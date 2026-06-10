@@ -1,0 +1,55 @@
+name: build
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  build:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    env:
+      DOTNET_NOLOGO: true
+      DOTNET_CLI_TELEMETRY_OPTOUT: true
+      CI: true
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0   # required for Source Link / deterministic builds
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+
+      - name: Restore
+        run: dotnet restore OfficeAgent.NET.sln
+
+      - name: Build (both TFM legs)
+        run: dotnet build OfficeAgent.NET.sln --no-restore --configuration Release
+
+      - name: Test
+        run: dotnet test OfficeAgent.NET.sln --no-build --configuration Release --logger "trx" --results-directory ./TestResults
+
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-results-${{ matrix.os }}
+          path: ./TestResults
+
+      - name: Pack
+        if: matrix.os == 'ubuntu-latest'
+        run: dotnet pack OfficeAgent.NET.sln --no-build --configuration Release --output ./artifacts
+
+      - name: Upload nupkgs
+        if: matrix.os == 'ubuntu-latest'
+        uses: actions/upload-artifact@v4
+        with:
+          name: nupkgs
+          path: ./artifacts/*.nupkg

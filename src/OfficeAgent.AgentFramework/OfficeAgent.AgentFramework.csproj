@@ -1,0 +1,19 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFrameworks>netstandard2.0;net8.0</TargetFrameworks>
+    <Description>Microsoft.Extensions.AI tool adapter for OfficeAgent.NET, a translation layer between AI agents and OOXML: projects inspect, find, preview, and apply as AIFunctions for Microsoft Agent Framework agents, with structured JSON results. Documents are pre-registered by the host; the agent works only with the opaque (connectionId, documentId) it is given.</Description>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\OfficeAgent.Abstractions\OfficeAgent.Abstractions.csproj" />
+    <ProjectReference Include="..\OfficeAgent.Core\OfficeAgent.Core.csproj" />
+    <ProjectReference Include="..\OfficeAgent.Word\OfficeAgent.Word.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Extensions.AI" Version="10.6.0" />
+    <PackageReference Include="Microsoft.Extensions.AI.Abstractions" Version="10.6.0" />
+  </ItemGroup>
+
+</Project>

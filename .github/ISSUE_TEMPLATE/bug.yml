@@ -1,0 +1,38 @@
+name: Bug report
+description: Report a defect in OfficeAgent.NET.
+labels: [bug]
+body:
+  - type: input
+    id: version
+    attributes:
+      label: Package version
+      placeholder: "0.3.0"
+    validations:
+      required: true
+  - type: dropdown
+    id: package
+    attributes:
+      label: Affected package
+      options:
+        - OfficeAgent.Core
+        - OfficeAgent.Word
+        - OfficeAgent.AgentFramework
+        - OfficeAgent.Abstractions
+        - "Multiple / not sure"
+    validations:
+      required: true
+  - type: textarea
+    id: summary
+    attributes:
+      label: Summary
+      description: What did you expect, what happened instead, and the smallest repro you can attach. Plan JSON + fixture .docx (or a generator) is ideal.
+    validations:
+      required: true
+  - type: textarea
+    id: environment
+    attributes:
+      label: Environment
+      placeholder: |
+        - OS:
+        - .NET runtime:
+        - TFM the consumer targets:

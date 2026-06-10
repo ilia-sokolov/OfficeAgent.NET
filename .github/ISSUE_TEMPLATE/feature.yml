@@ -1,0 +1,20 @@
+name: Feature request
+description: Suggest a new capability or improvement.
+labels: [enhancement]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem you're trying to solve
+      description: What document-editing scenario does the current API not support cleanly?
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed shape
+      description: Concrete API sketch, JSON plan shape, or worked example.
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered

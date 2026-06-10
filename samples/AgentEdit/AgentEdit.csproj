@@ -1,0 +1,33 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net8.0</TargetFramework>
+    <IsPackable>false</IsPackable>
+    <GenerateDocumentationFile>false</GenerateDocumentationFile>
+    <RootNamespace>OfficeAgent.Samples.AgentEdit</RootNamespace>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\OfficeAgent.Abstractions\OfficeAgent.Abstractions.csproj" />
+    <ProjectReference Include="..\..\src\OfficeAgent.Core\OfficeAgent.Core.csproj" />
+    <ProjectReference Include="..\..\src\OfficeAgent.Word\OfficeAgent.Word.csproj" />
+    <ProjectReference Include="..\..\src\OfficeAgent.AgentFramework\OfficeAgent.AgentFramework.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- Microsoft Agent Framework (GA 1.0, April 2026). -->
+    <PackageReference Include="Microsoft.Agents.AI" Version="1.9.0" />
+
+    <!-- Azure OpenAI client + Microsoft.Extensions.AI IChatClient adapter. -->
+    <PackageReference Include="Azure.AI.OpenAI" Version="2.1.0" />
+    <PackageReference Include="Azure.Identity" Version="1.13.1" />
+    <PackageReference Include="Microsoft.Extensions.AI.OpenAI" Version="9.4.0-preview.1.25207.5" />
+
+    <!-- Host + logging + bootstrap docx generation. -->
+    <PackageReference Include="Microsoft.Extensions.Hosting" Version="8.0.0" />
+    <PackageReference Include="Microsoft.Extensions.Logging.Console" Version="8.0.0" />
+    <PackageReference Include="DocumentFormat.OpenXml" Version="3.5.1" />
+  </ItemGroup>
+
+</Project>

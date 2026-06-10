@@ -1,87 +1,213 @@
 # OfficeAgent.NET
 
-Agent-friendly .NET building blocks for producing real Microsoft Office documents from structured AI output.
+A translation layer between AI agents and OOXML - the format behind real
+Microsoft Word documents. Agents express intent; the library turns it into
+valid Open XML manipulations.
 
-OfficeAgent.NET is an early-stage open-source toolkit for .NET developers building AI agents that need to create, fill, or revise Word documents without dropping down into hundreds of lines of low-level Open XML code.
+An agent can reason about a document, but it cannot safely produce one: the
+things that make a `.docx` a Word document - styles, numbering, tracked
+changes, comments, content controls - live in XML parts no language model
+should write by hand. OfficeAgent.NET closes that gap. The agent expresses
+intent as a typed, JSON-serialisable change plan - "replace this clause as a
+tracked change", "add a row to that table" - and the library translates the
+plan into the Open XML changes that carry it out. Every change is validated
+against the live document, previewed, and applied all-or-nothing. The agent
+never writes raw `.docx` bytes, and Word itself is not automated.
 
-The goal is simple: let an agent describe what should change in a document, and let a reliable .NET layer handle the Office file-format details.
+The Word support is built on the Open XML SDK (`DocumentFormat.OpenXml`).
 
-## Why This Exists
+Use it when you need to:
 
-AI agents are good at producing text, Markdown, JSON, and tool calls. Professional workflows often need something more specific: a `.docx` file that opens cleanly in Word, uses the organization's real template, preserves styles and numbering, fills named fields, and survives review with comments and tracked changes.
+- locate stable targets in a `.docx` (paragraphs, runs, tables, content
+  controls, document properties, tracked revisions);
+- ask a language model to return a typed edit plan instead of document bytes;
+- preview the result before saving;
+- keep Word semantics intact - runs, styles, content controls, comments,
+  tracked revisions;
+- reject edits that target the wrong place or that need a layout/calculation
+  engine.
 
-Today, .NET developers usually have to choose between:
+## Key concepts
 
-- writing verbose `DocumentFormat.OpenXml` code directly;
-- converting Markdown or HTML into a rough Word approximation;
-- buying a general-purpose commercial document engine;
-- building a private helper library that becomes its own mini-framework.
+### The workflow: inspect → find → preview → commit
 
-OfficeAgent.NET sits in the gap between structured agent output and Office documents. The agent says what it wants. The library translates that plan into valid Office document changes.
+Every edit follows the same four steps:
 
-The intended workflow is **inspect -> plan -> apply**: the library describes a Word document to the agent in structured, anchored terms; the agent returns a typed change plan; the library validates and applies that plan while preserving the underlying `.docx` package.
+1. **Inspect** - read the document and get a structured map of it: the outline,
+   paragraphs (with stable ids), styles, content controls, and nodes (tables,
+   images, document properties, revisions).
+2. **Find** - search for text and get an address back for each match.
+3. **Preview** - check a set of changes against the current document. Nothing is
+   written; you get a before/after report and any validation errors.
+4. **Commit** - apply the changes and save through storage. The operation is
+   all-or-nothing: if any step fails, nothing is written.
 
-## Intended v0.1 Scope
+### Plan
 
-The first target is Word document generation and revision through a .NET package.
+A **plan** (`DocumentPlan`) is the list of changes you want to make. It is a
+typed, JSON-serialisable object, so a language model can produce one directly.
+The library validates the whole plan before it touches the document.
 
-Planned primitives:
+### Anchors
 
-| Primitive | What it does |
-|---|---|
-| **Inspect** | Return an anchored map of a `.docx` document that an agent can reason about |
-| **Template fill** | Populate named slots in an existing `.docx` template |
-| **Content controls** | Write into Word content controls without disturbing surrounding styles |
-| **Structured tables** | Turn typed data into clean Word tables |
-| **Text changes** | Change anchored text spans without blind global replacement |
-| **Tracked changes** | Express agent-proposed edits as Word redlines |
-| **Comments** | Attach review comments to specific document locations |
+An **anchor** is an address inside the document. The library issues anchors from
+inspect and find; the caller (or the model) reuses them and never invents one.
 
-Explicitly out of v0.1:
+Anchors carry the content they expect to find. At commit time the library
+re-checks each anchor against the live document. If the content has changed, the
+operation fails safely instead of editing the wrong place.
 
-- MCP tools for document-editing agents.
-- Excel workbook primitives.
-- PowerPoint presentation primitives.
-- Higher-level recipes for reports, proposals, review packs, and contract drafts.
+### Operations
 
-## Current Status
+Each entry in a plan is one **operation** - a verb such as `changeText`,
+`format`, `insert`, or `setProperty`. Every operation targets one anchor. The
+Word module ships 15 verbs covering text, tables, images, styles, comments,
+document properties, and tracked revisions.
 
-OfficeAgent.NET is in problem-validation and design.
+### Documents are registered with a provider, not uploaded
 
-There is not yet:
+A document is not edited by file path. It lives behind a **document provider**
+(storage). The provider is a **registry of references** - it persists only the
+path (or URL, drive id, …) the host hands it, not the bytes. You register an
+existing document with a connection; the provider returns an **opaque document
+id**. Every later call addresses the document by `(connectionId, documentId)`,
+and the provider routes reads and saves back to the referenced location.
 
-- a NuGet package;
-- a stable public API;
-- production-ready code.
+The agent never sees a file path, cannot register documents, and cannot leave
+the storage you configured. A filesystem provider ships in the box; SharePoint,
+a database, or any other store can implement the same interface.
 
-## Roadmap
+## Quick start
 
-v0.1 target:
+Install the packages:
 
-- open and inspect an existing `.docx`;
-- fill content controls;
-- insert a structured table;
-- produce at least one tracked-change suggestion;
-- save a Word document that opens cleanly and preserves the template.
+```bash
+dotnet add package OfficeAgent.Core
+dotnet add package OfficeAgent.Word
+dotnet add package OfficeAgent.AgentFramework   # only for the Agent Framework path
+```
 
-v0.2 target:
+### With Microsoft Agent Framework (MAF)
 
-- expose the Word workflow through MCP tools for agents that revise documents directly.
+`OfficeAgent.AgentFramework` exposes the workflow as four tools a language model
+can call: `inspect_document`, `find_in_document`, `preview_plan`, and
+`apply_plan`. The host registers documents up front and threads the resulting
+opaque id into the agent's system prompt; the agent never sees a file path and
+cannot register or delete storage on its own.
 
-Future versions:
+```csharp
+using Microsoft.Agents.AI;
+using Microsoft.Extensions.AI;
+using Microsoft.Extensions.DependencyInjection;
+using OfficeAgent.AgentFramework;
+using OfficeAgent.Core;
+using OfficeAgent.Core.DocumentProviders;
+using OfficeAgent.Word;
 
-- Excel workbook primitives for agent-produced business artifacts;
-- PowerPoint primitives for slide and placeholder workflows;
-- higher-level document recipes once the core Word workflow is proven.
+var services = new ServiceCollection()
+    .AddWordFormat()
+    .AddFileSystemDocumentProvider("workspace", "/srv/officeagent/workspace")
+    .AddOfficeAgent()
+    .BuildServiceProvider();
 
-## Contributing
+var client = services.GetRequiredService<OfficeAgentClient>();
 
-The project is too early for broad code contributions, but feedback is very welcome.
+// Register the existing document with the connection. The provider stores only
+// the path; the host owns the file's lifecycle.
+var seeded = await client.RegisterAsync(
+    "workspace", "/srv/officeagent/workspace/contract.docx");
 
-Good first ways to help:
+var tools  = new OfficeAgentTools(client).AsAIFunctions();
+var prompt = $"You are editing documentId={seeded.ItemId} on connectionId=workspace.\n\n"
+           + OfficeAgentTools.SystemPromptGuidance;
 
-- star the repo if the problem statement matches your experience;
-- open an issue describing a real Word automation problem you hit with an AI agent;
-- share a minimal `.docx` scenario that broke your pipeline;
-- point to existing .NET libraries or examples that solve part of this well;
-- comment on the planned v0.1 primitives.
+AIAgent agent = new ChatClientAgent(
+    chatClient,                       // any Microsoft.Extensions.AI IChatClient
+    instructions: prompt,
+    name:         "OfficeAgent",
+    description:  "Edits Word documents using OfficeAgent.NET.",
+    tools:        tools.Cast<AITool>().ToList(),
+    services:     services);
+```
+
+`apply_plan` saves the result and returns an `outputDocumentId`. It does not send
+`.docx` bytes back through the model. The host reads the id with `OpenReadAsync`
+and delivers the file through its own download or attachment API.
+
+A runnable Azure OpenAI example is in [`samples/AgentEdit`](samples/AgentEdit).
+
+### As a library
+
+Drive the same workflow directly from code:
+
+```csharp
+using Microsoft.Extensions.DependencyInjection;
+using OfficeAgent.Abstractions;
+using OfficeAgent.Core;
+using OfficeAgent.Core.DocumentProviders;
+using OfficeAgent.Word;
+
+var services = new ServiceCollection()
+    .AddWordFormat()
+    .AddFileSystemDocumentProvider("workspace", "/srv/officeagent/workspace")
+    .AddOfficeAgent()
+    .BuildServiceProvider();
+
+var client = services.GetRequiredService<OfficeAgentClient>();
+
+// Register an existing file with the connection; the provider mints the opaque id.
+var doc = await client.RegisterAsync(
+    "workspace", "/srv/officeagent/workspace/contract.docx");
+
+// inspect → find → preview → commit, addressing the document by its id.
+var inspect = await client.InspectAsync("workspace", doc.ItemId);
+var hit     = (await client.FindAsync(
+    "workspace", doc.ItemId, new FindQuery("Acme Corp"))).First();
+
+var plan = new DocumentPlan
+{
+    Snapshot   = inspect.Snapshot,          // opt in to drift detection
+    Operations = new PlanOperation[]
+    {
+        new ChangeTextOp { Target = hit.Anchor, With = "Globex Inc.", Mode = ChangeMode.Tracked }
+    }
+};
+
+var preview = await client.PreviewAsync("workspace", doc.ItemId, plan);
+if (!preview.IsValid) { /* surface preview.Errors */ return; }
+
+// By default a fresh id is minted for the result; the source is preserved.
+var result = await client.CommitAsync("workspace", doc.ItemId, plan);
+if (result.Committed)
+{
+    using var saved = await client.OpenReadAsync(result.Document);
+    // saved.Stream holds the edited bytes; result.Document.ItemId is the new id.
+}
+```
+
+A runnable version is in [`samples/QuickEdit`](samples/QuickEdit).
+
+## Documentation
+
+- [Getting started](docs/getting-started.md) - one full edit, step by step.
+- [Concepts](docs/concepts.md) - providers, inspect, anchors, snapshots, plans,
+  preview/commit, capabilities, transactions.
+- [Document providers](docs/document-providers.md) - `IDocumentProvider`,
+  registration, save modes, optimistic concurrency.
+- [Document plans](docs/document-plans.md) - the JSON contract for every verb.
+- [Agent integration](docs/agent-integration.md) - wiring `OfficeAgentTools`
+  into Microsoft Agent Framework / MEAI.
+- [Operations](docs/operations.md) - thread safety, stream ownership, memory,
+  cancellation, telemetry.
+
+## Scope
+
+OfficeAgent.NET ships the Word path today. Excel and PowerPoint can plug in
+through the same `IFormatModule` interface but are not implemented yet. Work that
+needs a renderer - pagination, field recalculation, table-of-contents rendering,
+page-fit checks - is rejected on purpose: the engine can write the OOXML but
+cannot compute the displayed value.
+
+## License
+
+MIT. See [LICENSE](LICENSE).
