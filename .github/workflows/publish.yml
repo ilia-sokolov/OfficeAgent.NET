@@ -1,0 +1,43 @@
+name: publish
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write          # required: OIDC token exchange with nuget.org
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    environment: nuget     # matches the Trusted Publisher config; enables approval gating
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0   # Source Link / deterministic builds
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+
+      - name: Pack
+        run: dotnet pack OfficeAgent.NET.sln -c Release -o ./artifacts
+
+      - name: Login to NuGet.org (Trusted Publishing → short-lived key)
+        id: nuget-login
+        uses: NuGet/login@v1
+        with:
+          user: ilia-sokolov
+
+      - name: Push
+        env:
+          NUGET_API_KEY: ${{ steps.nuget-login.outputs.NUGET_API_KEY }}
+        run: |
+          for pkg in artifacts/*.nupkg; do
+            dotnet nuget push "$pkg" \
+              --api-key "$NUGET_API_KEY" \
+              --source https://api.nuget.org/v3/index.json \
+              --skip-duplicate
+          done
