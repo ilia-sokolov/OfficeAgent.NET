@@ -29,6 +29,8 @@
     <ProjectReference Include="..\..\src\OfficeAgent.Word\OfficeAgent.Word.csproj" />
     <ProjectReference Include="..\..\src\OfficeAgent.Core\OfficeAgent.Core.csproj" />
     <ProjectReference Include="..\..\src\OfficeAgent.Abstractions\OfficeAgent.Abstractions.csproj" />
+    <ProjectReference Include="..\..\src\OfficeAgent.SharePoint\OfficeAgent.SharePoint.csproj" />
+    <ProjectReference Include="..\..\src\OfficeAgent.Mcp\OfficeAgent.Mcp.csproj" />
   </ItemGroup>
 
 </Project>

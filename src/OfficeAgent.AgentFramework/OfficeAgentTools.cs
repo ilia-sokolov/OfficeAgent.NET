@@ -8,13 +8,34 @@ using OfficeAgent.Core.DocumentProviders;
 namespace OfficeAgent.AgentFramework;
 
 /// <summary>
+/// Controls which tools <see cref="OfficeAgentTools.AsAIFunctions(OfficeAgentToolsOptions)"/>
+/// exposes to the agent.
+/// </summary>
+public sealed class OfficeAgentToolsOptions
+{
+    /// <summary>
+    /// Gets whether the agent may register documents with provider connections and
+    /// remove registrations (<c>register_document</c> / <c>remove_document</c>). The
+    /// default is <see langword="false"/>: the host pre-registers documents and the
+    /// agent only ever sees opaque ids. Enabling this lets the agent hand
+    /// provider-relative sources (a path under a filesystem root, a drive-relative
+    /// SharePoint path) to the configured connections; the connection boundary,
+    /// extension allow-list, and size limits still apply, and removing a
+    /// registration never deletes the underlying content.
+    /// </summary>
+    public bool AllowRegistration { get; init; }
+}
+
+/// <summary>
 /// Projects <see cref="OfficeAgentClient"/> as Microsoft.Extensions.AI tools that
 /// address documents by an opaque, provider-assigned id. The host registers documents
 /// with a provider connection (<see cref="OfficeAgentClient.RegisterAsync"/>),
 /// receives a <see cref="DocumentReference"/>, and the LLM drives inspect /
 /// find / preview / apply by <c>(connectionId, documentId)</c>. The agent never
-/// sees a file path; it cannot register documents, escape the connection, or
-/// delete content the provider only references.
+/// sees credentials or absolute storage locations; by default it cannot register
+/// documents, escape the connection, or delete content the provider only
+/// references. Hosts that want the agent to manage its own registrations opt in
+/// via <see cref="OfficeAgentToolsOptions.AllowRegistration"/>.
 /// </summary>
 public sealed class OfficeAgentTools
 {
@@ -55,6 +76,7 @@ public sealed class OfficeAgentTools
 
         Plan shape, anchors, safety loop
         - Plan body is { "operations": [ ... ] }. Do NOT set contractVersion or snapshot - the engine fills them.
+        - Available operations (the JSON shape of each is in the preview_plan description): changeText, insert (a paragraph), insertTable, removeTable, format, fill, comment, setProperty, revision, insertTableRows, removeTableRows, insertTableColumns, removeTableColumns, insertImage, removeImage, copyStyles, clearStyles. Create a table with insertTable; delete one with removeTable. These are plan operations inside preview_plan/apply_plan, not separate tools.
         - Call inspect_document or find_in_document before building a plan to obtain anchor ids; never invent paragraph ids, occurrence numbers, content-control tags, or node paths.
         - Tables and images only appear in inspect_document.nodes (kind="table"/"image", path="table#N"/"image#N"). They are NOT in the paragraphs list. To recognise table content, look for paragraphs whose `in` field equals a table path.
         - Preview before you apply. If preview reports stale-snapshot, re-inspect and rebuild. If preview reports expect-mismatch, the document drifted - re-inspect/find that operation.
@@ -62,8 +84,46 @@ public sealed class OfficeAgentTools
         - Reject operations that need a renderer (pagination, field recalculation); explain the limitation instead.
         """;
 
-    /// <summary>Returns the four AIFunctions the host registers with its agent.</summary>
-    public AIFunction[] AsAIFunctions() => new[]
+    /// <summary>
+    /// System-prompt guidance to append to <see cref="SystemPromptGuidance"/> when the
+    /// host enables <see cref="OfficeAgentToolsOptions.AllowRegistration"/>.
+    /// </summary>
+    public const string RegistrationPromptGuidance = """
+
+        Document registration
+        - register_document(connectionId, source) registers an existing document with a host-configured connection and returns its opaque documentId. The source is connection-specific: a path under a filesystem connection's root, or - for a SharePoint connection - the document's SharePoint/OneDrive URL or a "driveId/itemId" pair. Never pass credentials.
+        - remove_document(connectionId, documentId) removes the registration only - the underlying file is never deleted. Remove registrations you created once the work is done.
+        - Register a document only when the user names a file the host has not already given you an id for; otherwise use the ids you were given.
+        """;
+
+    /// <summary>Returns the four core AIFunctions the host registers with its agent.</summary>
+    public AIFunction[] AsAIFunctions() => AsAIFunctions(new OfficeAgentToolsOptions());
+
+    /// <summary>
+    /// Returns the AIFunctions selected by <paramref name="options"/>: the four core
+    /// inspect/find/preview/apply tools, plus <c>register_document</c> and
+    /// <c>remove_document</c> when registration is allowed.
+    /// </summary>
+    public AIFunction[] AsAIFunctions(OfficeAgentToolsOptions options)
+    {
+        if (options is null) throw new ArgumentNullException(nameof(options));
+        var functions = new List<AIFunction>(CoreFunctions());
+        if (options.AllowRegistration)
+        {
+            functions.Add(AIFunctionFactory.Create(RegisterDocument, Opts(
+                "register_document",
+                "Register an existing document with a host-configured provider connection and return its opaque documentId. " +
+                "source is connection-specific: for a filesystem connection, a path under its root; for a SharePoint connection, the document's SharePoint/OneDrive URL (e.g. 'https://contoso.sharepoint.com/:w:/s/…') or a 'driveId/itemId' pair (e.g. 'b!9a3f…/01ABCDEF'). " +
+                "Never pass credentials. Returns {connectionId, documentId, name, contentType, version}.")));
+            functions.Add(AIFunctionFactory.Create(RemoveDocument, Opts(
+                "remove_document",
+                "Remove a document registration from a provider connection by (connectionId, documentId). " +
+                "Only the registration is removed - the underlying file is never deleted. Returns {removed, connectionId, documentId}.")));
+        }
+        return functions.ToArray();
+    }
+
+    private AIFunction[] CoreFunctions() => new[]
     {
         AIFunctionFactory.Create(InspectDocument, Opts(
             "inspect_document",
@@ -81,12 +141,15 @@ public sealed class OfficeAgentTools
             "{ \"op\": \"format\", \"target\": { \"paraId\": \"w14:...\", \"expect\": \"important\", \"occurrence\": 0 }, \"highlight\": \"yellow\", \"bold\": true, \"color\": \"FF0000\" }\n" +
             "{ \"op\": \"format\", \"target\": { \"kind\": \"table\",     \"path\": \"table#0\" }, \"styleId\": \"TableGrid\", \"borderStyle\": \"single\" }\n" +
             "{ \"op\": \"format\", \"target\": { \"kind\": \"image\",     \"path\": \"image#0\" }, \"widthPx\": 320, \"heightPx\": 200 }\n\n" +
-            "// Fill / comment / insert paragraph or new table / setProperty / revision:\n" +
+            "// Fill / comment / insert paragraph / setProperty / revision:\n" +
             "{ \"op\": \"fill\", \"target\": { \"tag\": \"ClientName\" }, \"value\": \"Globex\" }\n" +
             "{ \"op\": \"comment\", \"target\": { \"paraId\": \"w14:...\", \"expect\": \"...\" }, \"text\": \"Confirm this.\" }\n" +
             "{ \"op\": \"insert\", \"target\": { \"paraId\": \"w14:...\", \"expect\": \"...\" }, \"position\": \"After\", \"text\": \"New paragraph.\" }\n" +
             "{ \"op\": \"setProperty\", \"target\": { \"kind\": \"docProperty\", \"path\": \"core/title\" }, \"value\": \"My Title\" }\n" +
             "{ \"op\": \"revision\",   \"target\": { \"kind\": \"revision\",    \"path\": \"all\" }, \"action\": \"Accept\" }\n\n" +
+            "// Insert a whole new table after a paragraph, or remove an entire table (table path from inspect_document.nodes):\n" +
+            "{ \"op\": \"insertTable\", \"target\": { \"paraId\": \"w14:...\", \"expect\": \"...\" }, \"position\": \"After\", \"table\": { \"headers\": [\"Region\", \"Q1\"], \"rows\": [[\"NL\", \"41850\"]] } }\n" +
+            "{ \"op\": \"removeTable\",  \"target\": { \"kind\": \"table\", \"path\": \"table#0\" } }\n\n" +
             "// Add or remove table rows / columns; insert or remove image; copy or clear styles. Paths come from inspect_document.nodes:\n" +
             "{ \"op\": \"insertTableRows\", \"target\": { \"kind\": \"table\", \"path\": \"table#0\" }, \"rows\": [[\"NL\",\"17\",\"41850\"]], \"position\": \"End\" }\n" +
             "{ \"op\": \"removeTableRows\", \"target\": { \"kind\": \"table\", \"path\": \"table#0\" }, \"onlyIfEmpty\": true }\n" +
@@ -188,6 +251,35 @@ public sealed class OfficeAgentTools
             };
             var result = await _client.CommitAsync(connectionId, documentId, plan, options, cancellationToken).ConfigureAwait(false);
             return SerializeReport(result.Report, result.Committed, result.Committed ? result.Document : null);
+        });
+
+    /// <summary>Registers a document with a provider connection and returns its opaque id.</summary>
+    public Task<string> RegisterDocument(
+        string connectionId,
+        string source,
+        CancellationToken cancellationToken = default)
+        => SafeAsync(async () =>
+        {
+            var reference = await _client.RegisterAsync(connectionId, source, cancellationToken).ConfigureAwait(false);
+            return JsonSerializer.Serialize(new
+            {
+                connectionId = reference.ConnectionId,
+                documentId = reference.ItemId,
+                name = reference.Name,
+                contentType = reference.ContentType,
+                version = reference.Version
+            }, Json);
+        });
+
+    /// <summary>Removes a document registration; the underlying content is left untouched.</summary>
+    public Task<string> RemoveDocument(
+        string connectionId,
+        string documentId,
+        CancellationToken cancellationToken = default)
+        => SafeAsync(async () =>
+        {
+            await _client.RemoveAsync(connectionId, documentId, cancellationToken).ConfigureAwait(false);
+            return JsonSerializer.Serialize(new { removed = true, connectionId, documentId }, Json);
         });
 
     private static async Task<string> SafeAsync(Func<Task<string>> work)

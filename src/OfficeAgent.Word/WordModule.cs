@@ -41,6 +41,8 @@ public sealed class WordModule : IFormatModule
             new FormatHandler(),
             new SetPropertyHandler(),
             new RevisionHandler(),
+            new InsertTableHandler(),
+            new RemoveTableHandler(),
             new InsertTableRowsHandler(),
             new RemoveTableRowsHandler(),
             new InsertTableColumnsHandler(),

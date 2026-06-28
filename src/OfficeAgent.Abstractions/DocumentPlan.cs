@@ -60,6 +60,8 @@ public enum ChangeMode
 [JsonDerivedType(typeof(FormatOp), "format")]
 [JsonDerivedType(typeof(SetPropertyOp), "setProperty")]
 [JsonDerivedType(typeof(RevisionOp), "revision")]
+[JsonDerivedType(typeof(InsertTableOp), "insertTable")]
+[JsonDerivedType(typeof(RemoveTableOp), "removeTable")]
 [JsonDerivedType(typeof(InsertTableRowsOp), "insertTableRows")]
 [JsonDerivedType(typeof(RemoveTableRowsOp), "removeTableRows")]
 [JsonDerivedType(typeof(InsertTableColumnsOp), "insertTableColumns")]
@@ -116,7 +118,8 @@ public enum InsertPosition
 }
 
 /// <summary>
-/// Inserts a paragraph or table relative to an anchor.
+/// Inserts a new paragraph relative to an anchor. To insert a table, use
+/// <see cref="InsertTableOp"/>.
 /// </summary>
 public sealed class InsertOp : PlanOperation
 {
@@ -126,7 +129,7 @@ public sealed class InsertOp : PlanOperation
     public InsertPosition Position { get; init; } = InsertPosition.After;
 
     /// <summary>
-    /// Gets the paragraph text to insert when <see cref="Table"/> is not set.
+    /// Gets the paragraph text to insert.
     /// </summary>
     public string? Text { get; init; }
 
@@ -134,11 +137,6 @@ public sealed class InsertOp : PlanOperation
     /// Gets the style id to apply to the inserted paragraph.
     /// </summary>
     public string? StyleId { get; init; }
-
-    /// <summary>
-    /// Gets table data to insert instead of a paragraph.
-    /// </summary>
-    public TableData? Table { get; init; }
 }
 
 /// <summary>
@@ -392,6 +390,29 @@ public sealed class RemoveTableColumnsOp : PlanOperation
 {
     /// <summary>The column indices to remove.</summary>
     public IReadOnlyList<int> ColumnIndices { get; init; } = Array.Empty<int>();
+}
+
+/// <summary>
+/// Inserts a new table relative to an anchored paragraph (a <see cref="TextSpanAnchor"/>).
+/// A first-class table verb so an agent can create a table directly; the generic
+/// <see cref="InsertOp"/> inserts paragraphs only.
+/// </summary>
+public sealed class InsertTableOp : PlanOperation
+{
+    /// <summary>Gets where the new table is inserted relative to the target paragraph.</summary>
+    public InsertPosition Position { get; init; } = InsertPosition.After;
+
+    /// <summary>Gets the table content to insert.</summary>
+    public TableData Table { get; init; } = new();
+}
+
+/// <summary>
+/// Removes an entire table addressed by a table <see cref="NodeAnchor"/> with
+/// <c>Kind="table"</c> and <c>Path="table#N"</c>. The table and all of its rows are
+/// deleted; to drop only some rows or columns, use the row/column verbs instead.
+/// </summary>
+public sealed class RemoveTableOp : PlanOperation
+{
 }
 
 /// <summary>

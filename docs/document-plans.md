@@ -28,7 +28,7 @@ A `DocumentPlan` is the wire contract between an agent and the engine. It is a J
 | --- | --- |
 | `{ "paraId": "…", "expect": "…", "occurrence": 0 }` | text span in a paragraph |
 | `{ "tag": "ClientName" }` | content control or bookmark |
-| `{ "kind": "<nodeKind>", "path": "<path>" }` | document-level node - `kind` is `"table"`, `"docProperty"`, `"revision"`, or `"image"`, *not* the literal string `"node"` |
+| `{ "kind": "<nodeKind>", "path": "<path>" }` | document-level node - `kind` is `"table"`, `"tableRow"`, `"tableCell"`, `"image"`, `"docProperty"`, `"revision"`, or `"field"`, *not* the literal string `"node"` |
 
 Table-row, table-cell, and image paths come from `inspect_document.nodes`:
 
@@ -41,7 +41,7 @@ Table-row, table-cell, and image paths come from `inspect_document.nodes`:
 
 ## Supported verbs
 
-Concrete JSON shapes follow. Every verb's target works across the body, headers, footers, footnotes, and endnotes.
+A text-span target resolves across the body, headers, footers, footnotes, and endnotes.
 
 ### `changeText`
 
@@ -140,22 +140,35 @@ Attach a review comment.
 
 ### `insert`
 
-Insert a new paragraph or *new* table near an anchor paragraph. Use `insertTableRows` / `insertTableColumns` to extend an existing table.
+Insert a new paragraph near an anchor paragraph. Use `insertTable` to add a *new* table, or `insertTableRows` / `insertTableColumns` to extend an existing one.
 
 ```json
 { "op": "insert",
   "target":   { "paraId": "w14:…", "expect": "…" },
   "position": "After",
   "text":     "New paragraph." }
+```
 
-{ "op": "insert",
+### `insertTable` / `removeTable`
+
+Insert a whole new table near an anchor paragraph, or remove an entire table addressed by its `table#N` path.
+
+```json
+{ "op": "insertTable",
   "target":   { "paraId": "w14:…", "expect": "…" },
   "position": "After",
   "table":    { "headers": ["Country", "Population"],
                 "rows":    [["US", "332"], ["UK", "68"]] } }
+
+{ "op": "removeTable",
+  "target":   { "kind": "table", "path": "table#0" } }
 ```
 
+`removeTable` deletes the table and all of its rows.
+
 ### `insertTableRows` / `removeTableRows`
+
+Remove rows by explicit `rowIndices` (negative counts from the end), or set `onlyIfEmpty` to drop only blank rows.
 
 ```json
 { "op": "insertTableRows",
@@ -170,11 +183,11 @@ Insert a new paragraph or *new* table near an anchor paragraph. Use `insertTable
 
 { "op": "removeTableRows",
   "target":      { "kind": "table", "path": "table#0" },
-  "rowIndices":  [-1, -2] }                  // explicit indices (negative = from end)
+  "rowIndices":  [-1, -2] }
 
 { "op": "removeTableRows",
   "target":      { "kind": "table", "path": "table#0" },
-  "onlyIfEmpty": true }                      // safe cleanup of blank rows
+  "onlyIfEmpty": true }
 ```
 
 ### `insertTableColumns` / `removeTableColumns`
@@ -199,10 +212,11 @@ Add an inline image and remove one by `image#N` (discover paths via `inspect_doc
 The image bytes come from one of two routes - **exactly one** must be set:
 
 - `base64Bytes` - the image inline as base64.
-- `imageConnectionId` + `imageDocumentId` - the opaque id of an image already registered with a provider connection (use a connection whose `AllowedExtensions` permits image extensions). The client fetches the bytes through the provider before the plan reaches the engine, so the LLM still never handles paths.
+- `imageConnectionId` + `imageDocumentId` - the opaque id of an image already registered with a provider connection (use a connection whose `AllowedExtensions` permits image extensions). The client fetches the bytes through the provider before the plan reaches the engine.
+
+Inline base64:
 
 ```json
-// Inline base64.
 { "op": "insertImage",
   "target":      { "paraId": "w14:…", "expect": "…" },
   "base64Bytes": "iVBORw0KGgo…",
@@ -210,8 +224,11 @@ The image bytes come from one of two routes - **exactly one** must be set:
   "widthPx": 200, "heightPx": 80,
   "position": "After",
   "altText":  "Company logo" }
+```
 
-// By opaque id resolved through a provider.
+By opaque id resolved through a provider:
+
+```json
 { "op": "insertImage",
   "target":            { "paraId": "w14:…", "expect": "…" },
   "imageConnectionId": "images",
@@ -220,8 +237,11 @@ The image bytes come from one of two routes - **exactly one** must be set:
   "widthPx": 200, "heightPx": 80,
   "position": "After",
   "altText":  "Company logo" }
+```
 
-// Remove by node anchor.
+Remove by node anchor:
+
+```json
 { "op": "removeImage",
   "target": { "kind": "image", "path": "image#0" } }
 ```
@@ -268,5 +288,6 @@ Returned by `preview_plan` and `apply_plan` in the `errors` array. Stable wire c
 | `invalid-operation` | The operation is structurally invalid (e.g. empty `expect`, no formatting properties). |
 | `requires-renderer` | The requested change needs a layout / calculation engine. |
 | `operation-conflict` | Two operations target the same location in one plan. |
+| `contract-mismatch` | The plan's contract version does not match the engine. (Pre-1.0 the check is informational.) |
 
 Provider boundary errors (`apply_plan` only) use a separate set of wire codes - see [document-providers.md](document-providers.md).

@@ -4,9 +4,9 @@ OfficeAgent.NET is a translation layer between AI agents and OOXML: the agent ex
 
 ## Document providers
 
-A document lives behind an `IDocumentProvider`. Hosts register one or more provider *connections* - a filesystem provider ships in the box; SharePoint, Google Drive, MCP resources, or anything else implement the same `RegisterAsync` / `OpenReadAsync` / `SaveAsync` / `RemoveAsync` interface.
+A document lives behind an `IDocumentProvider`. Hosts register one or more provider *connections* - filesystem and SharePoint providers ship in the box; Google Drive, a database, or anything else implement the same `RegisterAsync` / `OpenReadAsync` / `SaveAsync` / `RemoveAsync` interface.
 
-A provider is a **registry of references**: it persists only where each document lives (a path, URL, drive id, …), never the bytes themselves. Registering a document with a connection mints an **opaque, provider-assigned `documentId`**, and every later call addresses the document by `(connectionId, documentId)`. The provider routes reads and saves back to the referenced location. The agent cannot register documents, construct an id, escape the connection, or see a filesystem path.
+A provider is a **registry of references**: it persists only where each document lives (a path, URL, drive id, …), never the bytes themselves. Registering a document with a connection mints an **opaque, provider-assigned `documentId`**, and every later call addresses the document by `(connectionId, documentId)`. The provider routes reads and saves back to the referenced location. The agent cannot construct an id, escape the connection, or see a filesystem path or credential. By default it cannot register documents either; hosts opt in to the registration tools when the agent should stage its own ids (the MCP server enables them by default - an MCP client has no other channel).
 
 ## Inspect
 
@@ -18,8 +18,6 @@ A provider is a **registry of references**: it persists only where each document
 - structural anchors for content controls and bookmarks (by tag);
 - the style catalog;
 - **nodes** - non-paragraph addressable objects (tables, images, document properties, tracked revisions) with their stable path strings.
-
-This map is what the agent reads before producing a plan.
 
 ## Anchors
 
@@ -55,7 +53,7 @@ A `DocumentPlan` is a typed list of operations against anchors. The plan and eve
 }
 ```
 
-The Word module ships 15 verbs covering text, runs, tables (rows / columns), images, styles, comments, properties, and revisions. See [document-plans.md](document-plans.md).
+The Word module ships 17 verbs covering text, runs, tables (create / remove / rows / columns), images, styles, comments, properties, and revisions. See [document-plans.md](document-plans.md).
 
 ## Preview / commit
 

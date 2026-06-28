@@ -9,7 +9,7 @@ namespace OfficeAgent.Abstractions;
 /// </remarks>
 public sealed class DocumentReference
 {
-    /// <summary>Gets the provider type, for example <c>filesystem</c> or <c>microsoftGraph</c>.</summary>
+    /// <summary>Gets the provider type, for example <c>filesystem</c> or <c>sharepoint</c>.</summary>
     public string Provider { get; init; } = string.Empty;
 
     /// <summary>Gets the host-configured connection identifier.</summary>

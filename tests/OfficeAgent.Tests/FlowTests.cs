@@ -164,7 +164,7 @@ public class FlowTests
     }
 
     [Fact]
-    public void Insert_adds_structured_table()
+    public void InsertTable_adds_structured_table()
     {
         var office = Office();
         var bytes = DocxFactory.Contract();
@@ -174,7 +174,7 @@ public class FlowTests
         {
             Operations = new PlanOperation[]
             {
-                new InsertOp
+                new InsertTableOp
                 {
                     Target = new TextSpanAnchor { ParaId = ParaId(inspect, "shall provide"), Expect = DocxFactory.ClauseText },
                     Position = InsertPosition.After,

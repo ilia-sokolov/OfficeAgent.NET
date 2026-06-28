@@ -102,6 +102,7 @@ internal sealed class PlanValidator
         var slot = operation switch
         {
             InsertOp i => $":{i.Position}",
+            InsertTableOp i => $":{i.Position}",
             InsertImageOp i => $":{i.Position}",
             InsertTableRowsOp i => $":{i.Position}:{i.RowIndex}",
             InsertTableColumnsOp i => $":{i.Position}:{i.ColumnIndex}",

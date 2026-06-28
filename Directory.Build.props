@@ -8,7 +8,7 @@
   </PropertyGroup>
 
   <PropertyGroup>
-    <Version>0.1.0-preview.1</Version>
+    <Version>0.2.0-preview.1</Version>
     <Authors>Ilia Sokolov</Authors>
     <Company>Ilia Sokolov</Company>
     <Product>OfficeAgent.NET</Product>

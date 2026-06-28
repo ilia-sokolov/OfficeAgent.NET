@@ -104,8 +104,7 @@ if (!result.Committed)
 Console.WriteLine($"Saved revision {result.Document.ItemId}");
 
 using var saved = await client.OpenReadAsync(result.Document);
-// saved.Stream contains the edited document. The host can now send this stream
-// through its HTTP response or chat-platform attachment API.
+// saved.Stream holds the edited bytes for the host to deliver.
 ```
 
 Commit is all-or-nothing: if validation or application fails, no partial edit is written.
@@ -129,3 +128,4 @@ File.Delete("/srv/officeagent/contracts/contract.v2.docx");   // host deletes th
 - [Document plans](document-plans.md) - the JSON shape of every supported verb.
 - [Document providers](document-providers.md) - registration, save modes, optimistic concurrency.
 - [Agent integration](agent-integration.md) - exposing OfficeAgent as Microsoft Agent Framework tools.
+- [MCP server](mcp-server.md) - the same workflow for any MCP-capable agent, hosted locally over stdio or in the cloud over HTTP.

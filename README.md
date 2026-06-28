@@ -7,7 +7,7 @@ valid Open XML manipulations.
 An agent can reason about a document, but it cannot safely produce one: the
 things that make a `.docx` a Word document - styles, numbering, tracked
 changes, comments, content controls - live in XML parts no language model
-should write by hand. OfficeAgent.NET closes that gap. The agent expresses
+should write by hand. OfficeAgent.NET does that translation. The agent expresses
 intent as a typed, JSON-serialisable change plan - "replace this clause as a
 tracked change", "add a row to that table" - and the library translates the
 plan into the Open XML changes that carry it out. Every change is validated
@@ -61,7 +61,7 @@ operation fails safely instead of editing the wrong place.
 
 Each entry in a plan is one **operation** - a verb such as `changeText`,
 `format`, `insert`, or `setProperty`. Every operation targets one anchor. The
-Word module ships 15 verbs covering text, tables, images, styles, comments,
+Word module ships 17 verbs covering text, tables, images, styles, comments,
 document properties, and tracked revisions.
 
 ### Documents are registered with a provider, not uploaded
@@ -73,9 +73,13 @@ existing document with a connection; the provider returns an **opaque document
 id**. Every later call addresses the document by `(connectionId, documentId)`,
 and the provider routes reads and saves back to the referenced location.
 
-The agent never sees a file path, cannot register documents, and cannot leave
-the storage you configured. A filesystem provider ships in the box; SharePoint,
-a database, or any other store can implement the same interface.
+The agent never sees a file path or credential and cannot leave the storage you
+configured. By default it cannot register documents either - the host stages ids
+up front; hosts that want the agent to manage its own registrations opt in to
+the `register_document` / `remove_document` tools, which stay inside the
+connection's boundary and never delete content. Filesystem and SharePoint
+providers ship in the box; a database or any other store can implement the same
+interface.
 
 ## Quick start
 
@@ -85,15 +89,40 @@ Install the packages:
 dotnet add package OfficeAgent.Core
 dotnet add package OfficeAgent.Word
 dotnet add package OfficeAgent.AgentFramework   # only for the Agent Framework path
+dotnet add package OfficeAgent.SharePoint       # only for the SharePoint provider
 ```
+
+### Over MCP (any agent, any language)
+
+The `OfficeAgent.Mcp` server exposes the same workflow as Model Context Protocol
+tools, so any MCP-capable agent can edit real Word documents without taking a
+.NET dependency. It runs over stdio for local hosting or streamable HTTP for the
+cloud.
+
+```bash
+dotnet tool install --global OfficeAgent.Mcp --prerelease
+officeagent-mcp --stdio          # local: child process of an MCP client
+officeagent-mcp                  # cloud: streamable HTTP + /healthz
+```
+
+Point it at your documents through configuration (`appsettings.json` or
+`OfficeAgent__`-prefixed environment variables) and the agent gets
+`inspect_document`, `find_in_document`, `preview_plan`, `apply_plan`, and -
+unless you turn registration off - `register_document` / `remove_document` /
+`list_connections`.
+See [the MCP server guide](docs/mcp-server.md) for client config snippets,
+SharePoint connections, and cloud hosting.
 
 ### With Microsoft Agent Framework (MAF)
 
-`OfficeAgent.AgentFramework` exposes the workflow as four tools a language model
-can call: `inspect_document`, `find_in_document`, `preview_plan`, and
-`apply_plan`. The host registers documents up front and threads the resulting
-opaque id into the agent's system prompt; the agent never sees a file path and
-cannot register or delete storage on its own.
+`OfficeAgent.AgentFramework` exposes the workflow as four core tools a language
+model can call: `inspect_document`, `find_in_document`, `preview_plan`, and
+`apply_plan`. By default the host registers documents up front and threads the
+resulting opaque id into the agent's system prompt; the agent never sees a file
+path and cannot register or delete storage on its own. Opt in via
+`OfficeAgentToolsOptions.AllowRegistration` to add `register_document` and
+`remove_document`, which let the agent stage its own ids inside the configured
+connections.
 
 ```csharp
 using Microsoft.Agents.AI;
@@ -193,10 +222,15 @@ A runnable version is in [`samples/QuickEdit`](samples/QuickEdit).
 - [Concepts](docs/concepts.md) - providers, inspect, anchors, snapshots, plans,
   preview/commit, capabilities, transactions.
 - [Document providers](docs/document-providers.md) - `IDocumentProvider`,
-  registration, save modes, optimistic concurrency.
+  registration, save modes, optimistic concurrency, the SharePoint provider.
 - [Document plans](docs/document-plans.md) - the JSON contract for every verb.
 - [Agent integration](docs/agent-integration.md) - wiring `OfficeAgentTools`
-  into Microsoft Agent Framework / MEAI.
+  into Microsoft Agent Framework / MEAI, opt-in registration tools.
+- [MCP server](docs/mcp-server.md) - hosting `OfficeAgent.Mcp` locally over
+  stdio or in the cloud over streamable HTTP.
+- [Deployment & client setup](docs/deployment.md) - connecting the MCP server to
+  Claude Code, Codex, Copilot Studio, and Microsoft 365 Copilot, with the
+  identity checklist.
 - [Operations](docs/operations.md) - thread safety, stream ownership, memory,
   cancellation, telemetry.
 

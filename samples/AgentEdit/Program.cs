@@ -2,11 +2,17 @@
 // OpenAI that edits a Word document through OfficeAgent.NET's opaque-id
 // register-by-reference flow.
 //
-// The host stages one document under a registered provider connection (here a
-// temp-rooted filesystem provider), registers the path, and receives an opaque
-// id. The LLM only ever sees that id; it cannot register, delete, or otherwise
-// touch storage. Each successful apply returns the next id to use for follow-up
-// edits.
+// The host registers one document with a provider connection and receives an
+// opaque id. The LLM only ever sees that id; it cannot register, delete, or
+// otherwise touch storage. Each successful apply returns the next id to use for
+// follow-up edits.
+//
+// Storage provider (auto-selected):
+//   - By default the sample uses a temp-rooted FILESYSTEM provider and stages a
+//     local fixture under it (zero configuration).
+//   - If SharePoint configuration is present (AGENT_SHAREPOINT_DOC set), the
+//     sample uses the SHAREPOINT provider instead and registers an existing
+//     document by its SharePoint/OneDrive URL or its driveId/itemId pair.
 //
 // Required environment variables (Azure OpenAI):
 //
@@ -19,12 +25,23 @@
 //   (none)                    uses DefaultAzureCredential - recommended for
 //                             managed identity / az login developer flows
 //
-// Optional:
+// Filesystem mode (the default) - optional:
 //
 //   AGENT_DOC          path to seed the conversation with (default: ./sample.docx,
 //                      generated on first run with a small contract fixture).
 //   AGENT_STORAGE_DIR  filesystem root the provider registers paths under
 //                      (default: a per-run temp directory).
+//
+// SharePoint mode - set AGENT_SHAREPOINT_DOC to enable; then:
+//
+//   AGENT_SHAREPOINT_DOC         the existing .docx to edit, as a SharePoint/OneDrive
+//                                URL (e.g. "https://contoso.sharepoint.com/:w:/s/…")
+//                                or a "driveId/itemId" pair (e.g. "b!9a3f…/01ABCDEF").
+//   Authentication:
+//     AGENT_SHAREPOINT_TENANT_ID + AGENT_SHAREPOINT_CLIENT_ID +
+//       AGENT_SHAREPOINT_CLIENT_SECRET  for the app-only (client-credentials) flow.
+//   Optional:
+//     AGENT_SHAREPOINT_CONNECTION_ID  connection id (default: "sharepoint").
 //
 // Run:
 //   dotnet run --project samples/AgentEdit
@@ -44,50 +61,88 @@ using OfficeAgent.Abstractions;
 using OfficeAgent.AgentFramework;
 using OfficeAgent.Core;
 using OfficeAgent.Core.DocumentProviders;
+using OfficeAgent.SharePoint;
 using OfficeAgent.Word;
 
 string endpoint = Required("AZURE_OPENAI_ENDPOINT");
 string deployment = Required("AZURE_OPENAI_DEPLOYMENT");
 string? apiKey = Environment.GetEnvironmentVariable("AZURE_OPENAI_API_KEY");
-string seedPath = Environment.GetEnvironmentVariable("AGENT_DOC") ?? "sample.docx";
-string storageRoot = Environment.GetEnvironmentVariable("AGENT_STORAGE_DIR")
-                     ?? Path.Combine(Path.GetTempPath(), $"officeagent-agentedit-{Guid.NewGuid():N}");
 
-if (!File.Exists(seedPath))
+// SharePoint mode turns on as soon as a document source is configured; otherwise
+// the sample stays on the zero-config filesystem provider.
+string? sharePointDoc = Environment.GetEnvironmentVariable("AGENT_SHAREPOINT_DOC");
+bool useSharePoint = !string.IsNullOrWhiteSpace(sharePointDoc);
+
+string connectionId = useSharePoint
+    ? (Environment.GetEnvironmentVariable("AGENT_SHAREPOINT_CONNECTION_ID") ?? "sharepoint")
+    : "workspace";
+string providerName = useSharePoint
+    ? SharePointDocumentProvider.ProviderName
+    : FileSystemDocumentProvider.ProviderName;
+
+// Filesystem mode prepares a local storage root and a fixture; SharePoint mode
+// needs neither (it edits an existing document already in the library).
+string storageRoot = string.Empty;
+string seedPath = string.Empty;
+if (useSharePoint)
 {
-    File.WriteAllBytes(seedPath, BuildSampleContract());
-    Console.WriteLine($"Generated fresh fixture at {Path.GetFullPath(seedPath)}");
+    Console.WriteLine($"Provider: sharepoint  connectionId={connectionId}");
+}
+else
+{
+    seedPath = Environment.GetEnvironmentVariable("AGENT_DOC") ?? "sample.docx";
+    storageRoot = Environment.GetEnvironmentVariable("AGENT_STORAGE_DIR")
+                  ?? Path.Combine(Path.GetTempPath(), $"officeagent-agentedit-{Guid.NewGuid():N}");
+    Directory.CreateDirectory(storageRoot);
+    Console.WriteLine($"Provider: filesystem  storage={storageRoot}");
+    if (!File.Exists(seedPath))
+    {
+        File.WriteAllBytes(seedPath, BuildSampleContract());
+        Console.WriteLine($"Generated fresh fixture at {Path.GetFullPath(seedPath)}");
+    }
 }
 
-Directory.CreateDirectory(storageRoot);
-Console.WriteLine($"Provider storage: {storageRoot}");
-
-// ── Host: OfficeAgent + filesystem provider + logging ──────────────────────
+// ── Host: OfficeAgent + the selected document provider + logging ───────────
 using var host = Host.CreateDefaultBuilder()
     .ConfigureLogging(b => b
         .SetMinimumLevel(LogLevel.Information)
         .AddSimpleConsole(o => { o.SingleLine = true; o.TimestampFormat = "HH:mm:ss "; }))
-    .ConfigureServices(s => s
-        .AddWordFormat()
-        .AddFileSystemDocumentProvider("workspace", storageRoot)
-        .AddOfficeAgent())
+    .ConfigureServices(s =>
+    {
+        s.AddWordFormat();
+        if (useSharePoint)
+            ConfigureSharePoint(s, connectionId);
+        else
+            ConfigureFileSystem(s, connectionId, storageRoot);
+        s.AddOfficeAgent();
+    })
     .Build();
 
 var officeClient = host.Services.GetRequiredService<OfficeAgentClient>();
 var log = host.Services.GetRequiredService<ILogger<Program>>();
 
-// ── Seed: stage the document under the storage root and register the path ──
+// ── Seed: register a document with the connection and get an opaque id back ──
 // The provider is a registry of references; the host owns where the file lives,
 // and gets back an opaque id to address it from then on.
-var seedDirectory = Path.Combine(storageRoot, Guid.NewGuid().ToString("N"));
-Directory.CreateDirectory(seedDirectory);
-var stagedPath = Path.Combine(seedDirectory, Path.GetFileName(seedPath));
-File.Copy(seedPath, stagedPath, overwrite: true);
-var seeded = await officeClient.RegisterAsync(
-    connectionId: "workspace",
-    source: stagedPath);
-log.LogInformation("Registered document with storage. connectionId=workspace path={Path} documentId={DocumentId}",
-    stagedPath, seeded.ItemId);
+DocumentReference seeded;
+if (useSharePoint)
+{
+    // SharePoint registers an EXISTING document by its URL or driveId/itemId pair -
+    // the sample does not create content in your library.
+    seeded = await officeClient.RegisterAsync(connectionId, sharePointDoc!);
+    log.LogInformation(
+        "Registered SharePoint document. connectionId={ConnectionId} source={Source} documentId={DocumentId}",
+        connectionId, sharePointDoc, seeded.ItemId);
+}
+else
+{
+    // Filesystem stages a local fixture under the storage root, then registers it.
+    var stagedPath = StageFilesystemFixture(storageRoot, seedPath);
+    seeded = await officeClient.RegisterAsync(connectionId, stagedPath);
+    log.LogInformation(
+        "Registered document with storage. connectionId={ConnectionId} path={Path} documentId={DocumentId}",
+        connectionId, stagedPath, seeded.ItemId);
+}
 
 // ── Azure OpenAI IChatClient ───────────────────────────────────────────────
 AzureOpenAIClient azureClient = apiKey is { Length: > 0 }
@@ -108,7 +163,7 @@ IList<AITool> tools = officeTools.AsAIFunctions().Cast<AITool>().ToList();
 
 var instructions = $$"""
     CURRENT DOCUMENT - use these values in every tool call:
-      connectionId = "workspace"
+      connectionId = "{{connectionId}}"
       documentId   = "{{seeded.ItemId}}"
 
     Each user message also starts with a [Current document: …] line carrying the
@@ -174,7 +229,7 @@ while (true)
         var outputPath = trimmed["export ".Length..].Trim();
         try
         {
-            var exported = await ExportDocumentAsync(officeClient, "workspace", activeDocumentId, outputPath);
+            var exported = await ExportDocumentAsync(officeClient, providerName, connectionId, activeDocumentId, outputPath);
             log.LogInformation(
                 "Returned {DocumentId} to the user as {OutputPath} ({ContentType})",
                 activeDocumentId,
@@ -195,7 +250,7 @@ while (true)
         // the latest message keeps the model anchored to the right document and stops
         // it from asking the user for ids.
         var turnInput =
-            $"[Current document: connectionId=\"workspace\", documentId=\"{activeDocumentId}\"]\n{input}";
+            $"[Current document: connectionId=\"{connectionId}\", documentId=\"{activeDocumentId}\"]\n{input}";
 
         var response = await agent.RunAsync(turnInput, session);
         Console.WriteLine();
@@ -216,14 +271,17 @@ return 0;
 
 static async Task<(string Path, string ContentType)> ExportDocumentAsync(
     OfficeAgentClient client,
+    string providerName,
     string connectionId,
     string documentId,
     string outputPath)
 {
     // The host-not the LLM-resolves the opaque id and delivers the bytes. A web
     // or chat host would pass this stream to its download/attachment API instead.
+    // The reference is built for whichever provider is in use; resolution is by
+    // (provider, connectionId).
     using var content = await client.OpenReadAsync(
-        DocumentReference.ForFileSystem(connectionId, documentId));
+        DocumentReference.For(providerName, connectionId, documentId));
     using var file = File.Create(outputPath);
     await content.Stream.CopyToAsync(file);
 
@@ -236,6 +294,38 @@ static string Required(string name) =>
     Environment.GetEnvironmentVariable(name)
     ?? throw new InvalidOperationException(
         $"Environment variable {name} is required. See the comment block at the top of Program.cs.");
+
+static void ConfigureFileSystem(IServiceCollection services, string connectionId, string storageRoot) =>
+    services.AddFileSystemDocumentProvider(connectionId, storageRoot);
+
+static void ConfigureSharePoint(IServiceCollection services, string connectionId)
+{
+    services.AddSingleton(new HttpClient());
+
+    // The app client-credentials flow acquires Graph tokens from the configured Entra app.
+    // For a per-user identity instead, configure On-Behalf-Of on a hosted HTTP server.
+    var options = new AppOnlyOptions
+    {
+        TenantId = Required("AGENT_SHAREPOINT_TENANT_ID"),
+        ClientId = Required("AGENT_SHAREPOINT_CLIENT_ID"),
+        ClientSecret = Required("AGENT_SHAREPOINT_CLIENT_SECRET")
+    };
+    services.AddSingleton<IAccessTokenProvider>(sp =>
+        new AppOnlyAccessTokenProvider(options, sp.GetRequiredService<HttpClient>()));
+
+    services.AddSharePointDocumentProvider(connectionId, o => o.AllowedExtensions = new[] { ".docx" });
+}
+
+static string StageFilesystemFixture(string storageRoot, string seedPath)
+{
+    // A per-call subdirectory keeps the display name intact while avoiding
+    // collisions across runs. The provider stores only the reference, not the bytes.
+    var seedDirectory = Path.Combine(storageRoot, Guid.NewGuid().ToString("N"));
+    Directory.CreateDirectory(seedDirectory);
+    var stagedPath = Path.Combine(seedDirectory, Path.GetFileName(seedPath));
+    File.Copy(seedPath, stagedPath, overwrite: true);
+    return stagedPath;
+}
 
 static string LatestSavedId(AgentResponse response, string fallback)
 {

@@ -104,15 +104,15 @@ public sealed class OfficeAgentClient
     /// <see cref="DocumentReference.ItemId"/>. The provider stores only the reference
     /// (path, URL, drive id, …), not the bytes - the host owns the underlying file's
     /// lifecycle. <paramref name="source"/> is provider-specific: a filesystem path for
-    /// the filesystem provider, a sharing URL or drive id for cloud providers. Defaults
-    /// to the filesystem provider.
+    /// the filesystem provider, a drive-relative path for the SharePoint provider. The
+    /// connection id alone selects the provider, whatever its type.
     /// </summary>
     public async Task<DocumentReference> RegisterAsync(
         string connectionId,
         string source,
         CancellationToken cancellationToken = default)
     {
-        var provider = _providers.Resolve(DocumentReference.ForFileSystem(connectionId, string.Empty));
+        var provider = _providers.ResolveConnection(connectionId);
         var reference = await provider.RegisterAsync(source, cancellationToken).ConfigureAwait(false);
         _logger.LogInformation(
             "Provider register {Provider}:{ConnectionId} '{Source}' → {ItemId}",
@@ -129,12 +129,12 @@ public sealed class OfficeAgentClient
         return provider.RemoveAsync(reference, cancellationToken);
     }
 
-    /// <summary>Removes a filesystem-provider document by its opaque id.</summary>
+    /// <summary>Removes a provider document registration by its opaque id.</summary>
     public Task RemoveAsync(
         string connectionId,
         string documentId,
         CancellationToken cancellationToken = default) =>
-        RemoveAsync(DocumentReference.ForFileSystem(connectionId, documentId), cancellationToken);
+        RemoveAsync(ReferenceFor(connectionId, documentId), cancellationToken);
 
     /// <summary>Opens a document and returns its canonical current reference plus bytes.</summary>
     public Task<DocumentContent> OpenReadAsync(
@@ -223,25 +223,31 @@ public sealed class OfficeAgentClient
         };
     }
 
-    // ── Opaque-id overloads (default to the filesystem provider) ──────────────
+    // ── Opaque-id overloads (connection id selects the provider) ──────────────
 
     /// <summary>Inspects a provider document by <c>(connectionId, documentId)</c>, where <paramref name="documentId"/> is the opaque id returned by <see cref="RegisterAsync"/> or a save.</summary>
     public Task<InspectResult> InspectAsync(string connectionId, string documentId, InspectOptions? options = null, CancellationToken cancellationToken = default) =>
-        InspectAsync(DocumentReference.ForFileSystem(connectionId, documentId), options, cancellationToken);
+        InspectAsync(ReferenceFor(connectionId, documentId), options, cancellationToken);
 
     /// <summary>Finds content in a provider document by <c>(connectionId, documentId)</c>.</summary>
     public Task<IReadOnlyList<FindHit>> FindAsync(string connectionId, string documentId, FindQuery query, CancellationToken cancellationToken = default) =>
-        FindAsync(DocumentReference.ForFileSystem(connectionId, documentId), query, cancellationToken);
+        FindAsync(ReferenceFor(connectionId, documentId), query, cancellationToken);
 
     /// <summary>Previews a plan against a provider document by <c>(connectionId, documentId)</c>.</summary>
     public Task<ChangeReport> PreviewAsync(string connectionId, string documentId, DocumentPlan plan, CancellationToken cancellationToken = default) =>
-        PreviewAsync(DocumentReference.ForFileSystem(connectionId, documentId), plan, cancellationToken);
+        PreviewAsync(ReferenceFor(connectionId, documentId), plan, cancellationToken);
 
     /// <summary>Commits a plan against a provider document by <c>(connectionId, documentId)</c>.</summary>
     public Task<ProviderApplyResult> CommitAsync(string connectionId, string documentId, DocumentPlan plan, SaveDocumentOptions? options = null, CancellationToken cancellationToken = default) =>
-        CommitAsync(DocumentReference.ForFileSystem(connectionId, documentId), plan, options, cancellationToken);
+        CommitAsync(ReferenceFor(connectionId, documentId), plan, options, cancellationToken);
 
     // ── Internal helpers ──────────────────────────────────────────────────────
+
+    private DocumentReference ReferenceFor(string connectionId, string documentId)
+    {
+        var provider = _providers.ResolveConnection(connectionId);
+        return DocumentReference.For(provider.Provider, connectionId, documentId);
+    }
 
     private Task<DocumentContent> OpenWithTelemetryAsync(DocumentReference reference, CancellationToken cancellationToken) =>
         OpenWithTelemetryAsync(_providers.Resolve(reference), reference, cancellationToken);
@@ -322,7 +328,7 @@ public sealed class OfficeAgentClient
 
     private async Task<byte[]> OpenImageBytesAsync(string connectionId, string documentId, CancellationToken cancellationToken)
     {
-        var reference = DocumentReference.ForFileSystem(connectionId, documentId);
+        var reference = ReferenceFor(connectionId, documentId);
         using var content = await OpenWithTelemetryAsync(reference, cancellationToken).ConfigureAwait(false);
         if (content.Stream is MemoryStream ms)
             return ms.ToArray();

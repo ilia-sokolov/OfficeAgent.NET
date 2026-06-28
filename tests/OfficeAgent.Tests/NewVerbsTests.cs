@@ -173,6 +173,50 @@ public class NewVerbsTests
         return ms.ToArray();
     }
 
+    [Fact]
+    public void RemoveTable_deletes_the_whole_table()
+    {
+        var bytes = BuildDocWithTable(("Milestone", "Date"), ("Kickoff", "2026-06-01"));
+        Assert.Single(Office().Inspect(Handle(bytes)).Nodes.Where(n => n.Kind == "table"));
+
+        var plan = new DocumentPlan
+        {
+            Operations = new PlanOperation[]
+            {
+                new RemoveTableOp
+                {
+                    Target = new NodeAnchor { Kind = "table", Path = "table#0" }
+                }
+            }
+        };
+
+        var result = Office().Commit(Handle(bytes), plan);
+        Assert.True(result.Committed);
+
+        using var doc = WordprocessingDocument.Open(new MemoryStream(OfficeAgentClient.ToBytes(result)), false);
+        Assert.Empty(doc.MainDocumentPart!.Document.Body!.Descendants<Table>());
+    }
+
+    [Fact]
+    public void RemoveTable_fails_cleanly_when_table_anchor_not_found()
+    {
+        var bytes = BuildDocWithTable(("A", "B"), ("1", "2"));
+        var plan = new DocumentPlan
+        {
+            Operations = new PlanOperation[]
+            {
+                new RemoveTableOp
+                {
+                    Target = new NodeAnchor { Kind = "table", Path = "table#99" }
+                }
+            }
+        };
+
+        var report = Office().Preview(Handle(bytes), plan);
+        Assert.False(report.IsValid);
+        Assert.Contains(report.Errors, e => e.Code == ValidationErrorCodes.AnchorNotFound);
+    }
+
     private static byte[] BuildDocWithTable(params (string A, string B)[] rows)
     {
         using var ms = new MemoryStream();

@@ -129,6 +129,36 @@ public sealed class DocumentProviderRegistry
         };
     }
 
+    /// <summary>
+    /// Returns the provider configured for a connection id, regardless of provider type.
+    /// Connection ids are host-chosen and must be unique across providers for callers
+    /// that address documents by <c>(connectionId, documentId)</c> alone.
+    /// </summary>
+    public IDocumentProvider ResolveConnection(string connectionId)
+    {
+        if (string.IsNullOrWhiteSpace(connectionId))
+            throw new DocumentProviderException(
+                ProviderErrorCode.InvalidArgument,
+                "A connection id is required.",
+                provider: "", connectionId: connectionId ?? "", itemId: null);
+
+        var matches = _providers.Where(p =>
+            string.Equals(p.ConnectionId, connectionId, StringComparison.Ordinal)).ToArray();
+
+        return matches.Length switch
+        {
+            1 => matches[0],
+            0 => throw new DocumentProviderException(
+                ProviderErrorCode.ConfigurationError,
+                $"No document provider is registered for connection '{connectionId}'.",
+                provider: "", connectionId, itemId: null),
+            _ => throw new DocumentProviderException(
+                ProviderErrorCode.ConfigurationError,
+                $"Multiple document providers share connection id '{connectionId}'; address documents by full reference instead.",
+                provider: "", connectionId, itemId: null)
+        };
+    }
+
     /// <summary>Returns the set of registered <c>(Provider, ConnectionId)</c> pairs for host enumeration.</summary>
     public IReadOnlyList<(string Provider, string ConnectionId)> Connections =>
         _providers.Select(p => (p.Provider, p.ConnectionId)).ToList();

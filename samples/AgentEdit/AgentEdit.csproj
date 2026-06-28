@@ -13,6 +13,7 @@
     <ProjectReference Include="..\..\src\OfficeAgent.Core\OfficeAgent.Core.csproj" />
     <ProjectReference Include="..\..\src\OfficeAgent.Word\OfficeAgent.Word.csproj" />
     <ProjectReference Include="..\..\src\OfficeAgent.AgentFramework\OfficeAgent.AgentFramework.csproj" />
+    <ProjectReference Include="..\..\src\OfficeAgent.SharePoint\OfficeAgent.SharePoint.csproj" />
   </ItemGroup>
 
   <ItemGroup>
