@@ -242,6 +242,12 @@ needs a renderer - pagination, field recalculation, table-of-contents rendering,
 page-fit checks - is rejected on purpose: the engine can write the OOXML but
 cannot compute the displayed value.
 
+## Commercial support
+
+OfficeAgent.NET is MIT and free to self-host. **dotaction** offers a managed,
+audited, EU-resident hosted service and commercial support —
+[get in touch](mailto:contact@dotaction.io?subject=OfficeAgent.NET%20commercial%20support).
+
 ## License
 
 MIT. See [LICENSE](LICENSE).
