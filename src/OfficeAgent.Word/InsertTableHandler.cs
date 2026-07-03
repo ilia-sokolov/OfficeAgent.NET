@@ -23,6 +23,12 @@ internal sealed class InsertTableHandler : IOperationHandler
                 ValidationErrorCodes.AnchorNotFound,
                 $"No paragraph with id '{anchor.ParaId}'.", anchor));
 
+        if (!WordModel.IsInMainBody(paragraph))
+            return OperationPreview.Fail(new ValidationError(
+                ValidationErrorCodes.InvalidOperation,
+                $"Paragraph '{anchor.ParaId}' is not in the document body — a table anchored here would not appear in the document. Re-inspect and target a paragraph whose location is \"body\".",
+                anchor));
+
         var table = op.Table;
         var rowCount = table.Rows.Count + (table.Headers.Count > 0 ? 1 : 0);
         var colCount = Math.Max(table.Headers.Count, table.Rows.FirstOrDefault()?.Count ?? 0);
@@ -52,5 +58,14 @@ internal sealed class InsertTableHandler : IOperationHandler
             paragraph.InsertBeforeSelf(table);
         else
             paragraph.InsertAfterSelf(table);
+
+        EnsureParagraphFollows(table);
+    }
+    
+    private static void EnsureParagraphFollows(Table table)
+    {
+        var next = table.NextSibling();
+        if (next is null || next is SectionProperties)
+            table.InsertAfterSelf(new Paragraph());
     }
 }

@@ -31,7 +31,7 @@ admin.
 **1. Install the tool.**
 
 ```bash
-dotnet tool install --global OfficeAgent.Mcp --prerelease
+dotnet tool install --global OfficeAgent.Mcp
 ```
 
 That puts `officeagent-mcp` on your PATH. (No global install? Use

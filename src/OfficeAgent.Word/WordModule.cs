@@ -85,7 +85,7 @@ public sealed class WordModule : IFormatModule
         // Map each <w:tbl> element to its table#N path so paragraphs can advertise containment.
         var tablePaths = BuildTablePathIndex(package);
 
-        foreach (var (paragraph, paraId, _) in WordModel.Paragraphs(package))
+        foreach (var (paragraph, paraId, hostKey) in WordModel.Paragraphs(package))
         {
             var text = WordModel.Text.GetLogicalText(paragraph);
             var styleId = WordModel.StyleOf(paragraph);
@@ -95,7 +95,7 @@ public sealed class WordModule : IFormatModule
                 inPath = path;
 
             if (wantContent)
-                paragraphs.Add(new ParagraphInfo { ParaId = paraId, Text = text, StyleId = styleId, In = inPath });
+                paragraphs.Add(new ParagraphInfo { ParaId = paraId, Text = text, StyleId = styleId, In = inPath, Location = WordModel.LocationOf(hostKey) });
 
             var anchor = new TextSpanAnchor { Id = paraId, ParaId = paraId, Expect = text, Occurrence = 0 };
             if (wantContent) anchors.Add(anchor);

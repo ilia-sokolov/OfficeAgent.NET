@@ -21,10 +21,23 @@ internal sealed class TableBinder
 
         var properties = new TableProperties(
             new TableStyle { Val = data.StyleId ?? "TableGrid" },
-            new TableWidth { Type = TableWidthUnitValues.Auto, Width = "0" },
+            new TableWidth { Type = TableWidthUnitValues.Pct, Width = "5000" },
             borders);
 
         table.AppendChild(properties);
+
+        int columnCount = Math.Max(
+            data.Headers.Count,
+            data.Rows.Count > 0 ? data.Rows.Max(r => r.Count) : 0);
+        if (columnCount > 0)
+        {
+            const int textWidthTwips = 9360; // ~US Letter with 1" margins
+            var columnWidth = (textWidthTwips / columnCount).ToString();
+            var grid = new TableGrid();
+            for (var i = 0; i < columnCount; i++)
+                grid.AppendChild(new GridColumn { Width = columnWidth });
+            table.AppendChild(grid);
+        }
 
         if (data.Headers.Count > 0)
             table.AppendChild(BuildRow(data.Headers, header: true));

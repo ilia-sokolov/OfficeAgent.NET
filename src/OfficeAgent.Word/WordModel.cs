@@ -66,11 +66,41 @@ internal static class WordModel
             int index = 0;
             foreach (var paragraph in root.Descendants<Paragraph>())
             {
+                if (IsNoteSeparator(paragraph)) continue;
+
                 yield return (paragraph, ComputeParaId(paragraph, hostKey, index), hostKey);
                 index++;
             }
         }
     }
+
+    private static bool IsNoteSeparator(Paragraph paragraph)
+    {
+        if (paragraph.Ancestors<Footnote>().FirstOrDefault() is { } footnote)
+            return IsSeparatorType(footnote.Type);
+        if (paragraph.Ancestors<Endnote>().FirstOrDefault() is { } endnote)
+            return IsSeparatorType(endnote.Type);
+        return false;
+    }
+
+    private static bool IsSeparatorType(EnumValue<FootnoteEndnoteValues>? type) =>
+        type is not null &&
+        (type.Value == FootnoteEndnoteValues.Separator || type.Value == FootnoteEndnoteValues.ContinuationSeparator);
+
+    /// <summary>Maps an internal host key to an agent-facing location: body, header, footer, footnote, or endnote.</summary>
+    public static string LocationOf(string hostKey) =>
+        hostKey.Length == 0 ? "body"
+        : hostKey.StartsWith("hdr", StringComparison.Ordinal) ? "header"
+        : hostKey.StartsWith("ftr", StringComparison.Ordinal) ? "footer"
+        : hostKey == "fn" ? "footnote"
+        : hostKey == "en" ? "endnote"
+        : hostKey;
+
+    /// <summary>
+    /// True when the element lives in the main document body (including inside a body table),
+    /// as opposed to a header, footer, footnote, or endnote part.
+    /// </summary>
+    public static bool IsInMainBody(OpenXmlElement element) => element.Ancestors<Body>().Any();
 
     public static string ComputeParaId(Paragraph paragraph, string hostKey, int index)
     {

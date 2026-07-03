@@ -100,7 +100,7 @@ tools, so any MCP-capable agent can edit real Word documents without taking a
 cloud.
 
 ```bash
-dotnet tool install --global OfficeAgent.Mcp --prerelease
+dotnet tool install --global OfficeAgent.Mcp
 officeagent-mcp --stdio          # local: child process of an MCP client
 officeagent-mcp                  # cloud: streamable HTTP + /healthz
 ```

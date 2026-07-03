@@ -14,7 +14,7 @@ One binary, two transports:
 ## Install and run
 
 ```bash
-dotnet tool install --global OfficeAgent.Mcp --prerelease
+dotnet tool install --global OfficeAgent.Mcp
 officeagent-mcp --stdio
 ```
 

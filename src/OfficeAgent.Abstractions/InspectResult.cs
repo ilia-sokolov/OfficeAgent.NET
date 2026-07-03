@@ -104,6 +104,14 @@ public sealed class ParagraphInfo
     /// or <see langword="null"/> when it is a free-flowing body paragraph.
     /// </summary>
     public string? In { get; init; }
+
+    /// <summary>
+    /// Gets where the paragraph lives: <c>body</c>, <c>header</c>, <c>footer</c>,
+    /// <c>footnote</c>, or <c>endnote</c>. Body content — including tables — belongs in
+    /// <c>body</c>; anchoring body edits to a header/footnote/endnote paragraph places the
+    /// change outside the document flow.
+    /// </summary>
+    public string Location { get; init; } = "body";
 }
 
 /// <summary>

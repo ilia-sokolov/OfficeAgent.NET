@@ -32,6 +32,7 @@ public class FlowTests
 
         var clause = inspect.Paragraphs.Single(p => p.ParaId == ParaId(inspect, "shall provide"));
         Assert.Equal(DocxFactory.ClauseText, clause.Text);
+        Assert.All(inspect.Paragraphs, p => Assert.Equal("body", p.Location));
     }
 
     [Fact]
@@ -194,6 +195,106 @@ public class FlowTests
         var table = doc.MainDocumentPart!.Document.Body!.Descendants<Table>().Single();
         Assert.Contains("Milestone", table.InnerText);
         Assert.Contains("Kickoff", table.InnerText);
+    }
+
+    [Fact]
+    public void InsertTable_at_end_of_document_keeps_a_trailing_paragraph()
+    {
+        var office = Office();
+        var bytes = DocxFactory.Contract();
+        var inspect = office.Inspect(Handle(bytes));
+
+        var plan = new DocumentPlan
+        {
+            Operations = new PlanOperation[]
+            {
+                new InsertTableOp
+                {
+                    Target = new TextSpanAnchor { ParaId = ParaId(inspect, "Effective date"), Expect = DocxFactory.DateText },
+                    Position = InsertPosition.After,
+                    Table = new TableData
+                    {
+                        Headers = new[] { "Milestone", "Date" },
+                        Rows = new[] { new[] { "Kickoff", "2026-06-01" } }
+                    }
+                }
+            }
+        };
+
+        var result = office.Commit(Handle(bytes), plan);
+        Assert.True(result.Committed);
+
+        using var doc = WordprocessingDocument.Open(new MemoryStream(OfficeAgentClient.ToBytes(result)), false);
+        var table = doc.MainDocumentPart!.Document.Body!.Descendants<Table>().Single();
+
+        var next = table.NextSibling();
+        Assert.NotNull(next);
+        Assert.IsType<Paragraph>(next);
+    }
+
+    [Fact]
+    public void InsertTable_spans_the_full_page_width()
+    {
+        var office = Office();
+        var bytes = DocxFactory.Contract();
+        var inspect = office.Inspect(Handle(bytes));
+
+        var plan = new DocumentPlan
+        {
+            Operations = new PlanOperation[]
+            {
+                new InsertTableOp
+                {
+                    Target = new TextSpanAnchor { ParaId = ParaId(inspect, "shall provide"), Expect = DocxFactory.ClauseText },
+                    Position = InsertPosition.After,
+                    Table = new TableData { Headers = new[] { "A", "B" }, Rows = new[] { new[] { "1", "2" } } }
+                }
+            }
+        };
+
+        var result = office.Commit(Handle(bytes), plan);
+        Assert.True(result.Committed);
+
+        using var doc = WordprocessingDocument.Open(new MemoryStream(OfficeAgentClient.ToBytes(result)), false);
+        var width = doc.MainDocumentPart!.Document.Body!.Descendants<Table>().Single()
+            .GetFirstChild<TableProperties>()!.TableWidth!;
+        Assert.Equal(TableWidthUnitValues.Pct, width.Type!.Value);
+        Assert.Equal("5000", width.Width!.Value);
+    }
+
+    [Fact]
+    public void InsertTable_declares_a_column_grid()
+    {
+        var office = Office();
+        var bytes = DocxFactory.Contract();
+        var inspect = office.Inspect(Handle(bytes));
+
+        var plan = new DocumentPlan
+        {
+            Operations = new PlanOperation[]
+            {
+                new InsertTableOp
+                {
+                    Target = new TextSpanAnchor { ParaId = ParaId(inspect, "shall provide"), Expect = DocxFactory.ClauseText },
+                    Position = InsertPosition.After,
+                    Table = new TableData
+                    {
+                        Headers = new[] { "Milestone", "Owner", "Date" },
+                        Rows = new[] { new[] { "Kickoff", "Acme", "2026-06-01" } }
+                    }
+                }
+            }
+        };
+
+        var result = office.Commit(Handle(bytes), plan);
+        Assert.True(result.Committed);
+
+        using var doc = WordprocessingDocument.Open(new MemoryStream(OfficeAgentClient.ToBytes(result)), false);
+        var table = doc.MainDocumentPart!.Document.Body!.Descendants<Table>().Single();
+
+        var grid = table.GetFirstChild<TableGrid>();
+        Assert.NotNull(grid);
+        Assert.Equal(3, grid!.Elements<GridColumn>().Count());
     }
 
     [Fact]
