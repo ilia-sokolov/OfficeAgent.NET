@@ -1,4 +1,5 @@
 # OfficeAgent.NET
+<!-- mcp-name: io.github.ilia-sokolov/officeagent -->
 
 A translation layer between AI agents and OOXML - the format behind real
 Microsoft Word documents. Agents express intent; the library turns it into
