@@ -13,7 +13,23 @@
       "registryType": "nuget",
       "identifier": "OfficeAgent.Mcp",
       "version": "0.2.1",
-      "transport": { "type": "stdio" }
+      "transport": { "type": "stdio" },
+      "environmentVariables": [
+        {
+          "name": "OfficeAgent__FileSystemConnections__0__ConnectionId",
+          "description": "Connection id the agent uses to address documents (any non-empty string). The server requires at least one connection (filesystem or SharePoint) and exits on startup if none is configured",
+          "isRequired": true,
+          "default": "documents",
+          "placeholder": "documents"
+        },
+        {
+          "name": "OfficeAgent__FileSystemConnections__0__RootPath",
+          "description": "Absolute path to the directory this filesystem connection may read and write .docx files under. To use SharePoint instead of the filesystem, set OfficeAgent__SharePointConnections__0__*",
+          "format": "filepath",
+          "isRequired": true,
+          "placeholder": "/path/to/documents"
+        }
+      ]
     }
   ]
 }
