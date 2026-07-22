@@ -14,7 +14,3 @@ body:
     attributes:
       label: Proposed shape
       description: Concrete API sketch, JSON plan shape, or worked example.
-  - type: textarea
-    id: alternatives
-    attributes:
-      label: Alternatives considered
