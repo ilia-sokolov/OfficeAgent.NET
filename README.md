@@ -1,253 +1,226 @@
 # OfficeAgent.NET
 <!-- mcp-name: io.github.ilia-sokolov/officeagent -->
 
-A translation layer between AI agents and OOXML - the format behind real
-Microsoft Word documents. Agents express intent; the library turns it into
-valid Open XML manipulations.
+[![build](https://img.shields.io/github/actions/workflow/status/ilia-sokolov/OfficeAgent.NET/build.yml?branch=main)](https://github.com/ilia-sokolov/OfficeAgent.NET/actions/workflows/build.yml)
+[![NuGet](https://img.shields.io/nuget/v/OfficeAgent.Core.svg)](https://www.nuget.org/packages/OfficeAgent.Core)
+[![downloads](https://img.shields.io/nuget/dt/OfficeAgent.Core.svg)](https://www.nuget.org/packages/OfficeAgent.Core)
+[![license](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
-An agent can reason about a document, but it cannot safely produce one: the
-things that make a `.docx` a Word document - styles, numbering, tracked
-changes, comments, content controls - live in XML parts no language model
-should write by hand. OfficeAgent.NET does that translation. The agent expresses
-intent as a typed, JSON-serialisable change plan - "replace this clause as a
-tracked change", "add a row to that table" - and the library translates the
-plan into the Open XML changes that carry it out. Every change is validated
-against the live document, previewed, and applied all-or-nothing. The agent
-never writes raw `.docx` bytes, and Word itself is not automated.
+OfficeAgent.NET translates an AI agent’s intent into controlled changes to Microsoft Word documents. The agent proposes a typed edit plan; the library validates and applies it while preserving document features such as styles and comments. Edits can be recorded as tracked changes for human review, while structured document operations can reduce token use compared with processing entire files.
 
-The Word support is built on the Open XML SDK (`DocumentFormat.OpenXml`).
 
-Use it when you need to:
+![OfficeAgent.NET finds, previews, and applies a contract edit as a tracked change in Word.](media/demo.gif)
 
-- locate stable targets in a `.docx` (paragraphs, runs, tables, content
-  controls, document properties, tracked revisions);
-- ask a language model to return a typed edit plan instead of document bytes;
-- preview the result before saving;
-- keep Word semantics intact - runs, styles, content controls, comments,
-  tracked revisions;
-- reject edits that target the wrong place or that need a layout/calculation
-  engine.
+## What this project does
 
-## Key concepts
+A `.docx` file is a package of related XML parts. A small text change can affect
+runs, styles, numbering, comments, content controls, or revision markup.
+OfficeAgent.NET handles that document-specific work. The model works with
+structured document data and JSON-serialisable operations such as "replace this
+clause as a tracked change" or "add a row to this table."
 
-### The workflow: inspect → find → preview → commit
+The same engine is available in three forms:
 
-Every edit follows the same four steps:
+- an MCP server for agents that support the Model Context Protocol;
+- tools for Microsoft Agent Framework and `Microsoft.Extensions.AI`;
+- a .NET API for applications that want to control the workflow directly.
 
-1. **Inspect** - read the document and get a structured map of it: the outline,
-   paragraphs (with stable ids), styles, content controls, and nodes (tables,
-   images, document properties, revisions).
-2. **Find** - search for text and get an address back for each match.
-3. **Preview** - check a set of changes against the current document. Nothing is
-   written; you get a before/after report and any validation errors.
-4. **Commit** - apply the changes and save through storage. The operation is
-   all-or-nothing: if any step fails, nothing is written.
+It currently supports Word `.docx` files. Excel and PowerPoint modules are not implemented. The . See
+[Scope and limitations](#scope-and-limitations) before choosing it for a
+workflow that depends on Word's layout or calculation engine.
 
-### Plan
+## Choose a starting point
 
-A **plan** (`DocumentPlan`) is the list of changes you want to make. It is a
-typed, JSON-serialisable object, so a language model can produce one directly.
-The library validates the whole plan before it touches the document.
+| I want to... | Start here |
+| --- | --- |
+| Add Word editing to a local MCP client | [Run the MCP server over stdio](#mcp-quick-start) |
+| Connect Codex, Claude Code, Copilot Studio, or Microsoft 365 Copilot | [Deployment and client setup](docs/deployment.md) |
+| Use OfficeAgent from C# | [Getting started](docs/getting-started.md) |
+| Add tools to a Microsoft Agent Framework agent | [Agent integration](docs/agent-integration.md) |
+| Host the MCP server or use SharePoint | [MCP server](docs/mcp-server.md) and [document providers](docs/document-providers.md) |
+| Contribute | [Contributing](#contributing) |
 
-### Anchors
+## MCP quick start
 
-An **anchor** is an address inside the document. The library issues anchors from
-inspect and find; the caller (or the model) reuses them and never invents one.
+Install the server as a .NET tool:
 
-Anchors carry the content they expect to find. At commit time the library
-re-checks each anchor against the live document. If the content has changed, the
-operation fails safely instead of editing the wrong place.
+```bash
+dotnet tool install --global OfficeAgent.Mcp
+```
 
-### Operations
+The following examples register it with Claude Code and limit its filesystem
+connection to one directory.
 
-Each entry in a plan is one **operation** - a verb such as `changeText`,
-`format`, `insert`, or `setProperty`. Every operation targets one anchor. The
-Word module ships 17 verbs covering text, tables, images, styles, comments,
-document properties, and tracked revisions.
+macOS/Linux:
 
-### Documents are registered with a provider, not uploaded
+```bash
+claude mcp add officeagent \
+  --env OfficeAgent__FileSystemConnections__0__ConnectionId=documents \
+  --env OfficeAgent__FileSystemConnections__0__RootPath=/absolute/path/to/documents \
+  -- officeagent-mcp --stdio
+```
 
-A document is not edited by file path. It lives behind a **document provider**
-(storage). The provider is a **registry of references** - it persists only the
-path (or URL, drive id, …) the host hands it, not the bytes. You register an
-existing document with a connection; the provider returns an **opaque document
-id**. Every later call addresses the document by `(connectionId, documentId)`,
-and the provider routes reads and saves back to the referenced location.
+PowerShell:
 
-The agent never sees a file path or credential and cannot leave the storage you
-configured. By default it cannot register documents either - the host stages ids
-up front; hosts that want the agent to manage its own registrations opt in to
-the `register_document` / `remove_document` tools, which stay inside the
-connection's boundary and never delete content. Filesystem and SharePoint
-providers ship in the box; a database or any other store can implement the same
-interface.
+```powershell
+claude mcp add officeagent `
+  --env OfficeAgent__FileSystemConnections__0__ConnectionId=documents `
+  --env OfficeAgent__FileSystemConnections__0__RootPath=C:\officeagent-documents `
+  -- officeagent-mcp --stdio
+```
 
-## Quick start
+Run `claude mcp list` to confirm that `officeagent` is connected. Then ask the
+client to edit a file in the configured directory, for example:
 
-Install the packages:
+> Change the payment terms in contract.docx from 30 to 45 days.
+
+The server exposes tools to register, inspect, search, preview, and apply edits.
+Text replacements are tracked changes by default. With the filesystem provider,
+a successful apply normally writes a sibling such as `contract.v2.docx`, keeps
+`contract.docx` unchanged, and returns the new document id for follow-up edits.
+
+OfficeAgent does not send the complete `.docx` package through the model, but
+the MCP client and model do receive document text and structure returned by the
+inspect and find tools. Only connect document folders and model providers that
+are appropriate for the data you are processing.
+
+Configuration for other clients, streamable HTTP hosting, containers, and
+SharePoint is in [Deployment and client setup](docs/deployment.md).
+The server does not provide an authentication layer for HTTP hosting; put it
+behind the authentication and network controls appropriate for your environment.
+
+## .NET quick start
+
+Install the core package and Word module:
 
 ```bash
 dotnet add package OfficeAgent.Core
 dotnet add package OfficeAgent.Word
-dotnet add package OfficeAgent.AgentFramework   # only for the Agent Framework path
-dotnet add package OfficeAgent.SharePoint       # only for the SharePoint provider
 ```
 
-### Over MCP (any agent, any language)
-
-The `OfficeAgent.Mcp` server exposes the same workflow as Model Context Protocol
-tools, so any MCP-capable agent can edit real Word documents without taking a
-.NET dependency. It runs over stdio for local hosting or streamable HTTP for the
-cloud.
-
-```bash
-dotnet tool install --global OfficeAgent.Mcp
-officeagent-mcp --stdio          # local: child process of an MCP client
-officeagent-mcp                  # cloud: streamable HTTP + /healthz
-```
-
-Point it at your documents through configuration (`appsettings.json` or
-`OfficeAgent__`-prefixed environment variables) and the agent gets
-`inspect_document`, `find_in_document`, `preview_plan`, `apply_plan`, and -
-unless you turn registration off - `register_document` / `remove_document` /
-`list_connections`.
-See [the MCP server guide](docs/mcp-server.md) for client config snippets,
-SharePoint connections, and cloud hosting.
-
-### With Microsoft Agent Framework (MAF)
-
-`OfficeAgent.AgentFramework` exposes the workflow as four core tools a language
-model can call: `inspect_document`, `find_in_document`, `preview_plan`, and
-`apply_plan`. By default the host registers documents up front and threads the
-resulting opaque id into the agent's system prompt; the agent never sees a file
-path and cannot register or delete storage on its own. Opt in via
-`OfficeAgentToolsOptions.AllowRegistration` to add `register_document` and
-`remove_document`, which let the agent stage its own ids inside the configured
-connections.
+After registering services and a document provider, the edit loop looks like
+this:
 
 ```csharp
-using Microsoft.Agents.AI;
-using Microsoft.Extensions.AI;
-using Microsoft.Extensions.DependencyInjection;
-using OfficeAgent.AgentFramework;
-using OfficeAgent.Core;
-using OfficeAgent.Core.DocumentProviders;
-using OfficeAgent.Word;
-
-var services = new ServiceCollection()
-    .AddWordFormat()
-    .AddFileSystemDocumentProvider("workspace", "/srv/officeagent/workspace")
-    .AddOfficeAgent()
-    .BuildServiceProvider();
-
 var client = services.GetRequiredService<OfficeAgentClient>();
+var doc = await client.RegisterAsync("workspace", "/srv/workspace/contract.docx");
 
-// Register the existing document with the connection. The provider stores only
-// the path; the host owns the file's lifecycle.
-var seeded = await client.RegisterAsync(
-    "workspace", "/srv/officeagent/workspace/contract.docx");
-
-var tools  = new OfficeAgentTools(client).AsAIFunctions();
-var prompt = $"You are editing documentId={seeded.ItemId} on connectionId=workspace.\n\n"
-           + OfficeAgentTools.SystemPromptGuidance;
-
-AIAgent agent = new ChatClientAgent(
-    chatClient,                       // any Microsoft.Extensions.AI IChatClient
-    instructions: prompt,
-    name:         "OfficeAgent",
-    description:  "Edits Word documents using OfficeAgent.NET.",
-    tools:        tools.Cast<AITool>().ToList(),
-    services:     services);
-```
-
-`apply_plan` saves the result and returns an `outputDocumentId`. It does not send
-`.docx` bytes back through the model. The host reads the id with `OpenReadAsync`
-and delivers the file through its own download or attachment API.
-
-A runnable Azure OpenAI example is in [`samples/AgentEdit`](samples/AgentEdit).
-
-### As a library
-
-Drive the same workflow directly from code:
-
-```csharp
-using Microsoft.Extensions.DependencyInjection;
-using OfficeAgent.Abstractions;
-using OfficeAgent.Core;
-using OfficeAgent.Core.DocumentProviders;
-using OfficeAgent.Word;
-
-var services = new ServiceCollection()
-    .AddWordFormat()
-    .AddFileSystemDocumentProvider("workspace", "/srv/officeagent/workspace")
-    .AddOfficeAgent()
-    .BuildServiceProvider();
-
-var client = services.GetRequiredService<OfficeAgentClient>();
-
-// Register an existing file with the connection; the provider mints the opaque id.
-var doc = await client.RegisterAsync(
-    "workspace", "/srv/officeagent/workspace/contract.docx");
-
-// inspect → find → preview → commit, addressing the document by its id.
 var inspect = await client.InspectAsync("workspace", doc.ItemId);
-var hit     = (await client.FindAsync(
+var hit = (await client.FindAsync(
     "workspace", doc.ItemId, new FindQuery("Acme Corp"))).First();
 
 var plan = new DocumentPlan
 {
-    Snapshot   = inspect.Snapshot,          // opt in to drift detection
+    Snapshot = inspect.Snapshot,
     Operations = new PlanOperation[]
     {
-        new ChangeTextOp { Target = hit.Anchor, With = "Globex Inc.", Mode = ChangeMode.Tracked }
+        new ChangeTextOp
+        {
+            Target = hit.Anchor,
+            With = "Globex Inc.",
+            Mode = ChangeMode.Tracked
+        }
     }
 };
 
 var preview = await client.PreviewAsync("workspace", doc.ItemId, plan);
-if (!preview.IsValid) { /* surface preview.Errors */ return; }
-
-// By default a fresh id is minted for the result; the source is preserved.
-var result = await client.CommitAsync("workspace", doc.ItemId, plan);
-if (result.Committed)
-{
-    using var saved = await client.OpenReadAsync(result.Document);
-    // saved.Stream holds the edited bytes; result.Document.ItemId is the new id.
-}
+if (preview.IsValid)
+    await client.CommitAsync("workspace", doc.ItemId, plan);
 ```
 
-A runnable version is in [`samples/QuickEdit`](samples/QuickEdit).
+The complete example, including service registration and reading the saved
+file, is in [Getting started](docs/getting-started.md).
+The minimal sample replaces the first `Acme Corp` with `Globex Inc.`. To run it,
+copy a Word document containing `Acme Corp` to `contract.docx` in the cloned
+repository root, then run:
+
+```bash
+dotnet run --project samples/QuickEdit -- ./contract.docx ./contract-edited.docx
+```
+
+The repository also contains an interactive
+[Agent Framework sample](samples/AgentEdit/).
+
+## How it works
+
+Every edit follows the same four steps:
+
+1. **Inspect** returns a structured map of the document: its outline,
+   paragraphs, styles, content controls, tables, images, and revisions.
+2. **Find** searches text and returns a content-verified anchor for each match.
+3. **Preview** validates a plan against the current document and reports the
+   proposed changes without writing.
+4. **Apply** commits the complete plan and saves it through the configured
+   provider.
+
+A plan (`DocumentPlan`) is a typed, JSON-serialisable list of operations. An
+anchor records both a location and the content expected there. If the content
+or optional document snapshot has changed, validation fails instead of silently
+targeting a different location. Applying a plan is all-or-nothing.
+
+The Word module supports changes to text, paragraphs, tables, images, styles,
+content controls, comments, document properties, and tracked revisions. The
+full operation schema is documented in
+[Document plans](docs/document-plans.md).
+
+Documents are accessed through configured providers. After registration,
+editing calls use a `(connectionId, documentId)` pair instead of a storage path
+or credentials. The filesystem provider restricts registrations to its root;
+the SharePoint provider uses the permissions of its configured identity.
 
 ## Documentation
 
-- [Getting started](docs/getting-started.md) - one full edit, step by step.
-- [Concepts](docs/concepts.md) - providers, inspect, anchors, snapshots, plans,
-  preview/commit, capabilities, transactions.
-- [Document providers](docs/document-providers.md) - `IDocumentProvider`,
-  registration, save modes, optimistic concurrency, the SharePoint provider.
-- [Document plans](docs/document-plans.md) - the JSON contract for every verb.
-- [Agent integration](docs/agent-integration.md) - wiring `OfficeAgentTools`
-  into Microsoft Agent Framework / MEAI, opt-in registration tools.
-- [MCP server](docs/mcp-server.md) - hosting `OfficeAgent.Mcp` locally over
-  stdio or in the cloud over streamable HTTP.
-- [Deployment & client setup](docs/deployment.md) - connecting the MCP server to
-  Claude Code, Codex, Copilot Studio, and Microsoft 365 Copilot, with the
-  identity checklist.
-- [Operations](docs/operations.md) - thread safety, stream ownership, memory,
-  cancellation, telemetry.
+| Guide | Covers |
+| --- | --- |
+| [Getting started](docs/getting-started.md) | A complete edit from service registration to reading the result |
+| [Concepts](docs/concepts.md) | Anchors, snapshots, plans, providers, transactions, and capabilities |
+| [Document plans](docs/document-plans.md) | JSON shapes and validation rules for every operation |
+| [Document providers](docs/document-providers.md) | Filesystem, SharePoint, save modes, and custom providers |
+| [Agent integration](docs/agent-integration.md) | Microsoft Agent Framework and `Microsoft.Extensions.AI` tools |
+| [MCP server](docs/mcp-server.md) | Server configuration, transports, security notes, and tool contracts |
+| [Deployment and client setup](docs/deployment.md) | Codex, Claude Code, Microsoft Copilot clients, containers, and Azure |
+| [Operations](docs/operations.md) | Concurrency, streams, cancellation, telemetry, and production concerns |
+| [Failure modes](docs/operations.md#failure-modes-you-should-handle) | Common plan errors and what to do next |
 
-## Scope
+## Contributing
 
-OfficeAgent.NET ships the Word path today. Excel and PowerPoint can plug in
-through the same `IFormatModule` interface but are not implemented yet. Work that
-needs a renderer - pagination, field recalculation, table-of-contents rendering,
-page-fit checks - is rejected on purpose: the engine can write the OOXML but
-cannot compute the displayed value.
+Bug reports, documentation fixes, new Word operations, provider integrations,
+and focused test cases are useful contributions. If you found a problem,
+[open an issue](https://github.com/ilia-sokolov/OfficeAgent.NET/issues) with the
+document feature involved, the operation you attempted, and the error or
+unexpected result. Do not attach confidential documents; a small sanitised
+reproduction is enough.
+
+To work on the code, install the .NET 8 SDK, fork the repository, and run:
+
+```bash
+dotnet build OfficeAgent.NET.sln
+dotnet test OfficeAgent.NET.sln
+```
+
+Before starting a larger change, especially one that changes public types or
+the JSON wire format, [open an issue](https://github.com/ilia-sokolov/OfficeAgent.NET/issues)
+so the design can be discussed. See
+[CONTRIBUTING.md](CONTRIBUTING.md)
+for code style, tests, and pull-request expectations.
+
+## Scope and limitations
+
+OfficeAgent.NET edits Word `.docx` files; it does not automate the Word desktop
+application. Excel and PowerPoint modules can be added through `IFormatModule`,
+but they do not ship today.
+
+The engine does not render pages or calculate Word fields. Operations that
+depend on pagination, table-of-contents rendering, field recalculation, or
+page-fit checks are outside its scope. Preview reports structural changes, not
+a visual rendering of the final document. Test the workflow on representative
+documents and keep human review in the loop for consequential edits.
 
 ## Commercial support
 
-OfficeAgent.NET is MIT and free to self-host. **dotaction** offers a managed,
-audited, EU-resident hosted service and commercial support —
-[get in touch](mailto:contact@dotaction.io?subject=OfficeAgent.NET%20commercial%20support).
+OfficeAgent.NET is MIT-licensed and can be self-hosted. Managed hosting and
+commercial support are available from dotaction:
+[contact dotaction](mailto:contact@dotaction.io?subject=OfficeAgent.NET%20commercial%20support).
 
 ## License
 
