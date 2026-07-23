@@ -25,7 +25,7 @@ The same engine is available in three forms:
 - tools for Microsoft Agent Framework and `Microsoft.Extensions.AI`;
 - a .NET API for applications that want to control the workflow directly.
 
-It currently supports Word `.docx` files. Excel and PowerPoint modules are not implemented. The . See
+It currently supports Word `.docx` files. Excel and PowerPoint modules are not implemented. See
 [Scope and limitations](#scope-and-limitations) before choosing it for a
 workflow that depends on Word's layout or calculation engine.
 
