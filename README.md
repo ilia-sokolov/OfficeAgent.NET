@@ -138,7 +138,9 @@ repository root, then run:
 dotnet run --project samples/QuickEdit -- ./contract.docx ./contract-edited.docx
 ```
 
-The repository also contains an interactive
+The repository also contains a
+[direct `IChatClient` Word-editing sample](samples/IChatClientWordEdit/) and an
+interactive
 [Agent Framework sample](samples/AgentEdit/).
 
 ## How it works

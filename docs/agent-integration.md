@@ -125,7 +125,12 @@ AIAgent agent = new ChatClientAgent(
     services:       services);
 ```
 
-`UseFunctionInvocation()` on the underlying chat client will execute the tool calls automatically. A complete Azure OpenAI sample is in [`samples/AgentEdit`](../samples/AgentEdit).
+`UseFunctionInvocation()` on the underlying chat client will execute the tool
+calls automatically. See
+[`samples/IChatClientWordEdit`](../samples/IChatClientWordEdit) for a minimal
+direct `IChatClient` Azure OpenAI host, or
+[`samples/AgentEdit`](../samples/AgentEdit) for an interactive Agent Framework
+host.
 
 ## Recommended agent loop
 
