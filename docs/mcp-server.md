@@ -71,7 +71,7 @@ Everything binds from the `OfficeAgent` section - `appsettings.json`, `OfficeAge
 | Key | Default | Meaning |
 | --- | --- | --- |
 | `Transport` | `http` | `http` or `stdio` (the `--stdio` flag also forces stdio). |
-| `AllowRegistration` | `true` | Expose `register_document` / `remove_document` / `list_connections`. Unlike the in-process tools (opt-in), the MCP server defaults to on: an MCP client has no other channel to stage document ids. Set to `false` to pin agents to ids the host distributes itself. |
+| `AllowRegistration` | `true` | Expose `register_document` / `remove_document` / `open_document` / `edit_document` / `list_connections` - every tool that takes a connection-relative source. Unlike the in-process tools (opt-in), the MCP server defaults to on: an MCP client has no other channel to stage document ids. Set to `false` to pin agents to ids the host distributes itself. |
 | `AllowCreation` | `false` | Expose `create_document` when at least one connection allows `.docx`: any filesystem connection qualifies, while SharePoint must also have a configured creation destination. Independent of `AllowRegistration`, so a host can permit creation without permitting arbitrary registration/removal. |
 | `FileSystemConnections[n]:ConnectionId` | - | Connection id agents address documents under. |
 | `FileSystemConnections[n]:RootPath` | - | Root directory; registrations must stay under it, and new documents are created in it. |
@@ -113,7 +113,7 @@ with `OfficeAgent__SharePointConnections__0__ClientSecret` supplied from the env
 
 ## Tools
 
-The MCP toolset is the projection of [the agent-integration surface](agent-integration.md): `inspect_document`, `find_in_document`, `preview_plan`, and `apply_plan`; `AllowRegistration` independently adds `register_document` / `remove_document`, while `AllowCreation` adds `create_document` when at least one connection allows `.docx` (SharePoint also requires its creation destination). Either opt-in adds `list_connections`, which returns `{connectionId, provider, canCreateDocuments}` entries. Tool results are the same structured JSON, including stable error codes such as `already-exists` and `configuration-error`.
+The MCP toolset is the projection of [the agent-integration surface](agent-integration.md): `inspect_document`, `find_in_document`, `preview_plan`, and `apply_plan`; `AllowRegistration` independently adds `register_document` / `remove_document` plus the composites `open_document` / `edit_document`, while `AllowCreation` adds `create_document` when at least one connection allows `.docx` (SharePoint also requires its creation destination). Either opt-in adds `list_connections`, which returns `{connectionId, provider, canCreateDocuments}` entries. Tool results are the same structured JSON, including stable error codes such as `already-exists` and `configuration-error`.
 
 The security model carries over: agents see opaque ids, never credentials; a filesystem source cannot escape its connection's root, and a SharePoint source resolves only to documents the connection's identity can already reach (per-user under On-Behalf-Of); `create_document` writes only under the filesystem root or configured SharePoint folder and never overwrites an existing name; `remove_document` drops a registration without deleting content; `apply_plan` never returns document bytes through the model - the host (or a download endpoint) retrieves the saved revision by id.
 
@@ -127,5 +127,14 @@ The security model carries over: agents see opaque ids, never credentials; a fil
 6. `remove_document("documents", id)` when the registration is no longer needed
 
 Step 5 writes `contract.v2.docx` beside the source (default `NewVersion` mode) - the source file is untouched, and the returned id addresses the new revision for follow-up edits.
+
+The composite tools collapse that loop. Steps 2–5 become one call when the edit is already known:
+
+```jsonc
+edit_document("documents", "contract.docx",
+  "[ { \"op\": \"changeText\", \"target\": { \"find\": \"Acme Corp\" }, \"with\": \"Globex Inc.\" } ]")
+```
+
+→ `{ committed: true, sourceDocumentId: "…", outputDocumentId: "…", outputName: "contract.v2.docx" }`. Text matching more than once comes back as `ambiguous-anchor` with the candidates listed, and nothing is written; re-issue with `"match": <index>`. When the document has to be read first, `open_document("documents", "contract.docx")` replaces steps 2–3 and returns the registration and the inspection together.
 
 To start from nothing instead, replace step 2 with `create_document("documents", "brief.docx", "")` → `{ committed: true, outputDocumentId: "…" }`. The new document holds one empty paragraph addressed as `auto-0000`, so the third argument can carry an initial plan targeting it. Plan-validation errors happen before the write; provider errors may occur after storage accepted the file, so do not retry the same name blindly.

@@ -1,4 +1,5 @@
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using System.Text.Json.Serialization;
 using Microsoft.Extensions.AI;
 using OfficeAgent.Abstractions;
@@ -104,6 +105,12 @@ public sealed class OfficeAgentTools
         - register_document(connectionId, source) registers an existing document with a host-configured connection and returns its opaque documentId. The source is connection-specific: a path under a filesystem connection's root, or - for a SharePoint connection - the document's SharePoint/OneDrive URL or a "driveId/itemId" pair. Never pass credentials.
         - remove_document(connectionId, documentId) removes the registration only - the underlying file is never deleted. Remove temporary registrations you made with register_document once the work is done, but keep the final document's output registration until the host has delivered it.
         - Register a document only when the user names a file the host has not already given you an id for; otherwise use the ids you were given.
+
+        Working from a source in one call
+        - open_document(connectionId, source) = register_document + inspect_document. Prefer it when the user names a file you have no id for and you need to see the document.
+        - edit_document(connectionId, source, planJson) = register_document + find + apply_plan. Prefer it when you already know the text to change; it returns sourceDocumentId for follow-up work.
+        - In edit_document a target may name text directly - { "find": "Acme Corp" } - instead of a paraId, so no lookup call is needed. Text matching more than once fails with "ambiguous-anchor" and lists the candidates: re-issue with { "find": "Acme Corp", "match": 2 } (zero-based) or use more surrounding text. Never guess a match index; use the one the error listed.
+        - Reach for the single-purpose tools when the composites do not fit: an id you already hold, a plan you want to preview before applying, or targets that need regex or case-sensitive search (find_in_document, then paraId targets).
         """;
 
     /// <summary>
@@ -113,7 +120,7 @@ public sealed class OfficeAgentTools
 
         Creating a document
         - create_document(connectionId, name, planJson) creates and registers a new .docx and returns outputDocumentId. name is a bare file name, never a path; an existing name is not overwritten.
-        - Pass "" for an empty document. An initial plan is applied in memory before storage and can target the empty paragraph as { "paraId": "auto-0000", "expect": "" }.
+        - Pass "" for an empty document. An initial plan is applied in memory before storage and can target the empty paragraph as { "paraId": "auto-0000", "expect": "" }. planJson accepts a bare operations array [ … ] as well as { "operations": [ … ] }.
         - Plan-validation errors mean nothing was written. A provider or cancellation error can occur after storage accepted the file, so do not retry the same name; report the possibly unregistered file name to the host/operator for recovery.
         """;
 
@@ -122,9 +129,11 @@ public sealed class OfficeAgentTools
 
     /// <summary>
     /// Returns the AIFunctions selected by <paramref name="options"/>: the four core
-    /// inspect/find/preview/apply tools, plus <c>register_document</c> and
-    /// <c>remove_document</c> when registration is allowed, and independently
-    /// <c>create_document</c> when creation is allowed.
+    /// inspect/find/preview/apply tools, plus the source-addressed tools
+    /// (<c>register_document</c>, <c>remove_document</c>, <c>open_document</c>,
+    /// <c>edit_document</c>) when registration is allowed, and independently
+    /// <c>create_document</c> when creation is allowed. The composites are gated with
+    /// registration because they take the same connection-relative source it does.
     /// </summary>
     public AIFunction[] AsAIFunctions(OfficeAgentToolsOptions options)
     {
@@ -141,6 +150,22 @@ public sealed class OfficeAgentTools
                 "remove_document",
                 "Remove a document registration from a provider connection by (connectionId, documentId). " +
                 "Only the registration is removed - the underlying file is never deleted. Returns {removed, connectionId, documentId}.")));
+            functions.Add(AIFunctionFactory.Create(OpenDocument, Opts(
+                "open_document",
+                "Open a document the user named by source: registers it and returns its inspection in one call - use this instead of register_document followed by inspect_document. " +
+                "source is connection-specific, exactly as for register_document: a path under a filesystem connection's root, or a SharePoint/OneDrive URL or 'driveId/itemId' pair. " +
+                "Returns {connectionId, documentId, name, contentType, version} followed by the inspect_document payload (snapshot, outline, paragraphs, contentControls, nodes, styles). " +
+                "Keep documentId for follow-up calls; paging works as in inspect_document.")));
+            functions.Add(AIFunctionFactory.Create(EditDocument, Opts(
+                "edit_document",
+                "Edit a document the user named by source, in one call: registers it, resolves targets, and applies the operations - use this instead of register_document + find_in_document + apply_plan. " +
+                "planJson is an operations array [ … ] or { \"operations\": [ … ] }, the same operations preview_plan documents.\n" +
+                "Targets may name text directly instead of a paragraph id, so no lookup call is needed first:\n" +
+                "{ \"op\": \"changeText\", \"target\": { \"find\": \"Acme Corp\" }, \"with\": \"Globex Inc.\" }\n" +
+                "If that text matches more than once the call fails with 'ambiguous-anchor' and lists each candidate with its context; re-issue with { \"find\": \"Acme Corp\", \"match\": 2 } (zero-based) or use more surrounding text. Text that matches nothing fails with 'anchor-not-found'. " +
+                "Anchors resolved from inspect_document/find_in_document ({ \"paraId\": …, \"expect\": … }) work here too, and can be mixed in the same plan. " +
+                "saveMode and newName behave as in apply_plan. Nothing is written unless every operation validates. " +
+                "Returns the apply_plan shape plus sourceDocumentId - the id of the document that was opened, usable for follow-up calls even when the edit failed.")));
         }
         if (options.AllowCreation)
         {
@@ -205,26 +230,31 @@ public sealed class OfficeAgentTools
         {
             var options = new InspectOptions { Fidelity = ParseFidelity(fidelity) };
             var result = await _client.InspectAsync(connectionId, documentId, options, cancellationToken).ConfigureAwait(false);
-
-            var pagedParagraphs = result.Paragraphs
-                .Skip(Math.Max(0, paragraphOffset))
-                .Take(Math.Max(0, paragraphLimit))
-                .Select(p => new { p.ParaId, style = p.StyleId, p.Text, @in = p.In });
-
-            return JsonSerializer.Serialize(new
-            {
-                format = result.Format.ToString(),
-                snapshot = result.Snapshot.ETag,
-                outline = result.Outline.Select(MapOutline),
-                paragraphsTotal = result.Paragraphs.Count,
-                paragraphOffset,
-                paragraphLimit,
-                paragraphs = pagedParagraphs,
-                contentControls = result.StructuralAnchors.Select(s => new { s.Tag, s.Kind }),
-                nodes = result.Nodes.Select(n => new { n.Kind, n.Path, n.Summary }),
-                styles = result.Styles.Styles.Select(s => new { s.Id, s.Name, s.InUseCount })
-            }, Json);
+            return JsonSerializer.Serialize(
+                InspectPayload(result, paragraphOffset, paragraphLimit), Json);
         });
+
+    /// <summary>
+    /// Shapes an inspection for the wire. Ordered so the fields an agent reads first come
+    /// first, and shared with <c>open_document</c> so both return the identical structure.
+    /// </summary>
+    private static Dictionary<string, object?> InspectPayload(
+        InspectResult result, int paragraphOffset, int paragraphLimit) => new()
+    {
+        ["format"] = result.Format.ToString(),
+        ["snapshot"] = result.Snapshot.ETag,
+        ["outline"] = result.Outline.Select(MapOutline),
+        ["paragraphsTotal"] = result.Paragraphs.Count,
+        ["paragraphOffset"] = paragraphOffset,
+        ["paragraphLimit"] = paragraphLimit,
+        ["paragraphs"] = result.Paragraphs
+            .Skip(Math.Max(0, paragraphOffset))
+            .Take(Math.Max(0, paragraphLimit))
+            .Select(p => new { p.ParaId, style = p.StyleId, p.Text, @in = p.In }),
+        ["contentControls"] = result.StructuralAnchors.Select(s => new { s.Tag, s.Kind }),
+        ["nodes"] = result.Nodes.Select(n => new { n.Kind, n.Path, n.Summary }),
+        ["styles"] = result.Styles.Styles.Select(s => new { s.Id, s.Name, s.InUseCount })
+    };
 
     /// <summary>Finds text in a document and returns content-verified anchors.</summary>
     public Task<string> FindInDocument(
@@ -319,6 +349,78 @@ public sealed class OfficeAgentTools
             return SerializeReport(result.Report, result.Committed, result.Committed ? result.Document : null);
         });
 
+    /// <summary>
+    /// Registers a document by its connection-relative source and inspects it in one call,
+    /// so the agent reaches a working documentId and the document's structure together.
+    /// </summary>
+    public Task<string> OpenDocument(
+        string connectionId,
+        string source,
+        string fidelity = "content",
+        int paragraphOffset = 0,
+        int paragraphLimit = 200,
+        CancellationToken cancellationToken = default)
+        => SafeAsync(async () =>
+        {
+            var reference = await _client.RegisterAsync(connectionId, source, cancellationToken).ConfigureAwait(false);
+            var options = new InspectOptions { Fidelity = ParseFidelity(fidelity) };
+            var result = await _client.InspectAsync(
+                connectionId, reference.ItemId, options, cancellationToken).ConfigureAwait(false);
+
+            // The registration fields lead, because the documentId is what every follow-up
+            // call needs; the inspection then follows in its usual shape.
+            var payload = new Dictionary<string, object?>
+            {
+                ["connectionId"] = reference.ConnectionId,
+                ["documentId"] = reference.ItemId,
+                ["name"] = reference.Name,
+                ["contentType"] = reference.ContentType,
+                ["version"] = reference.Version
+            };
+            foreach (var field in InspectPayload(result, paragraphOffset, paragraphLimit))
+                payload[field.Key] = field.Value;
+
+            return JsonSerializer.Serialize(payload, Json);
+        });
+
+    /// <summary>
+    /// Registers a document by source, binds any <c>find</c> targets to live anchors, and
+    /// applies the operations - the whole inspect/find/preview/apply loop in one call.
+    /// </summary>
+    public Task<string> EditDocument(
+        string connectionId,
+        string source,
+        string planJson,
+        string saveMode = "NewVersion",
+        string newName = "",
+        CancellationToken cancellationToken = default)
+        => SafeAsync(async () =>
+        {
+            var reference = await _client.RegisterAsync(connectionId, source, cancellationToken).ConfigureAwait(false);
+            var planObject = ParsePlanObject(planJson);
+
+            // Anchor binding happens against the freshly registered document, so the text
+            // an operation names is verified against live content before anything is applied.
+            var failures = await new FindTargetResolver(_client)
+                .ResolveAsync(reference, planObject, cancellationToken).ConfigureAwait(false);
+            if (failures.Count > 0)
+                return SerializeErrors(
+                    failures.Select(f => (f.Code, f.Message)).ToArray(),
+                    connectionId, reference.ItemId);
+
+            var options = new SaveDocumentOptions
+            {
+                Mode = ParseSaveMode(saveMode),
+                NewName = string.IsNullOrEmpty(newName) ? null : newName
+            };
+            var result = await _client.CommitAsync(
+                connectionId, reference.ItemId, DeserializePlan(planObject), options, cancellationToken).ConfigureAwait(false);
+
+            return SerializeReport(
+                result.Report, result.Committed, result.Committed ? result.Document : null,
+                sourceDocumentId: reference.ItemId);
+        });
+
     /// <summary>Removes a document registration; the underlying content is left untouched.</summary>
     public Task<string> RemoveDocument(
         string connectionId,
@@ -380,9 +482,31 @@ public sealed class OfficeAgentTools
         _ => "provider-error"
     };
 
-    private static DocumentPlan DeserializePlan(string planJson)
+    /// <summary>
+    /// Parses the plan JSON a tool was given. Accepts either the full plan object,
+    /// <c>{ "operations": [ … ] }</c>, or a bare operations array, <c>[ … ]</c> - models
+    /// reach for the array form constantly, and rejecting it buys nothing.
+    /// </summary>
+    private static JsonObject ParsePlanObject(string planJson)
     {
-        var plan = JsonSerializer.Deserialize<DocumentPlan>(planJson, PlanJson)
+        var node = JsonNode.Parse(planJson)
+            ?? throw new JsonException("Plan JSON was null.");
+
+        return node switch
+        {
+            JsonObject plan => plan,
+            JsonArray operations => new JsonObject { ["operations"] = operations.DeepClone() },
+            _ => throw new JsonException(
+                "Plan JSON must be an operations array [ … ] or an object { \"operations\": [ … ] }.")
+        };
+    }
+
+    private static DocumentPlan DeserializePlan(string planJson) =>
+        DeserializePlan(ParsePlanObject(planJson));
+
+    private static DocumentPlan DeserializePlan(JsonObject planObject)
+    {
+        var plan = planObject.Deserialize<DocumentPlan>(PlanJson)
             ?? throw new JsonException("Plan JSON did not deserialize to a DocumentPlan.");
 
         // An explicit "operations": null overwrites the empty default, and every consumer
@@ -396,11 +520,18 @@ public sealed class OfficeAgentTools
         return plan;
     }
 
-    private static string SerializeReport(ChangeReport report, bool committed, DocumentReference? savedReference) =>
+    private static string SerializeReport(
+        ChangeReport report,
+        bool committed,
+        DocumentReference? savedReference,
+        string? sourceDocumentId = null) =>
         JsonSerializer.Serialize(new
         {
             isValid = report.IsValid,
             committed,
+            // Present only for the composite tools, which mint the source id themselves:
+            // it lets the agent keep working with the document it just named by path.
+            sourceDocumentId,
             outputConnectionId = savedReference?.ConnectionId,
             outputDocumentId = savedReference?.ItemId,
             outputVersion = savedReference?.Version,
@@ -432,6 +563,36 @@ public sealed class OfficeAgentTools
             outputContentType = (string?)null,
             changes = Array.Empty<object>(),
             errors = new[] { new { Code = code, Message = message, target = (object?)null, provider, connectionId, itemId } }
+        }, Json);
+
+    /// <summary>
+    /// Reports every anchor that could not be bound in one result. Carries the source
+    /// documentId so a failed <c>edit_document</c> still leaves the agent with a usable
+    /// handle - it can inspect, disambiguate, and retry without registering again.
+    /// </summary>
+    private static string SerializeErrors(
+        IReadOnlyList<(string Code, string Message)> failures,
+        string connectionId,
+        string sourceDocumentId) =>
+        JsonSerializer.Serialize(new
+        {
+            isValid = false,
+            committed = false,
+            sourceDocumentId,
+            outputConnectionId = (string?)null,
+            outputDocumentId = (string?)null,
+            outputVersion = (string?)null,
+            outputName = (string?)null,
+            outputContentType = (string?)null,
+            changes = Array.Empty<object>(),
+            errors = failures.Select(f => new
+            {
+                f.Code,
+                f.Message,
+                target = (object?)null,
+                connectionId,
+                itemId = sourceDocumentId
+            })
         }, Json);
 
     private static object? SummariseAnchor(Anchor? anchor) => anchor switch

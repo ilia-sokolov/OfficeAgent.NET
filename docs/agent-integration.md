@@ -63,12 +63,46 @@ offers separate least-privilege switches for existing documents and new ones:
 | --- | --- | --- |
 | `register_document(connectionId, source)` | `AllowRegistration` | Registers an existing document with a configured connection and returns its opaque `documentId`. `source` is connection-specific: a path under the filesystem connection's root, or - for a SharePoint connection - the document's SharePoint/OneDrive URL or a `driveId/itemId` pair. Filesystem traversal, disallowed extensions, and oversized files are rejected by the provider. |
 | `remove_document(connectionId, documentId)` | `AllowRegistration` | Removes the registration only - the underlying file is never deleted. |
+| `open_document(connectionId, source, fidelity?, paragraphOffset?, paragraphLimit?)` | `AllowRegistration` | `register_document` + `inspect_document` in one call. Returns `{ connectionId, documentId, name, contentType, version }` followed by the whole `inspect_document` payload. |
+| `edit_document(connectionId, source, planJson, saveMode?, newName?)` | `AllowRegistration` | `register_document` + anchor resolution + `apply_plan` in one call. Targets may name text directly instead of a paragraph id. Returns the `apply_plan` shape plus `sourceDocumentId`. |
 | `create_document(connectionId, name, planJson)` | `AllowCreation` | Creates a **new** document in the connection, registers it, and optionally applies an initial plan in the same call. Pass `""` for no initial plan. Returns the `apply_plan` shape, so the new id arrives as `outputDocumentId`. `name` is a bare file name with its extension; a name already in use is refused rather than overwritten, and an initial plan that fails validation creates nothing at all. |
 
 A blank document contains one empty paragraph, addressed as paragraph id
 `auto-0000`. An initial plan can target
 `{ "paraId": "auto-0000", "expect": "" }`; use `"position": "Before"` to keep
 the empty anchor as the trailing paragraph.
+
+### Addressing text instead of paragraph ids
+
+The single-purpose loop is `find_in_document` to get an anchor, then `apply_plan`
+to use it. `edit_document` folds that into one call: a target may name the text
+itself, and the tool resolves it against live content before applying anything.
+
+```jsonc
+// Instead of: find_in_document → read paraId → apply_plan with that paraId
+[ { "op": "changeText", "target": { "find": "Acme Corp" }, "with": "Globex Inc." } ]
+```
+
+**Text that matches more than once is refused**, not guessed at. The error is
+`ambiguous-anchor` and lists every candidate with its surrounding context, so the
+next call can name the one it meant:
+
+```jsonc
+[ { "op": "changeText", "target": { "find": "Acme Corp", "match": 1 }, "with": "Globex Inc." } ]
+```
+
+`match` is zero-based over the document-wide match list. Text matching nothing is
+`anchor-not-found`. Every unresolvable target in a plan is reported in the same
+result, so a plan with two bad targets costs one call to discover both, not two.
+
+`find` is a literal, case-insensitive search. Regex, whole-word, and
+case-sensitive matching stay on `find_in_document` - resolve there and pass the
+resulting `paraId` targets, which `edit_document` accepts and can mix freely with
+`find` targets in one plan.
+
+`planJson` accepts a bare operations array `[ … ]` as well as
+`{ "operations": [ … ] }`, on `edit_document`, `create_document`, `preview_plan`,
+and `apply_plan` alike.
 
 The switches are independent: a host may expose creation without letting the
 agent register or remove arbitrary existing documents. Both remain off by default
@@ -158,6 +192,15 @@ The host pre-registers the document and writes the resulting `(connectionId, doc
 4. `preview_plan` → surface any validation errors to the user.
 5. `apply_plan` → commit, then use the returned `outputDocumentId` for any follow-up edits.
 
+When the composite tools are enabled and the user names a file by path, the same
+work is two calls or one:
+
+- `open_document` → registers and inspects together; carry on from step 2.
+- `edit_document` → registers, resolves `find` targets, and applies, when the
+  edit is already known. Reach back for the single-purpose tools when you need a
+  preview before writing, a regex or case-sensitive search, or an id you already
+  hold.
+
 ## Errors the LLM can act on
 
 | Code | Meaning |
@@ -168,6 +211,8 @@ The host pre-registers the document and writes the resulting `(connectionId, doc
 | `version-conflict` | A `Replace` save lost a race. Re-inspect and re-author the plan. |
 | `content-too-large`, `extension-not-allowed` | Provider policy refused the input. |
 | `already-exists` | A `create_document` name is taken. Nothing was overwritten; retry with a different name. |
+| `ambiguous-anchor` | An `edit_document` `find` target matched several times. The message lists each candidate; re-issue with `"match": <index>` or more surrounding text. Nothing was written. |
+| `anchor-not-found` | A `find` target matched nothing, or its `match` index was out of range. Check the wording with `inspect_document` rather than retrying the same text. |
 | `invalid-argument`, `invalid-json` | The plan or arguments were malformed. The error message says what to fix. |
 | `configuration-error` | The `connectionId` is not registered on this host, or - for `create_document` - that connection cannot create documents. Try another connection rather than retrying. |
 

@@ -19,7 +19,9 @@ public class McpServerTests
         var tools = OfficeAgentMcpServer.BuildToolset(options);
 
         var names = tools.Select(t => t.ProtocolTool.Name).ToArray();
-        Assert.Equal(7, names.Length);
+        Assert.Equal(9, names.Length);
+        Assert.Contains("open_document", names);
+        Assert.Contains("edit_document", names);
         Assert.Contains("inspect_document", names);
         Assert.Contains("find_in_document", names);
         Assert.Contains("preview_plan", names);
@@ -43,7 +45,7 @@ public class McpServerTests
 
         options.AllowCreation = true;
         var names = OfficeAgentMcpServer.BuildToolset(options).Select(t => t.ProtocolTool.Name).ToArray();
-        Assert.Equal(8, names.Length);
+        Assert.Equal(10, names.Length);
         Assert.Contains("create_document", names);
     }
 
@@ -61,6 +63,10 @@ public class McpServerTests
         Assert.DoesNotContain("create_document", names);
         Assert.DoesNotContain("remove_document", names);
         Assert.DoesNotContain("list_connections", names);
+
+        // The composites take a source, so they belong to the registration opt-in too.
+        Assert.DoesNotContain("open_document", names);
+        Assert.DoesNotContain("edit_document", names);
 
         options.AllowCreation = true;
         names = OfficeAgentMcpServer.BuildToolset(options).Select(t => t.ProtocolTool.Name).ToArray();
