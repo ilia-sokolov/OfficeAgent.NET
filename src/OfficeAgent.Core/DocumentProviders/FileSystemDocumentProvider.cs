@@ -33,9 +33,10 @@ public sealed class FileSystemDocumentProviderOptions
 /// never copies, mirrors, or owns content - it only persists the id → path mapping
 /// under <c>{root}/.officeagent/index.json</c> and routes open/save back to the
 /// referenced path. The agent only sees opaque ids and never receives a filesystem
-/// path.
+/// path. New documents created through <see cref="CreateAsync"/> are the one case
+/// where the provider owns the bytes it writes: they land directly under the root.
 /// </summary>
-public sealed class FileSystemDocumentProvider : IDocumentProvider
+public sealed class FileSystemDocumentProvider : IDocumentProvider, IDocumentCreatingProvider
 {
     /// <summary>Gets the provider discriminator used in document references.</summary>
     public const string ProviderName = "filesystem";
@@ -100,6 +101,73 @@ public sealed class FileSystemDocumentProvider : IDocumentProvider
         var version = await ComputeVersionStreamingAsync(fullPath, cancellationToken).ConfigureAwait(false);
         var id = await MintAndPersistAsync(fullPath, cancellationToken).ConfigureAwait(false);
         return CreateReference(id, version, Path.GetFileName(fullPath));
+    }
+
+    /// <inheritdoc />
+    public async Task<DocumentReference> CreateAsync(
+        string name,
+        Stream content,
+        CancellationToken cancellationToken = default)
+    {
+        if (content is null) throw new ArgumentNullException(nameof(content));
+
+        var fileName = ValidateCreateName(name);
+        var destinationPath = Path.Combine(_root, fileName);
+        if (File.Exists(destinationPath) || Directory.Exists(destinationPath))
+            throw Error(ProviderErrorCode.AlreadyExists,
+                $"A document named '{fileName}' already exists in this connection; choose another name.");
+
+        var bytes = await ReadStreamAsync(content, itemId: null, cancellationToken).ConfigureAwait(false);
+
+        try
+        {
+            // WriteAtomicallyAsync stages beside the destination and publishes with a
+            // no-overwrite File.Move, so concurrent creators cannot displace each other.
+            await WriteAtomicallyAsync(
+                destinationPath, bytes, replace: false, cancellationToken).ConfigureAwait(false);
+        }
+        catch (IOException ex) when (File.Exists(destinationPath) || Directory.Exists(destinationPath))
+        {
+            throw Error(ProviderErrorCode.AlreadyExists,
+                $"A document named '{fileName}' already exists in this connection; choose another name.",
+                itemId: null, ex);
+        }
+        catch (UnauthorizedAccessException ex)
+        {
+            throw Error(ProviderErrorCode.AccessDenied,
+                $"Could not create '{fileName}': the connection's storage refused access.", itemId: null, ex);
+        }
+        catch (IOException ex)
+        {
+            // The framework's IO messages carry the absolute path, and this exception
+            // travels back to the agent, so only the caller's own file name is echoed; the
+            // original exception remains available to the host as the inner exception.
+            throw Error(ProviderErrorCode.IO,
+                $"Could not create '{fileName}': the connection's storage rejected the write.", itemId: null, ex);
+        }
+
+        string id;
+        try
+        {
+            // Once the file exists, finish registration even if the caller cancels. Stopping
+            // between publication and index persistence would manufacture an avoidable
+            // unregistered document.
+            id = await MintAndPersistAsync(destinationPath, CancellationToken.None).ConfigureAwait(false);
+        }
+        catch (Exception ex)
+        {
+            // Do not compensate by deleting the published path: another actor could have
+            // opened, changed, or replaced it after publication. The caller knows the name
+            // and can register that file explicitly instead of risking data loss.
+            throw Error(ProviderErrorCode.IO,
+                $"Document '{fileName}' was created in this connection, but its registration " +
+                "could not be persisted. The file may exist but is unregistered. Do not retry " +
+                "creation; recover the known filename through registration when available, " +
+                "or report it to the host/operator.",
+                itemId: null, ex);
+        }
+
+        return CreateReference(id, ComputeVersion(bytes), fileName);
     }
 
     /// <inheritdoc />
@@ -176,7 +244,7 @@ public sealed class FileSystemDocumentProvider : IDocumentProvider
         var destinationPath = Path.Combine(sourceDir, destinationName);
         if (File.Exists(destinationPath))
             throw Error(ProviderErrorCode.IO,
-                $"A file already exists at the destination path; refusing to overwrite without Replace mode.",
+                "A file already exists at the destination path; refusing to overwrite without Replace mode.",
                 source.ItemId);
         await WriteAtomicallyAsync(destinationPath, bytes, replace: false, cancellationToken).ConfigureAwait(false);
 
@@ -212,7 +280,17 @@ public sealed class FileSystemDocumentProvider : IDocumentProvider
         {
             var id = NewItemId();
             _index[id] = fullPath;
-            await PersistIndexAsync(cancellationToken).ConfigureAwait(false);
+            try
+            {
+                await PersistIndexAsync(cancellationToken).ConfigureAwait(false);
+            }
+            catch
+            {
+                // Keep memory and disk agreeing: an id that did not survive the write must
+                // not answer lookups for the rest of the process's life.
+                _index.Remove(id);
+                throw;
+            }
             return id;
         }
         finally
@@ -345,6 +423,25 @@ public sealed class FileSystemDocumentProvider : IDocumentProvider
         return leaf;
     }
 
+    private string ValidateCreateName(string name)
+    {
+        if (!string.IsNullOrWhiteSpace(name) &&
+            (name.IndexOf('/') >= 0 || name.IndexOf('\\') >= 0 || name == "." || name == ".."))
+            throw Error(ProviderErrorCode.InvalidArgument,
+                "A document name must be a bare file name without path segments.");
+        if (!string.IsNullOrWhiteSpace(name) &&
+            (name.IndexOfAny(PortableInvalidNameChars) >= 0 ||
+             name.Any(char.IsControl)))
+            throw Error(ProviderErrorCode.InvalidArgument,
+                "A document name must not contain characters that are invalid in a file name.");
+        if (!string.IsNullOrWhiteSpace(name) &&
+            (!string.Equals(name, name.Trim(), StringComparison.Ordinal) ||
+             name.EndsWith(".", StringComparison.Ordinal)))
+            throw Error(ProviderErrorCode.InvalidArgument,
+                "A document name must not begin or end with whitespace or end with a dot.");
+        return ValidateName(name);
+    }
+
     /// <summary>
     /// Picks the next unused versioned sibling file name in <paramref name="directory"/>.
     /// For <c>contract.docx</c> the sequence is <c>contract.v2.docx</c>, <c>contract.v3.docx</c>, …
@@ -375,6 +472,14 @@ public sealed class FileSystemDocumentProvider : IDocumentProvider
             return (stem.Substring(0, dot), version);
         return (stem, 1);
     }
+
+    /// <summary>
+    /// The characters a document name may never carry, whatever the host OS. Windows
+    /// rejects all of these; enforcing the same set everywhere keeps a name that one
+    /// deployment accepts from being illegal on the next.
+    /// </summary>
+    private static readonly char[] PortableInvalidNameChars =
+        { '<', '>', ':', '"', '|', '?', '*', '/', '\\', '\0' };
 
     private static string NormalizeExtension(string extension) =>
         extension.StartsWith(".", StringComparison.Ordinal) ? extension : "." + extension;

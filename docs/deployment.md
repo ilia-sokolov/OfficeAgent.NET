@@ -184,7 +184,8 @@ Two layers, kept separate:
 - [ ] Client secret supplied from a secret store / environment, never committed.
 - [ ] `RegistrationIndexPath` set if you need registrations to survive restarts (filesystem connections persist automatically; SharePoint defaults to in-memory). For multiple instances, implement `ISharePointRegistrationStore` over shared storage.
 - [ ] `MaximumBytes` and `AllowedExtensions` reviewed against your documents (defaults: 100 MB, `.docx`).
-- [ ] `AllowRegistration` left on only if agents should stage their own document ids; otherwise set `false`. When on, the server exposes `register_document`, `remove_document`, and `list_connections` (the last returns the configured `{connectionId, provider}` pairs so agents can discover where to register documents).
+- [ ] `AllowRegistration` left on only if agents should stage their own document ids; otherwise set `false`. When on, the server exposes `register_document` and `remove_document`.
+- [ ] `AllowCreation` enabled only if agents should create files. Each SharePoint creation connection has both `CreationDriveId` and `CreationFolderItemId`; `list_connections` reports `canCreateDocuments` per connection whenever registration or creation discovery is enabled.
 
 ---
 

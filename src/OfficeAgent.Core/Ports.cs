@@ -43,6 +43,24 @@ public interface IFormatModule
 }
 
 /// <summary>
+/// Optional format-module capability that mints the empty package a new document starts
+/// from. This keeps format-specific markup out of the core engine.
+/// </summary>
+public interface IBlankDocumentFactory
+{
+    /// <summary>
+    /// Gets the file extension this factory can mint, including the leading dot.
+    /// </summary>
+    string Extension { get; }
+
+    /// <summary>
+    /// Returns the bytes of an empty but valid document with at least one addressable
+    /// anchor for an initial plan.
+    /// </summary>
+    byte[] CreateBlank();
+}
+
+/// <summary>
 /// Defines preview and apply behavior for one or more plan operations.
 /// </summary>
 public interface IOperationHandler

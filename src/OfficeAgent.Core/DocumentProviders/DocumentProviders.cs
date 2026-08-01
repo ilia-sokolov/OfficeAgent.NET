@@ -65,6 +65,31 @@ public interface IDocumentProvider
         CancellationToken cancellationToken = default);
 }
 
+/// <summary>
+/// Optional <see cref="IDocumentProvider"/> capability: write brand-new content into
+/// the connection and register it in one step, returning the same canonical reference
+/// <see cref="IDocumentProvider.RegisterAsync"/> would have produced for an existing
+/// file. Kept separate from <see cref="IDocumentProvider"/> because a provider over
+/// read-only or externally managed storage can serve every other operation without
+/// being able to create anything; <see cref="OfficeAgentClient.CreateAsync(string, string, DocumentPlan?, CancellationToken)"/>
+/// reports <see cref="ProviderErrorCode.ConfigurationError"/> for a connection whose
+/// provider does not implement it.
+/// </summary>
+public interface IDocumentCreatingProvider : IDocumentProvider
+{
+    /// <summary>
+    /// Writes <paramref name="content"/> as a new document named <paramref name="name"/>
+    /// inside the connection and registers it. <paramref name="name"/> is a bare file
+    /// name - never a path - and is subject to the connection's extension allow-list and
+    /// size cap. Implementations never overwrite: an existing document with that name
+    /// fails with <see cref="ProviderErrorCode.AlreadyExists"/>.
+    /// </summary>
+    Task<DocumentReference> CreateAsync(
+        string name,
+        Stream content,
+        CancellationToken cancellationToken = default);
+}
+
 /// <summary>Thrown when a provider item changed after the caller selected or inspected it.</summary>
 public sealed class DocumentVersionConflictException : DocumentProviderException
 {

@@ -24,9 +24,20 @@ public sealed class OfficeAgentMcpOptions
     /// connections, register documents with them, and remove registrations themselves.
     /// Defaults to <see langword="true"/>: an MCP client usually has no other channel to
     /// stage ids, unlike an in-process host. Set to <see langword="false"/> to pin agents
-    /// to ids the host hands out by other means.
+    /// to ids the host hands out by other means. Authoring brand-new documents is a
+    /// separate opt-in - see <see cref="AllowCreation"/>.
     /// </summary>
     public bool AllowRegistration { get; set; } = true;
+
+    /// <summary>
+    /// Gets or sets whether <c>create_document</c> is exposed when at least one
+    /// connection allows <c>.docx</c>; SharePoint connections additionally require an
+    /// explicit creation destination. Defaults to <see langword="false"/>: letting
+    /// an agent author new files under a connection root is a capability a host should
+    /// choose, and an upgrade must not hand it to deployments that never asked for it.
+    /// Turning it on adds document creation only - registration and editing are unchanged.
+    /// </summary>
+    public bool AllowCreation { get; set; }
 
     /// <summary>Gets or sets the filesystem connections to expose.</summary>
     public IList<FileSystemConnectionOptions> FileSystemConnections { get; set; } =
@@ -43,7 +54,10 @@ public sealed class FileSystemConnectionOptions
     /// <summary>Gets or sets the connection id agents address documents under.</summary>
     public string ConnectionId { get; set; } = string.Empty;
 
-    /// <summary>Gets or sets the root directory; registrations must stay under it.</summary>
+    /// <summary>
+    /// Gets or sets the root directory; registrations must stay under it, and
+    /// <c>create_document</c> writes new documents directly into it.
+    /// </summary>
     public string RootPath { get; set; } = string.Empty;
 
     /// <summary>Gets or sets the maximum accepted document size in bytes.</summary>
@@ -51,6 +65,7 @@ public sealed class FileSystemConnectionOptions
 
     /// <summary>Gets or sets the allowed document extensions.</summary>
     public IList<string> AllowedExtensions { get; set; } = new List<string> { ".docx" };
+
 }
 
 /// <summary>One SharePoint document-library connection.</summary>
@@ -106,4 +121,14 @@ public sealed class SharePointConnectionOptions
 
     /// <summary>Gets or sets the allowed document extensions.</summary>
     public IList<string> AllowedExtensions { get; set; } = new List<string> { ".docx" };
+
+    /// <summary>
+    /// Gets or sets the Graph drive id used for <c>create_document</c>. Set together
+    /// with <see cref="CreationFolderItemId"/>; registration is still allowed across
+    /// every drive reachable by this connection.
+    /// </summary>
+    public string CreationDriveId { get; set; } = string.Empty;
+
+    /// <summary>Gets or sets the destination folder's Graph drive-item id for new documents.</summary>
+    public string CreationFolderItemId { get; set; } = string.Empty;
 }

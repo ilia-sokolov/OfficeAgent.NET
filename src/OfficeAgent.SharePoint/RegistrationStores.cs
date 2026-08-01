@@ -109,7 +109,15 @@ public sealed class JsonFileRegistrationStore : ISharePointRegistrationStore
         {
             var id = Guid.NewGuid().ToString("N");
             _items[id] = item;
-            Persist();
+            try
+            {
+                Persist();
+            }
+            catch
+            {
+                _items.Remove(id);
+                throw;
+            }
             return id;
         }
         finally

@@ -2,8 +2,11 @@ using System.Net;
 using System.Text;
 using System.Text.Json;
 using OfficeAgent.Abstractions;
+using OfficeAgent.AgentFramework;
+using OfficeAgent.Core;
 using OfficeAgent.Core.DocumentProviders;
 using OfficeAgent.SharePoint;
+using OfficeAgent.Word;
 
 namespace OfficeAgent.Tests;
 
@@ -15,6 +18,103 @@ namespace OfficeAgent.Tests;
 /// </summary>
 public class SharePointProviderTests
 {
+    [Fact]
+    public async Task Create_uploads_registers_and_applies_an_initial_plan()
+    {
+        using var drive = new FakeGraphDrive();
+        var provider = drive.Provider();
+        var client = new OfficeAgentClient(
+            new DocumentProviderRegistry(new IDocumentProvider[] { provider }),
+            new WordModule());
+        var plan = new DocumentPlan
+        {
+            Operations = new PlanOperation[]
+            {
+                new InsertOp
+                {
+                    Target = new TextSpanAnchor { ParaId = "auto-0000", Expect = string.Empty },
+                    Position = InsertPosition.Before,
+                    Text = "SharePoint brief"
+                }
+            }
+        };
+
+        var created = await client.CreateAsync("legal", "brief.docx", plan);
+
+        Assert.True(created.Committed);
+        Assert.Equal("sharepoint", created.Document!.Provider);
+        Assert.True(drive.HasName("brief.docx"));
+        var inspected = await client.InspectAsync(created.Document);
+        Assert.Equal("SharePoint brief", inspected.Paragraphs[0].Text);
+    }
+
+    [Fact]
+    public async Task Create_never_overwrites_an_existing_sharepoint_name()
+    {
+        using var drive = new FakeGraphDrive();
+        var provider = drive.Provider();
+        using var first = new MemoryStream(DocxFactory.Contract());
+        using var second = new MemoryStream(DocxFactory.Contract());
+
+        await provider.CreateAsync("brief.docx", first);
+        var error = await Assert.ThrowsAsync<DocumentProviderException>(() =>
+            provider.CreateAsync("brief.docx", second));
+
+        Assert.Equal(ProviderErrorCode.AlreadyExists, error.Code);
+    }
+
+    [Fact]
+    public async Task Create_requires_a_configured_sharepoint_destination()
+    {
+        using var drive = new FakeGraphDrive();
+        var provider = drive.Provider(configureCreation: false);
+        using var content = new MemoryStream(DocxFactory.Contract());
+
+        var error = await Assert.ThrowsAsync<DocumentProviderException>(() =>
+            provider.CreateAsync("brief.docx", content));
+
+        Assert.Equal(ProviderErrorCode.ConfigurationError, error.Code);
+        Assert.False(drive.HasName("brief.docx"));
+    }
+
+    [Fact]
+    public async Task Registration_failure_leaves_the_uploaded_sharepoint_file_intact()
+    {
+        using var drive = new FakeGraphDrive();
+        var provider = drive.Provider(registrationStore: new FailingRegistrationStore());
+        using var content = new MemoryStream(DocxFactory.Contract());
+
+        var error = await Assert.ThrowsAsync<DocumentProviderException>(() =>
+            provider.CreateAsync("brief.docx", content));
+
+        Assert.Equal(ProviderErrorCode.IO, error.Code);
+        Assert.Contains("unregistered", error.Message);
+        Assert.True(drive.HasName("brief.docx"));
+    }
+
+    [Fact]
+    public async Task Create_tool_does_not_expose_sharepoint_target_details()
+    {
+        using var drive = new FakeGraphDrive
+        {
+            CreationFailureMessage =
+                $"Target {FakeGraphDrive.DriveId}/{FakeGraphDrive.FolderId} was not found."
+        };
+        var provider = drive.Provider();
+        var client = new OfficeAgentClient(
+            new DocumentProviderRegistry(new IDocumentProvider[] { provider }),
+            new WordModule());
+        var tools = new OfficeAgentTools(client);
+
+        var payload = await tools.CreateDocument("legal", "brief.docx");
+
+        Assert.DoesNotContain(FakeGraphDrive.DriveId, payload);
+        Assert.DoesNotContain(FakeGraphDrive.FolderId, payload);
+        using var json = JsonDocument.Parse(payload);
+        Assert.Equal("not-found",
+            json.RootElement.GetProperty("errors")[0].GetProperty("Code").GetString());
+    }
+
     [Fact]
     public async Task Register_by_drive_and_item_id_assigns_opaque_id_and_opens_by_it()
     {
@@ -241,6 +341,34 @@ public class SharePointProviderTests
         }
     }
 
+    [Fact]
+    public async Task Json_registration_store_rolls_back_an_add_when_persistence_fails()
+    {
+        var directory = Path.Combine(
+            Path.GetTempPath(), $"officeagent-spindex-failure-{Guid.NewGuid():N}");
+        var path = Path.Combine(directory, "index.json");
+        Directory.CreateDirectory(path);
+        try
+        {
+            var store = new JsonFileRegistrationStore(path);
+            await Assert.ThrowsAsync<IOException>(() =>
+                store.AddAsync(new SharePointItemRef("drive-ghost", "item-ghost")));
+
+            Directory.Delete(path);
+            await store.AddAsync(new SharePointItemRef("drive-real", "item-real"));
+
+            using var json = JsonDocument.Parse(File.ReadAllText(path));
+            var items = json.RootElement.GetProperty("Items");
+            Assert.Single(items.EnumerateObject());
+            Assert.Equal("drive-real",
+                items.EnumerateObject().Single().Value.GetProperty("DriveId").GetString());
+        }
+        finally
+        {
+            if (Directory.Exists(directory)) Directory.Delete(directory, recursive: true);
+        }
+    }
+
     // ── Fake Graph drive ──────────────────────────────────────────────────────
 
     /// <summary>
@@ -250,13 +378,31 @@ public class SharePointProviderTests
     /// separate host. Items report their parent drive id, so registration by URL or
     /// by driveId/itemId both resolve a fully-addressed item.
     /// </summary>
+    private sealed class FailingRegistrationStore : ISharePointRegistrationStore
+    {
+        public Task<string> AddAsync(
+            SharePointItemRef item,
+            CancellationToken cancellationToken = default) =>
+            throw new IOException("Registration store unavailable.");
+
+        public Task<SharePointItemRef?> ResolveAsync(
+            string registrationId,
+            CancellationToken cancellationToken = default) =>
+            Task.FromResult<SharePointItemRef?>(null);
+
+        public Task<bool> RemoveAsync(
+            string registrationId,
+            CancellationToken cancellationToken = default) =>
+            Task.FromResult(false);
+    }
+
     private sealed class FakeGraphDrive : IDisposable
     {
         private const string GraphBase = "https://graph.fake/v1.0";
         public const string DriveId = "fakedrive";
         private const string DownloadHost = "https://download.fake";
         private const string ShareHost = "https://contoso.fake/doc";
-        private const string FolderId = "folder-contracts";
+        public const string FolderId = "folder-contracts";
 
         private readonly Dictionary<string, Entry> _byName = new(StringComparer.OrdinalIgnoreCase);
         private readonly Dictionary<string, Entry> _byId = new(StringComparer.Ordinal);
@@ -268,6 +414,7 @@ public class SharePointProviderTests
 
         public bool SawAuthorizedGraphCall { get; private set; }
         public bool SawAuthorizedDownloadCall { get; private set; }
+        public string? CreationFailureMessage { get; init; }
 
         /// <summary>Seeds a drive item and returns its Graph item id.</summary>
         public string Seed(string name, byte[] bytes)
@@ -290,15 +437,23 @@ public class SharePointProviderTests
         /// <summary>A sharing-style URL registration source for a seeded item.</summary>
         public string UrlFor(string itemId) => $"{ShareHost}/{itemId}";
 
-        public SharePointDocumentProvider Provider(long maximumBytes = 100 * 1024 * 1024) => new(
+        public bool HasName(string name) => _byName.ContainsKey(name);
+
+        public SharePointDocumentProvider Provider(
+            long maximumBytes = 100 * 1024 * 1024,
+            bool configureCreation = true,
+            ISharePointRegistrationStore? registrationStore = null) => new(
             new SharePointDocumentProviderOptions
             {
                 ConnectionId = "legal",
                 GraphBaseUrl = GraphBase,
-                MaximumBytes = maximumBytes
+                MaximumBytes = maximumBytes,
+                CreationDriveId = configureCreation ? DriveId : string.Empty,
+                CreationFolderItemId = configureCreation ? FolderId : string.Empty
             },
             _http,
-            new FakeTokens());
+            new FakeTokens(),
+            registrationStore);
 
         public void Dispose() => _http.Dispose();
 
@@ -369,14 +524,32 @@ public class SharePointProviderTests
                     return Status(HttpStatusCode.NotFound);
                 rest = rest.Substring("/items/".Length);
 
-                // PUT /items/{folderId}:/{name}:/content?@microsoft.graph.conflictBehavior=fail
+                // PUT /items/{folderId}:/{name}:/content. Graph replaces by default;
+                // conflictBehavior=fail is what gives creation its no-overwrite guarantee.
                 if (request.Method == HttpMethod.Put && rest.Contains(":/"))
                 {
-                    var name = Uri.UnescapeDataString(rest.Substring(
-                        rest.IndexOf(":/", StringComparison.Ordinal) + 2)
-                        .Replace(":/content?@microsoft.graph.conflictBehavior=fail", ""));
-                    if (_drive._byName.ContainsKey(name))
-                        return GraphError(HttpStatusCode.Conflict, "nameAlreadyExists");
+                    if (!rest.StartsWith(FolderId + ":/", StringComparison.Ordinal))
+                        return GraphError(HttpStatusCode.NotFound, "itemNotFound");
+                    if (_drive.CreationFailureMessage is not null)
+                        return GraphError(
+                            HttpStatusCode.NotFound,
+                            "itemNotFound",
+                            _drive.CreationFailureMessage);
+
+                    var afterFolder = rest.Substring(rest.IndexOf(":/", StringComparison.Ordinal) + 2);
+                    var contentMarker = afterFolder.IndexOf(":/content", StringComparison.Ordinal);
+                    var name = Uri.UnescapeDataString(afterFolder.Substring(0, contentMarker));
+                    var failOnConflict = rest.Contains(
+                        "@microsoft.graph.conflictBehavior=fail",
+                        StringComparison.Ordinal);
+                    if (_drive._byName.TryGetValue(name, out var existing))
+                    {
+                        if (failOnConflict)
+                            return GraphError(HttpStatusCode.Conflict, "nameAlreadyExists");
+                        existing.Bytes = request.Content!.ReadAsByteArrayAsync().GetAwaiter().GetResult();
+                        existing.ETag = _drive.NextETag();
+                        return Item(existing);
+                    }
                     var bytes = request.Content!.ReadAsByteArrayAsync().GetAwaiter().GetResult();
                     var id = _drive.Seed(name, bytes);
                     return Item(_drive._byId[id]);
@@ -457,10 +630,13 @@ public class SharePointProviderTests
 
             private static HttpResponseMessage Status(HttpStatusCode code) => new(code);
 
-            private static HttpResponseMessage GraphError(HttpStatusCode status, string code) => new(status)
+            private static HttpResponseMessage GraphError(
+                HttpStatusCode status,
+                string code,
+                string? message = null) => new(status)
             {
                 Content = new StringContent(
-                    JsonSerializer.Serialize(new { error = new { code, message = code } }),
+                    JsonSerializer.Serialize(new { error = new { code, message = message ?? code } }),
                     Encoding.UTF8, "application/json")
             };
         }

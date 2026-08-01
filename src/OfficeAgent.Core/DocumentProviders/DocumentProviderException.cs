@@ -31,7 +31,14 @@ public enum ProviderErrorCode
     ConfigurationError,
 
     /// <summary>An underlying IO error occurred.</summary>
-    IO
+    IO,
+
+    /// <summary>
+    /// A document with the requested name already exists and the provider refuses to
+    /// overwrite it. Distinct from <see cref="IO"/> because the caller fixes it by
+    /// choosing another name rather than by retrying.
+    /// </summary>
+    AlreadyExists
 }
 
 /// <summary>

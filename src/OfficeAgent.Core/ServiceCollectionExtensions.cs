@@ -32,11 +32,13 @@ public static class ServiceCollectionExtensions
             var loggerFactory = sp.GetService<ILoggerFactory>() ?? NullLoggerFactory.Instance;
             return new OfficeAgentEngine(modules, resolverList, loggerFactory);
         });
+
         services.AddSingleton<DocumentProviderRegistry>();
         services.AddSingleton(sp => new OfficeAgentClient(
             sp.GetRequiredService<IDocumentService>(),
             sp.GetRequiredService<DocumentProviderRegistry>(),
-            sp.GetService<ILoggerFactory>() ?? NullLoggerFactory.Instance));
+            sp.GetService<ILoggerFactory>() ?? NullLoggerFactory.Instance,
+            sp.GetServices<IFormatModule>().OfType<IBlankDocumentFactory>()));
         return services;
     }
 }

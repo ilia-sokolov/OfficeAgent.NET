@@ -30,10 +30,15 @@ public sealed class OfficeAgentClient
 {
     private readonly IDocumentService _service;
     private readonly DocumentProviderRegistry _providers;
+    private readonly IReadOnlyList<IBlankDocumentFactory> _blankDocumentFactories;
     private readonly ILogger _logger;
 
     public OfficeAgentClient(params IFormatModule[] modules)
-        : this(new OfficeAgentEngine(modules))
+        : this(
+            new OfficeAgentEngine(modules),
+            new DocumentProviderRegistry(Array.Empty<IDocumentProvider>()),
+            modules.OfType<IBlankDocumentFactory>().ToArray(),
+            loggerFactory: null)
     {
     }
 
@@ -44,7 +49,7 @@ public sealed class OfficeAgentClient
 
     /// <summary>Initializes a client over format modules with provider-backed document access.</summary>
     public OfficeAgentClient(DocumentProviderRegistry providers, params IFormatModule[] modules)
-        : this(new OfficeAgentEngine(modules), providers, NullLoggerFactory.Instance)
+        : this(new OfficeAgentEngine(modules), providers, modules.OfType<IBlankDocumentFactory>().ToArray(), loggerFactory: null)
     {
     }
 
@@ -53,10 +58,37 @@ public sealed class OfficeAgentClient
         IDocumentService service,
         DocumentProviderRegistry providers,
         ILoggerFactory? loggerFactory = null)
+        : this(service, providers, Array.Empty<IBlankDocumentFactory>(), loggerFactory)
+    {
+    }
+
+    /// <summary>
+    /// Initializes a client over a custom document service with factories for formats
+    /// that support creating blank documents.
+    /// </summary>
+    public OfficeAgentClient(
+        IDocumentService service,
+        DocumentProviderRegistry providers,
+        ILoggerFactory? loggerFactory,
+        IEnumerable<IBlankDocumentFactory> blankDocumentFactories)
+        : this(
+            service,
+            providers,
+            (blankDocumentFactories ?? throw new ArgumentNullException(nameof(blankDocumentFactories))).ToArray(),
+            loggerFactory)
+    {
+    }
+
+    private OfficeAgentClient(
+        IDocumentService service,
+        DocumentProviderRegistry providers,
+        IReadOnlyList<IBlankDocumentFactory> blankDocumentFactories,
+        ILoggerFactory? loggerFactory)
     {
         _service = service ?? throw new ArgumentNullException(nameof(service));
         _providers = providers ?? throw new ArgumentNullException(nameof(providers));
         _logger = (loggerFactory ?? NullLoggerFactory.Instance).CreateLogger(OfficeAgentTelemetry.LogCategory);
+        _blankDocumentFactories = blankDocumentFactories;
     }
 
     // ---- Core surface (DocumentHandle) ----
@@ -119,6 +151,149 @@ public sealed class OfficeAgentClient
             provider.Provider, provider.ConnectionId, source, reference.ItemId);
         return reference;
     }
+
+    /// <summary>
+    /// Creates a new document inside a configured connection: mints an empty but valid
+    /// package for the format implied by <paramref name="name"/>'s extension, optionally
+    /// applies <paramref name="plan"/> to it, and writes the result through the provider,
+    /// which registers it and returns its opaque id.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// The plan is applied in memory <em>before</em> anything is written, so a plan that
+    /// fails validation leaves no trace: the returned result has
+    /// <see cref="ProviderApplyResult.Committed"/> <see langword="false"/>, a
+    /// <see langword="null"/> <see cref="ProviderApplyResult.Document"/>, and the errors
+    /// to act on. Nothing is ever overwritten - a name already in use fails with
+    /// <see cref="ProviderErrorCode.AlreadyExists"/>.
+    /// </para>
+    /// <para>
+    /// On the result, <see cref="ProviderApplyResult.Committed"/> means "the document was
+    /// created", and when <paramref name="plan"/> is <see langword="null"/> the
+    /// <see cref="ProviderApplyResult.Report"/> is a synthetic empty valid report - the
+    /// type is shared with <see cref="CommitAsync(DocumentReference, DocumentPlan, SaveDocumentOptions?, CancellationToken)"/>
+    /// so both reach an agent as the same JSON shape.
+    /// </para>
+    /// <para>
+    /// A blank Word document holds a single empty body paragraph, which inspection
+    /// addresses as paragraph id <c>auto-0000</c>; an initial plan targets that anchor.
+    /// </para>
+    /// <para>
+    /// Only the format-independent part of <paramref name="name"/> is checked before the
+    /// package is minted; connection-specific naming rules (the extension allow-list and
+    /// bare file name) are the provider's and are applied last, when the result
+    /// is written.
+    /// </para>
+    /// </remarks>
+    /// <exception cref="DocumentProviderException">
+    /// The connection is unknown, its provider cannot create documents
+    /// (<see cref="IDocumentCreatingProvider"/>), no format module can mint the requested
+    /// format, or the provider refused the write.
+    /// </exception>
+    public async Task<ProviderApplyResult> CreateAsync(
+        string connectionId,
+        string name,
+        DocumentPlan? plan = null,
+        CancellationToken cancellationToken = default)
+    {
+        var provider = _providers.ResolveConnection(connectionId);
+        if (provider is not IDocumentCreatingProvider creator)
+            throw new DocumentProviderException(
+                ProviderErrorCode.ConfigurationError,
+                $"The '{provider.Provider}' connection '{connectionId}' does not support creating documents; " +
+                "register an existing document instead.",
+                provider.Provider, connectionId, itemId: null);
+
+        var bytes = CreateBlankDocument(name, provider);
+        var report = new ChangeReport { IsValid = true };
+
+        if (plan is not null)
+        {
+            // Every supplied plan is validated, including an empty one: its Format and
+            // Snapshot are part of the contract, and a plan that disagrees with the
+            // document should fail before anything is written rather than after.
+            plan = await ResolveImageReferencesAsync(plan, cancellationToken).ConfigureAwait(false);
+            using var applied = await CommitAsync(
+                new StreamHandle(new MemoryStream(bytes, writable: false), name), plan, cancellationToken).ConfigureAwait(false);
+
+            if (!applied.Committed)
+            {
+                _logger.LogInformation(
+                    "Provider create rejected for {Provider}:{ConnectionId} '{Name}' - initial plan invalid",
+                    provider.Provider, provider.ConnectionId, name);
+                return new ProviderApplyResult { Report = applied.Report, Committed = false };
+            }
+
+            bytes = applied.ToBytes();
+            report = applied.Report;
+        }
+
+        using var output = new MemoryStream(bytes, writable: false);
+        using var activity = OfficeAgentTelemetry.ActivitySource.StartActivity("OfficeAgent.Provider.Create");
+        activity?.SetTag("officeagent.provider", provider.Provider);
+        activity?.SetTag("officeagent.connectionId", provider.ConnectionId);
+        activity?.SetTag("officeagent.bytes", bytes.Length);
+
+        var sw = Stopwatch.StartNew();
+        var created = await creator.CreateAsync(name, output, cancellationToken).ConfigureAwait(false);
+
+        _logger.LogInformation(
+            "Provider create {Provider}:{ConnectionId} '{Name}' → {ItemId} ({Bytes} B, {Operations} initial op(s)) in {Elapsed} ms",
+            provider.Provider, provider.ConnectionId, name, created.ItemId, bytes.Length,
+            plan?.Operations.Count ?? 0, sw.ElapsedMilliseconds);
+
+        return new ProviderApplyResult { Report = report, Committed = true, Document = created };
+    }
+
+    /// <summary>
+    /// Mints the empty package a new document starts from, choosing the format module
+    /// from the requested file name's extension.
+    /// </summary>
+    private byte[] CreateBlankDocument(string name, IDocumentProvider provider)
+    {
+        if (string.IsNullOrWhiteSpace(name))
+            throw new DocumentProviderException(
+                ProviderErrorCode.InvalidArgument,
+                "A document name is required, including its extension (for example 'report.docx').",
+                provider.Provider, provider.ConnectionId, itemId: null);
+
+        // Control characters and path separators are refused up front, before the name can
+        // reach a log line or an error message: the connection-specific rules run later, at
+        // the provider, and by then a name carrying an escape sequence has already been
+        // written to the host's log.
+        if (name.Any(character => char.IsControl(character)) ||
+            name.IndexOfAny(PortableInvalidDocumentNameChars) >= 0)
+            throw new DocumentProviderException(
+                ProviderErrorCode.InvalidArgument,
+                "A document name must be a bare file name without path separators, control characters, or other invalid filename characters.",
+                provider.Provider, provider.ConnectionId, itemId: null);
+
+        // Surrounding whitespace and a trailing dot are silently stripped by Windows, so a
+        // name carrying them would register under one spelling and land on disk under
+        // another. Reject them here rather than let the extension lookup fail obscurely.
+        if (!string.Equals(name, name.Trim(), StringComparison.Ordinal) ||
+            name.EndsWith(".", StringComparison.Ordinal))
+            throw new DocumentProviderException(
+                ProviderErrorCode.InvalidArgument,
+                $"The document name '{name}' must not begin or end with whitespace or end with a dot.",
+                provider.Provider, provider.ConnectionId, itemId: null);
+
+        var extension = Path.GetExtension(name);
+        var factory = _blankDocumentFactories.FirstOrDefault(candidate =>
+            !string.IsNullOrWhiteSpace(candidate.Extension) &&
+            string.Equals(extension, candidate.Extension, StringComparison.OrdinalIgnoreCase));
+        if (extension.Length == 0 || factory is null)
+            throw new DocumentProviderException(
+                ProviderErrorCode.InvalidArgument,
+                $"No registered format module can create a document named '{name}'. " +
+                $"Creatable extensions: {(_blankDocumentFactories.Count == 0 ? "none (register a format module such as AddWordFormat())" : string.Join(", ", _blankDocumentFactories.Select(item => item.Extension)))}.",
+                provider.Provider, provider.ConnectionId, itemId: null);
+
+        return factory.CreateBlank();
+    }
+
+    private static readonly char[] PortableInvalidDocumentNameChars =
+        { '<', '>', ':', '"', '|', '?', '*', '/', '\\', '\0' };
 
     /// <summary>Removes a document from a registered provider connection.</summary>
     public Task RemoveAsync(

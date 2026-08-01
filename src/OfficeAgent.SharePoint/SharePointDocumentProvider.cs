@@ -21,6 +21,12 @@ public sealed class SharePointDocumentProviderOptions
 
     /// <summary>Gets or sets the allowed document extensions.</summary>
     public IReadOnlyCollection<string> AllowedExtensions { get; set; } = new[] { ".docx" };
+
+    /// <summary>Gets or sets the Graph drive id used as the destination for new documents.</summary>
+    public string CreationDriveId { get; set; } = string.Empty;
+
+    /// <summary>Gets or sets the destination folder's Graph drive-item id for new documents.</summary>
+    public string CreationFolderItemId { get; set; } = string.Empty;
 }
 
 /// <summary>
@@ -31,11 +37,13 @@ public sealed class SharePointDocumentProviderOptions
 /// any drive the configured identity can reach is registrable. The provider stores
 /// only the registration id → (drive id, item id) mapping (via
 /// <see cref="ISharePointRegistrationStore"/>) and routes open/save back to Graph.
+/// When a creation drive and folder are configured, new documents are uploaded there
+/// without changing the cross-drive registration boundary.
 /// The agent only sees opaque ids - never site URLs, drive ids, or tokens. Saves use
 /// the drive item's ETag for optimistic concurrency, and removing a registration
 /// never deletes SharePoint content.
 /// </summary>
-public sealed class SharePointDocumentProvider : IDocumentProvider
+public sealed class SharePointDocumentProvider : IDocumentProvider, IDocumentCreatingProvider
 {
     /// <summary>Gets the provider discriminator used in document references.</summary>
     public const string ProviderName = "sharepoint";
@@ -46,6 +54,8 @@ public sealed class SharePointDocumentProvider : IDocumentProvider
     private readonly ISharePointRegistrationStore _store;
     private readonly string _graphBaseUrl;
     private readonly HashSet<string> _allowedExtensions;
+    private readonly string? _creationDriveId;
+    private readonly string? _creationFolderItemId;
 
     /// <summary>Initializes a provider over one tenant's Graph drives.</summary>
     public SharePointDocumentProvider(
@@ -67,11 +77,22 @@ public sealed class SharePointDocumentProvider : IDocumentProvider
             throw new ArgumentOutOfRangeException(nameof(options), "MaximumBytes must be positive.");
         if (options.AllowedExtensions is null || options.AllowedExtensions.Count == 0)
             throw new ArgumentException("At least one allowed document extension is required.", nameof(options));
+        if (string.IsNullOrWhiteSpace(options.CreationDriveId) !=
+            string.IsNullOrWhiteSpace(options.CreationFolderItemId))
+            throw new ArgumentException(
+                "SharePoint creation requires both CreationDriveId and CreationFolderItemId.",
+                nameof(options));
 
         _allowedExtensions = new HashSet<string>(
             options.AllowedExtensions.Select(NormalizeExtension),
             StringComparer.OrdinalIgnoreCase);
         _graphBaseUrl = options.GraphBaseUrl.TrimEnd('/');
+        _creationDriveId = string.IsNullOrWhiteSpace(options.CreationDriveId)
+            ? null
+            : options.CreationDriveId.Trim();
+        _creationFolderItemId = string.IsNullOrWhiteSpace(options.CreationFolderItemId)
+            ? null
+            : options.CreationFolderItemId.Trim();
     }
 
     /// <inheritdoc />
@@ -97,6 +118,78 @@ public sealed class SharePointDocumentProvider : IDocumentProvider
 
         var id = await _store.AddAsync(new SharePointItemRef(item.DriveId, item.Id), cancellationToken).ConfigureAwait(false);
         return CreateReference(id, item);
+    }
+
+    /// <inheritdoc />
+    public async Task<DocumentReference> CreateAsync(
+        string name,
+        Stream content,
+        CancellationToken cancellationToken = default)
+    {
+        if (content is null) throw new ArgumentNullException(nameof(content));
+        if (_creationDriveId is null || _creationFolderItemId is null)
+            throw Error(
+                ProviderErrorCode.ConfigurationError,
+                "This SharePoint connection has no creation destination. Configure both " +
+                "CreationDriveId and CreationFolderItemId, or register an existing document instead.");
+
+        var fileName = ValidateCreateName(name);
+        var bytes = await ReadStreamAsync(content, itemId: null, cancellationToken).ConfigureAwait(false);
+        var uploadUrl =
+            $"{ItemUrl(_creationDriveId, _creationFolderItemId)}:/{Uri.EscapeDataString(fileName)}:/content?@microsoft.graph.conflictBehavior=fail";
+        GraphItem created;
+        try
+        {
+            created = await UploadAsync(
+                uploadUrl,
+                bytes,
+                ifMatch: null,
+                itemId: null,
+                cancellationToken,
+                conflictCode: ProviderErrorCode.AlreadyExists).ConfigureAwait(false);
+        }
+        catch (DocumentProviderException ex) when (ex.Code != ProviderErrorCode.AlreadyExists)
+        {
+            throw Error(
+                ex.Code,
+                SafeCreateFailureMessage(ex.Code, fileName),
+                itemId: null,
+                ex);
+        }
+        catch (Exception ex) when (
+            ex is not OperationCanceledException and not DocumentProviderException)
+        {
+            // Transport and token-provider failures can include the request URL, which
+            // contains the host-configured drive and folder ids. Keep those details only
+            // on the inner exception available to the host.
+            throw Error(
+                ProviderErrorCode.IO,
+                $"SharePoint could not create document '{fileName}' in the configured destination.",
+                itemId: null,
+                ex);
+        }
+
+        var driveId = string.IsNullOrEmpty(created.DriveId) ? _creationDriveId : created.DriveId;
+        string registrationId;
+        try
+        {
+            // Once Graph confirms the upload, finish registration even if the caller
+            // cancels so the new remote file is not needlessly orphaned.
+            registrationId = await _store.AddAsync(
+                new SharePointItemRef(driveId, created.Id), CancellationToken.None).ConfigureAwait(false);
+        }
+        catch (Exception ex)
+        {
+            throw Error(
+                ProviderErrorCode.IO,
+                $"Document '{fileName}' was created in SharePoint, but its registration " +
+                "could not be persisted. Do not retry creation; report the possibly " +
+                "unregistered file to the host/operator for recovery.",
+                itemId: null,
+                ex);
+        }
+
+        return CreateReference(registrationId, created);
     }
 
     /// <summary>
@@ -263,14 +356,24 @@ public sealed class SharePointDocumentProvider : IDocumentProvider
         return ParseItem(await response.Content.ReadAsStringAsync().ConfigureAwait(false), itemId);
     }
 
-    private async Task<GraphItem> UploadAsync(string url, byte[] bytes, string? ifMatch, string? itemId, CancellationToken cancellationToken)
+    private async Task<GraphItem> UploadAsync(
+        string url,
+        byte[] bytes,
+        string? ifMatch,
+        string? itemId,
+        CancellationToken cancellationToken,
+        ProviderErrorCode conflictCode = ProviderErrorCode.IO)
     {
         using var body = new ByteArrayContent(bytes);
         body.Headers.ContentType = new MediaTypeHeaderValue("application/octet-stream");
         using var response = await SendAsync(HttpMethod.Put, url, body, ifMatch, cancellationToken).ConfigureAwait(false);
         if (response.StatusCode == HttpStatusCode.Conflict)
-            throw Error(ProviderErrorCode.IO,
-                "A file already exists at the destination path; refusing to overwrite without Replace mode.", itemId);
+            throw Error(
+                conflictCode,
+                conflictCode == ProviderErrorCode.AlreadyExists
+                    ? "A document with that name already exists in the configured SharePoint folder; choose another name."
+                    : "A file already exists at the destination path; refusing to overwrite without Replace mode.",
+                itemId);
         await ThrowOnFailureAsync(response, itemId).ConfigureAwait(false);
         return ParseItem(await response.Content.ReadAsStringAsync().ConfigureAwait(false), itemId);
     }
@@ -410,6 +513,35 @@ public sealed class SharePointDocumentProvider : IDocumentProvider
         ValidateExtension(name, itemId: null);
         return name;
     }
+
+    private string ValidateCreateName(string name)
+    {
+        if (!string.IsNullOrWhiteSpace(name) &&
+            (name.Any(char.IsControl) || name.IndexOfAny(PortableInvalidNameChars) >= 0))
+            throw Error(ProviderErrorCode.InvalidArgument,
+                "A document name must be a bare file name without path separators, " +
+                "control characters, or other invalid filename characters.");
+        if (!string.IsNullOrWhiteSpace(name) &&
+            (!string.Equals(name, name.Trim(), StringComparison.Ordinal) ||
+             name.EndsWith(".", StringComparison.Ordinal)))
+            throw Error(ProviderErrorCode.InvalidArgument,
+                "A document name must not begin or end with whitespace or end with a dot.");
+        return ValidateName(name);
+    }
+
+    private static readonly char[] PortableInvalidNameChars =
+        { '<', '>', ':', '"', '|', '?', '*', '/', '\\', '\0' };
+
+    private static string SafeCreateFailureMessage(ProviderErrorCode code, string fileName) => code switch
+    {
+        ProviderErrorCode.NotFound =>
+            $"The configured SharePoint creation destination for '{fileName}' was not found.",
+        ProviderErrorCode.AccessDenied =>
+            $"The configured SharePoint identity cannot create '{fileName}' in the creation destination.",
+        ProviderErrorCode.ContentTooLarge =>
+            $"SharePoint rejected '{fileName}' because its content is too large.",
+        _ => $"SharePoint could not create document '{fileName}' in the configured destination."
+    };
 
     private void ValidateReference(DocumentReference reference)
     {

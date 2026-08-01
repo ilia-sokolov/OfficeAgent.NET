@@ -52,29 +52,45 @@ host responsibilities, and the agent cannot supply file paths.
 | `preview_plan(connectionId, documentId, planJson)` | Validates a `DocumentPlan` JSON without writing. Returns `{ isValid, changes, errors }`. |
 | `apply_plan(connectionId, documentId, planJson, saveMode?, newName?)` | Applies the plan atomically and saves through the provider. `saveMode` is `NewVersion` (default), `NewDocument` (with `newName`), or `Replace`. Returns `{ isValid, committed, outputConnectionId, outputDocumentId, outputVersion, outputName, outputContentType, changes, errors }`. |
 
-## Let the agent register documents
+## Let the agent stage its own documents
 
 When the user names files the host has not staged - "open the contract in the
-legal library and fix the payment terms" - the agent needs a way to mint ids
-itself. Pass `OfficeAgentToolsOptions` with `AllowRegistration = true` to add
-two more tools:
+legal library and fix the payment terms" - or asks for a document that does not
+exist yet, the agent needs a way to mint ids itself. `OfficeAgentToolsOptions`
+offers separate least-privilege switches for existing documents and new ones:
 
-| Tool | Purpose |
-| --- | --- |
-| `register_document(connectionId, source)` | Registers an existing document with a configured connection and returns its opaque `documentId`. `source` is connection-specific: a path under the filesystem connection's root, or - for a SharePoint connection - the document's SharePoint/OneDrive URL or a `driveId/itemId` pair. Filesystem traversal, disallowed extensions, and oversized files are rejected by the provider. |
-| `remove_document(connectionId, documentId)` | Removes the registration only - the underlying file is never deleted. |
+| Tool | Opt-in | Purpose |
+| --- | --- | --- |
+| `register_document(connectionId, source)` | `AllowRegistration` | Registers an existing document with a configured connection and returns its opaque `documentId`. `source` is connection-specific: a path under the filesystem connection's root, or - for a SharePoint connection - the document's SharePoint/OneDrive URL or a `driveId/itemId` pair. Filesystem traversal, disallowed extensions, and oversized files are rejected by the provider. |
+| `remove_document(connectionId, documentId)` | `AllowRegistration` | Removes the registration only - the underlying file is never deleted. |
+| `create_document(connectionId, name, planJson)` | `AllowCreation` | Creates a **new** document in the connection, registers it, and optionally applies an initial plan in the same call. Pass `""` for no initial plan. Returns the `apply_plan` shape, so the new id arrives as `outputDocumentId`. `name` is a bare file name with its extension; a name already in use is refused rather than overwritten, and an initial plan that fails validation creates nothing at all. |
+
+A blank document contains one empty paragraph, addressed as paragraph id
+`auto-0000`. An initial plan can target
+`{ "paraId": "auto-0000", "expect": "" }`; use `"position": "Before"` to keep
+the empty anchor as the trailing paragraph.
+
+The switches are independent: a host may expose creation without letting the
+agent register or remove arbitrary existing documents. Both remain off by default
+for in-process tools:
 
 ```csharp
 var tools = new OfficeAgentTools(client)
-    .AsAIFunctions(new OfficeAgentToolsOptions { AllowRegistration = true });
+    .AsAIFunctions(new OfficeAgentToolsOptions
+    {
+        AllowRegistration = true,
+        AllowCreation     = true    // off by default; omit for a read-and-edit agent
+    });
 var prompt = OfficeAgentTools.SystemPromptGuidance
-           + OfficeAgentTools.RegistrationPromptGuidance;
+           + OfficeAgentTools.RegistrationPromptGuidance
+           + OfficeAgentTools.CreationPromptGuidance;   // only when AllowCreation = true
 ```
 
-The connection boundary is unchanged: the agent can only register what the
-host's connections can already reach. `RegistrationPromptGuidance` teaches the
-model when to register (only for files it has no id for) and to clean up
-registrations it created.
+Creation writes under a filesystem connection's root or, for SharePoint, into
+the connection's explicitly configured drive and folder. Initial-plan errors
+happen before storage is touched. A later provider error can mean storage accepted
+the file but registration did not finish, so the agent should not blindly retry
+the same name.
 
 ## Return the final document to the user
 
@@ -151,21 +167,23 @@ The host pre-registers the document and writes the resulting `(connectionId, doc
 | `not-found` / `access-denied` | The supplied `documentId` is wrong or outside the connection's reach. |
 | `version-conflict` | A `Replace` save lost a race. Re-inspect and re-author the plan. |
 | `content-too-large`, `extension-not-allowed` | Provider policy refused the input. |
+| `already-exists` | A `create_document` name is taken. Nothing was overwritten; retry with a different name. |
 | `invalid-argument`, `invalid-json` | The plan or arguments were malformed. The error message says what to fix. |
-| `configuration-error` | The `connectionId` is not registered on this host. |
+| `configuration-error` | The `connectionId` is not registered on this host, or - for `create_document` - that connection cannot create documents. Try another connection rather than retrying. |
 
 Every error also carries `connectionId` and `itemId` (when known) so the agent can correlate the failure to a specific call.
 
 ## Prompt guidance
 
-`OfficeAgentTools.SystemPromptGuidance` is a `const string` you concatenate into your agent's instructions. It teaches the model the host-registered `(connectionId, documentId)` contract, the safety loop (re-inspect on stale snapshot, re-find on expect mismatch), the default `Tracked` change mode, and the rule that anchors and node paths come from the engine - never invented. Append `OfficeAgentTools.RegistrationPromptGuidance` when the registration tools are enabled.
+`OfficeAgentTools.SystemPromptGuidance` is a `const string` you concatenate into your agent's instructions. It teaches the model the host-registered `(connectionId, documentId)` contract, the safety loop (re-inspect on stale snapshot, re-find on expect mismatch), the default `Tracked` change mode, and the rule that anchors and node paths come from the engine - never invented. Append `OfficeAgentTools.RegistrationPromptGuidance` when the registration tools are enabled, and `OfficeAgentTools.CreationPromptGuidance` when `create_document` is among them - each block should be present only when its tools are.
 
 ## Use OfficeAgent over MCP
 
 The same core tool surface is available to any MCP-capable agent (Claude code, Codex Copilot Studio agents etc.) through the
 [`OfficeAgent.Mcp` server](mcp-server.md) - stdio for local hosting, streamable
-HTTP for the cloud. When registration is enabled, the MCP server also adds
-`list_connections`, which returns the configured `{connectionId, provider}` pairs so
-the agent can discover which connections it may register documents under. The MCP
-server advertises this prompt guidance as its server instructions, so MCP clients
-pick up the contract automatically.
+HTTP for the cloud. When registration or creation is enabled, the MCP server also
+adds `list_connections`, which returns
+`{connectionId, provider, canCreateDocuments}` entries so the agent can discover
+the available connections and creation capability. The MCP server advertises this
+prompt guidance as its server instructions, so MCP clients pick up the contract
+automatically.

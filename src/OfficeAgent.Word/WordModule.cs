@@ -1,5 +1,6 @@
 using System.Text.RegularExpressions;
 using DocumentFormat.OpenXml;
+using DocumentFormat.OpenXml.Packaging;
 using OfficeAgent.Abstractions;
 using OfficeAgent.Core;
 using DocumentFormat.OpenXml.Wordprocessing;
@@ -11,7 +12,7 @@ namespace OfficeAgent.Word;
 /// Provides Word inspection, search, and supported plan operation handling over
 /// WordprocessingML across the body, headers, footers, footnotes, and endnotes.
 /// </summary>
-public sealed class WordModule : IFormatModule
+public sealed class WordModule : IFormatModule, IBlankDocumentFactory
 {
     public DocFormat Format => DocFormat.Word;
 
@@ -67,6 +68,24 @@ public sealed class WordModule : IFormatModule
     }
 
     public bool CanHandle(IOpenXmlPackage package) => package.Format == DocFormat.Word;
+
+    /// <inheritdoc />
+    public string Extension => ".docx";
+
+    /// <summary>
+    /// Returns a minimal valid .docx containing one empty body paragraph, addressable as
+    /// <c>auto-0000</c> by an initial plan.
+    /// </summary>
+    public byte[] CreateBlank()
+    {
+        using var buffer = new MemoryStream();
+        using (var document = WordprocessingDocument.Create(buffer, WordprocessingDocumentType.Document))
+        {
+            var main = document.AddMainDocumentPart();
+            main.Document = new Document(new Body(new Paragraph()));
+        }
+        return buffer.ToArray();
+    }
 
     public IReadOnlyDictionary<string, string> Stabilize(IOpenXmlPackage package) =>
         WordModel.Stabilize(package);

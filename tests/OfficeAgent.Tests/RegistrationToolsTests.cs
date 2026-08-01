@@ -23,6 +23,7 @@ public class RegistrationToolsTests
         var defaults = tools.AsAIFunctions().Select(f => f.Name).ToArray();
         Assert.Equal(4, defaults.Length);
         Assert.DoesNotContain("register_document", defaults);
+        Assert.DoesNotContain("create_document", defaults);
         Assert.DoesNotContain("remove_document", defaults);
 
         var opted = tools.AsAIFunctions(new OfficeAgentToolsOptions { AllowRegistration = true })
@@ -30,6 +31,9 @@ public class RegistrationToolsTests
         Assert.Equal(6, opted.Length);
         Assert.Contains("register_document", opted);
         Assert.Contains("remove_document", opted);
+
+        // Creation is a separate opt-in: registering documents does not grant it.
+        Assert.DoesNotContain("create_document", opted);
     }
 
     [Fact]

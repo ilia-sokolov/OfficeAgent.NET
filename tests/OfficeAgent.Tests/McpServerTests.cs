@@ -1,4 +1,5 @@
 using OfficeAgent.Mcp;
+using System.Text.Json;
 
 namespace OfficeAgent.Tests;
 
@@ -26,6 +27,24 @@ public class McpServerTests
         Assert.Contains("register_document", names);
         Assert.Contains("remove_document", names);
         Assert.Contains("list_connections", names);
+
+        // Creation is the one capability an upgrade must not switch on by itself.
+        Assert.DoesNotContain("create_document", names);
+    }
+
+    [Fact]
+    public void Creation_is_opt_in_and_never_arrives_with_registration_alone()
+    {
+        using var root = new TemporaryRoot();
+        var options = OptionsFor(root);
+
+        Assert.False(options.AllowCreation);
+        Assert.DoesNotContain("create_document", OfficeAgentMcpServer.InstructionsFor(options));
+
+        options.AllowCreation = true;
+        var names = OfficeAgentMcpServer.BuildToolset(options).Select(t => t.ProtocolTool.Name).ToArray();
+        Assert.Equal(8, names.Length);
+        Assert.Contains("create_document", names);
     }
 
     [Fact]
@@ -39,8 +58,19 @@ public class McpServerTests
 
         Assert.Equal(4, names.Length);
         Assert.DoesNotContain("register_document", names);
+        Assert.DoesNotContain("create_document", names);
         Assert.DoesNotContain("remove_document", names);
         Assert.DoesNotContain("list_connections", names);
+
+        options.AllowCreation = true;
+        names = OfficeAgentMcpServer.BuildToolset(options).Select(t => t.ProtocolTool.Name).ToArray();
+        Assert.Equal(6, names.Length);
+        Assert.Contains("create_document", names);
+        Assert.Contains("list_connections", names);
+        Assert.DoesNotContain("register_document", names);
+        Assert.DoesNotContain("remove_document", names);
+        Assert.Contains("create_document", OfficeAgentMcpServer.InstructionsFor(options));
+        Assert.DoesNotContain("register_document", OfficeAgentMcpServer.InstructionsFor(options));
     }
 
     [Fact]
@@ -53,6 +83,23 @@ public class McpServerTests
 
         options.AllowRegistration = false;
         Assert.DoesNotContain("register_document", OfficeAgentMcpServer.InstructionsFor(options));
+    }
+
+    [Fact]
+    public void Creation_guidance_and_tool_travel_together()
+    {
+        using var root = new TemporaryRoot();
+        var options = OptionsFor(root);
+        options.AllowCreation = true;
+
+        Assert.Contains("create_document", OfficeAgentMcpServer.InstructionsFor(options));
+
+        // With creation off the agent must be told nothing about a tool it will not get.
+        options.AllowCreation = false;
+        Assert.DoesNotContain("create_document", OfficeAgentMcpServer.InstructionsFor(options));
+        var names = OfficeAgentMcpServer.BuildToolset(options).Select(t => t.ProtocolTool.Name).ToArray();
+        Assert.DoesNotContain("create_document", names);
+        Assert.Contains("register_document", names);
     }
 
     [Fact]
@@ -85,6 +132,7 @@ public class McpServerTests
         // tenant. Missing OBO credentials would throw here.
         var options = new OfficeAgentMcpOptions
         {
+            AllowCreation = true,
             SharePointConnections =
             {
                 new SharePointConnectionOptions
@@ -101,6 +149,87 @@ public class McpServerTests
         var names = OfficeAgentMcpServer.BuildToolset(options).Select(t => t.ProtocolTool.Name).ToArray();
         Assert.Contains("apply_plan", names);
         Assert.Contains("register_document", names);
+        Assert.DoesNotContain("create_document", names);
+        Assert.DoesNotContain("create_document", OfficeAgentMcpServer.InstructionsFor(options));
+    }
+
+    [Fact]
+    public void Sharepoint_creation_is_exposed_only_with_a_configured_destination()
+    {
+        var options = new OfficeAgentMcpOptions
+        {
+            AllowRegistration = false,
+            AllowCreation = true,
+            SharePointConnections =
+            {
+                new SharePointConnectionOptions
+                {
+                    ConnectionId = "legal",
+                    AuthMode = "onBehalfOf",
+                    TenantId = "00000000-0000-0000-0000-000000000000",
+                    ClientId = "api-client-id",
+                    ClientSecret = "api-secret",
+                    CreationDriveId = "drive-legal",
+                    CreationFolderItemId = "folder-drafts"
+                }
+            }
+        };
+
+        var names = OfficeAgentMcpServer.BuildToolset(options).Select(t => t.ProtocolTool.Name).ToArray();
+
+        Assert.Contains("create_document", names);
+        Assert.Contains("list_connections", names);
+        Assert.DoesNotContain("register_document", names);
+        Assert.Contains("configured folder", OfficeAgentMcpServer.InstructionsFor(options));
+    }
+
+    [Fact]
+    public void Creation_requires_a_connection_that_allows_docx()
+    {
+        using var root = new TemporaryRoot();
+        var options = OptionsFor(root);
+        options.AllowRegistration = false;
+        options.AllowCreation = true;
+        options.FileSystemConnections[0].AllowedExtensions = new List<string> { ".xlsx" };
+
+        var names = OfficeAgentMcpServer.BuildToolset(options).Select(t => t.ProtocolTool.Name).ToArray();
+
+        Assert.DoesNotContain("create_document", names);
+        Assert.DoesNotContain("list_connections", names);
+    }
+
+    [Fact]
+    public void Connection_payload_reports_creation_per_connection()
+    {
+        using var root = new TemporaryRoot();
+        var options = OptionsFor(root);
+        options.AllowCreation = true;
+        options.FileSystemConnections.Add(new FileSystemConnectionOptions
+        {
+            ConnectionId = "spreadsheets",
+            RootPath = root.Path,
+            AllowedExtensions = new List<string> { ".xlsx" }
+        });
+        options.SharePointConnections.Add(new SharePointConnectionOptions
+        {
+            ConnectionId = "legal",
+            CreationDriveId = "drive-legal",
+            CreationFolderItemId = "folder-drafts"
+        });
+        options.SharePointConnections.Add(new SharePointConnectionOptions
+        {
+            ConnectionId = "archive"
+        });
+
+        using var json = JsonDocument.Parse(OfficeAgentMcpServer.ConnectionsPayload(options));
+        var capabilities = json.RootElement.EnumerateArray().ToDictionary(
+            item => item.GetProperty("connectionId").GetString()!,
+            item => item.GetProperty("canCreateDocuments").GetBoolean());
+
+        Assert.True(capabilities["documents"]);
+        Assert.False(capabilities["spreadsheets"]);
+        Assert.True(capabilities["legal"]);
+        Assert.False(capabilities["archive"]);
     }
 
     private static OfficeAgentMcpOptions OptionsFor(TemporaryRoot root) => new()

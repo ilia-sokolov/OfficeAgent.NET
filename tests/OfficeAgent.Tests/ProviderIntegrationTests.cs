@@ -29,22 +29,13 @@ public class ProviderIntegrationTests
     {
         // Demonstrates the DX win: developer writes one catch block.
         var thrown = new List<ProviderErrorCode>();
-        foreach (var ex in new DocumentProviderException[]
-        {
-            new(ProviderErrorCode.NotFound, "x"),
-            new(ProviderErrorCode.AccessDenied, "x"),
-            new(ProviderErrorCode.ContentTooLarge, "x"),
-            new(ProviderErrorCode.ExtensionNotAllowed, "x"),
-            new(ProviderErrorCode.VersionConflict, "x"),
-            new(ProviderErrorCode.InvalidArgument, "x"),
-            new(ProviderErrorCode.ConfigurationError, "x"),
-            new(ProviderErrorCode.IO, "x")
-        })
+        foreach (var ex in Enum.GetValues<ProviderErrorCode>()
+                     .Select(code => new DocumentProviderException(code, "x")))
         {
             try { throw ex; }
             catch (DocumentProviderException caught) { thrown.Add(caught.Code); }
         }
-        Assert.Equal(8, thrown.Count);
+        Assert.Equal(Enum.GetValues<ProviderErrorCode>().Length, thrown.Count);
     }
 
     [Fact]

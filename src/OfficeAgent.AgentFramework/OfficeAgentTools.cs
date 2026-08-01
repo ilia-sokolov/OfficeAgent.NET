@@ -21,9 +21,19 @@ public sealed class OfficeAgentToolsOptions
     /// provider-relative sources (a path under a filesystem root, a drive-relative
     /// SharePoint path) to the configured connections; the connection boundary,
     /// extension allow-list, and size limits still apply, and removing a
-    /// registration never deletes the underlying content.
+    /// registration never deletes the underlying content. Creating new documents is a
+    /// separate opt-in; see <see cref="AllowCreation"/>.
     /// </summary>
     public bool AllowRegistration { get; init; }
+
+    /// <summary>
+    /// Gets whether <c>create_document</c> is exposed. The default is <see langword="false"/>:
+    /// authoring a brand-new, agent-named file at a connection root is a capability the
+    /// host should choose deliberately, and upgrading the package must not grant it to a
+    /// host that only ever opted into registration. Turning it on adds document creation
+    /// only - registration and editing are unchanged.
+    /// </summary>
+    public bool AllowCreation { get; init; }
 }
 
 /// <summary>
@@ -92,8 +102,19 @@ public sealed class OfficeAgentTools
 
         Document registration
         - register_document(connectionId, source) registers an existing document with a host-configured connection and returns its opaque documentId. The source is connection-specific: a path under a filesystem connection's root, or - for a SharePoint connection - the document's SharePoint/OneDrive URL or a "driveId/itemId" pair. Never pass credentials.
-        - remove_document(connectionId, documentId) removes the registration only - the underlying file is never deleted. Remove registrations you created once the work is done.
+        - remove_document(connectionId, documentId) removes the registration only - the underlying file is never deleted. Remove temporary registrations you made with register_document once the work is done, but keep the final document's output registration until the host has delivered it.
         - Register a document only when the user names a file the host has not already given you an id for; otherwise use the ids you were given.
+        """;
+
+    /// <summary>
+    /// System-prompt guidance to append when <c>create_document</c> is exposed.
+    /// </summary>
+    public const string CreationPromptGuidance = """
+
+        Creating a document
+        - create_document(connectionId, name, planJson) creates and registers a new .docx and returns outputDocumentId. name is a bare file name, never a path; an existing name is not overwritten.
+        - Pass "" for an empty document. An initial plan is applied in memory before storage and can target the empty paragraph as { "paraId": "auto-0000", "expect": "" }.
+        - Plan-validation errors mean nothing was written. A provider or cancellation error can occur after storage accepted the file, so do not retry the same name; report the possibly unregistered file name to the host/operator for recovery.
         """;
 
     /// <summary>Returns the four core AIFunctions the host registers with its agent.</summary>
@@ -102,7 +123,8 @@ public sealed class OfficeAgentTools
     /// <summary>
     /// Returns the AIFunctions selected by <paramref name="options"/>: the four core
     /// inspect/find/preview/apply tools, plus <c>register_document</c> and
-    /// <c>remove_document</c> when registration is allowed.
+    /// <c>remove_document</c> when registration is allowed, and independently
+    /// <c>create_document</c> when creation is allowed.
     /// </summary>
     public AIFunction[] AsAIFunctions(OfficeAgentToolsOptions options)
     {
@@ -119,6 +141,16 @@ public sealed class OfficeAgentTools
                 "remove_document",
                 "Remove a document registration from a provider connection by (connectionId, documentId). " +
                 "Only the registration is removed - the underlying file is never deleted. Returns {removed, connectionId, documentId}.")));
+        }
+        if (options.AllowCreation)
+        {
+            functions.Add(AIFunctionFactory.Create(CreateDocument, Opts(
+                "create_document",
+                "Create and register a new .docx in a host-configured connection, optionally applying an initial plan before writing. " +
+                "name is a bare file name such as 'quarterly-report.docx'; an existing name is never overwritten. " +
+                "Pass planJson \"\" for a minimal document with one empty paragraph, or target that paragraph as { \"paraId\": \"auto-0000\", \"expect\": \"\" }. " +
+                "Plan-validation errors guarantee no write. Provider and cancellation errors may occur after storage accepted the file, so do not retry the same name; report the possibly unregistered name to the host for recovery. " +
+                "Returns the apply_plan shape: {isValid, committed, outputConnectionId, outputDocumentId, outputVersion, outputName, outputContentType, changes, errors}.")));
         }
         return functions.ToArray();
     }
@@ -271,6 +303,22 @@ public sealed class OfficeAgentTools
             }, Json);
         });
 
+    /// <summary>
+    /// Creates a new document in a provider connection, optionally applying an initial
+    /// plan to it before anything is written.
+    /// </summary>
+    public Task<string> CreateDocument(
+        string connectionId,
+        string name,
+        string planJson = "",
+        CancellationToken cancellationToken = default)
+        => SafeAsync(async () =>
+        {
+            var plan = string.IsNullOrWhiteSpace(planJson) ? null : DeserializePlan(planJson);
+            var result = await _client.CreateAsync(connectionId, name, plan, cancellationToken).ConfigureAwait(false);
+            return SerializeReport(result.Report, result.Committed, result.Committed ? result.Document : null);
+        });
+
     /// <summary>Removes a document registration; the underlying content is left untouched.</summary>
     public Task<string> RemoveDocument(
         string connectionId,
@@ -328,12 +376,25 @@ public sealed class OfficeAgentTools
         ProviderErrorCode.InvalidArgument => "invalid-argument",
         ProviderErrorCode.ConfigurationError => "configuration-error",
         ProviderErrorCode.IO => "io-error",
+        ProviderErrorCode.AlreadyExists => "already-exists",
         _ => "provider-error"
     };
 
-    private static DocumentPlan DeserializePlan(string planJson) =>
-        JsonSerializer.Deserialize<DocumentPlan>(planJson, PlanJson)
-        ?? throw new JsonException("Plan JSON did not deserialize to a DocumentPlan.");
+    private static DocumentPlan DeserializePlan(string planJson)
+    {
+        var plan = JsonSerializer.Deserialize<DocumentPlan>(planJson, PlanJson)
+            ?? throw new JsonException("Plan JSON did not deserialize to a DocumentPlan.");
+
+        // An explicit "operations": null overwrites the empty default, and every consumer
+        // downstream enumerates the list. Name the fix rather than let it surface as an
+        // internal error the model cannot act on.
+        if (plan.Operations is null)
+            throw new JsonException(
+                "Plan \"operations\" was null; supply an array of operation objects, " +
+                "for example { \"operations\": [ { \"op\": \"insert\", ... } ] }.");
+
+        return plan;
+    }
 
     private static string SerializeReport(ChangeReport report, bool committed, DocumentReference? savedReference) =>
         JsonSerializer.Serialize(new

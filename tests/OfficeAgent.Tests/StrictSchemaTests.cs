@@ -19,7 +19,11 @@ public class StrictSchemaTests
         //   every key in properties. Missing 'fidelity'.
         var registry = new DocumentProviderRegistry(Array.Empty<IDocumentProvider>());
         var client = new OfficeAgentClient(registry, new WordModule());
-        var tools = new OfficeAgentTools(client).AsAIFunctions();
+        // Both opt-ins, so this is genuinely the widest surface: with creation off,
+        // create_document's schema would never be checked here.
+        var tools = new OfficeAgentTools(client)
+            .AsAIFunctions(new OfficeAgentToolsOptions { AllowRegistration = true, AllowCreation = true });
+        Assert.Contains("create_document", tools.Select(t => t.Name));
 
         Assert.NotEmpty(tools);
         foreach (var tool in tools)

@@ -57,6 +57,7 @@ macOS/Linux:
 claude mcp add officeagent \
   --env OfficeAgent__FileSystemConnections__0__ConnectionId=documents \
   --env OfficeAgent__FileSystemConnections__0__RootPath=/absolute/path/to/documents \
+  --env OfficeAgent__AllowCreation=true \
   -- officeagent-mcp --stdio
 ```
 
@@ -66,15 +67,21 @@ PowerShell:
 claude mcp add officeagent `
   --env OfficeAgent__FileSystemConnections__0__ConnectionId=documents `
   --env OfficeAgent__FileSystemConnections__0__RootPath=C:\officeagent-documents `
+  --env OfficeAgent__AllowCreation=true `
   -- officeagent-mcp --stdio
 ```
+
+`AllowCreation` is off by default and is what adds `create_document`; drop that
+line for an agent that may only edit documents that already exist.
 
 Run `claude mcp list` to confirm that `officeagent` is connected. Then ask the
 client to edit a file in the configured directory, for example:
 
 > Change the payment terms in contract.docx from 30 to 45 days.
 
-The server exposes tools to register, inspect, search, preview, and apply edits.
+The server exposes tools to register, create, inspect, search, preview, and apply
+edits. Asking for a document that does not exist yet - "draft a project brief in
+`brief.docx`" - creates it in the configured directory rather than failing.
 Text replacements are tracked changes by default. With the filesystem provider,
 a successful apply normally writes a sibling such as `contract.v2.docx`, keeps
 `contract.docx` unchanged, and returns the new document id for follow-up edits.
@@ -169,6 +176,9 @@ Documents are accessed through configured providers. After registration,
 editing calls use a `(connectionId, documentId)` pair instead of a storage path
 or credentials. The filesystem provider restricts registrations to its root;
 the SharePoint provider uses the permissions of its configured identity.
+`CreateAsync` starts a new document inside a connection: the engine mints a
+minimal valid `.docx`, applies an optional initial plan in memory, and then asks
+the provider to create and register it without overwriting an existing name.
 
 ## Documentation
 

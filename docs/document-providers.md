@@ -24,7 +24,7 @@ services
     .AddOfficeAgent();
 ```
 
-The filesystem provider only accepts source paths that lie under its configured root. It persists the id → path mapping in `{root}/.officeagent/index.json` and rejects path-like ids, traversal escapes, symlinks/reparse points, disallowed extensions, oversized files, and stale versions.
+The filesystem provider only accepts source paths that lie under its configured root. It persists the id → path mapping in `{root}/.officeagent/index.json` and rejects path-like ids, traversal escapes, symlinks/reparse points, disallowed extensions, oversized files, and stale versions. New documents created through the connection are written directly under that root.
 
 Connection ids are host-chosen and must be unique across providers: the `(connectionId, documentId)` overloads resolve the provider from the connection id alone, whatever its type.
 
@@ -46,7 +46,12 @@ services.AddSingleton<IAccessTokenProvider>(sp => new AppOnlyAccessTokenProvider
     sp.GetRequiredService<HttpClient>()));
 services.AddSharePointDocumentProvider(
     connectionId: "legal",
-    o => o.AllowedExtensions = new[] { ".docx" });
+    o =>
+    {
+        o.AllowedExtensions = new[] { ".docx" };
+        o.CreationDriveId = configuration["Graph:CreationDriveId"]!;
+        o.CreationFolderItemId = configuration["Graph:CreationFolderItemId"]!;
+    });
 ```
 
 The same boundary rules apply, over Microsoft Graph:
@@ -56,6 +61,7 @@ The same boundary rules apply, over Microsoft Graph:
 - **Save modes match the filesystem provider**: `NewVersion`/`NewDocument` upload a versioned sibling (`contract.v2.docx`, …) with `conflictBehavior=fail` and mint a fresh id; `Replace` overwrites in place.
 - **Tokens stay out of references and tool results.** Authentication is an `IAccessTokenProvider` - two are included (see below). Content downloads use Graph's pre-authenticated URL, so the bearer token never travels to the storage endpoint.
 - **Registrations are pluggable.** `InMemoryRegistrationStore` is the default; `JsonFileRegistrationStore` survives restarts; implement `ISharePointRegistrationStore` over shared storage for multi-instance hosts.
+- **Creation has one explicit destination.** Set both `CreationDriveId` and `CreationFolderItemId` to allow new documents in that folder. Existing-document registration remains cross-drive. Uploads use `conflictBehavior=fail`, so creation never overwrites an existing SharePoint item.
 
 ### Choosing an authentication mode
 
@@ -108,6 +114,43 @@ A stored id can be reconstituted into a reference if you only have the id:
 var reference = DocumentReference.ForFileSystem("contracts", doc.ItemId);
 ```
 
+## Create a new document
+
+`RegisterAsync` needs a document that already exists. `CreateAsync` starts one:
+
+```csharp
+var created = await client.CreateAsync("contracts", "brief.docx");
+// created.Committed is true; created.Document is the new document's reference.
+
+// …or with an initial plan, applied before anything is written:
+var report = await client.CreateAsync("contracts", "report.docx", new DocumentPlan
+{
+    Operations = new PlanOperation[]
+    {
+        new InsertOp
+        {
+            Target   = new TextSpanAnchor { ParaId = "auto-0000", Expect = "" },
+            Position = InsertPosition.Before,
+            Text     = "Quarterly Report"
+        }
+    }
+});
+```
+
+The Word module supplies a minimal valid package with one empty paragraph,
+addressed as `auto-0000`. The optional plan is applied in memory before storage
+is touched. Providers use their native create-if-absent operation, so an existing
+name returns `AlreadyExists` and is never overwritten.
+
+Storage creation and registration are separate steps. If filesystem or SharePoint
+storage succeeds but registration fails, the provider leaves the new document
+intact and reports the possibly unregistered filename instead of deleting remote
+content or retrying an ambiguous write.
+
+The filesystem provider implements creation and writes new documents directly
+under the connection root. A SharePoint connection implements creation when its
+`CreationDriveId` and `CreationFolderItemId` identify the destination folder.
+
 ## Remove (unregister) a document
 
 `OfficeAgentClient.RemoveAsync` unregisters a document, by canonical reference or by `(connectionId, documentId)`:
@@ -141,7 +184,8 @@ Failures at the provider boundary throw `DocumentProviderException` carrying a s
 | `ExtensionNotAllowed` | Display-name extension is not in the allow-list. |
 | `VersionConflict` | Optimistic-concurrency check failed (`DocumentVersionConflictException`). |
 | `InvalidArgument` | Structurally bad reference or save options. |
-| `ConfigurationError` | Registry has zero or more than one provider for the requested `(provider, connectionId)`. |
+| `ConfigurationError` | Registry has zero or more than one provider for the requested `(provider, connectionId)`, or the connection's provider cannot create documents. |
 | `IO` | Underlying storage I/O error. |
+| `AlreadyExists` | A document with the requested name is already there; the provider refuses to overwrite it. Retry with a different name. |
 
-These flatten cleanly into the agent-tool surface: `OfficeAgent.AgentFramework` returns each one as a stable wire code (`not-found`, `access-denied`, `content-too-large`, `extension-not-allowed`, `version-conflict`, `invalid-argument`, `configuration-error`, `io-error`) so the LLM can act on it.
+These flatten cleanly into the agent-tool surface: `OfficeAgent.AgentFramework` returns each one as a stable wire code (`not-found`, `access-denied`, `content-too-large`, `extension-not-allowed`, `version-conflict`, `invalid-argument`, `configuration-error`, `io-error`, `already-exists`) so the LLM can act on it.
