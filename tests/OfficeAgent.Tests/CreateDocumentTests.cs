@@ -104,6 +104,22 @@ public class CreateDocumentTests
         Assert.Equal(original, File.ReadAllBytes(Path.Combine(workspace.Root, "report.docx")));
     }
 
+    [Theory]
+    [InlineData("CON.docx")]
+    [InlineData("nul.docx")]
+    [InlineData("LPT1.docx")]
+    public async Task Create_rejects_reserved_windows_device_names(string name)
+    {
+        using var workspace = new CreateWorkspace();
+
+        var error = await Assert.ThrowsAsync<DocumentProviderException>(() =>
+            workspace.Client.CreateAsync("workspace", name));
+
+        Assert.Equal(ProviderErrorCode.InvalidArgument, error.Code);
+        Assert.Contains("reserved Windows device name", error.Message, StringComparison.OrdinalIgnoreCase);
+        Assert.Empty(Directory.GetFiles(workspace.Root, "*.docx"));
+    }
+
     [Fact]
     public async Task Create_rejects_paths_and_unsupported_formats()
     {

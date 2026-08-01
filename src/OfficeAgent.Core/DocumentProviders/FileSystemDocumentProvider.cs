@@ -430,10 +430,12 @@ public sealed class FileSystemDocumentProvider : IDocumentProvider, IDocumentCre
             throw Error(ProviderErrorCode.InvalidArgument,
                 "A document name must be a bare file name without path segments.");
         if (!string.IsNullOrWhiteSpace(name) &&
-            (name.IndexOfAny(PortableInvalidNameChars) >= 0 ||
-             name.Any(char.IsControl)))
+            PortableDocumentName.ContainsInvalidCharacter(name))
             throw Error(ProviderErrorCode.InvalidArgument,
                 "A document name must not contain characters that are invalid in a file name.");
+        if (!string.IsNullOrWhiteSpace(name) && PortableDocumentName.IsWindowsDeviceName(name))
+            throw Error(ProviderErrorCode.InvalidArgument,
+                "A document name must not use a reserved Windows device name.");
         if (!string.IsNullOrWhiteSpace(name) &&
             (!string.Equals(name, name.Trim(), StringComparison.Ordinal) ||
              name.EndsWith(".", StringComparison.Ordinal)))
@@ -472,14 +474,6 @@ public sealed class FileSystemDocumentProvider : IDocumentProvider, IDocumentCre
             return (stem.Substring(0, dot), version);
         return (stem, 1);
     }
-
-    /// <summary>
-    /// The characters a document name may never carry, whatever the host OS. Windows
-    /// rejects all of these; enforcing the same set everywhere keeps a name that one
-    /// deployment accepts from being illegal on the next.
-    /// </summary>
-    private static readonly char[] PortableInvalidNameChars =
-        { '<', '>', ':', '"', '|', '?', '*', '/', '\\', '\0' };
 
     private static string NormalizeExtension(string extension) =>
         extension.StartsWith(".", StringComparison.Ordinal) ? extension : "." + extension;

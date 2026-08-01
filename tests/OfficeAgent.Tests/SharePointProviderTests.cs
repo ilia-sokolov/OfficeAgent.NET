@@ -63,6 +63,24 @@ public class SharePointProviderTests
         Assert.Equal(ProviderErrorCode.AlreadyExists, error.Code);
     }
 
+    [Theory]
+    [InlineData("CON.docx")]
+    [InlineData("nul.docx")]
+    [InlineData("LPT1.docx")]
+    public async Task Create_rejects_reserved_windows_device_names(string name)
+    {
+        using var drive = new FakeGraphDrive();
+        var provider = drive.Provider();
+        using var content = new MemoryStream(DocxFactory.Contract());
+
+        var error = await Assert.ThrowsAsync<DocumentProviderException>(() =>
+            provider.CreateAsync(name, content));
+
+        Assert.Equal(ProviderErrorCode.InvalidArgument, error.Code);
+        Assert.Contains("reserved Windows device name", error.Message, StringComparison.OrdinalIgnoreCase);
+        Assert.False(drive.HasName(name));
+    }
+
     [Fact]
     public async Task Create_requires_a_configured_sharepoint_destination()
     {

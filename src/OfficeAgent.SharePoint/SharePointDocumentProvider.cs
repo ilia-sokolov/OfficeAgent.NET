@@ -517,10 +517,13 @@ public sealed class SharePointDocumentProvider : IDocumentProvider, IDocumentCre
     private string ValidateCreateName(string name)
     {
         if (!string.IsNullOrWhiteSpace(name) &&
-            (name.Any(char.IsControl) || name.IndexOfAny(PortableInvalidNameChars) >= 0))
+            PortableDocumentName.ContainsInvalidCharacter(name))
             throw Error(ProviderErrorCode.InvalidArgument,
                 "A document name must be a bare file name without path separators, " +
                 "control characters, or other invalid filename characters.");
+        if (!string.IsNullOrWhiteSpace(name) && PortableDocumentName.IsWindowsDeviceName(name))
+            throw Error(ProviderErrorCode.InvalidArgument,
+                "A document name must not use a reserved Windows device name.");
         if (!string.IsNullOrWhiteSpace(name) &&
             (!string.Equals(name, name.Trim(), StringComparison.Ordinal) ||
              name.EndsWith(".", StringComparison.Ordinal)))
@@ -528,9 +531,6 @@ public sealed class SharePointDocumentProvider : IDocumentProvider, IDocumentCre
                 "A document name must not begin or end with whitespace or end with a dot.");
         return ValidateName(name);
     }
-
-    private static readonly char[] PortableInvalidNameChars =
-        { '<', '>', ':', '"', '|', '?', '*', '/', '\\', '\0' };
 
     private static string SafeCreateFailureMessage(ProviderErrorCode code, string fileName) => code switch
     {
