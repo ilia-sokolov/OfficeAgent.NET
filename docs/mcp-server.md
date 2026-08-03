@@ -123,10 +123,10 @@ The security model carries over: agents see opaque ids, never credentials; a fil
 2. `register_document("documents", "contract.docx")` → `{ documentId: "…" }` *(a SharePoint connection takes a document URL or `driveId/itemId` instead of a path)*
 3. `find_in_document("documents", id, "Acme Corp")` → content-verified anchors
 4. `preview_plan(…)` → before/after report, no write
-5. `apply_plan(…)` → `{ committed: true, outputDocumentId: "…", outputName: "contract.v2.docx", outputContentType: "…" }`
+5. `apply_plan(…)` → `{ committed: true, outputDocumentId: "…", outputName: "contract.docx", outputContentType: "…" }`
 6. `remove_document("documents", id)` when the registration is no longer needed
 
-Step 5 writes `contract.v2.docx` beside the source (default `NewVersion` mode) - the source file is untouched, and the returned id addresses the new revision for follow-up edits.
+Step 5 writes back to `contract.docx` itself (default `Replace` mode) after an optimistic version check, so the returned id is the one passed in. Pass `saveMode: "NewVersion"` to leave the source untouched and write `contract.v2.docx` beside it instead.
 
 The composite tools collapse that loop. Steps 2–5 become one call when the edit is already known:
 
@@ -135,6 +135,6 @@ edit_document("documents", "contract.docx",
   "[ { \"op\": \"changeText\", \"target\": { \"find\": \"Acme Corp\" }, \"with\": \"Globex Inc.\" } ]")
 ```
 
-→ `{ committed: true, sourceDocumentId: "…", outputDocumentId: "…", outputName: "contract.v2.docx" }`. Text matching more than once comes back as `ambiguous-anchor` with the candidates listed, and nothing is written; re-issue with `"match": <index>`. When the document has to be read first, `open_document("documents", "contract.docx")` replaces steps 2–3 and returns the registration and the inspection together.
+→ `{ committed: true, sourceDocumentId: "…", outputDocumentId: "…", outputName: "contract.docx" }`. Text matching more than once comes back as `ambiguous-anchor` with the candidates listed, and nothing is written; re-issue with `"match": <index>`. When the document has to be read first, `open_document("documents", "contract.docx")` replaces steps 2–3 and returns the registration and the inspection together.
 
 To start from nothing instead, replace step 2 with `create_document("documents", "brief.docx", "")` → `{ committed: true, outputDocumentId: "…" }`. The new document holds one empty paragraph addressed as `auto-0000`, so the third argument can carry an initial plan targeting it. Plan-validation errors happen before the write; provider errors may occur after storage accepted the file, so do not retry the same name blindly.

@@ -84,6 +84,7 @@ public sealed class OfficeAgentTools
         - Storage connections are host-configured and so is each document's registration. The host gives you an OPAQUE, provider-assigned documentId for every document you are allowed to work with; all document tools address it as (connectionId, documentId). Never invent a documentId, never pass a filename or path as one, and never ask the user to send raw file bytes through this conversation.
         - The connectionId and documentId are already in your instructions or in the conversation context. NEVER ask the user for them - the user does not know or manage these values. If a request mentions "the document", it means the current document you were given; start working with it immediately.
         - apply_plan returns outputDocumentId, outputName, and outputContentType for the saved revision. Use outputDocumentId as the next call's documentId if you keep editing. When the work is complete, tell the user the document is ready; the host retrieves its bytes and presents the download or attachment. Do not place document base64 in the final response.
+        - Saving edits the document in place (saveMode "Replace", the default), so outputDocumentId is the same id you passed in. If the user wants the original kept, pass saveMode "NewVersion" to write a sibling revision instead, and tell them where the result landed.
 
         Plan shape, anchors, safety loop
         - Plan body is { "operations": [ ... ] }. Do NOT set contractVersion or snapshot - the engine fills them.
@@ -224,7 +225,7 @@ public sealed class OfficeAgentTools
             "{ \"op\": \"removeImage\", \"target\": { \"kind\": \"image\", \"path\": \"image#0\" } }")),
         AIFunctionFactory.Create(ApplyPlan, Opts(
             "apply_plan",
-            "Apply a DocumentPlan JSON to (connectionId, documentId) and save through the provider. Returns {committed, outputConnectionId, outputDocumentId, outputVersion, outputName, outputContentType, changes, errors}. saveMode: 'NewVersion' (default, mints a new id under the same connection), 'NewDocument' (mints a fresh id with an optional newName for display), 'Replace' (overwrites the source after an optimistic version check). On any failure nothing is written."))
+            "Apply a DocumentPlan JSON to (connectionId, documentId) and save through the provider. Returns {committed, outputConnectionId, outputDocumentId, outputVersion, outputName, outputContentType, changes, errors}. saveMode: 'Replace' (default, overwrites the source after an optimistic version check), 'NewVersion' (keeps the source and mints a new id under the same connection), 'NewDocument' (mints a fresh id with an optional newName for display). On any failure nothing is written."))
     };
 
     /// <summary>Inspects a document and returns paginated JSON.</summary>
@@ -313,7 +314,7 @@ public sealed class OfficeAgentTools
         string connectionId,
         string documentId,
         string planJson,
-        string saveMode = "NewVersion",
+        string saveMode = "Replace",
         string newName = "",
         CancellationToken cancellationToken = default)
         => SafeAsync(async () =>
@@ -404,7 +405,7 @@ public sealed class OfficeAgentTools
         string connectionId,
         string source,
         string planJson,
-        string saveMode = "NewVersion",
+        string saveMode = "Replace",
         string newName = "",
         CancellationToken cancellationToken = default)
         => SafeAsync(async () =>
@@ -450,6 +451,7 @@ public sealed class OfficeAgentTools
         try { return await work().ConfigureAwait(false); }
         catch (OperationCanceledException) { return SerializeError("cancelled", "Operation was cancelled."); }
         catch (JsonException ex) { return SerializeError("invalid-json", ex.Message); }
+        catch (ArgumentException ex) { return SerializeError("invalid-argument", ex.Message); }
         catch (DocumentProviderException ex)
         {
             return SerializeError(
@@ -474,12 +476,26 @@ public sealed class OfficeAgentTools
         _ => Fidelity.Content
     };
 
-    private static SaveMode ParseSaveMode(string mode) => mode?.Trim() switch
+    /// <summary>
+    /// Omitted means the default, <see cref="SaveMode.Replace"/>. A value that is present
+    /// but unrecognised is refused rather than defaulted: now that the default writes over
+    /// the source, silently treating "NewVerison" as the default would destroy the very
+    /// document the caller was trying to preserve.
+    /// </summary>
+    private static SaveMode ParseSaveMode(string mode)
     {
-        "NewDocument" => SaveMode.NewDocument,
-        "Replace" => SaveMode.Replace,
-        _ => SaveMode.NewVersion
-    };
+        var value = mode?.Trim();
+        if (string.IsNullOrEmpty(value)) return SaveMode.Replace;
+
+        return value switch
+        {
+            "NewVersion" => SaveMode.NewVersion,
+            "NewDocument" => SaveMode.NewDocument,
+            "Replace" => SaveMode.Replace,
+            _ => throw new ArgumentException(
+                $"Unknown saveMode '{mode}'. Expected NewVersion, NewDocument, or Replace.", nameof(mode))
+        };
+    }
 
     private static string ProviderCodeToWire(ProviderErrorCode code) => code switch
     {

@@ -100,7 +100,8 @@ if (!result.Committed)
     return;
 }
 
-// SaveMode.NewVersion (default) mints a fresh id for the result; the source is preserved.
+// SaveMode.Replace (default) writes back to the same document, so ItemId is unchanged.
+// Pass SaveMode.NewVersion to keep the source and mint a fresh id for the result instead.
 Console.WriteLine($"Saved revision {result.Document.ItemId}");
 
 using var saved = await client.OpenReadAsync(result.Document);
@@ -117,7 +118,7 @@ In agent-driven workflows, deliver results by id, not by bytes - see [Agent inte
 
 ```csharp
 await client.RemoveAsync("contracts", result.Document.ItemId);
-File.Delete("/srv/officeagent/contracts/contract.v2.docx");   // host deletes the file
+File.Delete("/srv/officeagent/contracts/contract.docx");   // host deletes the file
 ```
 
 `OfficeAgentTools` deliberately does not expose registration or deletion to the agent - the host pre-registers documents and removes them through application code.

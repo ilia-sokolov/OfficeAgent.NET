@@ -46,7 +46,9 @@ public class AiToolsTests
         Assert.True(parsed.RootElement.GetProperty("committed").GetBoolean());
 
         var outputId = parsed.RootElement.GetProperty("outputDocumentId").GetString()!;
-        Assert.Equal("contract.v2.docx", parsed.RootElement.GetProperty("outputName").GetString());
+        // Saving defaults to Replace, so the edit lands in the document that was addressed.
+        Assert.Equal(added.ItemId, outputId);
+        Assert.Equal("contract.docx", parsed.RootElement.GetProperty("outputName").GetString());
         Assert.Equal(
             "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
             parsed.RootElement.GetProperty("outputContentType").GetString());

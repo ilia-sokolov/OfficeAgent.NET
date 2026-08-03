@@ -50,7 +50,7 @@ host responsibilities, and the agent cannot supply file paths.
 | `inspect_document(connectionId, documentId, fidelity?, paragraphOffset?, paragraphLimit?)` | Returns outline, paragraphs (with their containing table when applicable), content controls, nodes (tables, images, document properties, revisions), styles, and a snapshot etag. Pages large documents. |
 | `find_in_document(connectionId, documentId, pattern, regex?, wholeWord?, caseSensitive?)` | Returns content-verified anchors usable as plan targets. |
 | `preview_plan(connectionId, documentId, planJson)` | Validates a `DocumentPlan` JSON without writing. Returns `{ isValid, changes, errors }`. |
-| `apply_plan(connectionId, documentId, planJson, saveMode?, newName?)` | Applies the plan atomically and saves through the provider. `saveMode` is `NewVersion` (default), `NewDocument` (with `newName`), or `Replace`. Returns `{ isValid, committed, outputConnectionId, outputDocumentId, outputVersion, outputName, outputContentType, changes, errors }`. |
+| `apply_plan(connectionId, documentId, planJson, saveMode?, newName?)` | Applies the plan atomically and saves through the provider. `saveMode` is `Replace` (default), `NewVersion`, or `NewDocument` (with `newName`); an unrecognised value is refused rather than defaulted. Returns `{ isValid, committed, outputConnectionId, outputDocumentId, outputVersion, outputName, outputContentType, changes, errors }`. |
 
 ## Let the agent stage its own documents
 

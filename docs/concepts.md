@@ -60,7 +60,7 @@ The Word module ships 17 verbs covering text, runs, tables (create / remove / ro
 - `PreviewAsync` validates the whole plan against the current document and returns a *change report* - proposed before/after, declared capability per change, and any validation errors. Nothing is written.
 - `CommitAsync` applies the plan atomically and saves through the provider. Every operation is re-verified against live state immediately before it runs; if any step fails, no partial result is written.
 
-The default save mode is `NewVersion`: the source document is preserved and a fresh `documentId` is minted for the result. `NewDocument` mints a fresh id with a caller-supplied display name. `Replace` overwrites the source after an optimistic-concurrency check on the source version.
+The default save mode is `Replace`: the edit lands in the document it was aimed at, after an optimistic-concurrency check on the source version, and the returned `documentId` is the one you passed in. `NewVersion` preserves the source and mints a fresh `documentId` for the result instead. `NewDocument` mints a fresh id with a caller-supplied display name.
 
 ## Capabilities
 

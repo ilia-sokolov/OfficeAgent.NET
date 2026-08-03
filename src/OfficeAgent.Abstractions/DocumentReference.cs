@@ -51,7 +51,11 @@ public sealed class DocumentReference
     };
 }
 
-/// <summary>Specifies how a provider saves transformed document content.</summary>
+/// <summary>
+/// Specifies how a provider saves transformed document content. Member order is part of
+/// the contract - callers persisting these numerically depend on it - so the default is
+/// set on <see cref="SaveDocumentOptions.Mode"/> rather than by making it the zero value.
+/// </summary>
 public enum SaveMode
 {
     /// <summary>Create a non-destructive new version or sibling document.</summary>
@@ -60,15 +64,23 @@ public enum SaveMode
     /// <summary>Create a separate document at the requested destination.</summary>
     NewDocument,
 
-    /// <summary>Replace the source item after an optimistic concurrency check.</summary>
+    /// <summary>
+    /// Replace the source item after an optimistic concurrency check. This is the default:
+    /// editing a document is expected to change that document, not leave the original
+    /// untouched beside a copy the caller then has to find and reconcile.
+    /// </summary>
     Replace
 }
 
 /// <summary>Provides provider-independent options for saving transformed content.</summary>
 public sealed class SaveDocumentOptions
 {
-    /// <summary>Gets the save behavior. The default is non-destructive.</summary>
-    public SaveMode Mode { get; init; } = SaveMode.NewVersion;
+    /// <summary>
+    /// Gets the save behavior. The default is <see cref="SaveMode.Replace"/>: the edit
+    /// lands in the document it was aimed at, guarded by an optimistic version check.
+    /// Choose <see cref="SaveMode.NewVersion"/> to keep the source and write a sibling.
+    /// </summary>
+    public SaveMode Mode { get; init; } = SaveMode.Replace;
 
     /// <summary>
     /// Gets the source version expected by the caller. When omitted, providers use the

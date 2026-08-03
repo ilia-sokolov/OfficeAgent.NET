@@ -102,7 +102,9 @@ public class DocumentProviderTests
             }
         };
 
-        var result = await client.CommitAsync(source, plan);
+        // Non-destructive saving is opt-in: the default replaces the source in place.
+        var result = await client.CommitAsync(
+            source, plan, new SaveDocumentOptions { Mode = SaveMode.NewVersion });
 
         Assert.True(result.Committed);
         Assert.NotNull(result.Document);

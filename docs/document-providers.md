@@ -166,9 +166,9 @@ The provider drops the id → path mapping; the underlying file the provider onl
 
 | Mode | Behaviour |
 | --- | --- |
-| `NewVersion` | Default. Writes the result as `{base}.v{n}.{ext}` beside the source file, mints a fresh opaque id, and registers the new path. The source is preserved. Use `NewName` to override the destination's file name. |
+| `NewVersion` | Writes the result as `{base}.v{n}.{ext}` beside the source file, mints a fresh opaque id, and registers the new path. The source is preserved. Use `NewName` to override the destination's file name. |
 | `NewDocument` | Same as `NewVersion`, named for clarity when the intent is "create a sibling document". A caller-chosen `DestinationItemId` is rejected - ids are provider-assigned. |
-| `Replace` | Atomically overwrites the registered file in place (same id, same path) after an optimistic-concurrency check against `ExpectedVersion` (or the source reference's `Version`). |
+| `Replace` | Default. Atomically overwrites the registered file in place (same id, same path) after an optimistic-concurrency check against `ExpectedVersion` (or the source reference's `Version`). |
 
 Every save returns a canonical `DocumentReference` for the result, including its new id and version. A version mismatch raises `DocumentVersionConflictException` instead of overwriting newer content.
 

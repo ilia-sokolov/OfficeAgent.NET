@@ -82,9 +82,10 @@ client to edit a file in the configured directory, for example:
 The server exposes tools to register, create, inspect, search, preview, and apply
 edits. Asking for a document that does not exist yet - "draft a project brief in
 `brief.docx`" - creates it in the configured directory rather than failing.
-Text replacements are tracked changes by default. With the filesystem provider,
-a successful apply normally writes a sibling such as `contract.v2.docx`, keeps
-`contract.docx` unchanged, and returns the new document id for follow-up edits.
+Text replacements are tracked changes by default. A successful apply writes back
+to the document it edited, guarded by an optimistic version check; pass
+`saveMode: "NewVersion"` to keep the source and write a sibling such as
+`contract.v2.docx` instead.
 
 OfficeAgent does not send the complete `.docx` package through the model, but
 the MCP client and model do receive document text and structure returned by the

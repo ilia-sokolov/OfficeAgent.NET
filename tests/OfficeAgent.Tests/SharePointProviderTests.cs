@@ -223,7 +223,8 @@ public class SharePointProviderTests
         var source = await provider.RegisterAsync(drive.SourceById(itemId));
 
         using var output = new MemoryStream(DocxFactory.Contract());
-        var saved = await provider.SaveAsync(source, output, new SaveDocumentOptions());
+        var saved = await provider.SaveAsync(
+            source, output, new SaveDocumentOptions { Mode = SaveMode.NewVersion });
 
         Assert.Equal("contract.v2.docx", saved.Name);
         Assert.NotEqual(source.ItemId, saved.ItemId);
