@@ -304,7 +304,7 @@ public sealed class OfficeAgentTools
         CancellationToken cancellationToken = default)
         => SafeAsync(async () =>
         {
-            var plan = DeserializePlan(planJson);
+            var plan = DeserializePlan(planJson, connectionId);
             var report = await _client.PreviewAsync(connectionId, documentId, plan, cancellationToken).ConfigureAwait(false);
             return SerializeReport(report, committed: false, savedReference: null);
         });
@@ -319,7 +319,7 @@ public sealed class OfficeAgentTools
         CancellationToken cancellationToken = default)
         => SafeAsync(async () =>
         {
-            var plan = DeserializePlan(planJson);
+            var plan = DeserializePlan(planJson, connectionId);
             var options = new SaveDocumentOptions
             {
                 Mode = ParseSaveMode(saveMode),
@@ -358,7 +358,7 @@ public sealed class OfficeAgentTools
         CancellationToken cancellationToken = default)
         => SafeAsync(async () =>
         {
-            var plan = string.IsNullOrWhiteSpace(planJson) ? null : DeserializePlan(planJson);
+            var plan = string.IsNullOrWhiteSpace(planJson) ? null : DeserializePlan(planJson, connectionId);
             var result = await _client.CreateAsync(connectionId, name, plan, cancellationToken).ConfigureAwait(false);
             return SerializeReport(result.Report, result.Committed, result.Committed ? result.Document : null);
         });
@@ -428,7 +428,7 @@ public sealed class OfficeAgentTools
                 NewName = string.IsNullOrEmpty(newName) ? null : newName
             };
             var result = await _client.CommitAsync(
-                connectionId, reference.ItemId, DeserializePlan(planObject), options, cancellationToken).ConfigureAwait(false);
+                connectionId, reference.ItemId, DeserializePlan(planObject, connectionId), options, cancellationToken).ConfigureAwait(false);
 
             return SerializeReport(
                 result.Report, result.Committed, result.Committed ? result.Document : null,
@@ -530,8 +530,37 @@ public sealed class OfficeAgentTools
         };
     }
 
-    private static DocumentPlan DeserializePlan(string planJson) =>
-        DeserializePlan(ParsePlanObject(planJson));
+    /// <summary>
+    /// Writes the connection's default change mode into every operation that did not name
+    /// one. This has to happen on the JSON, before deserializing: once a
+    /// <see cref="ChangeTextOp"/> exists, its property initializer has already turned an
+    /// absent <c>mode</c> into <see cref="ChangeMode.Tracked"/> and the distinction between
+    /// "the agent omitted it" and "the agent asked for Tracked" is gone.
+    /// </summary>
+    private static JsonObject ApplyDefaultChangeMode(JsonObject planObject, ChangeMode connectionDefault)
+    {
+        if (connectionDefault == ChangeMode.Tracked) return planObject;
+        if (planObject["operations"] is not JsonArray operations) return planObject;
+
+        foreach (var operation in operations)
+        {
+            if (operation is not JsonObject op) continue;
+            // Only changeText carries a mode; naming it keeps an unrelated verb that
+            // happens to grow a "mode" property from silently inheriting this policy.
+            if (op["op"]?.GetValue<string>() is not "changeText") continue;
+            if (op.ContainsKey("mode")) continue;
+
+            op["mode"] = connectionDefault.ToString();
+        }
+
+        return planObject;
+    }
+
+    private DocumentPlan DeserializePlan(string planJson, string connectionId) =>
+        DeserializePlan(ParsePlanObject(planJson), connectionId);
+
+    private DocumentPlan DeserializePlan(JsonObject planObject, string connectionId) =>
+        DeserializePlan(ApplyDefaultChangeMode(planObject, _client.DefaultChangeModeFor(connectionId)));
 
     private static DocumentPlan DeserializePlan(JsonObject planObject)
     {

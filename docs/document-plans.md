@@ -52,7 +52,10 @@ paragraph that carries them.
 
 ### `changeText`
 
-Replace a content-verified text span. Default mode is `Tracked`.
+Replace a content-verified text span. An operation that does not state a `mode` takes the
+connection's `DefaultChangeMode`, which is `Tracked` unless the host configured otherwise -
+see [document providers](document-providers.md#default-change-mode). An operation that does
+state one is never overridden.
 
 ```json
 { "op": "changeText",

@@ -122,6 +122,22 @@ public sealed class DocumentVersionConflictException : DocumentProviderException
     public string ActualVersion { get; }
 }
 
+/// <summary>
+/// Optional <see cref="IDocumentProvider"/> capability: editing preferences the host
+/// configured for one connection. Separate from <see cref="IDocumentProvider"/> so a
+/// custom provider keeps compiling and simply takes the global defaults.
+/// </summary>
+public interface IConnectionEditingDefaults
+{
+    /// <summary>
+    /// Gets the change mode applied to a <c>changeText</c> operation that does not state
+    /// one. A connection over a review workflow wants <see cref="ChangeMode.Tracked"/>;
+    /// one over generated or machine-owned documents - or over decks, which have no
+    /// redline vocabulary at all - wants <see cref="ChangeMode.Direct"/>.
+    /// </summary>
+    ChangeMode DefaultChangeMode { get; }
+}
+
 /// <summary>Resolves configured providers without exposing credentials to agent tool calls.</summary>
 public sealed class DocumentProviderRegistry
 {
@@ -182,6 +198,27 @@ public sealed class DocumentProviderRegistry
                 $"Multiple document providers share connection id '{connectionId}'; address documents by full reference instead.",
                 provider: "", connectionId, itemId: null)
         };
+    }
+
+    /// <summary>
+    /// Returns the change mode a connection applies when an operation does not state one.
+    /// An unknown connection, or one whose provider declares no preference, yields
+    /// <see cref="ChangeMode.Tracked"/> - the global default. This deliberately does not
+    /// throw: resolving the connection properly is the caller's next step, and that
+    /// reports a missing connection far better than a lookup for a default could.
+    /// </summary>
+    public ChangeMode DefaultChangeModeFor(string connectionId)
+    {
+        if (string.IsNullOrWhiteSpace(connectionId)) return ChangeMode.Tracked;
+
+        var matches = _providers.Where(p =>
+            string.Equals(p.ConnectionId, connectionId, StringComparison.Ordinal)).ToArray();
+
+        // Ambiguity is reported by ResolveConnection; guessing a default here would pick
+        // one connection's review policy for another's documents.
+        return matches.Length == 1 && matches[0] is IConnectionEditingDefaults defaults
+            ? defaults.DefaultChangeMode
+            : ChangeMode.Tracked;
     }
 
     /// <summary>Returns the set of registered <c>(Provider, ConnectionId)</c> pairs for host enumeration.</summary>

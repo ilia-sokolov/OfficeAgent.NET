@@ -25,6 +25,14 @@ public sealed class FileSystemDocumentProviderOptions
 
     /// <summary>Gets or sets the allowed document extensions.</summary>
     public IReadOnlyCollection<string> AllowedExtensions { get; set; } = new[] { ".docx" };
+
+    /// <summary>
+    /// Gets or sets the change mode used when an operation does not state one. The
+    /// default is <see cref="ChangeMode.Tracked"/>, which suits documents a person
+    /// reviews. Set <see cref="ChangeMode.Direct"/> for a connection over generated or
+    /// machine-owned files, or one serving decks - PresentationML refuses Tracked.
+    /// </summary>
+    public ChangeMode DefaultChangeMode { get; set; } = ChangeMode.Tracked;
 }
 
 /// <summary>
@@ -36,7 +44,7 @@ public sealed class FileSystemDocumentProviderOptions
 /// path. New documents created through <see cref="CreateAsync"/> are the one case
 /// where the provider owns the bytes it writes: they land directly under the root.
 /// </summary>
-public sealed class FileSystemDocumentProvider : IDocumentProvider, IDocumentCreatingProvider
+public sealed class FileSystemDocumentProvider : IDocumentProvider, IDocumentCreatingProvider, IConnectionEditingDefaults
 {
     /// <summary>Gets the provider discriminator used in document references.</summary>
     public const string ProviderName = "filesystem";
@@ -63,6 +71,7 @@ public sealed class FileSystemDocumentProvider : IDocumentProvider, IDocumentCre
             throw new ArgumentOutOfRangeException(nameof(options), "MaximumBytes must be positive.");
 
         ConnectionId = options.ConnectionId;
+        DefaultChangeMode = options.DefaultChangeMode;
         _root = Path.GetFullPath(options.RootPath);
         Directory.CreateDirectory(_root);
         Directory.CreateDirectory(Path.Combine(_root, IndexDirectoryName));
@@ -82,6 +91,9 @@ public sealed class FileSystemDocumentProvider : IDocumentProvider, IDocumentCre
 
     /// <inheritdoc />
     public string ConnectionId { get; }
+
+    /// <inheritdoc />
+    public ChangeMode DefaultChangeMode { get; }
 
     /// <inheritdoc />
     public async Task<DocumentReference> RegisterAsync(

@@ -66,6 +66,13 @@ public sealed class FileSystemConnectionOptions
     /// <summary>Gets or sets the allowed document extensions.</summary>
     public IList<string> AllowedExtensions { get; set; } = new List<string> { ".docx" };
 
+    /// <summary>
+    /// Gets or sets the change mode used when a plan operation does not state one:
+    /// <c>Tracked</c> (the default) or <c>Direct</c>. Set <c>Direct</c> for a connection
+    /// over generated or machine-owned documents, or one serving <c>.pptx</c> - a deck has
+    /// no redline vocabulary and refuses Tracked outright.
+    /// </summary>
+    public string DefaultChangeMode { get; set; } = "Tracked";
 }
 
 /// <summary>One SharePoint document-library connection.</summary>
@@ -131,4 +138,12 @@ public sealed class SharePointConnectionOptions
 
     /// <summary>Gets or sets the destination folder's Graph drive-item id for new documents.</summary>
     public string CreationFolderItemId { get; set; } = string.Empty;
+
+    /// <summary>
+    /// Gets or sets the change mode used when a plan operation does not state one:
+    /// <c>Tracked</c> (the default) or <c>Direct</c>. Set <c>Direct</c> for a library of
+    /// generated or machine-owned documents, or one serving <c>.pptx</c> - a deck has no
+    /// redline vocabulary and refuses Tracked outright.
+    /// </summary>
+    public string DefaultChangeMode { get; set; } = "Tracked";
 }

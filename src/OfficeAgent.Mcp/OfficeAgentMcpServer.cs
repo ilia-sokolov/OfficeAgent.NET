@@ -2,6 +2,7 @@ using System.Text.Json;
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.DependencyInjection;
 using ModelContextProtocol.Server;
+using OfficeAgent.Abstractions;
 using OfficeAgent.AgentFramework;
 using OfficeAgent.Core;
 using OfficeAgent.Core.DocumentProviders;
@@ -93,12 +94,20 @@ public static class OfficeAgentMcpServer
         AddFormats(services);
         services.AddOfficeAgent();
 
+        // Parsed before anything is registered so a bad value names itself at startup
+        // rather than silently leaving the connection on the global default.
+        foreach (var connection in options.FileSystemConnections)
+            ParseChangeMode(connection.DefaultChangeMode, connection.ConnectionId);
+        foreach (var connection in options.SharePointConnections)
+            ParseChangeMode(connection.DefaultChangeMode, connection.ConnectionId);
+
         foreach (var connection in options.FileSystemConnections)
         {
             services.AddFileSystemDocumentProvider(connection.ConnectionId, connection.RootPath, o =>
             {
                 o.MaximumBytes = connection.MaximumBytes;
                 o.AllowedExtensions = connection.AllowedExtensions.ToArray();
+                o.DefaultChangeMode = ParseChangeMode(connection.DefaultChangeMode, connection.ConnectionId);
             });
         }
 
@@ -264,8 +273,25 @@ public static class OfficeAgentMcpServer
             MaximumBytes = connection.MaximumBytes,
             AllowedExtensions = connection.AllowedExtensions.ToArray(),
             CreationDriveId = connection.CreationDriveId,
-            CreationFolderItemId = connection.CreationFolderItemId
+            CreationFolderItemId = connection.CreationFolderItemId,
+            DefaultChangeMode = ParseChangeMode(connection.DefaultChangeMode, connection.ConnectionId)
         }, http, tokens, store);
+    }
+
+    /// <summary>
+    /// Reads a connection's <c>DefaultChangeMode</c>. It is bound as a string rather than
+    /// as the enum on purpose: the configuration binder silently skips a collection element
+    /// it cannot bind, so a typo in this one optional field would drop the whole connection
+    /// and surface as "no connections configured" - a diagnostic pointing nowhere near the
+    /// mistake. Parsing it here names the connection and the accepted values instead.
+    /// </summary>
+    private static ChangeMode ParseChangeMode(string value, string connectionId)
+    {
+        if (string.IsNullOrWhiteSpace(value)) return ChangeMode.Tracked;
+        if (Enum.TryParse<ChangeMode>(value.Trim(), ignoreCase: true, out var mode)) return mode;
+
+        throw new InvalidOperationException(
+            $"Connection '{connectionId}' has DefaultChangeMode '{value}'. Expected Tracked or Direct.");
     }
 
     private static IAccessTokenProvider CreateTokenProvider(SharePointConnectionOptions connection, HttpClient http)

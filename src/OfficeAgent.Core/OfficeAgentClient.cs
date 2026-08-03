@@ -416,6 +416,16 @@ public sealed class OfficeAgentClient
     public Task<ProviderApplyResult> CommitAsync(string connectionId, string documentId, DocumentPlan plan, SaveDocumentOptions? options = null, CancellationToken cancellationToken = default) =>
         CommitAsync(ReferenceFor(connectionId, documentId), plan, options, cancellationToken);
 
+    /// <summary>
+    /// Returns the change mode a connection applies to an operation that does not state
+    /// one. Hosts that build plans in code set <see cref="ChangeTextOp.Mode"/> themselves;
+    /// this is for surfaces that accept a plan from an agent, where an absent <c>mode</c>
+    /// should follow the connection's review policy rather than a single global rule.
+    /// Unknown connections yield <see cref="ChangeMode.Tracked"/>.
+    /// </summary>
+    public ChangeMode DefaultChangeModeFor(string connectionId) =>
+        _providers.DefaultChangeModeFor(connectionId);
+
     // ── Internal helpers ──────────────────────────────────────────────────────
 
     private DocumentReference ReferenceFor(string connectionId, string documentId)

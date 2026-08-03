@@ -77,6 +77,7 @@ Everything binds from the `OfficeAgent` section - `appsettings.json`, `OfficeAge
 | `FileSystemConnections[n]:RootPath` | - | Root directory; registrations must stay under it, and new documents are created in it. |
 | `FileSystemConnections[n]:MaximumBytes` | 100 MB | Size cap per document. |
 | `FileSystemConnections[n]:AllowedExtensions` | `[".docx"]` | Extension allow-list. |
+| `FileSystemConnections[n]:DefaultChangeMode` | `Tracked` | Change mode for a plan operation that does not state one. Set `Direct` for generated or machine-owned documents, or for a connection serving `.pptx` - a deck refuses `Tracked`. |
 | `SharePointConnections[n]:ConnectionId` | - | Connection id agents address documents under. Documents are registered by URL or `driveId/itemId`, so the connection is not tied to one drive. |
 | `SharePointConnections[n]:AuthMode` | `appOnly` | `onBehalfOf` (act as the signed-in user; hosted HTTP only) or `appOnly` (shared app identity). |
 | `SharePointConnections[n]:TenantId` / `ClientId` / `ClientSecret` | - | Entra app registration. For `onBehalfOf` this is the middle-tier API app. |
@@ -85,6 +86,7 @@ Everything binds from the `OfficeAgent` section - `appsettings.json`, `OfficeAge
 | `SharePointConnections[n]:CreationDriveId` / `CreationFolderItemId` | empty | Optional Graph drive and destination-folder item ids. Set both to allow `create_document` in this connection; registration remains cross-drive. |
 | `SharePointConnections[n]:GraphBaseUrl` / `LoginAuthority` | Graph v1.0 / public Entra | Override for sovereign clouds. |
 | `SharePointConnections[n]:MaximumBytes` / `AllowedExtensions` | 100 MB / `[".docx"]` | Same caps as filesystem connections. |
+| `SharePointConnections[n]:DefaultChangeMode` | `Tracked` | As above, per library. |
 
 ### Acting as the signed-in user (On-Behalf-Of)
 

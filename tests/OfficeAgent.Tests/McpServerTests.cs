@@ -1,3 +1,6 @@
+using Microsoft.Extensions.DependencyInjection;
+using OfficeAgent.Abstractions;
+using OfficeAgent.Core;
 using OfficeAgent.Mcp;
 using System.Text.Json;
 
@@ -236,6 +239,51 @@ public class McpServerTests
         Assert.False(capabilities["spreadsheets"]);
         Assert.True(capabilities["legal"]);
         Assert.False(capabilities["archive"]);
+    }
+
+    [Fact]
+    public void A_connection_change_mode_reaches_the_provider_and_a_bad_one_names_itself()
+    {
+        using var root = new TemporaryRoot();
+
+        var services = new ServiceCollection();
+        OfficeAgentMcpServer.AddOfficeAgentMcp(services, new OfficeAgentMcpOptions
+        {
+            FileSystemConnections =
+            {
+                new FileSystemConnectionOptions
+                {
+                    ConnectionId = "documents",
+                    RootPath = root.Path,
+                    DefaultChangeMode = "Direct"
+                }
+            }
+        });
+
+        using var provider = services.BuildServiceProvider();
+        Assert.Equal(
+            ChangeMode.Direct,
+            provider.GetRequiredService<OfficeAgentClient>().DefaultChangeModeFor("documents"));
+
+        // The binder drops a collection element it cannot bind, so this field is a string
+        // and is validated here. Left as an enum, a typo would silently remove the whole
+        // connection and report "no connections configured".
+        var error = Assert.Throws<InvalidOperationException>(() =>
+            OfficeAgentMcpServer.AddOfficeAgentMcp(new ServiceCollection(), new OfficeAgentMcpOptions
+            {
+                FileSystemConnections =
+                {
+                    new FileSystemConnectionOptions
+                    {
+                        ConnectionId = "documents",
+                        RootPath = root.Path,
+                        DefaultChangeMode = "Tracke"
+                    }
+                }
+            }));
+
+        Assert.Contains("documents", error.Message);
+        Assert.Contains("Tracked or Direct", error.Message);
     }
 
     private static OfficeAgentMcpOptions OptionsFor(TemporaryRoot root) => new()

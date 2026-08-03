@@ -27,6 +27,14 @@ public sealed class SharePointDocumentProviderOptions
 
     /// <summary>Gets or sets the destination folder's Graph drive-item id for new documents.</summary>
     public string CreationFolderItemId { get; set; } = string.Empty;
+
+    /// <summary>
+    /// Gets or sets the change mode used when an operation does not state one. The
+    /// default is <see cref="ChangeMode.Tracked"/>, which suits documents a person
+    /// reviews. Set <see cref="ChangeMode.Direct"/> for a library of generated or
+    /// machine-owned files, or one serving decks - PresentationML refuses Tracked.
+    /// </summary>
+    public ChangeMode DefaultChangeMode { get; set; } = ChangeMode.Tracked;
 }
 
 /// <summary>
@@ -43,7 +51,7 @@ public sealed class SharePointDocumentProviderOptions
 /// the drive item's ETag for optimistic concurrency, and removing a registration
 /// never deletes SharePoint content.
 /// </summary>
-public sealed class SharePointDocumentProvider : IDocumentProvider, IDocumentCreatingProvider
+public sealed class SharePointDocumentProvider : IDocumentProvider, IDocumentCreatingProvider, IConnectionEditingDefaults
 {
     /// <summary>Gets the provider discriminator used in document references.</summary>
     public const string ProviderName = "sharepoint";
@@ -100,6 +108,9 @@ public sealed class SharePointDocumentProvider : IDocumentProvider, IDocumentCre
 
     /// <inheritdoc />
     public string ConnectionId => _options.ConnectionId;
+
+    /// <inheritdoc />
+    public ChangeMode DefaultChangeMode => _options.DefaultChangeMode;
 
     /// <inheritdoc />
     public async Task<DocumentReference> RegisterAsync(

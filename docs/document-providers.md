@@ -172,6 +172,22 @@ The provider drops the id → path mapping; the underlying file the provider onl
 
 Every save returns a canonical `DocumentReference` for the result, including its new id and version. A version mismatch raises `DocumentVersionConflictException` instead of overwriting newer content.
 
+## Default change mode
+
+A `changeText` operation that does not state a `mode` takes the connection's `DefaultChangeMode`. The global default is `Tracked` - a contract nobody thought to redline still arrives redlined - but a connection over generated or machine-owned documents can say otherwise once, in configuration, instead of relying on the agent to repeat it on every call:
+
+```csharp
+services.AddFileSystemDocumentProvider("reports", "/srv/officeagent/reports", o =>
+{
+    o.AllowedExtensions = new[] { ".docx", ".pptx" };
+    o.DefaultChangeMode = ChangeMode.Direct;
+});
+```
+
+This matters most for decks: PresentationML has no redline vocabulary, so under `Tracked` every deck edit that omits a mode is refused outright. A connection serving `.pptx` usually wants `Direct`.
+
+The setting fills a gap; it never overrides an operation that names its own `mode`. It applies to plans arriving through `OfficeAgentTools` - `preview_plan`, `apply_plan`, `edit_document`, `create_document` - where an absent `mode` is genuinely absent. A host building a `DocumentPlan` in code sets `ChangeTextOp.Mode` itself, and `OfficeAgentClient.DefaultChangeModeFor(connectionId)` reports the connection's policy if it wants to follow it. A custom `IDocumentProvider` that does not implement `IConnectionEditingDefaults` takes the global default.
+
 ## Error contract
 
 Failures at the provider boundary throw `DocumentProviderException` carrying a strongly typed `ProviderErrorCode` and `Provider` / `ConnectionId` / `ItemId`. A single `catch (DocumentProviderException ex)` covers every provider failure.
