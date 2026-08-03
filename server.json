@@ -2,17 +2,17 @@
   "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
   "name": "io.github.ilia-sokolov/officeagent",
   "title": "OfficeAgent.NET",
-  "description": "Create and edit real Word documents (filesystem or SharePoint): typed change plans, tracked changes",
+  "description": "Create and edit real Word documents and PowerPoint decks (filesystem or SharePoint): typed change plans, tracked changes",
   "repository": {
     "url": "https://github.com/ilia-sokolov/OfficeAgent.NET",
     "source": "github"
   },
-  "version": "0.3.0",
+  "version": "0.4.0",
   "packages": [
     {
       "registryType": "nuget",
       "identifier": "OfficeAgent.Mcp",
-      "version": "0.3.0",
+      "version": "0.4.0",
       "transport": { "type": "stdio" },
       "environmentVariables": [
         {
@@ -24,7 +24,7 @@
         },
         {
           "name": "OfficeAgent__FileSystemConnections__0__RootPath",
-          "description": "Absolute path to the directory this filesystem connection may read and write .docx files under. To use SharePoint instead of the filesystem, set OfficeAgent__SharePointConnections__0__*",
+          "description": "Absolute path to the directory this filesystem connection may read and write documents under. Only .docx is allowed unless OfficeAgent__FileSystemConnections__0__AllowedExtensions__N adds more (.pptx for decks). To use SharePoint instead of the filesystem, set OfficeAgent__SharePointConnections__0__*",
           "format": "filepath",
           "isRequired": true,
           "placeholder": "/path/to/documents"
