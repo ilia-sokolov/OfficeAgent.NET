@@ -55,6 +55,10 @@ A `DocumentPlan` is a typed list of operations against anchors. The plan and eve
 
 The Word module ships 17 verbs covering text, runs, tables (create / remove / rows / columns), images, styles, comments, properties, and revisions. See [document-plans.md](document-plans.md).
 
+The verb vocabulary is shared, not per-format: each module implements the subset its format can express, and an operation a module does not implement comes back as `unsupported-operation` with nothing in the plan applied. The PowerPoint module implements text, formatting, tables, images, and comments; see [powerpoint.md](powerpoint.md). Because the vocabulary is shared, a plan need not declare a format - set `DocumentPlan.Format` only to *assert* one, which fails a mismatch with `contract-mismatch`.
+
+A `changeText` that does not state a `mode` takes the connection's configured default, which is `Tracked` unless the host changed it - see [document-providers.md](document-providers.md#default-change-mode).
+
 ## Preview / commit
 
 - `PreviewAsync` validates the whole plan against the current document and returns a *change report* - proposed before/after, declared capability per change, and any validation errors. Nothing is written.
@@ -74,4 +78,6 @@ Every proposed change declares what kind of engine support it needs:
 
 Before commit, the format module stabilises anchor ids: Word assigns a durable `w14:paraId` to any paragraph that lacks one and maps the positional `auto-NNNN` ids returned by inspection to the stable ids. Each operation is then re-verified against live state immediately before it is applied, so an operation that inserts a paragraph cannot redirect a later operation's anchor.
 
-Because stabilisation rewrites the saved bytes, the snapshot returned by `Inspect` will not match the *saved* document - re-inspect before authoring a follow-up plan.
+Stabilisation is per format. PresentationML has no id to mint, and no deck verb adds or removes a paragraph inside a text body, so slide offsets cannot shift mid-plan and the PowerPoint module stabilises nothing - see [powerpoint.md](powerpoint.md#anchor-stability) for why that reasoning has to be revisited if a paragraph-inserting verb is ever added.
+
+Because stabilisation rewrites the saved bytes, the snapshot returned by `Inspect` will not match the *saved* document - re-inspect before authoring a follow-up plan. The same applies to the ids themselves: a Word paragraph that inspected as `auto-0004` may come back as `w14:…` after the first commit, so a follow-up plan reuses ids from a fresh inspection rather than from the previous one.

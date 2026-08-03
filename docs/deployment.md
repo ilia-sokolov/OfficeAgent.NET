@@ -183,7 +183,8 @@ Two layers, kept separate:
 - [ ] For `appOnly`, the app registration uses `Sites.Selected`, not tenant-wide Graph permissions.
 - [ ] Client secret supplied from a secret store / environment, never committed.
 - [ ] `RegistrationIndexPath` set if you need registrations to survive restarts (filesystem connections persist automatically; SharePoint defaults to in-memory). For multiple instances, implement `ISharePointRegistrationStore` over shared storage.
-- [ ] `MaximumBytes` and `AllowedExtensions` reviewed against your documents (defaults: 100 MB, `.docx`).
+- [ ] `MaximumBytes` and `AllowedExtensions` reviewed against your documents (defaults: 100 MB, `.docx`). Add `.pptx` for connections that serve decks.
+- [ ] `DefaultChangeMode` set per connection if `Tracked` is not what you want when a plan omits `mode` - notably `Direct` for a connection serving `.pptx`, since a deck refuses tracked changes.
 - [ ] `AllowRegistration` left on only if agents should stage their own document ids; otherwise set `false`. When on, the server exposes `register_document`, `remove_document`, and the source-addressed composites `open_document` and `edit_document`. All four reach the same documents under the same connection boundary - the composites only save round trips, they do not widen it.
 - [ ] `AllowCreation` enabled only if agents should create files. Each SharePoint creation connection has both `CreationDriveId` and `CreationFolderItemId`; `list_connections` reports `canCreateDocuments` per connection whenever registration or creation discovery is enabled.
 

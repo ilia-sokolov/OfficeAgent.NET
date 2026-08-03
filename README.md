@@ -6,18 +6,18 @@
 [![downloads](https://img.shields.io/nuget/dt/OfficeAgent.Core.svg)](https://www.nuget.org/packages/OfficeAgent.Core)
 [![license](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
-OfficeAgent.NET translates an AI agent’s intent into controlled changes to Microsoft Word documents. The agent proposes a typed edit plan; the library validates and applies it while preserving document features such as styles and comments. Edits can be recorded as tracked changes for human review, while structured document operations can reduce token use compared with processing entire files.
+OfficeAgent.NET translates an AI agent’s intent into controlled changes to Microsoft Word documents and PowerPoint decks. The agent proposes a typed edit plan; the library validates and applies it while preserving document features such as styles and comments. Word edits can be recorded as tracked changes for human review, while structured document operations can reduce token use compared with processing entire files.
 
 
 ![OfficeAgent.NET finds, previews, and applies a contract edit as a tracked change in Word.](https://raw.githubusercontent.com/ilia-sokolov/OfficeAgent.NET/main/media/demo.gif)
 
 ## What this project does
 
-A `.docx` file is a package of related XML parts. A small text change can affect
-runs, styles, numbering, comments, content controls, or revision markup.
-OfficeAgent.NET handles that document-specific work. The model works with
-structured document data and JSON-serialisable operations such as "replace this
-clause as a tracked change" or "add a row to this table."
+A `.docx` or `.pptx` file is a package of related XML parts. A small text change
+can affect runs, styles, numbering, comments, content controls, or revision
+markup. OfficeAgent.NET handles that document-specific work. The model works
+with structured document data and JSON-serialisable operations such as "replace
+this clause as a tracked change" or "add a row to this table."
 
 The same engine is available in three forms:
 
@@ -25,9 +25,10 @@ The same engine is available in three forms:
 - tools for Microsoft Agent Framework and `Microsoft.Extensions.AI`;
 - a .NET API for applications that want to control the workflow directly.
 
-It currently supports Word `.docx` files. Excel and PowerPoint modules are not implemented. See
-[Scope and limitations](#scope-and-limitations) before choosing it for a
-workflow that depends on Word's layout or calculation engine.
+It supports Word `.docx` files and PowerPoint `.pptx` decks; one client serves
+both, routing each document to the module that handles it. Excel is not
+implemented. See [Scope and limitations](#scope-and-limitations) before choosing
+it for a workflow that depends on Office's layout or calculation engine.
 
 ## Choose a starting point
 
@@ -86,6 +87,17 @@ Text replacements are tracked changes by default. A successful apply writes back
 to the document it edited, guarded by an optimistic version check; pass
 `saveMode: "NewVersion"` to keep the source and write a sibling such as
 `contract.v2.docx` instead.
+
+A connection accepts `.docx` only until you say otherwise. To work on decks, add
+three more `--env` settings to the command above - `.pptx` in the extension
+allow-list, and a `Direct` default change mode, because a deck has no redline
+vocabulary and refuses tracked changes:
+
+```text
+OfficeAgent__FileSystemConnections__0__AllowedExtensions__0=.docx
+OfficeAgent__FileSystemConnections__0__AllowedExtensions__1=.pptx
+OfficeAgent__FileSystemConnections__0__DefaultChangeMode=Direct
+```
 
 OfficeAgent does not send the complete `.docx` package through the model, but
 the MCP client and model do receive document text and structure returned by the
@@ -170,8 +182,12 @@ targeting a different location. Applying a plan is all-or-nothing.
 
 The Word module supports changes to text, paragraphs, tables, images, styles,
 content controls, comments, document properties, and tracked revisions. The
+PowerPoint module implements the subset a deck can express - text, run and
+paragraph formatting, tables, images, speaker notes, and resolvable comments -
+and names any verb it does not support instead of silently skipping it. The
 full operation schema is documented in
-[Document plans](docs/document-plans.md).
+[Document plans](docs/document-plans.md), and the deck specifics in
+[PowerPoint support](docs/powerpoint.md).
 
 Documents are accessed through configured providers. After registration,
 editing calls use a `(connectionId, documentId)` pair instead of a storage path
@@ -198,8 +214,8 @@ the provider to create and register it without overwriting an existing name.
 
 ## Contributing
 
-Bug reports, documentation fixes, new Word operations, provider integrations,
-and focused test cases are useful contributions. If you found a problem,
+Bug reports, documentation fixes, new document operations, provider
+integrations, and focused test cases are useful contributions. If you found a problem,
 [open an issue](https://github.com/ilia-sokolov/OfficeAgent.NET/issues) with the
 document feature involved, the operation you attempted, and the error or
 unexpected result. Do not attach confidential documents; a small sanitised
@@ -220,9 +236,16 @@ for code style, tests, and pull-request expectations.
 
 ## Scope and limitations
 
-OfficeAgent.NET edits Word `.docx` files; it does not automate the Word desktop
-application. Excel and PowerPoint modules can be added through `IFormatModule`,
-but they do not ship today.
+OfficeAgent.NET edits Word `.docx` files and PowerPoint `.pptx` decks; it does
+not automate the Office desktop applications. An Excel module can be added
+through `IFormatModule`, but it does not ship today.
+
+The deck module implements a subset of the shared verb vocabulary - text,
+formatting, tables, images, speaker notes, and comments - and refuses the rest
+per operation rather than applying part of a plan. PresentationML has no redline
+vocabulary, so tracked changes are Word-only; see
+[PowerPoint support](docs/powerpoint.md) for what a deck does and does not
+accept.
 
 The engine does not render pages or calculate Word fields. Operations that
 depend on pagination, table-of-contents rendering, field recalculation, or

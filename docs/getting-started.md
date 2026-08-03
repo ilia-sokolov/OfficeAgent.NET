@@ -127,6 +127,7 @@ File.Delete("/srv/officeagent/contracts/contract.docx");   // host deletes the f
 
 - [Concepts](concepts.md) - anchors, plans, snapshots, capabilities, transactions.
 - [Document plans](document-plans.md) - the JSON shape of every supported verb.
-- [Document providers](document-providers.md) - registration, save modes, optimistic concurrency.
+- [Document providers](document-providers.md) - registration, save modes, optimistic concurrency, the per-connection default change mode.
+- [PowerPoint support](powerpoint.md) - the same loop against a `.pptx` deck: slide addressing, the verbs a deck implements, and what it preserves.
 - [Agent integration](agent-integration.md) - exposing OfficeAgent as Microsoft Agent Framework tools.
 - [MCP server](mcp-server.md) - the same workflow for any MCP-capable agent, hosted locally over stdio or in the cloud over HTTP.

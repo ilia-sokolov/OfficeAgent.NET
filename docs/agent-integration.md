@@ -20,11 +20,14 @@ using Microsoft.Extensions.DependencyInjection;
 using OfficeAgent.AgentFramework;
 using OfficeAgent.Core;
 using OfficeAgent.Core.DocumentProviders;
+using OfficeAgent.PowerPoint;
 using OfficeAgent.Word;
 
 var services = new ServiceCollection()
     .AddWordFormat()
-    .AddFileSystemDocumentProvider("workspace", "/srv/officeagent/workspace")
+    .AddPowerPointFormat()          // drop if the agent only handles .docx
+    .AddFileSystemDocumentProvider("workspace", "/srv/officeagent/workspace", o =>
+        o.AllowedExtensions = new[] { ".docx", ".pptx" })
     .AddOfficeAgent()
     .BuildServiceProvider();
 
@@ -220,7 +223,7 @@ Every error also carries `connectionId` and `itemId` (when known) so the agent c
 
 ## Prompt guidance
 
-`OfficeAgentTools.SystemPromptGuidance` is a `const string` you concatenate into your agent's instructions. It teaches the model the host-registered `(connectionId, documentId)` contract, the safety loop (re-inspect on stale snapshot, re-find on expect mismatch), the default `Tracked` change mode, and the rule that anchors and node paths come from the engine - never invented. Append `OfficeAgentTools.RegistrationPromptGuidance` when the registration tools are enabled, and `OfficeAgentTools.CreationPromptGuidance` when `create_document` is among them - each block should be present only when its tools are.
+`OfficeAgentTools.SystemPromptGuidance` is a `const string` you concatenate into your agent's instructions. It teaches the model the host-registered `(connectionId, documentId)` contract, the safety loop (re-inspect on stale snapshot, re-find on expect mismatch), the `Tracked` default for Word and why a deck refuses it, how a deck is addressed, that saving replaces the document in place, and the rule that anchors and node paths come from the engine - never invented. Append `OfficeAgentTools.RegistrationPromptGuidance` when the registration tools are enabled, and `OfficeAgentTools.CreationPromptGuidance` when `create_document` is among them - each block should be present only when its tools are.
 
 ## Use OfficeAgent over MCP
 

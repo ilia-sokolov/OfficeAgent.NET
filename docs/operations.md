@@ -9,11 +9,14 @@ Practical answers to "how do I run OfficeAgent.NET in production?"
 ```csharp
 services
     .AddWordFormat()
+    .AddPowerPointFormat()
     .AddFileSystemDocumentProvider("workspace", "/srv/officeagent/workspace")
     .AddOfficeAgent();
 ```
 
-Two concurrent `Commit` calls on the *same* document id are safe at the engine level - each opens its own in-memory copy - but they are not coordinated at the provider boundary, so the last successful save wins. If write ordering matters, either pass each commit's source `Version` via `SaveDocumentOptions.ExpectedVersion` (the optimistic-concurrency check rejects stale saves with `DocumentVersionConflictException`) or serialise the commits in your application layer (`SemaphoreSlim` keyed by id).
+Two concurrent `Commit` calls on the *same* document id are safe at the engine level - each opens its own in-memory copy. Under the default `Replace` save mode they are also checked at the provider boundary: the commit carries the version read when it opened the document, and a save whose source changed in between is rejected with `DocumentVersionConflictException` rather than overwriting the other writer. Handle that exception by re-inspecting and re-authoring the plan.
+
+That check covers the read-modify-write window of a single commit. It is not a lock, and it does nothing for `NewVersion`/`NewDocument`, which write to a fresh name. If you need ordering rather than conflict detection - or you want to fail before doing the work instead of after - pass an explicit `SaveDocumentOptions.ExpectedVersion`, or serialise the commits in your application layer (`SemaphoreSlim` keyed by id).
 
 ## Stream and lifetime ownership
 
@@ -86,6 +89,9 @@ All three throw `InvalidOperationException` when the plan was a dry run or did n
 | `Errors` contains `expect-mismatch` for a `changeText` | Paragraph text drifted from the anchor's `Expect` | Re-find or re-inspect the paragraph; rebuild that operation |
 | `Errors` contains `requires-renderer` | The plan asked for a field-recalc or pagination value the OOXML engine cannot compute | Use `setProperty` with `updateOnOpen` to defer to Word, or move that work to a renderer |
 | Empty `Find` result before building a plan | Target text not present at all | Surface to the user; do not build an operation against a missing anchor - the source document is never modified |
+| `DocumentVersionConflictException` from a `Replace` save | Another writer changed the document between this commit's open and its save | Re-inspect and re-author the plan against the current bytes; nothing was overwritten |
+| `Errors` contains `unsupported-operation` on a deck | The verb is Word-only - the PowerPoint module implements a subset | Use a verb the deck supports, or record the intent as a comment. See [PowerPoint support](powerpoint.md) |
+| `Errors` contains `invalid-operation` naming mode `Tracked` on a deck | PresentationML has no redline vocabulary | Send `"mode": "Direct"`, or set the connection's `DefaultChangeMode` so deck plans need not restate it |
 
 ## Versioning
 

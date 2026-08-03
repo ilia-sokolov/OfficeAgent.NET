@@ -1,6 +1,6 @@
 # MCP server
 
-`OfficeAgent.Mcp` exposes the OfficeAgent workflow as [Model Context Protocol](https://modelcontextprotocol.io) tools, so any MCP-capable agent can inspect and edit real Word documents without taking a .NET dependency. It is the same engine and tool contract as `OfficeAgent.AgentFramework`: typed plans, preview-before-apply, tracked changes by default, and all-or-nothing commits.
+`OfficeAgent.Mcp` exposes the OfficeAgent workflow as [Model Context Protocol](https://modelcontextprotocol.io) tools, so any MCP-capable agent can inspect and edit real Word documents and PowerPoint decks without taking a .NET dependency. It is the same engine and tool contract as `OfficeAgent.AgentFramework`: typed plans, preview-before-apply, tracked changes by default in Word, and all-or-nothing commits.
 
 > This page is the configuration reference. For step-by-step wiring of specific clients - Claude Code, Codex, Copilot Studio, Microsoft 365 Copilot - and the identity checklist, see [Deployment & client setup](deployment.md).
 
@@ -38,7 +38,9 @@ A typical MCP client entry (Claude Desktop, VS Code, and most agent SDKs use thi
       "args": ["--stdio"],
       "env": {
         "OfficeAgent__FileSystemConnections__0__ConnectionId": "documents",
-        "OfficeAgent__FileSystemConnections__0__RootPath": "/Users/me/Documents/agent-workspace"
+        "OfficeAgent__FileSystemConnections__0__RootPath": "/Users/me/Documents/agent-workspace",
+        "OfficeAgent__FileSystemConnections__0__AllowedExtensions__0": ".docx",
+        "OfficeAgent__FileSystemConnections__0__AllowedExtensions__1": ".pptx"
       }
     }
   }
@@ -72,7 +74,7 @@ Everything binds from the `OfficeAgent` section - `appsettings.json`, `OfficeAge
 | --- | --- | --- |
 | `Transport` | `http` | `http` or `stdio` (the `--stdio` flag also forces stdio). |
 | `AllowRegistration` | `true` | Expose `register_document` / `remove_document` / `open_document` / `edit_document` / `list_connections` - every tool that takes a connection-relative source. Unlike the in-process tools (opt-in), the MCP server defaults to on: an MCP client has no other channel to stage document ids. Set to `false` to pin agents to ids the host distributes itself. |
-| `AllowCreation` | `false` | Expose `create_document` when at least one connection allows `.docx`: any filesystem connection qualifies, while SharePoint must also have a configured creation destination. Independent of `AllowRegistration`, so a host can permit creation without permitting arbitrary registration/removal. |
+| `AllowCreation` | `false` | Expose `create_document` when at least one connection allows a creatable extension (`.docx` or `.pptx`); SharePoint must also have a configured creation destination. Independent of `AllowRegistration`, so a host can permit creation without permitting arbitrary registration/removal. |
 | `FileSystemConnections[n]:ConnectionId` | - | Connection id agents address documents under. |
 | `FileSystemConnections[n]:RootPath` | - | Root directory; registrations must stay under it, and new documents are created in it. |
 | `FileSystemConnections[n]:MaximumBytes` | 100 MB | Size cap per document. |
@@ -115,7 +117,7 @@ with `OfficeAgent__SharePointConnections__0__ClientSecret` supplied from the env
 
 ## Tools
 
-The MCP toolset is the projection of [the agent-integration surface](agent-integration.md): `inspect_document`, `find_in_document`, `preview_plan`, and `apply_plan`; `AllowRegistration` independently adds `register_document` / `remove_document` plus the composites `open_document` / `edit_document`, while `AllowCreation` adds `create_document` when at least one connection allows `.docx` (SharePoint also requires its creation destination). Either opt-in adds `list_connections`, which returns `{connectionId, provider, canCreateDocuments}` entries. Tool results are the same structured JSON, including stable error codes such as `already-exists` and `configuration-error`.
+The MCP toolset is the projection of [the agent-integration surface](agent-integration.md): `inspect_document`, `find_in_document`, `preview_plan`, and `apply_plan`; `AllowRegistration` independently adds `register_document` / `remove_document` plus the composites `open_document` / `edit_document`, while `AllowCreation` adds `create_document` when at least one connection allows a creatable extension - `.docx` or `.pptx` (SharePoint also requires its creation destination). Either opt-in adds `list_connections`, which returns `{connectionId, provider, canCreateDocuments}` entries. Tool results are the same structured JSON, including stable error codes such as `already-exists` and `configuration-error`.
 
 The security model carries over: agents see opaque ids, never credentials; a filesystem source cannot escape its connection's root, and a SharePoint source resolves only to documents the connection's identity can already reach (per-user under On-Behalf-Of); `create_document` writes only under the filesystem root or configured SharePoint folder and never overwrites an existing name; `remove_document` drops a registration without deleting content; `apply_plan` never returns document bytes through the model - the host (or a download endpoint) retrieves the saved revision by id.
 
