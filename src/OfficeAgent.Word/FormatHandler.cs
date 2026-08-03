@@ -98,7 +98,9 @@ internal sealed class FormatHandler : IOperationHandler
         IReadOnlyList<Run> runs;
         if (string.IsNullOrEmpty(anchor.Expect))
         {
-            runs = paragraph.Elements<Run>().ToList();
+            // Through the dialect, so a whole-paragraph format reaches runs nested in a
+            // tracked insertion, hyperlink or content control exactly as a span format does.
+            runs = WordModel.Dialect.GetRuns(paragraph).OfType<Run>().ToList();
         }
         else
         {

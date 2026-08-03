@@ -9,6 +9,7 @@
     <ProjectReference Include="..\OfficeAgent.Abstractions\OfficeAgent.Abstractions.csproj" />
     <ProjectReference Include="..\OfficeAgent.Core\OfficeAgent.Core.csproj" />
     <ProjectReference Include="..\OfficeAgent.Word\OfficeAgent.Word.csproj" />
+    <ProjectReference Include="..\OfficeAgent.PowerPoint\OfficeAgent.PowerPoint.csproj" />
   </ItemGroup>
 
   <ItemGroup>

@@ -19,7 +19,11 @@ internal sealed class PlanValidator
         // for forward compatibility; once the schema has real breaking versions, this
         // check can come back behind a stricter policy.
 
-        if (plan.Format != module.Format)
+        // An unspecified format is the norm: the tools document a plan as a bare list of
+        // operations, so only a caller that deliberately named a format is asserting one,
+        // and only that caller should be told the document disagrees.
+        if (plan.Format != OfficeAgent.Abstractions.DocumentFormat.Unspecified &&
+            plan.Format != module.Format)
         {
             errors.Add(new ValidationError(
                 ValidationErrorCodes.ContractMismatch,

@@ -600,10 +600,7 @@ public sealed class SharePointDocumentProvider : IDocumentProvider, IDocumentCre
         ContentType = item.MimeType ?? ContentTypeFor(item.Name)
     };
 
-    private static string ContentTypeFor(string name) =>
-        string.Equals(Path.GetExtension(name), ".docx", StringComparison.OrdinalIgnoreCase)
-            ? "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
-            : "application/octet-stream";
+    private static string ContentTypeFor(string name) => OfficeContentTypes.ForName(name);
 
     private async Task<byte[]> ReadStreamAsync(Stream content, string? itemId, CancellationToken cancellationToken)
     {

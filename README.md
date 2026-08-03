@@ -188,6 +188,7 @@ the provider to create and register it without overwriting an existing name.
 | [Concepts](docs/concepts.md) | Anchors, snapshots, plans, providers, transactions, and capabilities |
 | [Document plans](docs/document-plans.md) | JSON shapes and validation rules for every operation |
 | [Document providers](docs/document-providers.md) | Filesystem, SharePoint, save modes, and custom providers |
+| [PowerPoint support](docs/powerpoint.md) | Slide addressing, the verbs the deck module implements, and what it preserves |
 | [Agent integration](docs/agent-integration.md) | Microsoft Agent Framework and `Microsoft.Extensions.AI` tools |
 | [MCP server](docs/mcp-server.md) | Server configuration, transports, security notes, and tool contracts |
 | [Deployment and client setup](docs/deployment.md) | Codex, Claude Code, Microsoft Copilot clients, containers, and Azure |

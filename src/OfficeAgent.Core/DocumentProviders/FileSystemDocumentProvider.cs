@@ -499,10 +499,7 @@ public sealed class FileSystemDocumentProvider : IDocumentProvider, IDocumentCre
         ContentType = ContentTypeFor(name)
     };
 
-    private static string ContentTypeFor(string name) =>
-        string.Equals(Path.GetExtension(name), ".docx", StringComparison.OrdinalIgnoreCase)
-            ? "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
-            : "application/octet-stream";
+    private static string ContentTypeFor(string name) => OfficeContentTypes.ForName(name);
 
     private DocumentProviderException Error(
         ProviderErrorCode code,

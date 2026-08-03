@@ -18,9 +18,17 @@ public sealed class DocumentPlan
     public string ContractVersion { get; init; } = CurrentContractVersion;
 
     /// <summary>
-    /// Gets the document format expected by the plan.
+    /// Gets the document format expected by the plan. Defaults to
+    /// <see cref="DocumentFormat.Unspecified"/>, meaning the plan applies to whatever
+    /// format the document is; set it only to assert that the document must be a
+    /// particular format, and a mismatch then fails the plan.
     /// </summary>
-    public DocumentFormat Format { get; init; } = DocumentFormat.Word;
+    /// <remarks>
+    /// The agent tools document a plan as <c>{ "operations": [ … ] }</c> with no format
+    /// field, so defaulting to a concrete format would silently bind every such plan to
+    /// it and reject the others.
+    /// </remarks>
+    public DocumentFormat Format { get; init; } = DocumentFormat.Unspecified;
 
     /// <summary>
     /// Gets the snapshot the plan was authored against. When set, the engine rejects
@@ -52,24 +60,12 @@ public enum ChangeMode
 /// a registered module are part of the wire contract; reserved/future verbs are
 /// intentionally absent so an agent never sees a verb that always fails.
 /// </summary>
-[JsonPolymorphic(TypeDiscriminatorPropertyName = "op")]
-[JsonDerivedType(typeof(FillOp), "fill")]
-[JsonDerivedType(typeof(ChangeTextOp), "changeText")]
-[JsonDerivedType(typeof(InsertOp), "insert")]
-[JsonDerivedType(typeof(CommentOp), "comment")]
-[JsonDerivedType(typeof(FormatOp), "format")]
-[JsonDerivedType(typeof(SetPropertyOp), "setProperty")]
-[JsonDerivedType(typeof(RevisionOp), "revision")]
-[JsonDerivedType(typeof(InsertTableOp), "insertTable")]
-[JsonDerivedType(typeof(RemoveTableOp), "removeTable")]
-[JsonDerivedType(typeof(InsertTableRowsOp), "insertTableRows")]
-[JsonDerivedType(typeof(RemoveTableRowsOp), "removeTableRows")]
-[JsonDerivedType(typeof(InsertTableColumnsOp), "insertTableColumns")]
-[JsonDerivedType(typeof(RemoveTableColumnsOp), "removeTableColumns")]
-[JsonDerivedType(typeof(CopyStylesOp), "copyStyles")]
-[JsonDerivedType(typeof(ClearStylesOp), "clearStyles")]
-[JsonDerivedType(typeof(InsertImageOp), "insertImage")]
-[JsonDerivedType(typeof(RemoveImageOp), "removeImage")]
+// The verb map lives in the converter rather than in [JsonDerivedType] attributes:
+// System.Text.Json will not combine a custom converter with its own polymorphism, and its
+// built-in reader requires the discriminator to be the object's first property - which a
+// model writing a plan has no reason to do. PlanOperationJsonConverterTests keeps the map
+// complete as verbs are added.
+[JsonConverter(typeof(PlanOperationJsonConverter))]
 public abstract class PlanOperation
 {
     /// <summary>
@@ -161,13 +157,24 @@ public sealed class TableData
 }
 
 /// <summary>
-/// Specifies the lifecycle action for a comment operation. Only <see cref="Add"/>
-/// is currently implemented.
+/// Specifies the lifecycle action for a comment operation. Which actions a module
+/// implements depends on the module, not on the format: both formats can record a
+/// resolved comment - PresentationML in the modern comment's status, WordprocessingML in
+/// the <c>commentsExtended</c> part's <c>w15:done</c> - but only the PowerPoint module
+/// implements <see cref="Resolve"/> today. The Word module reports it as
+/// <c>unsupported-operation</c>.
 /// </summary>
 public enum CommentAction
 {
     /// <summary>Add a new comment.</summary>
-    Add
+    Add,
+
+    /// <summary>
+    /// Mark an existing comment resolved, addressed by a comment
+    /// <see cref="NodeAnchor"/>. The comment and its replies are kept; only its status
+    /// changes, so the review history survives.
+    /// </summary>
+    Resolve
 }
 
 /// <summary>

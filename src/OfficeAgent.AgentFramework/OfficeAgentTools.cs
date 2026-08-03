@@ -78,7 +78,7 @@ public sealed class OfficeAgentTools
     /// and the structured-error vocabulary the tools surface.
     /// </summary>
     public const string SystemPromptGuidance = """
-        You are editing a Microsoft Word document through the OfficeAgent tools.
+        You are editing Microsoft Office documents through the OfficeAgent tools - a Word document (.docx) or a PowerPoint deck (.pptx). inspect_document reports which: format "Word" or "PowerPoint". A few rules below differ by format, and each says so.
 
         Document addressing
         - Storage connections are host-configured and so is each document's registration. The host gives you an OPAQUE, provider-assigned documentId for every document you are allowed to work with; all document tools address it as (connectionId, documentId). Never invent a documentId, never pass a filename or path as one, and never ask the user to send raw file bytes through this conversation.
@@ -89,10 +89,17 @@ public sealed class OfficeAgentTools
         - Plan body is { "operations": [ ... ] }. Do NOT set contractVersion or snapshot - the engine fills them.
         - Available operations (the JSON shape of each is in the preview_plan description): changeText, insert (a paragraph), insertTable, removeTable, format, fill, comment, setProperty, revision, insertTableRows, removeTableRows, insertTableColumns, removeTableColumns, insertImage, removeImage, copyStyles, clearStyles. Create a table with insertTable; delete one with removeTable. These are plan operations inside preview_plan/apply_plan, not separate tools.
         - Call inspect_document or find_in_document before building a plan to obtain anchor ids; never invent paragraph ids, occurrence numbers, content-control tags, or node paths.
-        - Tables and images only appear in inspect_document.nodes (kind="table"/"image", path="table#N"/"image#N"). They are NOT in the paragraphs list. To recognise table content, look for paragraphs whose `in` field equals a table path.
+        - Tables and images only appear in inspect_document.nodes, never in the paragraphs list. Copy the path from there rather than composing one: Word uses "table#N"/"image#N", a deck uses "table#{slideId}/{shapeId}"/"image#{slideId}/{shapeId}". To recognise table content, look for paragraphs whose `in` field matches a table path.
         - Preview before you apply. If preview reports stale-snapshot, re-inspect and rebuild. If preview reports expect-mismatch, the document drifted - re-inspect/find that operation.
-        - Default to ChangeMode "Tracked" unless the user explicitly approves direct edits.
+        - Change mode: in a Word document default to "Tracked" unless the user explicitly approves direct edits. A PowerPoint deck has no tracked-changes representation and REFUSES mode "Tracked", so use "Direct" there and say that edits to a deck cannot be redlined; add a comment if the change needs to be flagged for review.
         - Reject operations that need a renderer (pagination, field recalculation); explain the limitation instead.
+
+        Working with a PowerPoint deck
+        - Each slide is one outline entry. Paragraph ids read "slide{slideId}/shape{shapeId}/p{n}", with "notes/..." for speaker notes and ".../r{row}c{col}/..." inside a table cell.
+        - A slide has no text flow, so insertTable, insertImage, and an added comment target the SLIDE - { "kind": "slide", "path": "slide#256" } - not a paragraph. Resolve a comment with { "op": "comment", "action": "Resolve", "target": { "kind": "comment", "path": "comment#256/{id}" } }.
+        - Only these verbs work on a deck: changeText, format, insertTable, removeTable, insertTableRows, removeTableRows, insertTableColumns, removeTableColumns, insertImage, removeImage, comment. The others return "unsupported-operation" and nothing in the plan is applied.
+        - format on a deck covers bold, italic, underline, sizeHalfPoints, fontFamily, color, highlight, alignment, and widthPx/heightPx on an image. Word-only measures (styleId, indents, spacing, borders) are refused rather than ignored. Anchor the span you want styled, or use an empty "expect" to style a whole paragraph.
+        - A deck has no paragraph-inserting verb, so to write into an empty placeholder - the state a newly created deck's title is in - use changeText with an empty expect: { "op": "changeText", "target": { "paraId": "slide256/shape2/p0", "expect": "" }, "with": "Quarterly Review", "mode": "Direct" }. That still verifies the paragraph is blank, so it fails rather than overwriting text that drifted in.
         """;
 
     /// <summary>
@@ -119,8 +126,9 @@ public sealed class OfficeAgentTools
     public const string CreationPromptGuidance = """
 
         Creating a document
-        - create_document(connectionId, name, planJson) creates and registers a new .docx and returns outputDocumentId. name is a bare file name, never a path; an existing name is not overwritten.
-        - Pass "" for an empty document. An initial plan is applied in memory before storage and can target the empty paragraph as { "paraId": "auto-0000", "expect": "" }. planJson accepts a bare operations array [ … ] as well as { "operations": [ … ] }.
+        - create_document(connectionId, name, planJson) creates and registers a new document and returns outputDocumentId. name is a bare file name, never a path; an existing name is not overwritten. The extension picks the format: .docx makes a Word document, .pptx makes a PowerPoint deck.
+        - Pass "" for an empty document. An initial plan is applied in memory before storage. The empty starting anchor differs by format: a Word document has one empty paragraph at { "paraId": "auto-0000", "expect": "" }; a deck has one empty title placeholder at { "paraId": "slide256/shape2/p0", "expect": "" }. When unsure, create with planJson "" and then inspect_document.
+        - planJson accepts a bare operations array [ … ] as well as { "operations": [ … ] }.
         - Plan-validation errors mean nothing was written. A provider or cancellation error can occur after storage accepted the file, so do not retry the same name; report the possibly unregistered file name to the host/operator for recovery.
         """;
 
@@ -171,9 +179,10 @@ public sealed class OfficeAgentTools
         {
             functions.Add(AIFunctionFactory.Create(CreateDocument, Opts(
                 "create_document",
-                "Create and register a new .docx in a host-configured connection, optionally applying an initial plan before writing. " +
+                "Create and register a new document in a host-configured connection, optionally applying an initial plan before writing. " +
                 "name is a bare file name such as 'quarterly-report.docx'; an existing name is never overwritten. " +
-                "Pass planJson \"\" for a minimal document with one empty paragraph, or target that paragraph as { \"paraId\": \"auto-0000\", \"expect\": \"\" }. " +
+                "The extension picks the format: '.docx' makes a Word document, '.pptx' makes a PowerPoint deck. Use list_connections to see which connections accept which. " +
+                "Pass planJson \"\" for a minimal document. The starting anchor differs by format: a Word document has one empty paragraph at { \"paraId\": \"auto-0000\", \"expect\": \"\" }; a deck has one empty title placeholder at { \"paraId\": \"slide256/shape2/p0\", \"expect\": \"\" }, and its slide-targeted verbs use { \"kind\": \"slide\", \"path\": \"slide#256\" }. " +
                 "Plan-validation errors guarantee no write. Provider and cancellation errors may occur after storage accepted the file, so do not retry the same name; report the possibly unregistered name to the host for recovery. " +
                 "Returns the apply_plan shape: {isValid, committed, outputConnectionId, outputDocumentId, outputVersion, outputName, outputContentType, changes, errors}.")));
         }
@@ -184,10 +193,10 @@ public sealed class OfficeAgentTools
     {
         AIFunctionFactory.Create(InspectDocument, Opts(
             "inspect_document",
-            "Inspect a Word document by (connectionId, documentId). Returns outline, paragraphs (with their `in` table containment), content controls, nodes (tables/images/docProperties/revisions - paths for table-row and image operations come from here), styles, and a snapshot etag for drift detection. Use paragraphOffset/paragraphLimit to page; fidelity='outline'|'structure'|'content' to control payload size.")),
+            "Inspect a document by (connectionId, documentId) - a Word document or a PowerPoint deck. Returns outline (headings, or one entry per slide), paragraphs (with their `in` containment - a table path in Word, a slide's shape or table cell in a deck), content controls, nodes (tables/images/docProperties/revisions in Word; slides/tables/images/comments in a deck - paths for node-targeted operations come from here), styles, and a snapshot etag for drift detection. Use paragraphOffset/paragraphLimit to page; fidelity='outline'|'structure'|'content' to control payload size.")),
         AIFunctionFactory.Create(FindInDocument, Opts(
             "find_in_document",
-            "Find text in a Word document by (connectionId, documentId). Returns content-verified anchors (paragraphId + expected + occurrence) usable as plan targets.")),
+            "Find text in a document by (connectionId, documentId) - a Word document or a PowerPoint deck, including slide notes and table cells. Returns content-verified anchors (paragraphId + expected + occurrence) usable as plan targets.")),
         AIFunctionFactory.Create(PreviewPlan, Opts(
             "preview_plan",
             "Dry-run a DocumentPlan JSON against (connectionId, documentId). Returns {isValid, changes, errors} without writing. " +
@@ -247,10 +256,14 @@ public sealed class OfficeAgentTools
         ["paragraphsTotal"] = result.Paragraphs.Count,
         ["paragraphOffset"] = paragraphOffset,
         ["paragraphLimit"] = paragraphLimit,
+        // `location` says which part of the document a paragraph lives in - body, header,
+        // footer, footnote, endnote, or a deck's speaker notes. Without it an agent
+        // editing a Word document cannot tell a footnote from body text, and a caption in
+        // a header reads identically to one in the flow.
         ["paragraphs"] = result.Paragraphs
             .Skip(Math.Max(0, paragraphOffset))
             .Take(Math.Max(0, paragraphLimit))
-            .Select(p => new { p.ParaId, style = p.StyleId, p.Text, @in = p.In }),
+            .Select(p => new { p.ParaId, style = p.StyleId, p.Text, @in = p.In, location = p.Location }),
         ["contentControls"] = result.StructuralAnchors.Select(s => new { s.Tag, s.Kind }),
         ["nodes"] = result.Nodes.Select(n => new { n.Kind, n.Path, n.Summary }),
         ["styles"] = result.Styles.Styles.Select(s => new { s.Id, s.Name, s.InUseCount })

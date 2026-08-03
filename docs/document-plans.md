@@ -43,6 +43,13 @@ Table-row, table-cell, and image paths come from `inspect_document.nodes`:
 
 A text-span target resolves across the body, headers, footers, footnotes, and endnotes.
 
+A paragraph's text is everything the reader sees, including text wrapped in a tracked
+insertion (`w:ins`), a hyperlink, or a content control. So a redline pass can be revisited:
+change something with `"mode": "Tracked"`, re-open, and the text you inserted is a normal
+target for `find`, `changeText` and `format`. Text struck through by a tracked deletion is
+not part of it, and a text box's paragraphs belong to their own body rather than to the
+paragraph that carries them.
+
 ### `changeText`
 
 Replace a content-verified text span. Default mode is `Tracked`.

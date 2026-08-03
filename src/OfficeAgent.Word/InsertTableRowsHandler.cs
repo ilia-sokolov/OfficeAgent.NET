@@ -132,6 +132,7 @@ internal sealed class InsertTableRowsHandler : IOperationHandler
         }
 
         var clone = (TableRow)templateRow.CloneNode(deep: true);
+        ClearParagraphIds(clone);
         var templateCells = clone.Elements<TableCell>().ToList();
         int i = 0;
         foreach (var cell in templateCells)
@@ -144,6 +145,20 @@ internal sealed class InsertTableRowsHandler : IOperationHandler
         return clone;
     }
 
+    /// <summary>
+    /// Drops the paragraph ids carried over by the clone. They identify the template
+    /// row's paragraphs, so leaving them would put two paragraphs in the document under
+    /// one anchor and make every later target ambiguous. Stabilize mints fresh ones.
+    /// </summary>
+    private static void ClearParagraphIds(TableRow row)
+    {
+        foreach (var paragraph in row.Descendants<Paragraph>())
+        {
+            paragraph.ParagraphId = null;
+            paragraph.TextId = null;
+        }
+    }
+
     private static void ReplaceCellText(TableCell cell, string text)
     {
         var paragraph = cell.Elements<Paragraph>().FirstOrDefault();
@@ -153,8 +168,11 @@ internal sealed class InsertTableRowsHandler : IOperationHandler
             return;
         }
 
-        foreach (var run in paragraph.Elements<Run>().ToList())
-            run.Remove();
+        // Everything but the paragraph properties: a template cell can hold its text in a
+        // hyperlink or content control, and leaving those behind would duplicate content.
+        foreach (var child in paragraph.ChildElements.ToList())
+            if (child is not ParagraphProperties)
+                child.Remove();
         paragraph.AppendChild(new Run(new Text(text) { Space = SpaceProcessingModeValues.Preserve }));
     }
 

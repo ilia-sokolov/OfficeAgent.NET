@@ -29,8 +29,40 @@ public sealed class WordmlDialect : ITextDialect
 {
     public DocFormat Format => DocFormat.Word;
 
-    public IReadOnlyList<OpenXmlElement> GetRuns(OpenXmlElement paragraph) =>
-        paragraph.Elements<Run>().Cast<OpenXmlElement>().ToList();
+    public IReadOnlyList<OpenXmlElement> GetRuns(OpenXmlElement paragraph)
+    {
+        var runs = new List<OpenXmlElement>();
+        Collect(paragraph, runs);
+        return runs;
+    }
+
+    /// <summary>
+    /// Walks the paragraph's inline content in document order. A run is not always a
+    /// direct child of <c>w:p</c>: tracked insertions (<c>w:ins</c>), hyperlinks,
+    /// content controls and fields all wrap their runs, and text inside them is live
+    /// text the reader sees. Enumerating only direct children makes that text
+    /// invisible to find, changeText and format - so a tracked edit or a content
+    /// control could not be targeted afterwards.
+    /// </summary>
+    private static void Collect(OpenXmlElement element, List<OpenXmlElement> runs)
+    {
+        foreach (var child in element.ChildElements)
+        {
+            // Stop at the run itself: a run may carry a text box, whose paragraphs
+            // belong to their own body and must not fold into this one's text.
+            if (child is Run)
+            {
+                runs.Add(child);
+                continue;
+            }
+
+            // Deleted and moved-from content is struck through, not part of the text.
+            if (child is DeletedRun or MoveFromRun)
+                continue;
+
+            Collect(child, runs);
+        }
+    }
 
     public bool IsTextRun(OpenXmlElement run) =>
         run is Run r && r.Elements<Text>().Any();

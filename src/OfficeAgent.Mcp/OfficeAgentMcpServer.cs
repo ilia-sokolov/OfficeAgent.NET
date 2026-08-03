@@ -6,6 +6,7 @@ using OfficeAgent.AgentFramework;
 using OfficeAgent.Core;
 using OfficeAgent.Core.DocumentProviders;
 using OfficeAgent.SharePoint;
+using OfficeAgent.PowerPoint;
 using OfficeAgent.Word;
 
 namespace OfficeAgent.Mcp;
@@ -55,19 +56,19 @@ public static class OfficeAgentMcpServer
             : string.Empty;
         var lines = options.FileSystemConnections
             .Select(c => $"- \"{c.ConnectionId}\" (filesystem):" + filesystemRegistration
-                + (creationEnabled && AllowsWordCreation(c.AllowedExtensions)
-                    ? " create_document writes new .docx files into this connection's root."
+                + (creationEnabled && AllowsCreatableExtension(c.AllowedExtensions)
+                    ? " create_document writes new documents into this connection's root; the name's extension picks the format."
                     : creationEnabled
-                        ? " create_document is not available because this connection does not allow .docx."
+                        ? " create_document is not available because this connection allows no creatable extension."
                         : string.Empty))
             .Concat(options.SharePointConnections
                 .Select(c => $"- \"{c.ConnectionId}\" (sharepoint):" + sharePointRegistration
-                    + (creationEnabled && HasSharePointCreationTarget(c) && AllowsWordCreation(c.AllowedExtensions)
-                        ? " create_document writes new .docx files into this connection's configured folder."
+                    + (creationEnabled && HasSharePointCreationTarget(c) && AllowsCreatableExtension(c.AllowedExtensions)
+                        ? " create_document writes new documents into this connection's configured folder; the name's extension picks the format."
                         : creationEnabled && !HasSharePointCreationTarget(c)
                             ? " create_document is not configured for this connection."
                             : creationEnabled
-                                ? " create_document is not available because this connection does not allow .docx."
+                                ? " create_document is not available because this connection allows no creatable extension."
                             : string.Empty)))
             .ToList();
 
@@ -89,7 +90,7 @@ public static class OfficeAgentMcpServer
                 "The OfficeAgent MCP server requires at least one connection. Configure " +
                 "OfficeAgent:FileSystemConnections or OfficeAgent:SharePointConnections.");
 
-        services.AddWordFormat();
+        AddFormats(services);
         services.AddOfficeAgent();
 
         foreach (var connection in options.FileSystemConnections)
@@ -169,7 +170,7 @@ public static class OfficeAgentMcpServer
             {
                 connectionId = c.ConnectionId,
                 provider = "filesystem",
-                canCreateDocuments = creationEnabled && AllowsWordCreation(c.AllowedExtensions)
+                canCreateDocuments = creationEnabled && AllowsCreatableExtension(c.AllowedExtensions)
             })
             .Concat(options.SharePointConnections
                 .Select(c => new
@@ -178,7 +179,7 @@ public static class OfficeAgentMcpServer
                     provider = "sharepoint",
                     canCreateDocuments = creationEnabled &&
                         HasSharePointCreationTarget(c) &&
-                        AllowsWordCreation(c.AllowedExtensions)
+                        AllowsCreatableExtension(c.AllowedExtensions)
                 }))
             .ToArray();
         return JsonSerializer.Serialize(connections);
@@ -186,20 +187,51 @@ public static class OfficeAgentMcpServer
 
     private static bool CreationEnabled(OfficeAgentMcpOptions options) =>
         options.AllowCreation &&
-        (options.FileSystemConnections.Any(c => AllowsWordCreation(c.AllowedExtensions)) ||
+        (options.FileSystemConnections.Any(c => AllowsCreatableExtension(c.AllowedExtensions)) ||
          options.SharePointConnections.Any(c =>
-             HasSharePointCreationTarget(c) && AllowsWordCreation(c.AllowedExtensions)));
+             HasSharePointCreationTarget(c) && AllowsCreatableExtension(c.AllowedExtensions)));
 
     private static bool HasSharePointCreationTarget(SharePointConnectionOptions connection) =>
         !string.IsNullOrWhiteSpace(connection.CreationDriveId) &&
         !string.IsNullOrWhiteSpace(connection.CreationFolderItemId);
 
-    private static bool AllowsWordCreation(IEnumerable<string> extensions) =>
-        extensions.Any(extension =>
-            string.Equals(
-                extension.StartsWith(".", StringComparison.Ordinal) ? extension : "." + extension,
-                ".docx",
-                StringComparison.OrdinalIgnoreCase));
+    /// <summary>
+    /// The format modules this server speaks. The single place they are named, so the
+    /// toolset, the connection inventory, and the server instructions cannot drift apart.
+    /// </summary>
+    private static void AddFormats(IServiceCollection services)
+    {
+        services.AddWordFormat();
+        services.AddPowerPointFormat();
+    }
+
+    /// <summary>
+    /// The extensions this server can mint a blank document for, derived from the very
+    /// modules <see cref="AddFormats"/> registers rather than a hard-coded list - adding
+    /// a format module must not silently leave capability reporting behind.
+    /// </summary>
+    private static readonly Lazy<string[]> CreatableExtensions = new(() =>
+    {
+        var services = new ServiceCollection();
+        AddFormats(services);
+        using var provider = services.BuildServiceProvider();
+        return provider.GetServices<IFormatModule>()
+            .OfType<IBlankDocumentFactory>()
+            .Select(factory => factory.Extension)
+            .Where(extension => !string.IsNullOrWhiteSpace(extension))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToArray();
+    });
+
+    /// <summary>
+    /// Whether a connection accepts at least one extension the engine can actually mint.
+    /// A connection limited to formats no registered module creates cannot create
+    /// anything, and advertising it would send the agent into a call that can only fail.
+    /// </summary>
+    private static bool AllowsCreatableExtension(IEnumerable<string> extensions) =>
+        extensions.Any(extension => CreatableExtensions.Value.Contains(
+            extension.StartsWith(".", StringComparison.Ordinal) ? extension : "." + extension,
+            StringComparer.OrdinalIgnoreCase));
 
     /// <summary>
     /// Builds the full toolset from configuration alone: composes the engine and

@@ -128,6 +128,9 @@ internal static class WordModel
     public static IReadOnlyDictionary<string, string> Stabilize(IOpenXmlPackage package)
     {
         var aliases = new Dictionary<string, string>(StringComparer.Ordinal);
+        var used = ExistingParaIds(package);
+
+        using var rng = RandomNumberGenerator.Create();
         foreach (var (root, hostKey) in TextHosts(package))
         {
             int index = 0;
@@ -135,7 +138,7 @@ internal static class WordModel
             {
                 var positional = hostKey.Length == 0 ? $"auto-{index:D4}" : $"auto-{hostKey}-{index:D4}";
                 if (string.IsNullOrEmpty(paragraph.ParagraphId?.Value))
-                    paragraph.ParagraphId = NewParaId();
+                    paragraph.ParagraphId = NewParaId(rng, used);
                 aliases[positional] = $"w14:{paragraph.ParagraphId!.Value}";
                 index++;
             }
@@ -143,12 +146,39 @@ internal static class WordModel
         return aliases;
     }
 
-    private static string NewParaId()
+    /// <summary>Collects the ids already in the document, so a minted one cannot collide.</summary>
+    private static HashSet<string> ExistingParaIds(IOpenXmlPackage package)
+    {
+        var used = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var (root, _) in TextHosts(package))
+            foreach (var paragraph in root.Descendants<Paragraph>())
+                if (paragraph.ParagraphId?.Value is { Length: > 0 } id)
+                    used.Add(id);
+        return used;
+    }
+
+    /// <summary>
+    /// Mints a <c>w14:paraId</c> inside the range the schema allows - greater than
+    /// <c>00000000</c> and less than <c>80000000</c> - and unique within the document.
+    /// </summary>
+    /// <remarks>
+    /// A plain random 32-bit value is invalid roughly half the time, because any value
+    /// with the high bit set exceeds the schema's maximum. Word silently rewrites such an
+    /// id when it next saves, which both defeats the durability the alias map exists to
+    /// provide and leaves a document strict consumers reject.
+    /// </remarks>
+    private static string NewParaId(RandomNumberGenerator rng, HashSet<string> used)
     {
         var bytes = new byte[4];
-        using (var rng = RandomNumberGenerator.Create())
+        while (true)
+        {
             rng.GetBytes(bytes);
-        return ToHex(bytes);
+            var value = BitConverter.ToUInt32(bytes, 0) & 0x7FFFFFFFu;
+            if (value == 0) continue;
+
+            var id = value.ToString("X8");
+            if (used.Add(id)) return id;
+        }
     }
 
     private static string ToHex(byte[] bytes) =>
