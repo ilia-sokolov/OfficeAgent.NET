@@ -9,7 +9,7 @@
 OfficeAgent.NET translates an AI agent’s intent into controlled changes to Microsoft Word documents. The agent proposes a typed edit plan; the library validates and applies it while preserving document features such as styles and comments. Edits can be recorded as tracked changes for human review, while structured document operations can reduce token use compared with processing entire files.
 
 
-![OfficeAgent.NET finds, previews, and applies a contract edit as a tracked change in Word.](media/demo.gif)
+![OfficeAgent.NET finds, previews, and applies a contract edit as a tracked change in Word.](https://raw.githubusercontent.com/ilia-sokolov/OfficeAgent.NET/main/media/demo.gif)
 
 ## What this project does
 
