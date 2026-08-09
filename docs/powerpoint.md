@@ -30,6 +30,8 @@ than to a document-wide position.
 | Table node | `table#{slideId}/{shapeId}` | |
 | Image node | `image#{slideId}/{shapeId}` | |
 | Comment node | `comment#{slideId}/{commentId}` | |
+| Section node | `section#{guid}` | Named slide groups |
+| Slot | a shape name, e.g. `ClientName` | What `fill` targets; qualified `slide256/ClientName` when the name repeats |
 
 A picture appears twice — as `image#…` and as `shape#…` — because the verbs care
 about different things: one about the picture, the other about the box it sits in.
@@ -57,6 +59,10 @@ guessing which line was meant; see [Anchor stability](#anchor-stability).
 | `insertImage` / `removeImage` | slide / image node | `base64Bytes` or a provider-backed `imageDocumentId`; `altText` is carried through |
 | `comment` (add) | slide node | |
 | `comment` (resolve) | comment node | `"action": "Resolve"` |
+| `fill` | slot (shape name) | Structured template population. `{ "tag": "ClientName" }`; a name reused across slides is refused as ambiguous until qualified `slide256/ClientName` |
+| `copyStyles` | paragraph | Copies direct `a:pPr`/`a:rPr` from a source paragraph. `scope`: `run`, `paragraph`, `all` |
+| `clearStyles` | paragraph | Strips direct formatting so the layout's styling shows through again. Keeps the language tag, which is not formatting |
+| `section` | slide node (Add) / section node (Rename, Remove) | Named slide groups. Removing a section keeps its slides |
 | `insert` | paragraph | Adds a bullet or line beside an existing one. Inherits the neighbour's bullet and run styling; `level` (0-8) sets the depth. `styleId` is refused - a deck has no style table |
 | `insertShape` | slide node | A free-standing text box with its own `xPx`/`yPx`/`widthPx`/`heightPx` |
 | `removeShape` | shape node | Any shape - text box, table frame, picture. Removing a *placeholder* is refused |
@@ -65,10 +71,9 @@ guessing which line was meant; see [Anchor stability](#anchor-stability).
 | `moveSlide` | slide node | `position` + `relativeTo` |
 | `duplicateSlide` | slide node | Copy gets its own slide id, shape ids, and notes; lands after the original by default |
 
-Verbs the module does not implement — `fill`, `setProperty`, `revision`,
-`copyStyles`, `clearStyles` — are reported per-operation as
-`unsupported-operation`, and nothing in the plan is applied. The four slide verbs
-run the other way: a Word document reports *them* as unsupported.
+Verbs the module does not implement — `setProperty` and `revision` — are reported per-operation as
+`unsupported-operation`, and nothing in the plan is applied. The slide, shape and
+section verbs run the other way: a Word document reports *them* as unsupported.
 
 ## Comments
 
@@ -133,6 +138,32 @@ the plan with `contract-mismatch`.
   only.
 - **Slide layouts and masters.** Untouched. New shapes inherit from the layout
   the slide already points at.
+
+## Sections
+
+Sections are the named slide groups PowerPoint shows in the thumbnail pane, stored
+in a `p14:sectionLst` extension on the presentation. They partition the deck in
+presentation order: a section owns a **contiguous** run, and once a deck has any
+section every slide belongs to exactly one.
+
+```jsonc
+[ { "op": "section", "action": "Add", "name": "Financials",
+    "target": { "kind": "slide", "path": "slide#257" } } ]
+```
+
+Adding the first section to a deck whose slides do not all follow the target
+creates a `Default Section` ahead of it, because slides belonging to no section
+are what make PowerPoint offer to repair the file. Two sections cannot start at
+one slide - the second would own nothing.
+
+The grouping is maintained for you. Every verb that changes the slide list
+reconciles it afterwards, so a slide inserted inside a section joins it, a
+duplicate joins its original's, a moved slide joins wherever it lands, and a
+removed slide leaves no dangling entry. A section is identified by the slide it
+*starts* at, which is what keeps runs contiguous: a slide moved into the middle of
+another section joins that section rather than splitting its own in two - a shape
+PresentationML does not allow. Sections are also stored in the order their slides
+appear, so `inspect_document` lists them the way the thumbnail pane shows them.
 
 ## Anchor stability
 

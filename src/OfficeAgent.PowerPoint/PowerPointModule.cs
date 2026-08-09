@@ -120,6 +120,10 @@ public sealed class PowerPointModule : IFormatModule, IBlankDocumentFactory, IPl
             new SlideInsertParagraphHandler(),
             new SlideInsertShapeHandler(),
             new SlideRemoveShapeHandler(),
+            new SlideFillHandler(),
+            new SlideCopyStylesHandler(),
+            new SlideClearStylesHandler(),
+            new SectionHandler(),
             new SlideRemoveHandler(),
             new SlideMoveHandler(),
             new SlideDuplicateHandler()
@@ -131,6 +135,7 @@ public sealed class PowerPointModule : IFormatModule, IBlankDocumentFactory, IPl
         {
             new SlideNodeProvider(),
             new ShapeNodeProvider(),
+            new SectionNodeProvider(),
             new SlideTableNodeProvider(),
             new SlideImageNodeProvider(),
             new SlideCommentNodeProvider()
@@ -209,6 +214,28 @@ public sealed class PowerPointModule : IFormatModule, IBlankDocumentFactory, IPl
             }
         }
 
+        // A deck's fillable slot is a named shape - the label PowerPoint shows in the
+        // Selection Pane and that templates set deliberately. Names repeat across slides,
+        // so a repeated one is surfaced qualified, which is also how fill disambiguates.
+        var structuralAnchors = new List<StructuralAnchor>();
+        if (wantContent)
+        {
+            var slots = SlideFillHandler.Slots(package).ToList();
+            var duplicated = new HashSet<string>(
+                slots.GroupBy(s => s.Name, StringComparer.OrdinalIgnoreCase)
+                    .Where(g => g.Count() > 1)
+                    .Select(g => g.Key),
+                StringComparer.OrdinalIgnoreCase);
+
+            foreach (var slot in slots)
+            {
+                var tag = duplicated.Contains(slot.Name) ? slot.Qualified : slot.Name;
+                var anchor = new StructuralAnchor { Id = tag, Tag = tag, Kind = "shapeName" };
+                structuralAnchors.Add(anchor);
+                anchors.Add(anchor);
+            }
+        }
+
         var nodes = new List<NodeInfo>();
         if (wantContent)
         {
@@ -231,9 +258,7 @@ public sealed class PowerPointModule : IFormatModule, IBlankDocumentFactory, IPl
             Styles = new StyleCatalog(),
             Anchors = anchors,
             Paragraphs = paragraphs,
-            // PresentationML has no counterpart to Word's content controls or bookmarks:
-            // a placeholder is a layout role, not an addressable slot a plan can fill.
-            StructuralAnchors = Array.Empty<StructuralAnchor>(),
+            StructuralAnchors = structuralAnchors,
             Nodes = nodes
         };
     }

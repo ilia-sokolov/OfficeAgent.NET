@@ -658,3 +658,43 @@ public sealed class InsertShapeOp : PlanOperation
 public sealed class RemoveShapeOp : PlanOperation
 {
 }
+
+/// <summary>Specifies the lifecycle action for a <see cref="SectionOp"/>.</summary>
+public enum SectionAction
+{
+    /// <summary>Start a new section at the target slide.</summary>
+    Add,
+
+    /// <summary>Rename the target section.</summary>
+    Rename,
+
+    /// <summary>
+    /// Remove the target section. Its slides are kept and join the section before it, or
+    /// become unsectioned when it was the first - deleting a grouping must not delete the
+    /// things being grouped.
+    /// </summary>
+    Remove
+}
+
+/// <summary>
+/// Manages the named slide groups PowerPoint shows in the thumbnail pane.
+/// </summary>
+/// <remarks>
+/// Sections partition the deck in presentation order: a section owns a contiguous run of
+/// slides, and once a deck has any section every slide belongs to one. The module keeps
+/// that invariant as slides are added, moved, copied and removed, so the grouping cannot
+/// drift out of step with the deck.
+/// <para>
+/// <see cref="SectionAction.Add"/> targets the slide the section starts at;
+/// <see cref="SectionAction.Rename"/> and <see cref="SectionAction.Remove"/> target a
+/// section <see cref="NodeAnchor"/> with <c>Kind="section"</c>.
+/// </para>
+/// </remarks>
+public sealed class SectionOp : PlanOperation
+{
+    /// <summary>Gets the action to perform.</summary>
+    public SectionAction Action { get; init; } = SectionAction.Add;
+
+    /// <summary>Gets the section name, for <see cref="SectionAction.Add"/> and <see cref="SectionAction.Rename"/>.</summary>
+    public string Name { get; init; } = string.Empty;
+}

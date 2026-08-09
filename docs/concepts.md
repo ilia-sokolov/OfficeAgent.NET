@@ -26,7 +26,7 @@ An anchor is an engine-issued address. The caller (or the LLM) does not invent a
 | Anchor | Targets | Example |
 | --- | --- | --- |
 | `TextSpanAnchor` | expected text in a paragraph | `{ paraId, expect, occurrence }` |
-| `StructuralAnchor` | content control or bookmark | `{ tag, kind: "contentControl" }` |
+| `StructuralAnchor` | a named slot: a Word content control or bookmark, a deck's shape name | `{ tag, kind: "contentControl" }` |
 | `NodeAnchor` | table, image, document property, revision | `{ kind: "table", path: "table#0" }` |
 | `StyleAnchor` | a named style | `{ styleId: "Heading1" }` |
 
@@ -55,7 +55,7 @@ A `DocumentPlan` is a typed list of operations against anchors. The plan and eve
 
 The Word module ships 17 verbs covering text, runs, tables (create / remove / rows / columns), images, styles, comments, properties, and revisions. See [document-plans.md](document-plans.md).
 
-The verb vocabulary is shared, not per-format: each module implements the subset its format can express, and an operation a module does not implement comes back as `unsupported-operation` with nothing in the plan applied. The PowerPoint module implements text, formatting, tables, images, and comments, plus six verbs only a deck has - `insertSlide`, `removeSlide`, `moveSlide`, `duplicateSlide`, `insertShape`, `removeShape` - which Word reports as unsupported in turn; see [powerpoint.md](powerpoint.md). Because the vocabulary is shared, a plan need not declare a format - set `DocumentPlan.Format` only to *assert* one, which fails a mismatch with `contract-mismatch`.
+The verb vocabulary is shared, not per-format: each module implements the subset its format can express, and an operation a module does not implement comes back as `unsupported-operation` with nothing in the plan applied. The PowerPoint module implements all but `setProperty` and `revision`, plus seven verbs only a deck has - `insertSlide`, `removeSlide`, `moveSlide`, `duplicateSlide`, `insertShape`, `removeShape`, `section` - which Word reports as unsupported in turn; see [powerpoint.md](powerpoint.md). Because the vocabulary is shared, a plan need not declare a format - set `DocumentPlan.Format` only to *assert* one, which fails a mismatch with `contract-mismatch`.
 
 A `changeText` that does not state a `mode` takes the connection's configured default, which is `Tracked` unless the host changed it - see [document-providers.md](document-providers.md#default-change-mode).
 

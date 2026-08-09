@@ -54,15 +54,23 @@ internal sealed class SlideNodeProvider : IPowerPointNodeProvider
         };
     }
 
-    /// <summary>Parses the <c>slide#{id}</c> path form, tolerating a bare id.</summary>
+    /// <summary>
+    /// Parses a slide id from any of the forms the deck vocabulary uses: the node path
+    /// <c>slide#256</c>, the paragraph-id prefix <c>slide256</c>, or a bare <c>256</c>.
+    /// All three appear in ids the engine itself hands out, so accepting only one of them
+    /// would fail an agent that copied the prefix from a paragraph id.
+    /// </summary>
     internal static bool TryParseSlideId(string path, out uint slideId)
     {
         slideId = 0;
         if (string.IsNullOrEmpty(path)) return false;
 
-        var value = path.StartsWith("slide#", StringComparison.OrdinalIgnoreCase)
-            ? path.Substring("slide#".Length)
-            : path;
+        var value = path;
+        if (value.StartsWith("slide#", StringComparison.OrdinalIgnoreCase))
+            value = value.Substring("slide#".Length);
+        else if (value.StartsWith("slide", StringComparison.OrdinalIgnoreCase))
+            value = value.Substring("slide".Length);
+
         return uint.TryParse(value, out slideId);
     }
 }

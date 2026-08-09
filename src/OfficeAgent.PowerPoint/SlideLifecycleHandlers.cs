@@ -204,6 +204,10 @@ internal sealed class SlideInsertHandler : IOperationHandler
             context, op.Position, RelativePath(op), op.Target, "insertSlide", out var reference);
         SlideList.Place(list, entry, op.Position,
             reference is null ? null : SlideList.EntryFor(list, reference.SlideId));
+
+        // A sectioned deck must claim the new slide, or PowerPoint sees a slide belonging
+        // to no section and offers to repair the file.
+        Sections.Reconcile(context.Package);
     }
 
     /// <summary>The reference slide comes from the target anchor for this verb.</summary>
@@ -268,6 +272,10 @@ internal sealed class SlideRemoveHandler : IOperationHandler
         // Drop the part last: the list entry is what makes it reachable, and deleting the
         // part first would briefly leave a dangling relationship id in the presentation.
         main.DeletePart(slide.Part);
+
+        // Its id has to leave the section that listed it too, or the grouping references
+        // a slide the deck no longer has.
+        Sections.Reconcile(context.Package);
     }
 }
 
@@ -328,6 +336,9 @@ internal sealed class SlideMoveHandler : IOperationHandler
         // it, but re-inserting an attached element is what actually moves it.
         entry.Remove();
         SlideList.Place(list, entry, op.Position, referenceEntry);
+
+        // Moving a slide moves it between sections: the grouping follows deck order.
+        Sections.Reconcile(context.Package);
     }
 }
 
@@ -405,5 +416,8 @@ internal sealed class SlideDuplicateHandler : IOperationHandler
             context, op.Position, op.RelativeTo ?? anchor.Path, anchor, "duplicateSlide", out var reference);
         SlideList.Place(list, entry, op.Position,
             reference is null ? null : SlideList.EntryFor(list, reference.SlideId));
+
+        // The copy joins the section its neighbour is in, as it does in PowerPoint.
+        Sections.Reconcile(context.Package);
     }
 }

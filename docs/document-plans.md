@@ -128,7 +128,7 @@ Copy direct formatting from one text span to another, or clear it on the target.
   "scope":  "run" }
 ```
 
-`scope` is `run`, `paragraph`, or `all`. Empty `expect` means the whole paragraph.
+`scope` is `run`, `paragraph`, or `all`. Empty `expect` means the whole paragraph. Only *direct* formatting travels or is removed - a deck's layout and master, and a Word document's style definitions, are never touched, so clearing returns the text to the look its template gives it.
 
 ### `fill`
 
@@ -274,6 +274,23 @@ Update document metadata or a selected document-level setting.
   "target": { "kind": "field" },
   "name":   "updateOnOpen" }
 ```
+
+### `section`
+
+PowerPoint only. Named slide groups; see [PowerPoint support](powerpoint.md#sections).
+
+```json
+{ "op": "section", "action": "Add", "name": "Financials",
+  "target": { "kind": "slide", "path": "slide#257" } }
+
+{ "op": "section", "action": "Rename", "name": "FY27 Financials",
+  "target": { "kind": "section", "path": "section#{GUID}" } }
+
+{ "op": "section", "action": "Remove",
+  "target": { "kind": "section", "path": "section#{GUID}" } }
+```
+
+Removing a section keeps its slides - they join the section before it.
 
 ### `insertShape` / `removeShape`
 
