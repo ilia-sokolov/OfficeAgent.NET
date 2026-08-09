@@ -130,9 +130,17 @@ public sealed class InsertOp : PlanOperation
     public string? Text { get; init; }
 
     /// <summary>
-    /// Gets the style id to apply to the inserted paragraph.
+    /// Gets the style id to apply to the inserted paragraph. Word only - a deck has no
+    /// paragraph style table.
     /// </summary>
     public string? StyleId { get; init; }
+
+    /// <summary>
+    /// Gets the outline level of the inserted paragraph, zero-based - the bullet depth on
+    /// a slide. PresentationML only: the Word module refuses it rather than dropping it,
+    /// because a list level silently lost renders as a document that looks wrong.
+    /// </summary>
+    public int? Level { get; init; }
 }
 
 /// <summary>
@@ -269,11 +277,20 @@ public sealed class FormatOp : PlanOperation
     /// <summary>Border hex RGB color, e.g. "000000".</summary>
     public string? BorderColor { get; init; }
 
-    /// <summary>Width in pixels at 96 DPI (images and table rows).</summary>
+    /// <summary>Width in pixels at 96 DPI (images, table rows, and any slide shape).</summary>
     public int? WidthPx { get; init; }
 
-    /// <summary>Height in pixels at 96 DPI (images and table rows).</summary>
+    /// <summary>Height in pixels at 96 DPI (images, table rows, and any slide shape).</summary>
     public int? HeightPx { get; init; }
+
+    /// <summary>
+    /// Distance in pixels at 96 DPI from the slide's left edge. PresentationML only:
+    /// a slide positions shapes absolutely, whereas a Word document lays them out in flow.
+    /// </summary>
+    public int? XPx { get; init; }
+
+    /// <summary>Distance in pixels at 96 DPI from the slide's top edge. PresentationML only.</summary>
+    public int? YPx { get; init; }
 }
 
 /// <summary>
@@ -598,4 +615,46 @@ public sealed class DuplicateSlideOp : PlanOperation
     /// <see cref="SlidePosition.After"/>. Omitted, the original is the reference.
     /// </summary>
     public string? RelativeTo { get; init; }
+}
+
+/// <summary>
+/// Adds a free-standing text box to a slide. Unlike a placeholder, it belongs to the
+/// slide rather than to the layout, so it carries its own position and size.
+/// </summary>
+/// <remarks>
+/// The target is a slide <see cref="NodeAnchor"/>. Text that belongs in the slide's title
+/// or body should go through the layout's placeholders instead - a text box laid over a
+/// placeholder looks right until the template changes underneath it.
+/// </remarks>
+public sealed class InsertShapeOp : PlanOperation
+{
+    /// <summary>Gets the paragraphs the box contains - one entry per line.</summary>
+    public IReadOnlyList<string> Text { get; init; } = Array.Empty<string>();
+
+    /// <summary>Gets the distance in pixels at 96 DPI from the slide's left edge.</summary>
+    public int? XPx { get; init; }
+
+    /// <summary>Gets the distance in pixels at 96 DPI from the slide's top edge.</summary>
+    public int? YPx { get; init; }
+
+    /// <summary>Gets the width in pixels at 96 DPI. Default 400.</summary>
+    public int WidthPx { get; init; } = 400;
+
+    /// <summary>Gets the height in pixels at 96 DPI. Default 100.</summary>
+    public int HeightPx { get; init; } = 100;
+}
+
+/// <summary>
+/// Removes a shape addressed by a <see cref="NodeAnchor"/> with <c>Kind="shape"</c> and
+/// <c>Path="shape#{slideId}/{shapeId}"</c>. Works for any shape a slide holds - a text
+/// box, a table frame, or a picture - so it is the general counterpart to the
+/// type-specific <see cref="RemoveTableOp"/> and <see cref="RemoveImageOp"/>.
+/// </summary>
+/// <remarks>
+/// Removing a placeholder is refused: the layout would immediately re-offer it as an empty
+/// prompt, so the slide would look unchanged while its content was gone. Clear the text
+/// instead.
+/// </remarks>
+public sealed class RemoveShapeOp : PlanOperation
+{
 }

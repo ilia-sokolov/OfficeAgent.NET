@@ -162,6 +162,8 @@ Insert a new paragraph near an anchor paragraph. Use `insertTable` to add a *new
   "text":     "New paragraph." }
 ```
 
+On a deck this adds a bullet or line beside an existing one, inheriting the neighbour's bullet and run styling. `level` (0-8) sets the bullet depth there and is refused in Word, where numbering comes from the paragraph style; `styleId` is the reverse. Because a slide paragraph id is positional, a plan that inserts and then addresses the same text body at an equal or higher index is refused — see [anchor stability](powerpoint.md#anchor-stability).
+
 ### `insertTable` / `removeTable`
 
 Insert a whole new table near an anchor paragraph, or remove an entire table addressed by its `table#N` path.
@@ -272,6 +274,21 @@ Update document metadata or a selected document-level setting.
   "target": { "kind": "field" },
   "name":   "updateOnOpen" }
 ```
+
+### `insertShape` / `removeShape`
+
+PowerPoint only. `insertShape` adds a free-standing text box to a slide; `removeShape` deletes any shape by its node path — text box, table frame, or picture. Removing a layout *placeholder* is refused, because the layout would re-offer it as an empty prompt and the slide would look unchanged with its content gone.
+
+```json
+{ "op": "insertShape",
+  "target":  { "kind": "slide", "path": "slide#257" },
+  "text":    [ "Draft - not for circulation" ],
+  "xPx": 40, "yPx": 620, "widthPx": 420, "heightPx": 50 }
+
+{ "op": "removeShape", "target": { "kind": "shape", "path": "shape#257/4" } }
+```
+
+Moving and resizing go through `format` on the same shape node — see [PowerPoint support](powerpoint.md#supported-operations).
 
 ### `insertSlide` / `removeSlide` / `moveSlide` / `duplicateSlide`
 

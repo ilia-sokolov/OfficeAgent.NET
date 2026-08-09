@@ -25,27 +25,31 @@ than to a document-wide position.
 | Anchor | Form | Notes |
 | --- | --- | --- |
 | Paragraph | `slide{slideId}/shape{shapeId}/p{n}` | `slide{slideId}/notes/shape{shapeId}/p{n}` for a speaker-notes body; `slide{slideId}/shape{shapeId}/r{row}c{col}/p{n}` inside a table cell |
-| Slide node | `slide#{slideId}` | The target for inserting a table, image, or comment |
+| Slide node | `slide#{slideId}` | The target for inserting a table, image, text box, or comment |
+| Shape node | `shape#{slideId}/{shapeId}` | Any shape by identity — what moving, resizing and deleting address |
 | Table node | `table#{slideId}/{shapeId}` | |
 | Image node | `image#{slideId}/{shapeId}` | |
 | Comment node | `comment#{slideId}/{commentId}` | |
+
+A picture appears twice — as `image#…` and as `shape#…` — because the verbs care
+about different things: one about the picture, the other about the box it sits in.
 
 `slideId` is the id from `p:sldIdLst`, which survives reordering — unlike a slide
 number. Node paths are keyed by shape id rather than by ordinal for the same
 reason: adding a table to an earlier slide must not silently retarget a path that
 already exists.
 
-The trailing `p{n}` is positional **within its own text body**. That is safe for
-every verb below because none of them add or remove paragraphs inside a body. A
-paragraph-inserting verb would need a durable id scheme first — see
-[Stabilize](#anchor-stability) below.
+The trailing `p{n}` is positional **within its own text body**, and `insert` adds
+paragraphs — so inserting renumbers every later paragraph in that same body. The
+module refuses a plan that would then address the body positionally rather than
+guessing which line was meant; see [Anchor stability](#anchor-stability).
 
 ## Supported operations
 
 | Verb | Target | Notes |
 | --- | --- | --- |
-| `changeText` | paragraph | Works across slides, table cells, and notes. An empty `expect` writes into an empty paragraph — the route to filling a new deck's placeholder, since a slide has no paragraph-inserting verb. `mode: "Tracked"` is **refused** — PresentationML has no redline vocabulary |
-| `format` | paragraph / image node | bold, italic, underline, `sizeHalfPoints`, `fontFamily`, `color`, `highlight`, `alignment`; `widthPx`/`heightPx` resizes an image. An empty `expect` styles the whole paragraph. Word-only measures (`styleId`, indents, spacing, borders) are **refused**, not ignored |
+| `changeText` | paragraph | Works across slides, table cells, and notes. An empty `expect` writes into an empty paragraph — the route to filling a new deck's placeholder. `mode: "Tracked"` is **refused** — PresentationML has no redline vocabulary |
+| `format` | paragraph / image node / shape node | bold, italic, underline, `sizeHalfPoints`, `fontFamily`, `color`, `highlight`, `alignment`; `widthPx`/`heightPx` resizes an image; on a **shape** node `xPx`/`yPx`/`widthPx`/`heightPx` move and resize anything - text box, table frame, picture - and nothing else is accepted there. An empty `expect` styles the whole paragraph. Word-only measures (`styleId`, indents, spacing, borders) are **refused**, not ignored |
 | `insertTable` | slide node | Placed below existing content |
 | `removeTable` | table node | Removes the frame, not just the `a:tbl` |
 | `insertTableRows` / `removeTableRows` | table node | `Start`/`End`/`Before`/`After`; negative indices count from the end |
@@ -53,13 +57,16 @@ paragraph-inserting verb would need a durable id scheme first — see
 | `insertImage` / `removeImage` | slide / image node | `base64Bytes` or a provider-backed `imageDocumentId`; `altText` is carried through |
 | `comment` (add) | slide node | |
 | `comment` (resolve) | comment node | `"action": "Resolve"` |
+| `insert` | paragraph | Adds a bullet or line beside an existing one. Inherits the neighbour's bullet and run styling; `level` (0-8) sets the depth. `styleId` is refused - a deck has no style table |
+| `insertShape` | slide node | A free-standing text box with its own `xPx`/`yPx`/`widthPx`/`heightPx` |
+| `removeShape` | shape node | Any shape - text box, table frame, picture. Removing a *placeholder* is refused |
 | `insertSlide` | none, or slide node | Adds a slide from one of the deck's layouts. `position` defaults to `End`; `Before`/`After` take a slide target |
 | `removeSlide` | slide node | Takes the slide's notes with it. Refused when it would empty the deck |
 | `moveSlide` | slide node | `position` + `relativeTo` |
 | `duplicateSlide` | slide node | Copy gets its own slide id, shape ids, and notes; lands after the original by default |
 
-Verbs the module does not implement — `insert`, `fill`, `setProperty`,
-`revision`, `copyStyles`, `clearStyles` — are reported per-operation as
+Verbs the module does not implement — `fill`, `setProperty`, `revision`,
+`copyStyles`, `clearStyles` — are reported per-operation as
 `unsupported-operation`, and nothing in the plan is applied. The four slide verbs
 run the other way: a Word document reports *them* as unsupported.
 
@@ -102,9 +109,8 @@ Fill it with `changeText` and an empty `expect`:
 
 The empty `expect` is still content-verified — it asserts the paragraph *is*
 blank, so if the deck drifted and something is already there the operation fails
-with `expect-mismatch` rather than overwriting it. Where a blank Word document
-takes an `insert`, a deck takes this, because slides have no paragraph-inserting
-verb.
+with `expect-mismatch` rather than overwriting it. Use it to fill a placeholder
+that is already there; use `insert` to add a line beside one that has text.
 
 ## Plans do not need a format
 
@@ -119,9 +125,12 @@ the plan with `contract-mismatch`.
   the shared text engine, so runs the span does not fully cover keep their
   formatting. Text that runs across several `a:r` elements is replaced as one
   edit.
-- **Shape properties and layout.** Nothing rewrites a shape's transform, style,
-  or placeholder relationship; edits touch the text body, the table, or the
-  shape tree only.
+- **Shape properties and layout.** Nothing rewrites a shape's style or
+  placeholder relationship. A shape's transform changes only when a `format`
+  explicitly moves or resizes it — and on a placeholder that means materialising
+  a transform it previously inherited, which pins it against later layout
+  changes. Everything else touches the text body, the table, or the shape tree
+  only.
 - **Slide layouts and masters.** Untouched. New shapes inherit from the layout
   the slide already points at.
 
@@ -130,10 +139,26 @@ the plan with `contract-mismatch`.
 `Stabilize` is deliberately a no-op returning an empty alias map. Word assigns
 `w14:paraId` there so that an operation which shifts paragraph offsets cannot
 redirect a later operation's target. DrawingML has no equivalent identifier to
-mint, and none of the verbs above add or remove paragraphs inside a text body, so
-offsets cannot shift mid-plan.
+mint — `a:p` admits neither an id attribute nor an extension list — so the alias
+map cannot be built, and `insert` genuinely does shift offsets.
 
-The slide verbs do not change that, because a paragraph id names its slide by the
+The shift is therefore handled the other way round. The module implements
+`IPlanValidatingModule`, and refuses any plan that both inserts a paragraph and
+addresses that **same text body** at an equal or higher index:
+
+```text
+operation-conflict: 'slide257/shape3/p2' is addressed in the same plan that
+inserts a paragraph at 'slide257/shape3/p1'. … Apply the insert, re-inspect,
+then send the rest as a second plan.
+```
+
+Earlier paragraphs in that body, other shapes, and other slides are unaffected
+and stay addressable in the same plan. Content verification would already catch
+most of this — the renumbered line rarely carries the expected text — but not an
+anchor with an empty `expect`, and not two lines that read alike. Splitting the
+plan costs one round trip; guessing costs a wrong edit.
+
+The slide verbs need none of that, because a paragraph id names its slide by the
 durable id from `p:sldIdLst`, not by the slide's position:
 
 - `insertSlide` and `duplicateSlide` mint an id above every existing one, so they

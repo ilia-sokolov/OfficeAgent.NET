@@ -40,6 +40,10 @@ internal sealed class PlanValidator
 
         DetectConflicts(plan, errors);
 
+        // Format-specific plan-wide rules, which no single handler can see.
+        if (module is IPlanValidatingModule planValidating)
+            errors.AddRange(planValidating.ValidatePlan(plan, context));
+
         foreach (var operation in plan.Operations)
         {
             var handler = module.Handlers.FirstOrDefault(h => h.CanHandle(operation));

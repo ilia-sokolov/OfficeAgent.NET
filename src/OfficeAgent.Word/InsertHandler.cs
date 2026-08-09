@@ -22,6 +22,15 @@ internal sealed class InsertHandler : IOperationHandler
                 ValidationErrorCodes.AnchorNotFound,
                 $"No paragraph with id '{anchor.ParaId}'.", anchor));
 
+        // level is DrawingML's bullet depth and has no WordprocessingML counterpart -
+        // numbering here comes from the paragraph's style and numbering definition. Losing
+        // it silently would produce a list that looks flat for no visible reason.
+        if (op.Level is not null)
+            return OperationPreview.Fail(new ValidationError(
+                ValidationErrorCodes.InvalidOperation,
+                "The Word module cannot apply 'level'; it is a slide's bullet depth. " +
+                "Use styleId with a list style instead.", anchor));
+
         return OperationPreview.Ok(new ProposedChange
         {
             Target = anchor,

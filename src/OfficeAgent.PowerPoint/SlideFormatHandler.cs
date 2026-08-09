@@ -31,7 +31,8 @@ internal sealed class SlideFormatHandler : IOperationHandler
     /// <inheritdoc />
     public bool CanHandle(PlanOperation operation) =>
         operation is FormatOp { Target: TextSpanAnchor } ||
-        operation is FormatOp { Target: NodeAnchor { Kind: "image" } };
+        operation is FormatOp { Target: NodeAnchor { Kind: "image" } } ||
+        operation is FormatOp { Target: NodeAnchor { Kind: "shape" } };
 
     /// <inheritdoc />
     public OperationPreview Preview(ApplyContext context, PlanOperation operation)
@@ -42,15 +43,30 @@ internal sealed class SlideFormatHandler : IOperationHandler
             return OperationPreview.Fail(new ValidationError(
                 ValidationErrorCodes.InvalidOperation, unsupported, op.Target));
 
-        return op.Target is NodeAnchor node
-            ? PreviewImage(op, node, context)
-            : PreviewText(op, (TextSpanAnchor)op.Target!, context);
+        return op.Target switch
+        {
+            NodeAnchor { Kind: "shape" } shape => PreviewShape(op, shape, context),
+            NodeAnchor node => PreviewImage(op, node, context),
+            _ => PreviewText(op, (TextSpanAnchor)op.Target!, context)
+        };
     }
 
     /// <inheritdoc />
     public void Apply(ApplyContext context, PlanOperation operation)
     {
         var op = (FormatOp)operation;
+
+        if (op.Target is NodeAnchor { Kind: "shape" } shapeAnchor)
+        {
+            var located = ShapeNodeProvider.Locate(shapeAnchor.Path, context.Package)
+                ?? throw new InvalidOperationException($"Shape '{shapeAnchor.Path}' vanished before apply.");
+            located.Arrange(
+                op.XPx is { } x ? Emu.FromPixels(x) : null,
+                op.YPx is { } y ? Emu.FromPixels(y) : null,
+                op.WidthPx is { } w ? Emu.FromPixels(w) : null,
+                op.HeightPx is { } h ? Emu.FromPixels(h) : null);
+            return;
+        }
 
         if (op.Target is NodeAnchor node)
         {
@@ -238,6 +254,62 @@ internal sealed class SlideFormatHandler : IOperationHandler
         if (op.HeightPx is { } height) transform.Extents.Cy = height * EmuPerPixel;
     }
 
+    // ── shape geometry ────────────────────────────────────────────────────────
+
+    /// <summary>
+    /// Moving and resizing any shape - a text box, a table frame, a picture. Geometry is
+    /// the only thing a shape-targeted format changes; run and paragraph properties need a
+    /// text anchor, because a shape may hold many paragraphs and styling all of them is
+    /// rarely what was meant.
+    /// </summary>
+    private static OperationPreview PreviewShape(FormatOp op, NodeAnchor anchor, ApplyContext context)
+    {
+        var located = ShapeNodeProvider.Locate(anchor.Path, context.Package);
+        if (located is null)
+            return OperationPreview.Fail(new ValidationError(
+                ValidationErrorCodes.AnchorNotFound,
+                $"No shape with path '{anchor.Path}'. Shape paths come from inspect_document.nodes.",
+                anchor));
+
+        if (op.WidthPx is null && op.HeightPx is null && op.XPx is null && op.YPx is null)
+            return OperationPreview.Fail(new ValidationError(
+                ValidationErrorCodes.InvalidOperation,
+                "Formatting a shape moves or resizes it, so widthPx, heightPx, xPx or yPx is required. " +
+                "To style its text, target a paragraph instead.",
+                anchor));
+
+        if (op.WidthPx is <= 0 || op.HeightPx is <= 0)
+            return OperationPreview.Fail(new ValidationError(
+                ValidationErrorCodes.InvalidOperation,
+                "widthPx and heightPx must be positive.", anchor));
+
+        if (op.XPx is < 0 || op.YPx is < 0)
+            return OperationPreview.Fail(new ValidationError(
+                ValidationErrorCodes.InvalidOperation,
+                "xPx and yPx are measured from the slide's top-left corner and cannot be negative.",
+                anchor));
+
+        var box = located.Box();
+        var before = box is { } b
+            ? $"{b.X / Emu.PerPixel},{b.Y / Emu.PerPixel} {b.Cx / Emu.PerPixel}×{b.Cy / Emu.PerPixel}"
+            : "inherited from layout";
+
+        var parts = new List<string>();
+        if (op.XPx is { } px || op.YPx is { } py) parts.Add($"at {op.XPx?.ToString() ?? "="},{op.YPx?.ToString() ?? "="}");
+        if (op.WidthPx is not null || op.HeightPx is not null)
+            parts.Add($"{op.WidthPx?.ToString() ?? "auto"}×{op.HeightPx?.ToString() ?? "auto"}");
+
+        return OperationPreview.Ok(new ProposedChange
+        {
+            Target = anchor,
+            Verb = "format",
+            Before = before,
+            After = string.Join(", ", parts),
+            Context = $"slide {located.Slide.Number}",
+            BlastRadius = 1
+        });
+    }
+
     // ── vocabulary ────────────────────────────────────────────────────────────
 
     /// <summary>
@@ -258,7 +330,7 @@ internal sealed class SlideFormatHandler : IOperationHandler
             ? null
             : $"The PowerPoint module cannot apply {string.Join(", ", rejected)}. " +
               "Supported here: bold, italic, underline, sizeHalfPoints, fontFamily, color, highlight, " +
-              "alignment, and widthPx/heightPx on an image.";
+              "alignment, widthPx/heightPx/xPx/yPx on a shape or image.";
     }
 
     private static string Describe(FormatOp op)

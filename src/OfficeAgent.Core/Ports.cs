@@ -4,12 +4,34 @@ using DocFormat = OfficeAgent.Abstractions.DocumentFormat;
 namespace OfficeAgent.Core;
 
 /// <summary>
+/// Optional <see cref="IFormatModule"/> capability: rules that only make sense across a
+/// whole plan, which a per-operation handler cannot see.
+/// </summary>
+/// <remarks>
+/// Kept separate from <see cref="IFormatModule"/> so existing modules keep compiling, and
+/// separate from the shared conflict detection in the validator because the rules are
+/// format-specific. The PowerPoint module uses it for the one hazard positional paragraph
+/// ids create: an operation that inserts a paragraph renumbers every later paragraph in
+/// the same text body, so a second operation in the same plan addressing that body by
+/// index would land somewhere else.
+/// </remarks>
+public interface IPlanValidatingModule
+{
+    /// <summary>
+    /// Returns errors for plan-wide problems. Called once per preview or apply, after the
+    /// shared checks and before any operation runs. An empty sequence means no objection.
+    /// </summary>
+    IEnumerable<ValidationError> ValidatePlan(DocumentPlan plan, ApplyContext context);
+}
+
+/// <summary>
 /// Defines the contract implemented by a document format module.
 /// </summary>
 public interface IFormatModule
 {
     /// <summary>Gets the document format served by the module.</summary>
     DocFormat Format { get; }
+
 
     /// <summary>Returns whether the module can process the open package.</summary>
     /// <param name="package">The open package.</param>

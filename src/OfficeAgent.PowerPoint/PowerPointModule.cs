@@ -11,8 +11,67 @@ namespace OfficeAgent.PowerPoint;
 /// Provides PowerPoint inspection, search, and supported plan operation handling over
 /// PresentationML across slides, their tables, and their notes.
 /// </summary>
-public sealed class PowerPointModule : IFormatModule, IBlankDocumentFactory
+public sealed class PowerPointModule : IFormatModule, IBlankDocumentFactory, IPlanValidatingModule
 {
+    /// <summary>
+    /// Refuses a plan that inserts a paragraph and then addresses the same text body by
+    /// index. DrawingML has no durable paragraph id to mint, so <c>p{n}</c> is positional:
+    /// inserting renumbers every paragraph after it, and a later operation carrying an
+    /// index would land on the wrong line.
+    /// </summary>
+    /// <remarks>
+    /// Content verification catches most of this on its own - the wrong line rarely has the
+    /// expected text - but not an anchor with an empty <c>expect</c>, and not two lines
+    /// that happen to read alike. Refusing up front turns a silent mis-edit into an error
+    /// naming the fix, and costs only that the plan be split in two.
+    /// </remarks>
+    public IEnumerable<ValidationError> ValidatePlan(DocumentPlan plan, ApplyContext context)
+    {
+        var insertions = plan.Operations
+            .OfType<InsertOp>()
+            .Where(op => op.Target is TextSpanAnchor)
+            .Select(op => (TextSpanAnchor)op.Target)
+            .ToList();
+        if (insertions.Count == 0) yield break;
+
+        foreach (var insertion in insertions)
+        {
+            if (!TrySplit(insertion.ParaId, out var body, out var index)) continue;
+
+            foreach (var operation in plan.Operations)
+            {
+                if (operation is InsertOp { Target: TextSpanAnchor other } && ReferenceEquals(other, insertion))
+                    continue;
+                if (operation.Target is not TextSpanAnchor target) continue;
+                if (!TrySplit(target.ParaId, out var otherBody, out var otherIndex)) continue;
+                if (!string.Equals(body, otherBody, StringComparison.Ordinal)) continue;
+                if (otherIndex < index) continue;
+
+                yield return new ValidationError(
+                    ValidationErrorCodes.OperationConflict,
+                    $"'{target.ParaId}' is addressed in the same plan that inserts a paragraph at " +
+                    $"'{insertion.ParaId}'. A slide paragraph id is positional, so the insert renumbers " +
+                    "it and the later operation would target a different line. Apply the insert, " +
+                    "re-inspect, then send the rest as a second plan.",
+                    target);
+            }
+        }
+    }
+
+    /// <summary>Splits <c>slide256/shape2/p3</c> into its body key and paragraph index.</summary>
+    private static bool TrySplit(string paraId, out string body, out int index)
+    {
+        body = string.Empty;
+        index = 0;
+        if (string.IsNullOrEmpty(paraId)) return false;
+
+        var marker = paraId.LastIndexOf("/p", StringComparison.Ordinal);
+        if (marker < 0) return false;
+
+        body = paraId.Substring(0, marker);
+        return int.TryParse(paraId.Substring(marker + 2), out index);
+    }
+
     /// <inheritdoc />
     public DocFormat Format => DocFormat.PowerPoint;
 
@@ -58,6 +117,9 @@ public sealed class PowerPointModule : IFormatModule, IBlankDocumentFactory
             new SlideCommentHandler(clock),
             new SlideFormatHandler(),
             new SlideInsertHandler(),
+            new SlideInsertParagraphHandler(),
+            new SlideInsertShapeHandler(),
+            new SlideRemoveShapeHandler(),
             new SlideRemoveHandler(),
             new SlideMoveHandler(),
             new SlideDuplicateHandler()
@@ -68,6 +130,7 @@ public sealed class PowerPointModule : IFormatModule, IBlankDocumentFactory
         _providers = new IPowerPointNodeProvider[]
         {
             new SlideNodeProvider(),
+            new ShapeNodeProvider(),
             new SlideTableNodeProvider(),
             new SlideImageNodeProvider(),
             new SlideCommentNodeProvider()
@@ -85,11 +148,12 @@ public sealed class PowerPointModule : IFormatModule, IBlankDocumentFactory
     /// </summary>
     /// <remarks>
     /// Word assigns <c>w14:paraId</c> here so that an operation which shifts paragraph
-    /// offsets cannot redirect a later operation's target. PowerPoint paragraph ids are
-    /// scoped to a shape and positional only within it, and none of this module's
-    /// operations add or remove paragraphs inside a body, so offsets cannot shift
-    /// mid-plan. Should a paragraph-inserting verb ever be supported here, it will need
-    /// a durable id scheme rather than an empty alias map.
+    /// offsets cannot redirect a later operation's target. DrawingML has no equivalent
+    /// attribute to mint - <c>a:p</c> admits no id and no extension list - so the alias
+    /// map cannot be built and the shift is handled the other way round: the module
+    /// refuses, in <see cref="ValidatePlan"/>, any plan that both inserts a paragraph and
+    /// addresses that same text body positionally. Splitting such a plan in two costs one
+    /// extra round trip; guessing which line the agent meant costs a wrong edit.
     /// </remarks>
     public IReadOnlyDictionary<string, string> Stabilize(IOpenXmlPackage package) =>
         new Dictionary<string, string>(0, StringComparer.Ordinal);
