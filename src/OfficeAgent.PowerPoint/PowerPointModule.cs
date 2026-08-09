@@ -56,7 +56,11 @@ public sealed class PowerPointModule : IFormatModule, IBlankDocumentFactory
             new SlideInsertImageHandler(),
             new SlideRemoveImageHandler(),
             new SlideCommentHandler(clock),
-            new SlideFormatHandler()
+            new SlideFormatHandler(),
+            new SlideInsertHandler(),
+            new SlideRemoveHandler(),
+            new SlideMoveHandler(),
+            new SlideDuplicateHandler()
         }
         .Concat(extraHandlers ?? Enumerable.Empty<IOperationHandler>())
         .ToList();

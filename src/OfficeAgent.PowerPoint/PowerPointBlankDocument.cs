@@ -34,34 +34,49 @@ internal static class PowerPointBlankDocument
             presentationPart.Presentation = new Presentation();
 
             var masterPart = presentationPart.AddNewPart<SlideMasterPart>();
-            var layoutPart = masterPart.AddNewPart<SlideLayoutPart>();
             var themePart = masterPart.AddNewPart<ThemePart>();
 
-            // The layout must point back at its master. Creating the layout under the
-            // master only writes the master→layout relationship; without the reverse one
-            // PowerPoint reports the package as corrupt and offers to repair it, even
-            // though the schema validator is satisfied.
-            layoutPart.AddPart(masterPart);
-
-            layoutPart.SlideLayout = new SlideLayout(
-                new CommonSlideData(Tree()),
-                new ColorMapOverride(new A.MasterColorMapping()))
-            { Type = SlideLayoutValues.Title };
-
+            // The master carries the title and body placeholders every layout inherits
+            // from, so a slide that states only its text still lands where the template
+            // says it should.
             masterPart.SlideMaster = new SlideMaster(
-                new CommonSlideData(Tree()),
+                new CommonSlideData(Tree(
+                    SlideLayouts.Placeholder(2U, "Title Placeholder 1", PlaceholderValues.Title, null,
+                        SlideLayouts.TitleBox, majorFont: true),
+                    SlideLayouts.Placeholder(3U, "Text Placeholder 2", PlaceholderValues.Body, 1U,
+                        SlideLayouts.BodyBox, majorFont: false))),
                 DefaultColorMap(),
-                new SlideLayoutIdList(new SlideLayoutId
-                {
-                    Id = 2147483649U,
-                    RelationshipId = masterPart.GetIdOfPart(layoutPart)
-                }));
+                new SlideLayoutIdList());
 
             themePart.Theme = DefaultTheme();
 
+            // One layout per shape a deck actually needs. A generated slide picks one by
+            // name; without them every new slide would be a bare text box with hand-placed
+            // geometry rather than something the template governs.
+            var layoutParts = new Dictionary<string, SlideLayoutPart>(StringComparer.Ordinal);
+            uint layoutId = 2147483649U;
+            foreach (var definition in SlideLayouts.All)
+            {
+                var layoutPart = masterPart.AddNewPart<SlideLayoutPart>();
+
+                // The layout must point back at its master. Creating the layout under the
+                // master only writes the master→layout relationship; without the reverse
+                // one PowerPoint reports the package as corrupt and offers to repair it,
+                // even though the schema validator is satisfied.
+                layoutPart.AddPart(masterPart);
+                layoutPart.SlideLayout = definition.Build();
+
+                masterPart.SlideMaster.SlideLayoutIdList!.Append(new SlideLayoutId
+                {
+                    Id = layoutId++,
+                    RelationshipId = masterPart.GetIdOfPart(layoutPart)
+                });
+                layoutParts[definition.Name] = layoutPart;
+            }
+
             var slidePart = presentationPart.AddNewPart<SlidePart>();
             slidePart.Slide = new Slide(new CommonSlideData(Tree(TitleShape())));
-            slidePart.AddPart(layoutPart);
+            slidePart.AddPart(layoutParts[SlideLayouts.Title]);
 
             presentationPart.Presentation.Append(
                 new SlideMasterIdList(new SlideMasterId

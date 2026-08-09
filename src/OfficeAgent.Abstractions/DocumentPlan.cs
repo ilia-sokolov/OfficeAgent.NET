@@ -499,3 +499,103 @@ public sealed class InsertImageOp : PlanOperation
 public sealed class RemoveImageOp : PlanOperation
 {
 }
+
+/// <summary>
+/// Specifies where a slide lands relative to the deck or to a reference slide.
+/// </summary>
+public enum SlidePosition
+{
+    /// <summary>Before every existing slide.</summary>
+    Start,
+
+    /// <summary>After every existing slide. The default for a new slide.</summary>
+    End,
+
+    /// <summary>Immediately before the reference slide.</summary>
+    Before,
+
+    /// <summary>Immediately after the reference slide.</summary>
+    After
+}
+
+/// <summary>
+/// Describes one slide to author. The layout supplies the geometry and styling; this
+/// carries only the content that goes into it, so a generated slide looks like one the
+/// deck's own template would produce rather than a hand-placed text box.
+/// </summary>
+public sealed class SlideData
+{
+    /// <summary>
+    /// Gets the layout the slide uses: <c>title</c>, <c>titleAndContent</c> (the default
+    /// when a body is supplied), <c>sectionHeader</c>, <c>titleOnly</c>, or <c>blank</c>.
+    /// Resolved against the layouts the deck's own slide master defines, so a deck built
+    /// from a corporate template keeps that template's appearance.
+    /// </summary>
+    public string? Layout { get; init; }
+
+    /// <summary>Gets the title placeholder's text. Omitted leaves the placeholder empty.</summary>
+    public string? Title { get; init; }
+
+    /// <summary>Gets the body placeholder's paragraphs - one entry per bullet.</summary>
+    public IReadOnlyList<string> Body { get; init; } = Array.Empty<string>();
+
+    /// <summary>Gets the speaker notes. Omitted creates no notes slide.</summary>
+    public string? Notes { get; init; }
+}
+
+/// <summary>
+/// Adds a slide to a presentation. <see cref="SlidePosition.Start"/> and
+/// <see cref="SlidePosition.End"/> need no target; <see cref="SlidePosition.Before"/> and
+/// <see cref="SlidePosition.After"/> take a slide <see cref="NodeAnchor"/> as the
+/// reference point.
+/// </summary>
+public sealed class InsertSlideOp : PlanOperation
+{
+    /// <summary>Gets where the slide lands. The default appends to the deck.</summary>
+    public SlidePosition Position { get; init; } = SlidePosition.End;
+
+    /// <summary>Gets the slide's layout and content.</summary>
+    public SlideData Slide { get; init; } = new();
+}
+
+/// <summary>
+/// Removes the slide addressed by a <see cref="NodeAnchor"/> with <c>Kind="slide"</c>.
+/// The slide, its notes, and its relationships go with it; the layout and master it used
+/// stay, because other slides share them.
+/// </summary>
+public sealed class RemoveSlideOp : PlanOperation
+{
+}
+
+/// <summary>
+/// Reorders the deck by moving the slide addressed by a slide <see cref="NodeAnchor"/>.
+/// Slide ids are durable across reordering, so anchors into any slide keep working.
+/// </summary>
+public sealed class MoveSlideOp : PlanOperation
+{
+    /// <summary>Gets where the slide lands.</summary>
+    public SlidePosition Position { get; init; } = SlidePosition.End;
+
+    /// <summary>
+    /// Gets the reference slide's path (for example <c>slide#257</c>), required for
+    /// <see cref="SlidePosition.Before"/> and <see cref="SlidePosition.After"/>.
+    /// </summary>
+    public string? RelativeTo { get; init; }
+}
+
+/// <summary>
+/// Copies the slide addressed by a slide <see cref="NodeAnchor"/>, content and all. The
+/// copy receives its own slide id and its own shape ids, and by default lands immediately
+/// after the original - what duplicating a slide in PowerPoint does.
+/// </summary>
+public sealed class DuplicateSlideOp : PlanOperation
+{
+    /// <summary>Gets where the copy lands. The default places it after the original.</summary>
+    public SlidePosition Position { get; init; } = SlidePosition.After;
+
+    /// <summary>
+    /// Gets the reference slide's path for <see cref="SlidePosition.Before"/> and
+    /// <see cref="SlidePosition.After"/>. Omitted, the original is the reference.
+    /// </summary>
+    public string? RelativeTo { get; init; }
+}

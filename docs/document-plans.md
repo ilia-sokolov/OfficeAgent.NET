@@ -273,6 +273,29 @@ Update document metadata or a selected document-level setting.
   "name":   "updateOnOpen" }
 ```
 
+### `insertSlide` / `removeSlide` / `moveSlide` / `duplicateSlide`
+
+PowerPoint only; a Word document reports them as `unsupported-operation`. Several `insertSlide` operations in one plan author a whole deck — see [PowerPoint support](powerpoint.md#generating-a-deck) for the layouts and what a slide inherits from them.
+
+```json
+{ "op": "insertSlide",
+  "slide": { "layout": "titleAndContent",
+             "title":  "FY27 Priorities",
+             "body":   [ "Finish the migration", "Rebuild the pipeline" ],
+             "notes":  "Do not commit to a date." } }
+
+{ "op": "moveSlide",
+  "target":     { "kind": "slide", "path": "slide#259" },
+  "position":   "After",
+  "relativeTo": "slide#256" }
+
+{ "op": "duplicateSlide", "target": { "kind": "slide", "path": "slide#259" } }
+
+{ "op": "removeSlide", "target": { "kind": "slide", "path": "slide#258" } }
+```
+
+`position` is `Start`, `End`, `Before`, or `After`. `insertSlide` defaults to `End` and takes its reference slide from `target`; `moveSlide` and `duplicateSlide` target the slide they act on and name the reference in `relativeTo`. `duplicateSlide` defaults to landing immediately after the original.
+
 ### `revision`
 
 Accept or reject tracked revisions.

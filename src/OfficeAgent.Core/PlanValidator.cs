@@ -110,6 +110,12 @@ internal sealed class PlanValidator
             InsertImageOp i => $":{i.Position}",
             InsertTableRowsOp i => $":{i.Position}:{i.RowIndex}",
             InsertTableColumnsOp i => $":{i.Position}:{i.ColumnIndex}",
+            // Slide verbs with Start/End carry no target at all, so they never reach here;
+            // Before/After name a reference slide, and two of them at one reference are as
+            // ambiguously ordered as two row inserts at one index.
+            InsertSlideOp i => $":{i.Position}",
+            MoveSlideOp m => $":{m.Position}:{m.RelativeTo}",
+            DuplicateSlideOp d => $":{d.Position}:{d.RelativeTo}",
             _ => string.Empty
         };
         return $"{operation.GetType().Name}:{anchor}{slot}";

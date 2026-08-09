@@ -1,5 +1,6 @@
 using DocumentFormat.OpenXml;
 using DocumentFormat.OpenXml.Packaging;
+using DocumentFormat.OpenXml.Presentation;
 using DocumentFormat.OpenXml.Validation;
 using Microsoft.Extensions.DependencyInjection;
 using OfficeAgent.Abstractions;
@@ -36,9 +37,20 @@ public class PowerPointCreateTests
         // A deck needs a master, a layout, and a theme to open at all.
         var presentation = document.PresentationPart!;
         var master = Assert.Single(presentation.SlideMasterParts);
-        Assert.Single(master.SlideLayoutParts);
         Assert.NotNull(master.ThemePart);
         Assert.Single(presentation.SlideParts);
+
+        // The layouts insertSlide names have to exist in the deck it creates, or a
+        // generated slide would silently fall back to whichever layout happened to be
+        // first and land with the wrong geometry.
+        var types = master.SlideLayoutParts.Select(p => p.SlideLayout?.Type?.Value).ToList();
+        Assert.Contains(SlideLayoutValues.Title, types);
+        Assert.Contains(SlideLayoutValues.Object, types);
+        Assert.Contains(SlideLayoutValues.SectionHeader, types);
+        Assert.Contains(SlideLayoutValues.TitleOnly, types);
+        Assert.Contains(SlideLayoutValues.Blank, types);
+        // Every layout must point back at its master, or PowerPoint offers to repair.
+        Assert.All(master.SlideLayoutParts, p => Assert.NotNull(p.SlideMasterPart));
     }
 
     [Fact]

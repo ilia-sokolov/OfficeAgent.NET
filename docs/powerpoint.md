@@ -53,10 +53,15 @@ paragraph-inserting verb would need a durable id scheme first — see
 | `insertImage` / `removeImage` | slide / image node | `base64Bytes` or a provider-backed `imageDocumentId`; `altText` is carried through |
 | `comment` (add) | slide node | |
 | `comment` (resolve) | comment node | `"action": "Resolve"` |
+| `insertSlide` | none, or slide node | Adds a slide from one of the deck's layouts. `position` defaults to `End`; `Before`/`After` take a slide target |
+| `removeSlide` | slide node | Takes the slide's notes with it. Refused when it would empty the deck |
+| `moveSlide` | slide node | `position` + `relativeTo` |
+| `duplicateSlide` | slide node | Copy gets its own slide id, shape ids, and notes; lands after the original by default |
 
 Verbs the module does not implement — `insert`, `fill`, `setProperty`,
 `revision`, `copyStyles`, `clearStyles` — are reported per-operation as
-`unsupported-operation`, and nothing in the plan is applied.
+`unsupported-operation`, and nothing in the plan is applied. The four slide verbs
+run the other way: a Word document reports *them* as unsupported.
 
 ## Comments
 
@@ -83,9 +88,9 @@ var deck = await client.CreateAsync("workspace", "review.pptx");
 ```
 
 A new deck is one slide with an empty title placeholder, addressable as
-`slide256/shape2/p0`, over the slide master, layout, and theme a presentation
-needs in order to open at all. That anchor is the PowerPoint counterpart of a
-blank Word document's `auto-0000`.
+`slide256/shape2/p0`, over the slide master, theme, and the five layouts
+[Generating a deck](#generating-a-deck) names. That anchor is the PowerPoint
+counterpart of a blank Word document's `auto-0000`.
 
 Fill it with `changeText` and an empty `expect`:
 
@@ -128,9 +133,65 @@ redirect a later operation's target. DrawingML has no equivalent identifier to
 mint, and none of the verbs above add or remove paragraphs inside a text body, so
 offsets cannot shift mid-plan.
 
+The slide verbs do not change that, because a paragraph id names its slide by the
+durable id from `p:sldIdLst`, not by the slide's position:
+
+- `insertSlide` and `duplicateSlide` mint an id above every existing one, so they
+  cannot collide with an anchor already issued.
+- `moveSlide` rewrites only the order of `p:sldIdLst`. Every id, and therefore
+  every anchor, is untouched — which is the whole reason anchors key on the id.
+- `removeSlide` invalidates anchors into the slide it removes, and only those.
+  An operation later in the same plan that targets the removed slide fails with
+  `anchor-not-found` at apply time and the whole plan is rolled back.
+
 **If a paragraph-inserting verb is added to this module, that reasoning stops
 holding** and a durable id scheme is required first — an empty alias map would
 silently let one operation retarget another.
+
+## Generating a deck
+
+Several `insertSlide` operations in one plan author a deck end to end, so
+`create_document` plus an initial plan produces a finished presentation in a
+single call:
+
+```jsonc
+[ { "op": "changeText",
+    "target": { "paraId": "slide256/shape2/p0", "expect": "" },
+    "with": "FY27 Operating Plan", "mode": "Direct" },
+  { "op": "insertSlide",
+    "slide": { "layout": "titleAndContent",
+               "title": "FY27 Priorities",
+               "body": [ "Finish the billing migration by Q2",
+                         "Rebuild the APAC pipeline" ],
+               "notes": "Do not commit to a date beyond Q2." } },
+  { "op": "insertSlide",
+    "slide": { "layout": "sectionHeader", "title": "Financials" } } ]
+```
+
+| Layout | Placeholders |
+| --- | --- |
+| `title` | centred title + subtitle — the opening slide |
+| `titleAndContent` | title + bulleted body. The default when `body` is supplied |
+| `sectionHeader` | title + short standfirst |
+| `titleOnly` | title. The default when only a `title` is supplied |
+| `blank` | none. The default when neither is supplied |
+
+`layout` is resolved against the layouts **the deck itself defines**, matched by
+PresentationML layout type. A deck created here ships all five; a deck built from
+a corporate template is matched against that template's layouts, so its styling
+wins. A layout the deck does not define falls back to the deck's first rather
+than failing — a slide in the wrong layout is recoverable, a refused edit on
+someone's template is just an obstacle.
+
+An inserted slide carries no geometry of its own: its shapes name the layout's
+placeholders and leave `p:spPr` empty, so position, size, font, and bullet
+styling are inherited. Restyling the layout later restyles the slide, which would
+not happen had the coordinates been baked in at creation time.
+
+**A slide added by a plan cannot be edited by a later operation in that same
+plan** — its slide id does not exist until the plan is applied, and `find`
+targets resolve against the pre-edit document. Set its text through
+`insertSlide`'s own `title`/`body`/`notes`, or apply, re-inspect, and edit.
 
 ## One plan, one operation per target
 
@@ -154,7 +215,7 @@ already resized.
 
 ## Known gaps
 
-- Slide-level verbs (add, delete, reorder, duplicate slides) are not implemented.
 - `format` does not reach shape fills, outlines, or table styles; it covers run and paragraph formatting plus image size.
+- A slide's content is set when it is inserted; there is no verb that adds a shape to an existing slide beyond a table or an image.
 - Legacy `p:cm` comments are neither read nor written.
 - Charts and SmartArt are not addressable.

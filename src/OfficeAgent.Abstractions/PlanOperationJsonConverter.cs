@@ -43,7 +43,11 @@ public sealed class PlanOperationJsonConverter : JsonConverter<PlanOperation>
             ["copyStyles"] = typeof(CopyStylesOp),
             ["clearStyles"] = typeof(ClearStylesOp),
             ["insertImage"] = typeof(InsertImageOp),
-            ["removeImage"] = typeof(RemoveImageOp)
+            ["removeImage"] = typeof(RemoveImageOp),
+            ["insertSlide"] = typeof(InsertSlideOp),
+            ["removeSlide"] = typeof(RemoveSlideOp),
+            ["moveSlide"] = typeof(MoveSlideOp),
+            ["duplicateSlide"] = typeof(DuplicateSlideOp)
         };
 
     private static string KnownVerbs => string.Join(", ", ByVerb.Keys.OrderBy(v => v, StringComparer.Ordinal));
