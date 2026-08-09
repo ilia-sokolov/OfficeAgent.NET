@@ -30,6 +30,7 @@ than to a document-wide position.
 | Table node | `table#{slideId}/{shapeId}` | |
 | Image node | `image#{slideId}/{shapeId}` | |
 | Comment node | `comment#{slideId}/{commentId}` | |
+| Media node | `media#{slideId}/{shapeId}` | An embedded clip; remove it with `removeShape` on the matching shape path |
 | Section node | `section#{guid}` | Named slide groups |
 | Slot | a shape name, e.g. `ClientName` | What `fill` targets; qualified `slide256/ClientName` when the name repeats |
 
@@ -63,6 +64,8 @@ guessing which line was meant; see [Anchor stability](#anchor-stability).
 | `copyStyles` | paragraph | Copies direct `a:pPr`/`a:rPr` from a source paragraph. `scope`: `run`, `paragraph`, `all` |
 | `clearStyles` | paragraph | Strips direct formatting so the layout's styling shows through again. Keeps the language tag, which is not formatting |
 | `section` | slide node (Add) / section node (Rename, Remove) | Named slide groups. Removing a section keeps its slides |
+| `headerFooter` | none (every slide), or slide node | Footer text, slide number, date. `showFooter: false` removes the placeholder rather than blanking it. A slide has **no header** — see below |
+| `insertMedia` | slide node | Embedded video or audio. `mediaType` must agree with `kind` |
 | `insert` | paragraph | Adds a bullet or line beside an existing one. Inherits the neighbour's bullet and run styling; `level` (0-8) sets the depth. `styleId` is refused - a deck has no style table |
 | `insertShape` | slide node | A free-standing text box with its own `xPx`/`yPx`/`widthPx`/`heightPx` |
 | `removeShape` | shape node | Any shape - text box, table frame, picture. Removing a *placeholder* is refused |
@@ -72,8 +75,9 @@ guessing which line was meant; see [Anchor stability](#anchor-stability).
 | `duplicateSlide` | slide node | Copy gets its own slide id, shape ids, and notes; lands after the original by default |
 
 Verbs the module does not implement — `setProperty` and `revision` — are reported per-operation as
-`unsupported-operation`, and nothing in the plan is applied. The slide, shape and
-section verbs run the other way: a Word document reports *them* as unsupported.
+`unsupported-operation`, and nothing in the plan is applied. The slide, shape,
+section, header-footer and media verbs run the other way: a Word document reports
+*them* as unsupported.
 
 ## Comments
 
@@ -138,6 +142,63 @@ the plan with `contract-mismatch`.
   only.
 - **Slide layouts and masters.** Untouched. New shapes inherit from the layout
   the slide already points at.
+
+## Footer, slide number, and date
+
+```jsonc
+[ { "op": "headerFooter",
+    "footer": "Confidential — internal only",
+    "showSlideNumber": true,
+    "showDateTime": true } ]
+```
+
+No target applies it to every slide, which is what PowerPoint's *Apply to All*
+does; a slide target changes only that slide, which is how the title slide is
+kept clean. `showFooter: false` **removes** the placeholder rather than blanking
+it — an empty placeholder still shows PowerPoint's editing prompt, so a "hidden"
+footer left in place would stay visible.
+
+The slide number is written as an `a:fld` field, not as text, so PowerPoint
+renumbers it when slides move. The date is a field too unless `dateTime` supplies
+a fixed string — that is the difference between the dialog's *Update
+automatically* and *Fixed*.
+
+Each item is a placeholder inheriting its position from the layout, so the module
+first declares the three on the master and on every layout that lacks them. A
+template that already defines them keeps its own placement.
+
+**A slide has no header.** PresentationML carries a header flag on `p:hf`, but it
+governs notes and handout pages — which is why PowerPoint greys the box out on
+the Slide tab. A `header` is refused rather than written as a field nothing
+renders.
+
+## Embedded video and audio
+
+```jsonc
+[ { "op": "insertMedia",
+    "target": { "kind": "slide", "path": "slide#257" },
+    "kind": "Video", "mediaType": "mp4",
+    "base64Bytes": "AAAAIGZ0eXBpc29t…",
+    "widthPx": 480, "heightPx": 270,
+    "posterBase64": "iVBORw0KGgo…", "altText": "Product walkthrough" } ]
+```
+
+`mediaType` is `mp4`, `m4v`, `mov`, `wmv`, `avi` for video and `mp3`, `m4a`,
+`wav`, `wma` for audio. It must agree with `kind`: the element PowerPoint reads is
+chosen by the declared kind, not by the bytes, so a mismatch would produce a deck
+that silently plays nothing and is refused instead.
+
+The bytes travel **inside** the package, so the deck still plays when it is mailed
+on. That takes three relationships on one `p:pic`: the media part, a video or
+audio reference to it, and a poster image for the frame. The `p14:media`
+extension is what marks the clip embedded rather than linked; without it
+PowerPoint treats the reference as a link to a file that is not there. Supply
+`posterBase64` for the frame shown before playback — PowerPoint does not generate
+one from the media.
+
+Media is also reachable as `image#…`-style content: clips appear in
+`inspect_document.nodes` under kind `media`, and are removed with `removeShape`
+on the matching `shape#…` path.
 
 ## Sections
 

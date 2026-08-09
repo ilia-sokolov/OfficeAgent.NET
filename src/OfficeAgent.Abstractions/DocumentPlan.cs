@@ -698,3 +698,101 @@ public sealed class SectionOp : PlanOperation
     /// <summary>Gets the section name, for <see cref="SectionAction.Add"/> and <see cref="SectionAction.Rename"/>.</summary>
     public string Name { get; init; } = string.Empty;
 }
+
+/// <summary>
+/// Configures the running items along a slide's edge: the footer text, the slide number,
+/// and the date. Targeting a slide node configures that slide; omitting the target
+/// configures every slide, which is what PowerPoint's "Apply to All" does.
+/// </summary>
+/// <remarks>
+/// A slide has no header. PresentationML carries a header flag on <c>p:hf</c>, but it
+/// applies to notes and handout pages only - PowerPoint's own dialog greys it out on the
+/// Slide tab - so the module refuses one rather than writing a field nothing renders.
+/// </remarks>
+public sealed class HeaderFooterOp : PlanOperation
+{
+    /// <summary>
+    /// Gets the footer text. An empty string clears it. Leaving this
+    /// <see langword="null"/> keeps whatever the slide already shows.
+    /// </summary>
+    public string? Footer { get; init; }
+
+    /// <summary>Gets whether the footer is displayed.</summary>
+    public bool? ShowFooter { get; init; }
+
+    /// <summary>Gets whether the slide number is displayed.</summary>
+    public bool? ShowSlideNumber { get; init; }
+
+    /// <summary>Gets whether the date is displayed.</summary>
+    public bool? ShowDateTime { get; init; }
+
+    /// <summary>
+    /// Gets fixed date text. When <see langword="null"/> and the date is shown, the slide
+    /// carries a field PowerPoint refreshes on open instead - the "update automatically"
+    /// option, which is what a deck presented more than once wants.
+    /// </summary>
+    public string? DateTime { get; init; }
+}
+
+/// <summary>Distinguishes the two kinds of timeline media a slide can carry.</summary>
+public enum MediaKind
+{
+    /// <summary>A movie, shown in a frame on the slide.</summary>
+    Video,
+
+    /// <summary>A sound, shown as a speaker icon.</summary>
+    Audio
+}
+
+/// <summary>
+/// Embeds video or audio in a slide. The bytes travel inside the package, so the deck
+/// still plays when it is mailed on - a linked file would not.
+/// </summary>
+/// <remarks>
+/// Supply the media inline as <see cref="Base64Bytes"/>, or indirectly by the opaque
+/// <see cref="MediaDocumentId"/> of a document already registered with a provider
+/// connection. Exactly one of the two routes must be set, matching how
+/// <see cref="InsertImageOp"/> takes an image.
+/// </remarks>
+public sealed class InsertMediaOp : PlanOperation
+{
+    /// <summary>Gets whether this is video or audio.</summary>
+    public MediaKind Kind { get; init; } = MediaKind.Video;
+
+    /// <summary>Gets the media bytes, base64-encoded.</summary>
+    public string? Base64Bytes { get; init; }
+
+    /// <summary>Gets the connection holding the media document, used with <see cref="MediaDocumentId"/>.</summary>
+    public string? MediaConnectionId { get; init; }
+
+    /// <summary>Gets the opaque id of a registered document holding the media bytes.</summary>
+    public string? MediaDocumentId { get; init; }
+
+    /// <summary>
+    /// Gets the file extension the bytes are in - <c>mp4</c>, <c>m4a</c>, <c>mp3</c>,
+    /// <c>wav</c>. It selects the media type the package declares, which is how PowerPoint
+    /// decides whether it can play the stream at all.
+    /// </summary>
+    public string MediaType { get; init; } = "mp4";
+
+    /// <summary>
+    /// Gets the poster image shown before playback, base64-encoded PNG. Omitted, the frame
+    /// is a plain placeholder; PowerPoint does not generate one from the media itself.
+    /// </summary>
+    public string? PosterBase64 { get; init; }
+
+    /// <summary>Gets the distance in pixels at 96 DPI from the slide's left edge.</summary>
+    public int? XPx { get; init; }
+
+    /// <summary>Gets the distance in pixels at 96 DPI from the slide's top edge.</summary>
+    public int? YPx { get; init; }
+
+    /// <summary>Gets the frame width in pixels at 96 DPI. Default 480.</summary>
+    public int WidthPx { get; init; } = 480;
+
+    /// <summary>Gets the frame height in pixels at 96 DPI. Default 270.</summary>
+    public int HeightPx { get; init; } = 270;
+
+    /// <summary>Gets optional alt text describing the media for accessibility.</summary>
+    public string? AltText { get; init; }
+}

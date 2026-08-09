@@ -275,6 +275,24 @@ Update document metadata or a selected document-level setting.
   "name":   "updateOnOpen" }
 ```
 
+### `headerFooter` / `insertMedia`
+
+PowerPoint only; see [PowerPoint support](powerpoint.md#footer-slide-number-and-date) and [embedded media](powerpoint.md#embedded-video-and-audio).
+
+```json
+{ "op": "headerFooter",
+  "footer": "Confidential", "showSlideNumber": true, "showDateTime": true }
+
+{ "op": "insertMedia",
+  "target":      { "kind": "slide", "path": "slide#257" },
+  "kind":        "Video",
+  "mediaType":   "mp4",
+  "base64Bytes": "AAAAIGZ0eXBpc29t…",
+  "widthPx": 480, "heightPx": 270 }
+```
+
+`headerFooter` with no target applies to every slide. A slide has no header - that is a notes and handout concept - so one is refused rather than written where nothing renders it.
+
 ### `section`
 
 PowerPoint only. Named slide groups; see [PowerPoint support](powerpoint.md#sections).

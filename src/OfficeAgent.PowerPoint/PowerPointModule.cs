@@ -124,6 +124,8 @@ public sealed class PowerPointModule : IFormatModule, IBlankDocumentFactory, IPl
             new SlideCopyStylesHandler(),
             new SlideClearStylesHandler(),
             new SectionHandler(),
+            new SlideHeaderFooterHandler(),
+            new SlideInsertMediaHandler(),
             new SlideRemoveHandler(),
             new SlideMoveHandler(),
             new SlideDuplicateHandler()
@@ -136,6 +138,7 @@ public sealed class PowerPointModule : IFormatModule, IBlankDocumentFactory, IPl
             new SlideNodeProvider(),
             new ShapeNodeProvider(),
             new SectionNodeProvider(),
+            new SlideMediaNodeProvider(),
             new SlideTableNodeProvider(),
             new SlideImageNodeProvider(),
             new SlideCommentNodeProvider()
