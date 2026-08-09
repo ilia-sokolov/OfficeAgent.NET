@@ -52,7 +52,9 @@ public sealed class PlanOperationJsonConverter : JsonConverter<PlanOperation>
             ["removeShape"] = typeof(RemoveShapeOp),
             ["section"] = typeof(SectionOp),
             ["headerFooter"] = typeof(HeaderFooterOp),
-            ["insertMedia"] = typeof(InsertMediaOp)
+            ["insertMedia"] = typeof(InsertMediaOp),
+            ["transition"] = typeof(TransitionOp),
+            ["animate"] = typeof(AnimateOp)
         };
 
     private static string KnownVerbs => string.Join(", ", ByVerb.Keys.OrderBy(v => v, StringComparer.Ordinal));

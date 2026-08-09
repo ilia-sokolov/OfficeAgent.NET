@@ -120,6 +120,9 @@ internal sealed class PlanValidator
             InsertSlideOp i => $":{i.Position}",
             MoveSlideOp m => $":{m.Position}:{m.RelativeTo}",
             DuplicateSlideOp d => $":{d.Position}:{d.RelativeTo}",
+            // A shape routinely carries several effects in sequence - that is what the
+            // trigger orders - so only an identical one twice is a genuine duplicate.
+            AnimateOp a => $":{a.Effect}:{a.Kind}:{a.Trigger}",
             _ => string.Empty
         };
         return $"{operation.GetType().Name}:{anchor}{slot}";

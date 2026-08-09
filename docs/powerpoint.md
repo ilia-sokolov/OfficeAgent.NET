@@ -66,6 +66,8 @@ guessing which line was meant; see [Anchor stability](#anchor-stability).
 | `section` | slide node (Add) / section node (Rename, Remove) | Named slide groups. Removing a section keeps its slides |
 | `headerFooter` | none (every slide), or slide node | Footer text, slide number, date. `showFooter: false` removes the placeholder rather than blanking it. A slide has **no header** — see below |
 | `insertMedia` | slide node | Embedded video or audio. `mediaType` must agree with `kind` |
+| `transition` | none (every slide), or slide node | The effect played when the slide arrives, plus auto-advance. `none` removes it |
+| `animate` | shape node | Entrance or exit effect. `trigger` places it in the slide's sequence; `none` removes the shape's animations |
 | `insert` | paragraph | Adds a bullet or line beside an existing one. Inherits the neighbour's bullet and run styling; `level` (0-8) sets the depth. `styleId` is refused - a deck has no style table |
 | `insertShape` | slide node | A free-standing text box with its own `xPx`/`yPx`/`widthPx`/`heightPx` |
 | `removeShape` | shape node | Any shape - text box, table frame, picture. Removing a *placeholder* is refused |
@@ -76,8 +78,8 @@ guessing which line was meant; see [Anchor stability](#anchor-stability).
 
 Verbs the module does not implement — `setProperty` and `revision` — are reported per-operation as
 `unsupported-operation`, and nothing in the plan is applied. The slide, shape,
-section, header-footer and media verbs run the other way: a Word document reports
-*them* as unsupported.
+section, header-footer, media, transition and animation verbs run the other way:
+a Word document reports *them* as unsupported.
 
 ## Comments
 
@@ -199,6 +201,55 @@ one from the media.
 Media is also reachable as `image#…`-style content: clips appear in
 `inspect_document.nodes` under kind `media`, and are removed with `removeShape`
 on the matching `shape#…` path.
+
+## Transitions and animations
+
+```jsonc
+[ { "op": "transition", "effect": "push", "direction": "up", "durationMs": 700 },
+  { "op": "animate",
+    "target": { "kind": "shape", "path": "shape#257/2" },
+    "effect": "fade", "kind": "Entrance", "trigger": "OnClick", "durationMs": 600 } ]
+```
+
+An untargeted `transition` applies to every slide - PowerPoint's *Apply To All*.
+`advanceAfterMs` makes the deck self-running and `advanceOnClick: false` stops a
+click skipping ahead. `p:transition` must sit between `p:clrMapOvr` and
+`p:timing`, so it is inserted at that position rather than appended.
+
+### What the trigger means
+
+A slide's animations are a four-level time-node tree, not a list, and the trigger
+decides which level an effect joins:
+
+| `trigger` | Where it lands | Effect |
+| --- | --- | --- |
+| `OnClick` | a new click step in the main sequence | waits for a click |
+| `WithPrevious` | the previous effect's own group | runs alongside it |
+| `AfterPrevious` | a new group inside the current click | runs when the previous one ends |
+
+Effects play in the order the operations are sent. Every `p:cTn/@id` must be
+unique within the slide, so the tree is renumbered after each change - a
+high-water mark would drift the moment an effect was removed, and duplicate ids
+are the classic reason a hand-built timing tree opens as "repaired".
+
+### Available effects
+
+`appear`, `fade`, `wipe`, `blinds`, `checkerboard`, `circle`, `diamond`,
+`dissolve`, `plus`, `randomBar`, `split`, `wedge`, `wheel`, `box` - each as an
+`Entrance` or an `Exit`.
+
+These are the effects PresentationML expresses as a filtered `p:animEffect`.
+**Fly-in, zoom, grow and the motion paths are not available**: they need
+interpolated position or scale properties rather than a filter, and are refused
+by name rather than approximated with something that looks different from what
+was asked for.
+
+Transitions have a wider vocabulary - `cut`, `fade`, `push`, `wipe`, `split`,
+`dissolve`, `checker`, `blinds`, `circle`, `diamond`, `plus`, `wedge`, `wheel`,
+`randomBar`, `zoom`, `newsflash`, `comb`, `strips`, `cover`, `pull`, `random`.
+`direction` (`up`/`down`/`left`/`right`) applies to `push` and `wipe`; `cover`
+and `pull` take an eight-way direction the SDK does not surface as a typed enum,
+so they run in their default direction.
 
 ## Sections
 

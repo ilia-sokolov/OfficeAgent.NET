@@ -293,6 +293,23 @@ PowerPoint only; see [PowerPoint support](powerpoint.md#footer-slide-number-and-
 
 `headerFooter` with no target applies to every slide. A slide has no header - that is a notes and handout concept - so one is refused rather than written where nothing renders it.
 
+### `transition` / `animate`
+
+PowerPoint only; see [transitions and animations](powerpoint.md#transitions-and-animations).
+
+```json
+{ "op": "transition", "effect": "push", "direction": "up", "durationMs": 700 }
+
+{ "op": "animate",
+  "target":     { "kind": "shape", "path": "shape#257/2" },
+  "effect":     "fade",
+  "kind":       "Entrance",
+  "trigger":    "OnClick",
+  "durationMs": 600 }
+```
+
+An untargeted `transition` applies to every slide. `trigger` is `OnClick`, `WithPrevious` or `AfterPrevious`, and effects play in the order the operations are sent. `effect: "none"` removes a transition or a shape's animations. Fly-in, zoom, grow and motion paths are refused - they need interpolated properties rather than a filter.
+
 ### `section`
 
 PowerPoint only. Named slide groups; see [PowerPoint support](powerpoint.md#sections).

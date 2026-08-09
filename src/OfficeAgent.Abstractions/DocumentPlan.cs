@@ -796,3 +796,97 @@ public sealed class InsertMediaOp : PlanOperation
     /// <summary>Gets optional alt text describing the media for accessibility.</summary>
     public string? AltText { get; init; }
 }
+
+/// <summary>
+/// Sets the transition played when a slide arrives, and how the deck advances off it.
+/// Targeting a slide node sets that slide; omitting the target sets every slide, which is
+/// what PowerPoint's "Apply To All" does.
+/// </summary>
+public sealed class TransitionOp : PlanOperation
+{
+    /// <summary>
+    /// Gets the effect name - <c>none</c>, <c>cut</c>, <c>fade</c>, <c>push</c>,
+    /// <c>wipe</c>, <c>split</c>, <c>dissolve</c>, <c>checker</c>, <c>blinds</c>,
+    /// <c>circle</c>, <c>diamond</c>, <c>plus</c>, <c>wedge</c>, <c>wheel</c>,
+    /// <c>randomBar</c>, <c>zoom</c>, <c>newsflash</c>, <c>comb</c>, <c>strips</c>,
+    /// <c>cover</c>, <c>pull</c>, <c>random</c>. <c>none</c> removes the transition.
+    /// </summary>
+    public string Effect { get; init; } = "fade";
+
+    /// <summary>
+    /// Gets the direction for the effects that take one (<c>push</c>, <c>wipe</c>,
+    /// <c>cover</c>, <c>pull</c>, <c>comb</c>, <c>strips</c>): <c>up</c>, <c>down</c>,
+    /// <c>left</c>, <c>right</c>. Ignored by the others.
+    /// </summary>
+    public string? Direction { get; init; }
+
+    /// <summary>Gets how long the transition runs, in milliseconds.</summary>
+    public int? DurationMs { get; init; }
+
+    /// <summary>Gets whether a click advances the slide. Defaults to PowerPoint's own <see langword="true"/>.</summary>
+    public bool? AdvanceOnClick { get; init; }
+
+    /// <summary>
+    /// Gets the automatic advance delay in milliseconds. Set it for a self-running deck;
+    /// omit it to leave advancing to the presenter.
+    /// </summary>
+    public int? AdvanceAfterMs { get; init; }
+}
+
+/// <summary>Specifies what starts an animation relative to the one before it.</summary>
+public enum AnimationTrigger
+{
+    /// <summary>Waits for a click. Each of these is its own step in the slide's sequence.</summary>
+    OnClick,
+
+    /// <summary>Runs at the same time as the previous effect.</summary>
+    WithPrevious,
+
+    /// <summary>Runs when the previous effect finishes, with no click.</summary>
+    AfterPrevious
+}
+
+/// <summary>Distinguishes an effect that brings a shape on from one that takes it off.</summary>
+public enum AnimationKind
+{
+    /// <summary>The shape appears.</summary>
+    Entrance,
+
+    /// <summary>The shape leaves.</summary>
+    Exit
+}
+
+/// <summary>
+/// Animates a shape, addressed by a <see cref="NodeAnchor"/> with <c>Kind="shape"</c>.
+/// Effects are appended to the slide's sequence in the order the operations run, which is
+/// the order they play.
+/// </summary>
+/// <remarks>
+/// The supported effects are the ones PresentationML expresses as a filtered
+/// <c>p:animEffect</c>: they need no motion path or scaling, so the whole effect is one
+/// declaration rather than a hand-built set of interpolated properties. Fly-in, zoom, grow
+/// and motion paths are refused rather than approximated with something that looks
+/// different from what was asked for.
+/// </remarks>
+public sealed class AnimateOp : PlanOperation
+{
+    /// <summary>
+    /// Gets the effect name - <c>none</c>, <c>appear</c>, <c>fade</c>, <c>wipe</c>,
+    /// <c>blinds</c>, <c>checkerboard</c>, <c>circle</c>, <c>diamond</c>, <c>dissolve</c>,
+    /// <c>plus</c>, <c>randomBar</c>, <c>split</c>, <c>wedge</c>, <c>wheel</c>,
+    /// <c>box</c>. <c>none</c> removes the shape's animations.
+    /// </summary>
+    public string Effect { get; init; } = "fade";
+
+    /// <summary>Gets whether the shape is arriving or leaving.</summary>
+    public AnimationKind Kind { get; init; } = AnimationKind.Entrance;
+
+    /// <summary>Gets what starts the effect.</summary>
+    public AnimationTrigger Trigger { get; init; } = AnimationTrigger.OnClick;
+
+    /// <summary>Gets how long the effect runs, in milliseconds. Default 500.</summary>
+    public int? DurationMs { get; init; }
+
+    /// <summary>Gets how long the effect waits after its trigger, in milliseconds.</summary>
+    public int? DelayMs { get; init; }
+}
