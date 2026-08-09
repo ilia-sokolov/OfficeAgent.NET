@@ -158,8 +158,15 @@ public sealed class ApplyContext
     /// Translates a plan anchor id through the stabilization alias map. Returns the input
     /// unchanged when no alias exists, so anchors that already use stable ids pass through.
     /// </summary>
+    /// <remarks>
+    /// A null id is passed straight back rather than throwing. JSON may carry an explicit
+    /// <c>"paraId": null</c>, and a dictionary lookup on it raises
+    /// <c>Value cannot be null. (Parameter 'key')</c> - an error naming nothing the caller
+    /// can act on. Returning it lets the handler resolve nothing and report
+    /// <c>anchor-not-found</c> against the anchor that is actually wrong.
+    /// </remarks>
     public string ResolveAlias(string anchorId) =>
-        _aliases.TryGetValue(anchorId, out var stable) ? stable : anchorId;
+        anchorId is not null && _aliases.TryGetValue(anchorId, out var stable) ? stable : anchorId;
 
     private static readonly IReadOnlyDictionary<string, string> EmptyAliases =
         new Dictionary<string, string>(0);

@@ -22,11 +22,20 @@ internal static class HeaderFooterLayout
     private const long Row = 6356350L;
     private const long Height = 365125L;
 
-    private static readonly (PlaceholderValues Type, string Name, long X, long Cx, A.TextAlignmentTypeValues Align)[] Items =
+    /// <summary>
+    /// The three running items, with the placeholder indices PowerPoint's own masters use.
+    /// </summary>
+    /// <remarks>
+    /// The index is not decoration: a slide's placeholder is matched to the layout's by
+    /// <em>type and index together</em>. Omitting it makes PowerPoint fall back to the
+    /// first placeholder on the layout - the title - so the footer, date and slide number
+    /// all inherit the title's box and render stacked on top of it.
+    /// </remarks>
+    private static readonly (PlaceholderValues Type, uint Index, string Name, long X, long Cx, A.TextAlignmentTypeValues Align)[] Items =
     {
-        (PlaceholderValues.DateAndTime, "Date Placeholder", 838200L, 2743200L, A.TextAlignmentTypeValues.Left),
-        (PlaceholderValues.Footer, "Footer Placeholder", 4038600L, 4114800L, A.TextAlignmentTypeValues.Center),
-        (PlaceholderValues.SlideNumber, "Slide Number Placeholder", 8610600L, 2743200L, A.TextAlignmentTypeValues.Right)
+        (PlaceholderValues.DateAndTime, 10U, "Date Placeholder", 838200L, 2743200L, A.TextAlignmentTypeValues.Left),
+        (PlaceholderValues.Footer, 11U, "Footer Placeholder", 4038600L, 4114800L, A.TextAlignmentTypeValues.Center),
+        (PlaceholderValues.SlideNumber, 12U, "Slide Number Placeholder", 8610600L, 2743200L, A.TextAlignmentTypeValues.Right)
     };
 
     /// <summary>Declares the three placeholders on the master and every layout that lacks them.</summary>
@@ -68,13 +77,13 @@ internal static class HeaderFooterLayout
         return highest + 1;
     }
 
-    private static Shape Placeholder(uint shapeId, (PlaceholderValues Type, string Name, long X, long Cx, A.TextAlignmentTypeValues Align) item) =>
+    private static Shape Placeholder(uint shapeId, (PlaceholderValues Type, uint Index, string Name, long X, long Cx, A.TextAlignmentTypeValues Align) item) =>
         new(
             new NonVisualShapeProperties(
                 new NonVisualDrawingProperties { Id = shapeId, Name = item.Name },
                 new NonVisualShapeDrawingProperties(new A.ShapeLocks { NoGrouping = true }),
                 new ApplicationNonVisualDrawingProperties(
-                    new PlaceholderShape { Type = item.Type, Size = PlaceholderSizeValues.Quarter })),
+                    new PlaceholderShape { Type = item.Type, Index = item.Index, Size = PlaceholderSizeValues.Quarter })),
             new ShapeProperties(new A.Transform2D(
                 new A.Offset { X = item.X, Y = Row },
                 new A.Extents { Cx = item.Cx, Cy = Height })),
@@ -89,14 +98,16 @@ internal static class HeaderFooterLayout
     /// <summary>The slide-side shape, which carries only the placeholder reference.</summary>
     public static Shape SlideShape(uint shapeId, PlaceholderValues type)
     {
-        var name = Items.First(i => i.Type == type).Name;
+        var item = Items.First(i => i.Type == type);
 
         return new Shape(
             new NonVisualShapeProperties(
-                new NonVisualDrawingProperties { Id = shapeId, Name = name },
+                new NonVisualDrawingProperties { Id = shapeId, Name = item.Name },
                 new NonVisualShapeDrawingProperties(new A.ShapeLocks { NoGrouping = true }),
+                // The index must match the layout's, or PowerPoint matches on type alone,
+                // finds the title first, and the item inherits the title's box.
                 new ApplicationNonVisualDrawingProperties(
-                    new PlaceholderShape { Type = type, Size = PlaceholderSizeValues.Quarter })),
+                    new PlaceholderShape { Type = type, Index = item.Index, Size = PlaceholderSizeValues.Quarter })),
             // Empty on purpose: geometry comes from the layout.
             new ShapeProperties(),
             new TextBody(new A.BodyProperties(), new A.ListStyle()));

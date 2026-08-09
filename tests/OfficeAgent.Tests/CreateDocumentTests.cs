@@ -18,6 +18,61 @@ public class CreateDocumentTests
     private const string BlankAnchor = "auto-0000";
 
     [Fact]
+    public void A_created_document_defines_the_styles_its_own_verbs_name()
+    {
+        var blank = new WordModule().CreateBlank();
+
+        using var stream = new MemoryStream(blank);
+        using var document = WordprocessingDocument.Open(stream, isEditable: false);
+        var styles = document.MainDocumentPart!.StyleDefinitionsPart?.Styles;
+
+        // styleId writes a w:pStyle *reference*. With no definition to resolve, Word renders
+        // the paragraph as Normal - the plan commits, the reference is in the file, and the
+        // document looks nothing like what was asked for.
+        Assert.NotNull(styles);
+        var ids = styles!.Elements<Style>().Select(s => s.StyleId?.Value).ToList();
+        Assert.Contains("Normal", ids);
+        Assert.Contains("Heading1", ids);
+        Assert.Contains("Heading2", ids);
+        Assert.Contains("TableGrid", ids);
+
+        // A heading must carry its outline level, or Inspect builds no outline from it.
+        var heading = styles.Elements<Style>().Single(s => s.StyleId?.Value == "Heading1");
+        Assert.Equal(0, heading.StyleParagraphProperties?.OutlineLevel?.Val?.Value);
+    }
+
+    [Fact]
+    public void A_heading_inserted_into_a_created_document_resolves_to_a_real_style()
+    {
+        var client = new OfficeAgentClient(new WordModule());
+
+        using var applied = client.Commit(
+            new StreamHandle(new MemoryStream(new WordModule().CreateBlank())),
+            new DocumentPlan
+            {
+                Operations = new PlanOperation[]
+                {
+                    new InsertOp
+                    {
+                        Target = new TextSpanAnchor { ParaId = BlankAnchor, Expect = string.Empty },
+                        Position = InsertPosition.Before,
+                        Text = "Statement of Work",
+                        StyleId = "Heading1"
+                    }
+                }
+            });
+
+        Assert.True(applied.Committed,
+            string.Join("; ", applied.Report.Errors.Select(e => $"{e.Code}: {e.Message}")));
+
+        // Inspect resolves the style and builds the outline from it - both of which fail
+        // silently when the style is only a dangling reference.
+        var inspection = client.Inspect(applied.ToBytes());
+        Assert.Equal("Heading1", inspection.Paragraphs.First().StyleId);
+        Assert.Equal("Statement of Work", Assert.Single(inspection.Outline).Text);
+    }
+
+    [Fact]
     public void Blank_word_document_is_minimal_and_schema_valid()
     {
         var module = new WordModule();

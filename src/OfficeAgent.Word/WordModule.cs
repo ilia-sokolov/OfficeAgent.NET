@@ -74,8 +74,16 @@ public sealed class WordModule : IFormatModule, IBlankDocumentFactory
 
     /// <summary>
     /// Returns a minimal valid .docx containing one empty body paragraph, addressable as
-    /// <c>auto-0000</c> by an initial plan.
+    /// <c>auto-0000</c> by an initial plan, over a style table the document's own headings
+    /// resolve against.
     /// </summary>
+    /// <remarks>
+    /// The styles part is not optional scaffolding. A <c>styleId</c> on <c>insert</c> or
+    /// <c>format</c> writes <c>w:pStyle</c>, which is a <em>reference</em>; with no
+    /// definition to resolve, Word silently renders the paragraph as Normal. The edit then
+    /// appears to succeed - the plan commits, the reference is in the file - while the
+    /// document looks nothing like what was asked for.
+    /// </remarks>
     public byte[] CreateBlank()
     {
         using var buffer = new MemoryStream();
@@ -83,9 +91,79 @@ public sealed class WordModule : IFormatModule, IBlankDocumentFactory
         {
             var main = document.AddMainDocumentPart();
             main.Document = new Document(new Body(new Paragraph()));
+
+            var styles = main.AddNewPart<StyleDefinitionsPart>();
+            styles.Styles = new Styles(
+                new DocDefaults(
+                    new RunPropertiesDefault(new RunPropertiesBaseStyle(
+                        new RunFonts { Ascii = "Calibri", HighAnsi = "Calibri" },
+                        new FontSize { Val = "22" })),
+                    new ParagraphPropertiesDefault(new ParagraphPropertiesBaseStyle(
+                        new SpacingBetweenLines { After = "160", Line = "259", LineRule = LineSpacingRuleValues.Auto }))),
+                Normal(),
+                Heading(1, "heading 1", 32, "2F5496"),
+                Heading(2, "heading 2", 26, "2F5496"),
+                Heading(3, "heading 3", 24, "1F3763"),
+                ListParagraph(),
+                TableGrid());
         }
         return buffer.ToArray();
     }
+
+    private static Style Normal() => new(
+        new StyleName { Val = "Normal" },
+        new PrimaryStyle())
+    {
+        Type = StyleValues.Paragraph,
+        StyleId = "Normal",
+        Default = true
+    };
+
+    /// <summary>A heading that carries its own outline level, so Inspect builds an outline from it.</summary>
+    private static Style Heading(int level, string name, int halfPoints, string colour) => new(
+        new StyleName { Val = name },
+        new BasedOn { Val = "Normal" },
+        new NextParagraphStyle { Val = "Normal" },
+        new PrimaryStyle(),
+        new StyleParagraphProperties(
+            new KeepNext(),
+            new SpacingBetweenLines { Before = "240", After = "0" },
+            new OutlineLevel { Val = level - 1 }),
+        new StyleRunProperties(
+            new RunFonts { AsciiTheme = ThemeFontValues.MajorHighAnsi, HighAnsiTheme = ThemeFontValues.MajorHighAnsi },
+            new Color { Val = colour },
+            new FontSize { Val = halfPoints.ToString() }))
+    {
+        Type = StyleValues.Paragraph,
+        StyleId = $"Heading{level}"
+    };
+
+    private static Style ListParagraph() => new(
+        new StyleName { Val = "List Paragraph" },
+        new BasedOn { Val = "Normal" },
+        new PrimaryStyle(),
+        new StyleParagraphProperties(new Indentation { Left = "720" }))
+    {
+        Type = StyleValues.Paragraph,
+        StyleId = "ListParagraph"
+    };
+
+    /// <summary>The table style the <c>format</c> verb's <c>styleId</c> examples name.</summary>
+    private static Style TableGrid() => new(
+        new StyleName { Val = "Table Grid" },
+        new PrimaryStyle(),
+        new StyleTableProperties(
+            new TableBorders(
+                new TopBorder { Val = BorderValues.Single, Size = 4, Color = "auto" },
+                new LeftBorder { Val = BorderValues.Single, Size = 4, Color = "auto" },
+                new BottomBorder { Val = BorderValues.Single, Size = 4, Color = "auto" },
+                new RightBorder { Val = BorderValues.Single, Size = 4, Color = "auto" },
+                new InsideHorizontalBorder { Val = BorderValues.Single, Size = 4, Color = "auto" },
+                new InsideVerticalBorder { Val = BorderValues.Single, Size = 4, Color = "auto" })))
+    {
+        Type = StyleValues.Table,
+        StyleId = "TableGrid"
+    };
 
     public IReadOnlyDictionary<string, string> Stabilize(IOpenXmlPackage package) =>
         WordModel.Stabilize(package);

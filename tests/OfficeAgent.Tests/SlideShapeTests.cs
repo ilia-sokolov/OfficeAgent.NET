@@ -260,6 +260,28 @@ public class SlideShapeTests
     }
 
     [Fact]
+    public void A_null_paragraph_id_is_reported_against_the_anchor_that_is_wrong()
+    {
+        var client = Client();
+
+        // An agent that failed to find a paragraph and passed the miss straight through
+        // sends "paraId": null. Looking that up in the alias map raises "Value cannot be
+        // null. (Parameter 'key')" - an error naming nothing the agent can act on.
+        foreach (var op in new PlanOperation[]
+                 {
+                     new FormatOp { Target = new TextSpanAnchor { ParaId = null!, Expect = "" }, Bold = true },
+                     new ChangeTextOp { Target = new TextSpanAnchor { ParaId = null!, Expect = "x" }, With = "y", Mode = ChangeMode.Direct },
+                     new ClearStylesOp { Target = new TextSpanAnchor { ParaId = null!, Expect = "" } }
+                 })
+        {
+            var report = Preview(client, BulletDeck(client), op);
+            var error = Assert.Single(report.Errors);
+            Assert.Equal(ValidationErrorCodes.AnchorNotFound, error.Code);
+            Assert.DoesNotContain("Parameter 'key'", error.Message);
+        }
+    }
+
+    [Fact]
     public void Word_refuses_a_bullet_level_rather_than_dropping_it()
     {
         var client = new OfficeAgentClient(new WordModule());
