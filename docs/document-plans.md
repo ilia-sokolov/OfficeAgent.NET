@@ -132,13 +132,17 @@ Copy direct formatting from one text span to another, or clear it on the target.
 
 ### `fill`
 
-Populate a content control or bookmark by tag.
+Populate a named slot by tag. Slot tags come from `inspect_document.contentControls`, each carrying the `kind` that says what it is.
 
 ```json
 { "op": "fill",
   "target": { "tag": "ClientName" },
   "value":  "Globex" }
 ```
+
+In Word a slot is a content control or bookmark (`kind: "contentControl"`). On a deck it is the **shape name** a template author sets, which PowerPoint shows in its Selection Pane (`kind: "shapeName"`); names repeat across slides, so a tag matching more than one shape is refused as `ambiguous-anchor` rather than filling an arbitrary one, and is qualified as `slide256/ClientName`.
+
+**`fill` populates a slot; it does not create one.** In Word that means the document must already carry the content control — no verb adds one, so `fill` applies to templates the host supplies rather than to documents `create_document` produced. A deck has no such gap: every named shape is a slot, and `insertShape` makes one.
 
 ### `comment`
 
@@ -274,6 +278,8 @@ Update document metadata or a selected document-level setting.
   "target": { "kind": "field" },
   "name":   "updateOnOpen" }
 ```
+
+`updateOnOpen` sets `w:updateFields`, which makes Word ask *"This document contains fields that may refer to other files. Do you want to update the fields in this document?"* every time the document is opened. On a document with **no fields** that prompt buys nothing and reads to the user as a damage warning, so it is refused with `invalid-operation` rather than armed. Set it once the document actually contains a field.
 
 ### `headerFooter` / `insertMedia`
 

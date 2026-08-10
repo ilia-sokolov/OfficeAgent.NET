@@ -137,9 +137,14 @@ var report = await client.CreateAsync("contracts", "report.docx", new DocumentPl
 });
 ```
 
-The Word module supplies a minimal valid package with one empty paragraph,
-addressed as `auto-0000`. The optional plan is applied in memory before storage
-is touched. Providers use their native create-if-absent operation, so an existing
+The Word module supplies a valid package with one empty paragraph, addressed as
+`auto-0000`, over a style catalogue the `styleId` examples name: `Normal`,
+`Heading1`, `Heading2`, `Heading3`, `ListParagraph`, and the `TableGrid` table
+style, plus the document defaults that set the base font. Without those a
+`styleId` would write a reference to a style the document does not define, and
+Word would silently render the paragraph as `Normal` — the plan committing while
+the document looked nothing like what was asked for. The optional plan is applied
+in memory before storage is touched. Providers use their native create-if-absent operation, so an existing
 name returns `AlreadyExists` and is never overwritten.
 
 Storage creation and registration are separate steps. If filesystem or SharePoint

@@ -383,7 +383,9 @@ already resized.
 
 ## Known gaps
 
-- `format` does not reach shape fills, outlines, or table styles; it covers run and paragraph formatting plus image size.
-- A slide's content is set when it is inserted; there is no verb that adds a shape to an existing slide beyond a table or an image.
+- `format` on a shape moves and resizes it; it does not reach shape fills, outlines, or table styles.
+- Animations are limited to the effects PresentationML expresses as a filtered `p:animEffect`. Fly-in, zoom, grow and the motion paths are refused rather than approximated — see [available effects](#available-effects).
+- A slide has no header. `p:hf` carries one, but it governs notes and handout pages, which is why PowerPoint greys the box out on the Slide tab.
+- `setProperty` and `revision` are not implemented; a deck has no document-property vocabulary of its own and no redline model.
 - Legacy `p:cm` comments are neither read nor written.
 - Charts and SmartArt are not addressable.

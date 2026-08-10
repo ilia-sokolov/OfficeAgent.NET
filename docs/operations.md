@@ -87,7 +87,8 @@ All three throw `InvalidOperationException` when the plan was a dry run or did n
 |---|---|---|
 | `ApplyResult.Committed == false`, `Errors` contains `stale-snapshot` | Document was edited after the inspect that produced the plan | Re-inspect and rebuild the plan against the fresh snapshot |
 | `Errors` contains `expect-mismatch` for a `changeText` | Paragraph text drifted from the anchor's `Expect` | Re-find or re-inspect the paragraph; rebuild that operation |
-| `Errors` contains `requires-renderer` | The plan asked for a field-recalc or pagination value the OOXML engine cannot compute | Use `setProperty` with `updateOnOpen` to defer to Word, or move that work to a renderer |
+| `Errors` contains `requires-renderer` | The plan asked for a field-recalc or pagination value the OOXML engine cannot compute | Use `setProperty` with `updateOnOpen` to defer to Word (only on a document that has fields), or move that work to a renderer |
+| `Errors` contains `invalid-operation` for `updateOnOpen` | The document has no fields, so the setting would only make Word prompt about updating fields that do not exist | Insert the field first, or drop the operation |
 | Empty `Find` result before building a plan | Target text not present at all | Surface to the user; do not build an operation against a missing anchor - the source document is never modified |
 | `DocumentVersionConflictException` from a `Replace` save | Another writer changed the document between this commit's open and its save | Re-inspect and re-author the plan against the current bytes; nothing was overwritten |
 | `Errors` contains `unsupported-operation` on a deck | The verb is Word-only - the PowerPoint module implements a subset | Use a verb the deck supports, or record the intent as a comment. See [PowerPoint support](powerpoint.md) |

@@ -70,10 +70,14 @@ offers separate least-privilege switches for existing documents and new ones:
 | `edit_document(connectionId, source, planJson, saveMode?, newName?)` | `AllowRegistration` | `register_document` + anchor resolution + `apply_plan` in one call. Targets may name text directly instead of a paragraph id. Returns the `apply_plan` shape plus `sourceDocumentId`. |
 | `create_document(connectionId, name, planJson)` | `AllowCreation` | Creates a **new** document in the connection, registers it, and optionally applies an initial plan in the same call. Pass `""` for no initial plan. Returns the `apply_plan` shape, so the new id arrives as `outputDocumentId`. `name` is a bare file name with its extension; a name already in use is refused rather than overwritten, and an initial plan that fails validation creates nothing at all. |
 
-A blank document contains one empty paragraph, addressed as paragraph id
-`auto-0000`. An initial plan can target
-`{ "paraId": "auto-0000", "expect": "" }`; use `"position": "Before"` to keep
-the empty anchor as the trailing paragraph.
+A new `.docx` contains one empty paragraph, addressed as paragraph id
+`auto-0000`, over a style catalogue carrying `Heading1`–`Heading3`,
+`ListParagraph` and `TableGrid`, so `styleId` works from the first operation. An
+initial plan can target `{ "paraId": "auto-0000", "expect": "" }`; use
+`"position": "Before"` to keep the empty anchor as the trailing paragraph.
+`changeText` needs a non-empty `expect`, so filling that first paragraph is an
+`insert` — a new **deck** is the other way round, see
+[PowerPoint support](powerpoint.md#creating-a-deck).
 
 ### Addressing text instead of paragraph ids
 
