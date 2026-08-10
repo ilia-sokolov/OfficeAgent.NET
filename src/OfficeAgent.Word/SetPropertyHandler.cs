@@ -42,6 +42,18 @@ internal sealed class SetPropertyHandler : IOperationHandler
             }
 
             case "field" when op.Name == "updateOnOpen":
+                // Word answers w:updateFields with "This document contains fields that may
+                // refer to other files. Do you want to update…" every time the document is
+                // opened. On a document with no fields that prompt buys nothing and reads
+                // as a damage warning, so refuse rather than arm it.
+                if (!HasFields(context.Package))
+                    return OperationPreview.Fail(new ValidationError(
+                        ValidationErrorCodes.InvalidOperation,
+                        "This document has no fields, so 'updateOnOpen' would only make Word " +
+                        "prompt about updating fields that do not exist. Set it once the " +
+                        "document contains a field.",
+                        anchor));
+
                 return OperationPreview.Ok(new ProposedChange
                 {
                     Target = anchor,
@@ -93,6 +105,17 @@ internal sealed class SetPropertyHandler : IOperationHandler
                     $"setProperty cannot apply node kind '{anchor.Kind}' / name '{op.Name}' in the pure engine.");
         }
     }
+
+    /// <summary>
+    /// Whether the document contains a field at all, in any of its three forms: the simple
+    /// <c>w:fldSimple</c>, and the complex pair of <c>w:fldChar</c> runs carrying
+    /// <c>w:instrText</c>.
+    /// </summary>
+    private static bool HasFields(IOpenXmlPackage package) =>
+        WordModel.Main(package).Document?.Body is { } body &&
+        (body.Descendants<SimpleField>().Any() ||
+         body.Descendants<FieldChar>().Any() ||
+         body.Descendants<FieldCode>().Any());
 
     private static void SetUpdateFieldsOnOpen(WordObjectMap map)
     {

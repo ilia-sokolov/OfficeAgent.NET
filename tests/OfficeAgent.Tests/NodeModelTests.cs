@@ -48,7 +48,7 @@ public class NodeModelTests
     public void SetProperty_update_fields_on_open_is_deferred_but_commits()
     {
         var office = Office();
-        var bytes = DocxFactory.Contract();
+        var bytes = WithField();
         var plan = new DocumentPlan
         {
             Operations = new PlanOperation[]
@@ -67,6 +67,46 @@ public class NodeModelTests
         using var doc = WordprocessingDocument.Open(new MemoryStream(OfficeAgentClient.ToBytes(result)), false);
         var settings = doc.MainDocumentPart!.DocumentSettingsPart!.Settings;
         Assert.NotNull(settings.GetFirstChild<UpdateFieldsOnOpen>());
+    }
+
+    [Fact]
+    public void SetProperty_update_fields_on_open_is_refused_when_there_are_no_fields()
+    {
+        var office = Office();
+
+        // w:updateFields makes Word ask "This document contains fields that may refer to
+        // other files…" on every open. With no fields the prompt buys nothing and reads to
+        // the user as a damage warning - the file looks broken when it is not.
+        var report = office.Preview(
+            Handle(DocxFactory.Contract()),
+            new DocumentPlan
+            {
+                Operations = new PlanOperation[]
+                {
+                    new SetPropertyOp { Target = new NodeAnchor { Kind = "field" }, Name = "updateOnOpen" }
+                }
+            });
+
+        var error = Assert.Single(report.Errors);
+        Assert.Equal(ValidationErrorCodes.InvalidOperation, error.Code);
+        Assert.Contains("no fields", error.Message);
+    }
+
+    /// <summary>A contract carrying one simple field, so the field verbs have a subject.</summary>
+    private static byte[] WithField()
+    {
+        var bytes = DocxFactory.Contract();
+        var buffer = new MemoryStream();
+        buffer.Write(bytes, 0, bytes.Length);
+        using (var document = WordprocessingDocument.Open(buffer, isEditable: true))
+        {
+            var body = document.MainDocumentPart!.Document.Body!;
+            body.AppendChild(new Paragraph(
+                new SimpleField(
+                    new Run(new Text("1")))
+                { Instruction = " PAGE " }));
+        }
+        return buffer.ToArray();
     }
 
     [Fact]

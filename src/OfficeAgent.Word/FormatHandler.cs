@@ -231,25 +231,27 @@ internal sealed class FormatHandler : IOperationHandler
         if (op.Alignment is not null)
             ReplaceChild(pPr, new Justification { Val = ParseAlignment(op.Alignment) });
 
+        // Cloned from whatever is already there so an indent set earlier is not lost when
+        // only one edge is changed now. The clone must come *before* the removal: calling
+        // Remove on an element that was never in the tree throws "The parent of this
+        // element is null", which is what a paragraph with no existing indent produced.
         if (op.IndentLeftTwips is not null || op.IndentRightTwips is not null || op.IndentFirstLineTwips is not null)
         {
-            var existing = pPr.GetFirstChild<Indentation>() ?? new Indentation();
-            existing.Remove();
-            var ind = (Indentation)existing.CloneNode(deep: true);
+            var existing = pPr.GetFirstChild<Indentation>();
+            var ind = existing is null ? new Indentation() : (Indentation)existing.CloneNode(deep: true);
             if (op.IndentLeftTwips is int left) ind.Left = left.ToString();
             if (op.IndentRightTwips is int right) ind.Right = right.ToString();
             if (op.IndentFirstLineTwips is int firstLine) ind.FirstLine = firstLine.ToString();
-            pPr.AppendChild(ind);
+            ReplaceChild(pPr, ind);
         }
 
         if (op.SpacingBeforeTwips is not null || op.SpacingAfterTwips is not null)
         {
-            var existing = pPr.GetFirstChild<SpacingBetweenLines>() ?? new SpacingBetweenLines();
-            existing.Remove();
-            var sp = (SpacingBetweenLines)existing.CloneNode(deep: true);
+            var existing = pPr.GetFirstChild<SpacingBetweenLines>();
+            var sp = existing is null ? new SpacingBetweenLines() : (SpacingBetweenLines)existing.CloneNode(deep: true);
             if (op.SpacingBeforeTwips is int b) sp.Before = b.ToString();
             if (op.SpacingAfterTwips is int a) sp.After = a.ToString();
-            pPr.AppendChild(sp);
+            ReplaceChild(pPr, sp);
         }
 
         if (HasBorder(op))
@@ -267,10 +269,10 @@ internal sealed class FormatHandler : IOperationHandler
         var size = (uint)(op.BorderSizeEighths ?? 4);
         var color = op.BorderColor ?? "auto";
         return new ParagraphBorders(
-            new TopBorder        { Val = style, Size = size, Color = color },
-            new BottomBorder     { Val = style, Size = size, Color = color },
-            new LeftBorder       { Val = style, Size = size, Color = color },
-            new RightBorder      { Val = style, Size = size, Color = color });
+            new TopBorder    { Val = style, Size = size, Color = color },
+            new LeftBorder   { Val = style, Size = size, Color = color },
+            new BottomBorder { Val = style, Size = size, Color = color },
+            new RightBorder  { Val = style, Size = size, Color = color });
     }
 
     private static TableBorders BuildTableBorders(FormatOp op)
@@ -278,10 +280,12 @@ internal sealed class FormatHandler : IOperationHandler
         var style = ParseBorderStyle(op.BorderStyle);
         var size = (uint)(op.BorderSizeEighths ?? 4);
         var color = op.BorderColor ?? "auto";
+        // top, left, bottom, right, insideH, insideV - the order the schema declares.
+        // Any other and Word offers to repair the document.
         return new TableBorders(
             new TopBorder { Val = style, Size = size, Color = color },
-            new BottomBorder { Val = style, Size = size, Color = color },
             new LeftBorder { Val = style, Size = size, Color = color },
+            new BottomBorder { Val = style, Size = size, Color = color },
             new RightBorder { Val = style, Size = size, Color = color },
             new InsideHorizontalBorder { Val = style, Size = size, Color = color },
             new InsideVerticalBorder { Val = style, Size = size, Color = color });
@@ -294,8 +298,8 @@ internal sealed class FormatHandler : IOperationHandler
         var color = op.BorderColor ?? "auto";
         return new TableCellBorders(
             new TopBorder { Val = style, Size = size, Color = color },
-            new BottomBorder { Val = style, Size = size, Color = color },
             new LeftBorder { Val = style, Size = size, Color = color },
+            new BottomBorder { Val = style, Size = size, Color = color },
             new RightBorder { Val = style, Size = size, Color = color });
     }
 
@@ -384,12 +388,90 @@ internal sealed class FormatHandler : IOperationHandler
         });
     }
 
+    /// <summary>
+    /// Replaces a property element, keeping the parent's children in the order the schema
+    /// declares them.
+    /// </summary>
+    /// <remarks>
+    /// <c>w:rPr</c>, <c>w:pPr</c>, <c>w:tblPr</c> and their kin are <em>sequences</em>, not
+    /// bags: <c>w:tblStyle</c> has to precede <c>w:tblW</c>, <c>w:b</c> has to precede
+    /// <c>w:color</c>, and so on. Appending produces a document Word offers to repair -
+    /// and one that validates only by accident, when the properties happen to be applied
+    /// in schema order. <see cref="OpenXmlCompositeElement.InsertAt"/> is positional, so
+    /// the insertion point is computed from the SDK's own declared child order.
+    /// </remarks>
     private static void ReplaceChild<T>(OpenXmlElement parent, T newChild) where T : OpenXmlElement
     {
-        var existing = parent.GetFirstChild<T>();
-        if (existing is not null) existing.Remove();
+        parent.GetFirstChild<T>()?.Remove();
+
+        var order = ChildOrder(parent);
+        var rank = Rank(order, newChild);
+        if (rank < 0)
+        {
+            parent.AppendChild(newChild);
+            return;
+        }
+
+        // The first existing child that belongs after this one.
+        foreach (var child in parent.ChildElements)
+        {
+            var childRank = Rank(order, child);
+            if (childRank >= 0 && childRank > rank)
+            {
+                parent.InsertBefore(newChild, child);
+                return;
+            }
+        }
+
         parent.AppendChild(newChild);
     }
+
+    private static int Rank(IReadOnlyList<Type> order, OpenXmlElement element)
+    {
+        for (var i = 0; i < order.Count; i++)
+            if (order[i] == element.GetType()) return i;
+        return -1;
+    }
+
+    /// <summary>
+    /// The schema's child order for the property containers this handler writes into. Only
+    /// the elements it actually produces need listing - anything else keeps its place.
+    /// </summary>
+    private static IReadOnlyList<Type> ChildOrder(OpenXmlElement parent) => parent switch
+    {
+        RunProperties => RunPropertyOrder,
+        ParagraphProperties => ParagraphPropertyOrder,
+        TableProperties => TablePropertyOrder,
+        TableCellProperties => TableCellPropertyOrder,
+        _ => Array.Empty<Type>()
+    };
+
+    private static readonly Type[] RunPropertyOrder =
+    {
+        typeof(RunStyle), typeof(RunFonts), typeof(Bold), typeof(BoldComplexScript),
+        typeof(Italic), typeof(ItalicComplexScript), typeof(WColor), typeof(Spacing),
+        typeof(FontSize), typeof(FontSizeComplexScript), typeof(Highlight), typeof(Underline)
+    };
+
+    private static readonly Type[] ParagraphPropertyOrder =
+    {
+        typeof(ParagraphStyleId), typeof(NumberingProperties), typeof(ParagraphBorders),
+        typeof(SpacingBetweenLines), typeof(Indentation), typeof(Justification),
+        typeof(OutlineLevel)
+    };
+
+    private static readonly Type[] TablePropertyOrder =
+    {
+        typeof(TableStyle), typeof(TableWidth), typeof(TableJustification),
+        typeof(TableIndentation), typeof(TableBorders), typeof(Shading),
+        typeof(TableLayout), typeof(TableCellMarginDefault), typeof(TableLook)
+    };
+
+    private static readonly Type[] TableCellPropertyOrder =
+    {
+        typeof(TableCellWidth), typeof(GridSpan), typeof(TableCellBorders),
+        typeof(Shading), typeof(TableCellMargin), typeof(TableCellVerticalAlignment)
+    };
 
     private static Drawing? FindDrawing(IOpenXmlPackage package, string path)
     {

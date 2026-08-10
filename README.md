@@ -182,15 +182,16 @@ targeting a different location. Applying a plan is all-or-nothing.
 
 The Word module supports changes to text, paragraphs, tables, images, styles,
 content controls, comments, document properties, and tracked revisions. The
-PowerPoint module implements the subset a deck can express - text, run and
-paragraph formatting, tables, images, speaker notes, and resolvable comments -
-plus adding, removing, reordering and duplicating slides. Several slide inserts
-in one plan author a deck end to end, so a single call turns nothing into a
-finished presentation. Any verb it does not support is named rather than
-silently skipped. The
-full operation schema is documented in
-[Document plans](docs/document-plans.md), and the deck specifics in
-[PowerPoint support](docs/powerpoint.md).
+PowerPoint module implements everything a deck can express except document
+properties and revisions: text, bullets, run and paragraph formatting, template
+slots, style copying, tables, images, text boxes, embedded video and audio,
+speaker notes, resolvable comments, footers and slide numbers, sections,
+transitions and animations, and the slide lifecycle - adding, removing,
+reordering and duplicating. Several slide inserts in one plan author a deck end
+to end, so a single call turns nothing into a finished presentation. Any verb it
+does not support is named rather than silently skipped. The full operation
+schema is documented in [Document plans](docs/document-plans.md), and the deck
+specifics in [PowerPoint support](docs/powerpoint.md).
 
 Documents are accessed through configured providers. After registration,
 editing calls use a `(connectionId, documentId)` pair instead of a storage path
@@ -243,10 +244,12 @@ OfficeAgent.NET edits Word `.docx` files and PowerPoint `.pptx` decks; it does
 not automate the Office desktop applications. An Excel module can be added
 through `IFormatModule`, but it does not ship today.
 
-The deck module implements a subset of the shared verb vocabulary - text,
-formatting, tables, images, speaker notes, comments, and the slide lifecycle -
-and refuses the rest per operation rather than applying part of a plan. PresentationML has no redline
-vocabulary, so tracked changes are Word-only; see
+The deck module refuses the two verbs a presentation has no vocabulary for -
+`setProperty` and `revision` - per operation, rather than applying part of a
+plan. PresentationML has no redline model, so tracked changes are Word-only, and
+a slide has no header (that is a notes and handout concept). Animations cover
+the effects expressible as a filtered `p:animEffect`; fly-in, zoom and motion
+paths are refused rather than approximated. See
 [PowerPoint support](docs/powerpoint.md) for what a deck does and does not
 accept.
 

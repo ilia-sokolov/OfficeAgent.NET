@@ -11,10 +11,13 @@ internal sealed class TableBinder
     {
         var table = new Table();
 
+        // top, left, bottom, right, insideH, insideV. CT_TblBorders is a sequence, so any
+        // other order makes every table this builds schema-invalid and Word offers to
+        // repair the document.
         var borders = new TableBorders(
             new TopBorder { Val = BorderValues.Single, Size = 4 },
-            new BottomBorder { Val = BorderValues.Single, Size = 4 },
             new LeftBorder { Val = BorderValues.Single, Size = 4 },
+            new BottomBorder { Val = BorderValues.Single, Size = 4 },
             new RightBorder { Val = BorderValues.Single, Size = 4 },
             new InsideHorizontalBorder { Val = BorderValues.Single, Size = 4 },
             new InsideVerticalBorder { Val = BorderValues.Single, Size = 4 });
