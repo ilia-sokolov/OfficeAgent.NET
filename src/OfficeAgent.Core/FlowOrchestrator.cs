@@ -139,6 +139,15 @@ internal sealed class FlowOrchestrator
             };
         }
 
+        // Stabilize again before writing. The first pass could only reach what existed
+        // then; anything the plan created - a paragraph from `insert`, a row from
+        // `insertTableRows` - carries no stable id yet, and would come back from the next
+        // inspect named by its position instead. Positions move as soon as anything is
+        // added above them, so a caller that built a document in several passes would find
+        // its ids pointing at the wrong lines. The returned alias map is discarded: this
+        // pass exists to mint ids, and every anchor in this plan was resolved long ago.
+        commitModule.Stabilize(commitPackage);
+
         var outputBytes = commitPackage.ToBytes();
         var output = new StreamHandle(new MemoryStream(outputBytes), OutputName(handle));
 

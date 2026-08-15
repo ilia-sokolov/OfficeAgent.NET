@@ -51,7 +51,9 @@ public sealed class WordModule : IFormatModule, IBlankDocumentFactory
             new CopyStylesHandler(),
             new ClearStylesHandler(),
             new InsertImageHandler(),
-            new RemoveImageHandler()
+            new RemoveImageHandler(),
+            new WordHeaderFooterHandler(),
+            new WordBackgroundImageHandler()
         }
         .Concat(extraHandlers ?? Enumerable.Empty<IOperationHandler>())
         .ToList();

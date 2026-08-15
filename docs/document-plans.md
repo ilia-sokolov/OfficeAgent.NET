@@ -67,6 +67,13 @@ state one is never overridden.
   "mode":   "Tracked" }
 ```
 
+`expect` may be empty **only when the target paragraph is itself empty**, which means "write
+here" — the way the first words go into a document `create_document` just made, and into a
+new slide's placeholder. Against a paragraph that has text an empty `expect` is refused: it
+cannot be told apart from a caller who left the field out, and the cost of guessing wrong is
+a rewritten paragraph nobody named. Under `Tracked`, filling an empty paragraph is recorded
+as an insertion.
+
 ### `format`
 
 Unified styling. Apply any combination of properties to a paragraph or text span, a table, a table row, a table cell, or an image. Properties left unset are not changed.
@@ -108,10 +115,17 @@ Properties (all optional):
 | `highlight` | `yellow`, `green`, `cyan`, `magenta`, `blue`, `red`, `dark*`, `lightGray`, `black`, `white`, `none` |
 | `color` | hex RGB font colour, e.g. `FF0000` |
 | `alignment` | `left`, `center`, `right`, `justify` |
-| `indentLeftTwips`, `indentRightTwips`, `indentFirstLineTwips` | paragraph indent (1 inch = 1440 twips) |
+| `indentLeftTwips`, `indentRightTwips`, `indentFirstLineTwips` | paragraph indent (1 inch = 1440 twips). A **negative** `indentFirstLineTwips` is a hanging indent — the first line set back from the rest, how a bullet hangs its dash outside the text |
+| `listStyle`, `listLevel`, `listId` | makes the paragraph a real list item (Word only). `bullet`, `decimal` (1. / a. / i.), `clause` (1. / 1.1 / 1.1.1), or `none` to remove it. `listLevel` is 0–8. Paragraphs sharing a style **and** a `listId` form one running sequence; a different `listId` starts a separate one, which is how a second chapter restarts its steps at 1. Word owns the numbers, so inserting an item renumbers the rest — text that merely begins "4.2" does not |
+| `pageBreakBefore` | the paragraph starts a new page (Word only). A property of the paragraph, not a character in the text, so the page goes on starting there as the text above it is edited |
 | `spacingBeforeTwips`, `spacingAfterTwips` | paragraph spacing |
 | `borderStyle`, `borderSizeEighths`, `borderColor` | paragraph / table / cell border (8 = 1 pt) |
+| `borderEdges` | which edges the border is drawn on — a comma-separated subset of `top`, `left`, `bottom`, `right` and, on a table, `insideH`, `insideV`. Unset means every edge. `"left"` is a pull quote's rule; all four is a callout box |
 | `widthPx`, `heightPx` | image and row sizing at 96 DPI |
+| `xPx`, `yPx` | shape position at 96 DPI (PresentationML shape targets) |
+| `fillColor`, `lineColor` | hex RGB, or `none`, on a shape or slide background (PresentationML) |
+| `lineWidthPx` | shape outline width at 96 DPI (PresentationML) |
+| `verticalAlignment` | `top`, `middle`, `bottom` — where text sits in a shape's box (PresentationML) |
 
 ### `copyStyles` / `clearStyles`
 
@@ -265,6 +279,63 @@ Remove by node anchor:
   "target": { "kind": "image", "path": "image#0" } }
 ```
 
+### `backgroundImage`
+
+An image *behind* the content, as opposed to `insertImage`'s picture *in* it. On a deck a
+slide target paints that slide and no target paints every slide; in Word there is no target
+and the image repeats on every page.
+
+```json
+{ "op": "backgroundImage",
+  "base64Bytes": "iVBORw0KGgo…", "imageType": "png", "opacity": 0.2 }
+
+{ "op": "backgroundImage",
+  "target": { "kind": "slide", "path": "slide#256" },
+  "imageConnectionId": "images", "imageDocumentId": "<id from a prior add>",
+  "opacity": 0.15 }
+```
+
+`opacity` runs 0 to 1 and defaults to 1. Set it for any photograph that has text over it:
+at full strength almost any image destroys the contrast the text needs, and 0.1–0.3 is the
+usable range. It is written as `a:alphaModFix` on the blip — the same attribute PowerPoint's
+own Transparency slider reads.
+
+Supplying neither `base64Bytes` nor `imageDocumentId` takes an existing background away. A
+flat colour is [`format`](#format) with `fillColor`, not this.
+
+Word has no usable page-background element — its own is a lump of VML that does not print by
+default — so the image is anchored page-sized and behind the text in the section's header,
+which is what Word's designed templates do. It therefore lands in the first-page and
+even-page headers too when the section uses them, and `insertImage` remains the way to put a
+picture in the text flow.
+
+### `headerFooter`
+
+Running heads and page numbers. Word only in this section; the deck's own footer settings are
+in [powerpoint.md](powerpoint.md).
+
+```json
+{ "op": "headerFooter",
+  "header": "Northwind Traders — Q2 Board Review",
+  "footer": "Confidential",
+  "showPageNumber": true,
+  "alignment": "edges",
+  "differentFirstPage": true }
+
+{ "op": "headerFooter", "scope": "firstPage", "header": "", "footer": "" }
+```
+
+| Property | Notes |
+| --- | --- |
+| `header`, `footer` | the text. An empty string clears it |
+| `showPageNumber` | a `PAGE` field, not a number, so it stays right as the document grows |
+| `differentFirstPage` | gives page one its own header and footer — how a cover keeps the running head off it |
+| `scope` | which pages this writes: `default` (the fallback), `firstPage`, `evenPage` |
+| `alignment` | `left` (default), `center`, `right`, or `edges` — text left and page number right on one line |
+
+The deck-only settings (`showSlideNumber`, `showFooter`, `showDateTime`, `dateTime`) are
+**refused** here rather than ignored.
+
 ### `setProperty`
 
 Update document metadata or a selected document-level setting.
@@ -396,7 +467,7 @@ Returned by `preview_plan` and `apply_plan` in the `errors` array. Stable wire c
 | `expect-mismatch` | The live content no longer matches the anchor's `expect`. |
 | `ambiguous-anchor` | The target is not specific enough to edit safely. |
 | `unsupported-operation` | No registered handler supports the verb / anchor combination. |
-| `invalid-operation` | The operation is structurally invalid (e.g. empty `expect`, no formatting properties). |
+| `invalid-operation` | The operation is structurally invalid (e.g. empty `expect` against a paragraph that has text, no formatting properties). |
 | `requires-renderer` | The requested change needs a layout / calculation engine. |
 | `operation-conflict` | Two operations target the same location in one plan. |
 | `contract-mismatch` | The plan's contract version does not match the engine, or the plan asserted a `format` the document is not. (The version check is informational pre-1.0; the format assertion is not.) |

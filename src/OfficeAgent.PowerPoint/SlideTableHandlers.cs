@@ -39,6 +39,12 @@ internal sealed class SlideInsertTableHandler : IOperationHandler
                 ValidationErrorCodes.InvalidOperation,
                 "insertTable needs at least one header or row.", anchor));
 
+        if (op.Table.StyleId is { Length: > 0 } style && !SlideTableBuilder.IsStyle(style))
+            return OperationPreview.Fail(new ValidationError(
+                ValidationErrorCodes.InvalidOperation,
+                $"'{style}' is not a table style. A deck names one of: {SlideTableBuilder.StyleNames}.",
+                anchor));
+
         var columnCount = Math.Max(
             op.Table.Headers.Count,
             op.Table.Rows.Count > 0 ? op.Table.Rows.Max(r => r.Count) : 0);

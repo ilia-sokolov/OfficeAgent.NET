@@ -124,12 +124,12 @@ internal sealed class SlideInsertImageHandler : IOperationHandler
                 "insertImage needs either base64Bytes or an imageConnectionId/imageDocumentId pair.",
                 anchor));
 
-        if (!TryDecode(op.Base64Bytes!, out _))
+        if (!SlideImages.TryDecode(op.Base64Bytes!, out _))
             return OperationPreview.Fail(new ValidationError(
                 ValidationErrorCodes.InvalidOperation,
                 "insertImage base64Bytes is not valid base64.", anchor));
 
-        if (PartTypeFor(op.ImageType) is null)
+        if (SlideImages.PartTypeFor(op.ImageType) is null)
             return OperationPreview.Fail(new ValidationError(
                 ValidationErrorCodes.InvalidOperation,
                 $"Unsupported imageType '{op.ImageType}'. Use png, jpeg, gif, bmp, or tiff.", anchor));
@@ -158,10 +158,10 @@ internal sealed class SlideInsertImageHandler : IOperationHandler
 
         var slide = ResolveSlide(context, anchor)
             ?? throw new InvalidOperationException($"Slide '{anchor.Path}' vanished before apply.");
-        if (!TryDecode(op.Base64Bytes!, out var bytes))
+        if (!SlideImages.TryDecode(op.Base64Bytes!, out var bytes))
             throw new InvalidOperationException("insertImage base64Bytes is not valid base64.");
 
-        var partType = PartTypeFor(op.ImageType)
+        var partType = SlideImages.PartTypeFor(op.ImageType)
             ?? throw new InvalidOperationException($"Unsupported imageType '{op.ImageType}'.");
 
         var imagePart = slide.Part.AddImagePart(partType);
@@ -202,42 +202,6 @@ internal sealed class SlideInsertImageHandler : IOperationHandler
         SlideNodeProvider.TryParseSlideId(anchor.Path, out var slideId)
             ? PowerPointModel.Slide(context.Package, slideId)
             : null;
-
-    private static bool TryDecode(string base64, out byte[] bytes)
-    {
-        try
-        {
-            bytes = Convert.FromBase64String(base64);
-            return bytes.Length > 0;
-        }
-        catch (FormatException)
-        {
-            bytes = Array.Empty<byte>();
-            return false;
-        }
-    }
-
-    /// <summary>
-    /// Maps the plan's image-type vocabulary onto Open XML part types, matching the set
-    /// the Word module accepts so one plan vocabulary serves both formats.
-    /// </summary>
-    private static PartTypeInfo? PartTypeFor(string? imageType)
-    {
-        if (string.IsNullOrEmpty(imageType)) return ImagePartType.Png;
-        return ImagePartTypes.TryGetValue(imageType!, out var type) ? type : null;
-    }
-
-    private static readonly Dictionary<string, PartTypeInfo> ImagePartTypes =
-        new(StringComparer.OrdinalIgnoreCase)
-        {
-            ["png"] = ImagePartType.Png,
-            ["jpeg"] = ImagePartType.Jpeg,
-            ["jpg"] = ImagePartType.Jpeg,
-            ["gif"] = ImagePartType.Gif,
-            ["bmp"] = ImagePartType.Bmp,
-            ["tiff"] = ImagePartType.Tiff,
-            ["tif"] = ImagePartType.Tiff
-        };
 
     /// <summary>Places the picture below existing content rather than on top of it.</summary>
     private static long LowestEdge(SlideRef slide)

@@ -468,16 +468,23 @@ public sealed class OfficeAgentClient
     // ---- Plan preprocessing ----
 
     /// <summary>
-    /// Walks the plan and resolves any <see cref="InsertImageOp"/> that references
-    /// an image by <c>(ImageConnectionId, ImageDocumentId)</c> into its base64 form
-    /// by reading the bytes from the configured provider. The original plan is
-    /// returned unchanged when no image ops reference a provider id.
+    /// Walks the plan and resolves any operation that references an image by
+    /// <c>(ImageConnectionId, ImageDocumentId)</c> into its base64 form by reading the
+    /// bytes from the configured provider. The original plan is returned unchanged when no
+    /// operation references a provider id.
     /// </summary>
     private async Task<DocumentPlan> ResolveImageReferencesAsync(DocumentPlan plan, CancellationToken cancellationToken)
     {
         if (plan.Operations.Count == 0) return plan;
-        if (!plan.Operations.OfType<InsertImageOp>().Any(o => !string.IsNullOrEmpty(o.ImageDocumentId)))
-            return plan;
+
+        static bool NeedsResolving(PlanOperation op) => op switch
+        {
+            InsertImageOp i => !string.IsNullOrEmpty(i.ImageDocumentId),
+            BackgroundImageOp b => !string.IsNullOrEmpty(b.ImageDocumentId),
+            _ => false
+        };
+
+        if (!plan.Operations.Any(NeedsResolving)) return plan;
 
         var rewritten = new List<PlanOperation>(plan.Operations.Count);
         foreach (var op in plan.Operations)
@@ -494,6 +501,17 @@ public sealed class OfficeAgentClient
                     HeightPx = image.HeightPx,
                     Position = image.Position,
                     AltText = image.AltText
+                });
+            }
+            else if (op is BackgroundImageOp background && !string.IsNullOrEmpty(background.ImageDocumentId))
+            {
+                var bytes = await OpenImageBytesAsync(background.ImageConnectionId!, background.ImageDocumentId!, cancellationToken).ConfigureAwait(false);
+                rewritten.Add(new BackgroundImageOp
+                {
+                    Target = background.Target,
+                    Base64Bytes = Convert.ToBase64String(bytes),
+                    ImageType = background.ImageType,
+                    Opacity = background.Opacity
                 });
             }
             else

@@ -154,6 +154,12 @@ internal sealed class LocatedShape
             Apply(
                 transform.Offset ??= new A.Offset { X = 0, Y = 0 },
                 transform.Extents ??= new A.Extents { Cx = 0, Cy = 0 });
+
+            // A table renders at the width of its own column grid, not the frame's, so a
+            // frame widened on its own leaves the table the size it was and the caller
+            // sees nothing happen. PowerPoint rescales the columns when a user drags the
+            // handle; doing the same here is what makes the resize mean anything.
+            if (cx is { } frameWidth) RescaleColumns(frame, frameWidth);
             return;
         }
 
@@ -177,6 +183,32 @@ internal sealed class LocatedShape
             if (cx is { } width) extents.Cx = width;
             if (cy is { } height) extents.Cy = height;
         }
+    }
+
+    /// <summary>
+    /// Spreads a new frame width across a table's columns, keeping their relative
+    /// proportions. Rounding is absorbed by the last column so the grid still totals the
+    /// frame width exactly - a grid that is a few EMUs out draws a visible seam.
+    /// </summary>
+    private static void RescaleColumns(GraphicFrame frame, long frameWidth)
+    {
+        var columns = frame.Descendants<A.GridColumn>().ToList();
+        if (columns.Count == 0 || frameWidth <= 0) return;
+
+        var current = columns.Sum(c => c.Width?.Value ?? 0L);
+        long used = 0;
+
+        for (var i = 0; i < columns.Count - 1; i++)
+        {
+            var width = current > 0
+                ? (long)(frameWidth * ((double)(columns[i].Width?.Value ?? 0L) / current))
+                : frameWidth / columns.Count;
+
+            columns[i].Width = width;
+            used += width;
+        }
+
+        columns[columns.Count - 1].Width = frameWidth - used;
     }
 
     /// <summary>The shape's current box in EMUs, or null where it inherits one.</summary>

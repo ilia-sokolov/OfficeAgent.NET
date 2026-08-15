@@ -291,6 +291,84 @@ public sealed class FormatOp : PlanOperation
 
     /// <summary>Distance in pixels at 96 DPI from the slide's top edge. PresentationML only.</summary>
     public int? YPx { get; init; }
+
+    /// <summary>
+    /// Hex RGB fill for a shape, or for a slide's background when the target is a slide -
+    /// <c>"1F3A5F"</c>. <c>"none"</c> makes the shape transparent. PresentationML only:
+    /// this is the colour behind the content, not the colour of the text, which is
+    /// <see cref="Color"/>.
+    /// </summary>
+    public string? FillColor { get; init; }
+
+    /// <summary>
+    /// Hex RGB outline colour for a shape, or <c>"none"</c> for no outline.
+    /// PresentationML only.
+    /// </summary>
+    public string? LineColor { get; init; }
+
+    /// <summary>Outline width in pixels at 96 DPI. PresentationML only.</summary>
+    public int? LineWidthPx { get; init; }
+
+    /// <summary>
+    /// Column widths for a table, in pixels at 96 DPI, one per column. WordprocessingML
+    /// only - a deck's table follows the frame, which <c>widthPx</c> rescales.
+    /// </summary>
+    /// <remarks>
+    /// A table whose columns are all the same width is the clearest sign nobody laid it out:
+    /// a description column gets the same room as a quantity, so the prose wraps four times
+    /// while the number sits in an acre of space. There is no way to fix that by styling the
+    /// text, which is why this is here.
+    /// </remarks>
+    public IReadOnlyList<int>? ColumnWidthsPx { get; init; }
+
+    /// <summary>
+    /// Turns the paragraph into a list item: <c>bullet</c>, <c>decimal</c> (1. / a. / i.),
+    /// <c>clause</c> (1. / 1.1 / 1.1.1), or <c>none</c> to take the numbering off.
+    /// WordprocessingML only - a deck's bullets come from its layout, and depth there is
+    /// <see cref="InsertOp.Level"/>.
+    /// </summary>
+    /// <remarks>
+    /// Word owns the numbers, which is the entire point: insert a clause in the middle and
+    /// everything below it renumbers. Text that merely begins "4.2" does not, and that is
+    /// how a contract ends up with two clause 7s.
+    /// </remarks>
+    public string? ListStyle { get; init; }
+
+    /// <summary>
+    /// Depth of the list item, zero-based, to a maximum of 8. Defaults to 0.
+    /// </summary>
+    public int? ListLevel { get; init; }
+
+    /// <summary>
+    /// Which running sequence the item belongs to. Paragraphs sharing a
+    /// <see cref="ListStyle"/> and a list id are numbered as one list; a different id starts
+    /// a separate one - how a manual's second chapter restarts its steps at 1.
+    /// </summary>
+    public int? ListId { get; init; }
+
+    /// <summary>
+    /// Which edges the border is drawn on, as a comma-separated list of
+    /// <c>top</c>, <c>left</c>, <c>bottom</c>, <c>right</c> — and, on a table,
+    /// <c>insideH</c> and <c>insideV</c>. Unset means every edge, which is what a border
+    /// meant before this existed. A single edge is how a pull quote gets its rule, or a
+    /// header row its underline, without becoming a box.
+    /// </summary>
+    public string? BorderEdges { get; init; }
+
+    /// <summary>
+    /// Whether the paragraph starts a new page. WordprocessingML only. This is the
+    /// paragraph's own property rather than a break character in the text, so the page goes
+    /// on starting here as the text above it is edited.
+    /// </summary>
+    public bool? PageBreakBefore { get; init; }
+
+    /// <summary>
+    /// How text sits inside a shape's box: <c>top</c>, <c>middle</c>, or <c>bottom</c>.
+    /// PresentationML only, and distinct from <see cref="Alignment"/>, which is horizontal.
+    /// A filled card whose text hugs the top edge is the usual reason a slide looks
+    /// unfinished, and no amount of horizontal alignment fixes it.
+    /// </summary>
+    public string? VerticalAlignment { get; init; }
 }
 
 /// <summary>
@@ -732,6 +810,97 @@ public sealed class HeaderFooterOp : PlanOperation
     /// option, which is what a deck presented more than once wants.
     /// </summary>
     public string? DateTime { get; init; }
+
+    /// <summary>
+    /// Gets the header text. WordprocessingML only - a slide has a footer but no header.
+    /// An empty string clears it.
+    /// </summary>
+    public string? Header { get; init; }
+
+    /// <summary>
+    /// Gets whether the page number is shown in the footer. WordprocessingML only; a deck
+    /// numbers slides through <see cref="ShowSlideNumber"/>. The number is a field, so it
+    /// stays right as pages are added.
+    /// </summary>
+    public bool? ShowPageNumber { get; init; }
+
+    /// <summary>
+    /// Gets whether the first page carries its own header and footer, which is how a cover
+    /// page keeps the running header off it. WordprocessingML only.
+    /// </summary>
+    public bool? DifferentFirstPage { get; init; }
+
+    /// <summary>
+    /// Gets which pages this applies to: <c>default</c> (every page, and the fallback when
+    /// unset), <c>firstPage</c>, or <c>evenPage</c>. WordprocessingML only.
+    /// </summary>
+    public string? Scope { get; init; }
+
+    /// <summary>
+    /// Gets how the header and footer text is placed: <c>left</c> (default), <c>center</c>,
+    /// <c>right</c>, or <c>edges</c> — the last putting the header text left and the page
+    /// number right on one line, which is the arrangement most running heads use.
+    /// WordprocessingML only.
+    /// </summary>
+    public string? Alignment { get; init; }
+}
+
+/// <summary>
+/// Puts an image behind the content: behind a slide, or behind every page of a document.
+/// </summary>
+/// <remarks>
+/// <para>
+/// On a deck the target is a slide node, or absent to paint every slide. On a Word document
+/// there is no target - a page background belongs to the section, and the image is placed in
+/// the header behind the text, which is where Word itself keeps one. It therefore repeats on
+/// every page rather than being a one-off picture in the flow, and
+/// <see cref="InsertImageOp"/> remains the way to place a picture <em>in</em> the text.
+/// </para>
+/// <para>
+/// <see cref="Opacity"/> is what makes a photograph usable behind body copy at all: at full
+/// strength almost any image destroys the contrast the text needs. Supply neither
+/// <see cref="Base64Bytes"/> nor <see cref="ImageDocumentId"/> to take an existing background
+/// image away. A <em>colour</em> background is <c>format</c> with <c>fillColor</c> instead.
+/// </para>
+/// </remarks>
+public sealed class BackgroundImageOp : PlanOperation
+{
+    /// <summary>Base64-encoded image bytes. Mutually exclusive with <see cref="ImageDocumentId"/>.</summary>
+    public string? Base64Bytes { get; init; }
+
+    /// <summary>
+    /// Connection id of the provider the image was added to.
+    /// Required when <see cref="ImageDocumentId"/> is set.
+    /// </summary>
+    public string? ImageConnectionId { get; init; }
+
+    /// <summary>
+    /// Opaque, provider-assigned document id for an image already held by a provider
+    /// connection. Mutually exclusive with <see cref="Base64Bytes"/>.
+    /// </summary>
+    public string? ImageDocumentId { get; init; }
+
+    /// <summary>Image format: <c>png</c> (default), <c>jpeg</c>, <c>gif</c>, <c>bmp</c>, or <c>tiff</c>.</summary>
+    public string ImageType { get; init; } = "png";
+
+    /// <summary>
+    /// How opaque the image is, from 0 (invisible) to 1 (full strength). Defaults to 1.
+    /// Text over a photograph usually needs 0.1-0.3 to stay readable.
+    /// </summary>
+    public double? Opacity { get; init; }
+
+    /// <summary>
+    /// Which pages carry the image: <c>all</c> (the default), <c>firstPage</c>,
+    /// <c>default</c> for every page after a distinct first one, or <c>evenPage</c>.
+    /// WordprocessingML only - a deck names slides instead.
+    /// </summary>
+    /// <remarks>
+    /// This is what lets a cover page have a full-strength backdrop while the pages behind
+    /// it keep the pale wash body copy can be read over. It needs
+    /// <see cref="HeaderFooterOp.DifferentFirstPage"/> to be set, since without a first-page
+    /// header there is nowhere for a cover-only background to live.
+    /// </remarks>
+    public string? Scope { get; init; }
 }
 
 /// <summary>Distinguishes the two kinds of timeline media a slide can carry.</summary>

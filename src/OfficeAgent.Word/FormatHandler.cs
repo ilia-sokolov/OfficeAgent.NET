@@ -27,10 +27,47 @@ internal sealed class FormatHandler : IOperationHandler
     public OperationPreview Preview(ApplyContext context, PlanOperation operation)
     {
         var op = (FormatOp)operation;
+
+        if (!AreEdges(op.BorderEdges))
+            return OperationPreview.Fail(new ValidationError(
+                ValidationErrorCodes.InvalidOperation,
+                $"'{op.BorderEdges}' is not a border edge list. Expected a comma-separated subset of: {BorderEdgeNames}.",
+                op.Target));
+
+        if (op.ListStyle is not null && !WordNumbering.IsStyle(op.ListStyle))
+            return OperationPreview.Fail(new ValidationError(
+                ValidationErrorCodes.InvalidOperation,
+                $"'{op.ListStyle}' is not a list style. Expected one of: {WordNumbering.Names}.",
+                op.Target));
+
+        if (op.ListLevel is { } requested && (requested < 0 || requested > WordNumbering.MaxLevel))
+            return OperationPreview.Fail(new ValidationError(
+                ValidationErrorCodes.InvalidOperation,
+                $"listLevel must be between 0 and {WordNumbering.MaxLevel}; got {requested}.",
+                op.Target));
+
+        if (op.ListStyle is null && (op.ListLevel is not null || op.ListId is not null))
+            return OperationPreview.Fail(new ValidationError(
+                ValidationErrorCodes.InvalidOperation,
+                "listLevel and listId need a listStyle to belong to.", op.Target));
+
+        if (op.ColumnWidthsPx is { } columns)
+        {
+            if (op.Target is not NodeAnchor { Kind: "table" })
+                return OperationPreview.Fail(new ValidationError(
+                    ValidationErrorCodes.InvalidOperation,
+                    "columnWidthsPx belongs on a table target.", op.Target));
+
+            if (columns.Count == 0 || columns.Any(w => w <= 0))
+                return OperationPreview.Fail(new ValidationError(
+                    ValidationErrorCodes.InvalidOperation,
+                    "columnWidthsPx needs a positive width for every column.", op.Target));
+        }
+
         if (!HasAnyProperty(op))
             return OperationPreview.Fail(new ValidationError(
                 ValidationErrorCodes.InvalidOperation,
-                "format requires at least one of: styleId, fontFamily, sizeHalfPoints, bold, italic, underline, highlight, color, alignment, indent*, spacing*, border*, widthPx, heightPx.",
+                "format requires at least one of: styleId, fontFamily, sizeHalfPoints, bold, italic, underline, highlight, color, alignment, indent*, spacing*, border*, pageBreakBefore, listStyle, columnWidthsPx, widthPx, heightPx.",
                 op.Target));
 
         switch (op.Target)
@@ -93,7 +130,7 @@ internal sealed class FormatHandler : IOperationHandler
         var paragraph = WordModel.ResolveParagraph(context, anchor.ParaId)
             ?? throw new InvalidOperationException($"Paragraph '{anchor.ParaId}' vanished before apply.");
 
-        ApplyParagraphProperties(paragraph, op);
+        ApplyParagraphProperties(context, paragraph, op);
 
         IReadOnlyList<Run> runs;
         if (string.IsNullOrEmpty(anchor.Expect))
@@ -132,6 +169,60 @@ internal sealed class FormatHandler : IOperationHandler
             var borders = BuildTableBorders(op);
             ReplaceChild(properties, borders);
         }
+
+        if (op.ColumnWidthsPx is { Count: > 0 } widths)
+            SetColumnWidths(table, properties, widths);
+    }
+
+    /// <summary>
+    /// Sets the column widths, in the three places Word reads them from: the grid, every
+    /// cell, and the table's own width.
+    /// </summary>
+    /// <remarks>
+    /// The grid alone is a hint. Word honours it until a cell's content is wider, then
+    /// quietly reflows the whole table - so the cell widths have to agree with the grid, and
+    /// the layout has to be fixed, or a long description drags its column open and squeezes
+    /// the figures beside it.
+    /// </remarks>
+    private static void SetColumnWidths(
+        Table table, TableProperties properties, IReadOnlyList<int> widthsPx)
+    {
+        // 1440 twips to the inch, 96 pixels to the inch.
+        const int TwipsPerPixel = 15;
+
+        var widths = widthsPx.Select(px => px * TwipsPerPixel).ToList();
+        var total = widths.Sum();
+
+        var grid = table.GetFirstChild<TableGrid>();
+        if (grid is null)
+        {
+            grid = new TableGrid();
+            table.InsertAfter(grid, properties);
+        }
+
+        grid.RemoveAllChildren<GridColumn>();
+        foreach (var width in widths)
+            grid.AppendChild(new GridColumn { Width = width.ToString() });
+
+        foreach (var row in table.Elements<TableRow>())
+        {
+            var cells = row.Elements<TableCell>().ToList();
+            for (var i = 0; i < cells.Count && i < widths.Count; i++)
+            {
+                var cellProperties = cells[i].TableCellProperties ??= new TableCellProperties();
+                cellProperties.GetFirstChild<TableCellWidth>()?.Remove();
+                cellProperties.InsertAt(
+                    new TableCellWidth { Width = widths[i].ToString(), Type = TableWidthUnitValues.Dxa },
+                    0);
+            }
+        }
+
+        ReplaceChild(properties, new TableWidth
+        {
+            Width = total.ToString(),
+            Type = TableWidthUnitValues.Dxa
+        });
+        ReplaceChild(properties, new TableLayout { Type = TableLayoutValues.Fixed });
     }
 
     // ── Target: table row ─────────────────────────────────────────────────
@@ -146,7 +237,18 @@ internal sealed class FormatHandler : IOperationHandler
             ReplaceChild(rowProperties, new TableRowHeight { Val = (uint)(h * 15) }); // 1px ≈ 15 twips at 96dpi
         }
 
-        ApplyCharacterAndParagraphPropertiesToContainer(row, op);
+        // A row has no borders of its own in WordprocessingML - the cells carry them. A
+        // caller asking to rule a row means every cell in it, which is how a header row
+        // gets its underline; ignoring the request instead would look like nothing happened.
+        if (HasBorder(op))
+            foreach (var cell in row.Elements<TableCell>())
+            {
+                var cellProperties = cell.GetFirstChild<TableCellProperties>()
+                    ?? cell.InsertAt(new TableCellProperties(), 0)!;
+                ReplaceChild(cellProperties, BuildTableCellBorders(op));
+            }
+
+        ApplyCharacterAndParagraphPropertiesToContainer(context, row, op);
     }
 
     // ── Target: table cell ────────────────────────────────────────────────
@@ -159,7 +261,7 @@ internal sealed class FormatHandler : IOperationHandler
         if (HasBorder(op))
             ReplaceChild(properties, BuildTableCellBorders(op));
 
-        ApplyCharacterAndParagraphPropertiesToContainer(cell, op);
+        ApplyCharacterAndParagraphPropertiesToContainer(context, cell, op);
     }
 
     // ── Target: image ─────────────────────────────────────────────────────
@@ -186,11 +288,11 @@ internal sealed class FormatHandler : IOperationHandler
 
     // ── Helpers ──────────────────────────────────────────────────────────
 
-    private static void ApplyCharacterAndParagraphPropertiesToContainer(OpenXmlElement container, FormatOp op)
+    private static void ApplyCharacterAndParagraphPropertiesToContainer(ApplyContext context, OpenXmlElement container, FormatOp op)
     {
         foreach (var paragraph in container.Descendants<Paragraph>())
         {
-            ApplyParagraphProperties(paragraph, op);
+            ApplyParagraphProperties(context, paragraph, op);
             foreach (var run in paragraph.Elements<Run>())
                 ApplyRunProperties(run, op);
         }
@@ -214,12 +316,20 @@ internal sealed class FormatHandler : IOperationHandler
         if (op.Color is not null) ReplaceChild(rPr, new WColor { Val = op.Color });
     }
 
-    private static void ApplyParagraphProperties(Paragraph paragraph, FormatOp op)
+    private static void ApplyParagraphProperties(ApplyContext context, Paragraph paragraph, FormatOp op)
     {
+        // Numbering is written first: it creates the w:pPr the rest of this then fills in,
+        // and it owns the one child that has to sit ahead of the indent and the spacing.
+        if (op.ListStyle is { Length: > 0 } list)
+            WordNumbering.Apply(
+                WordModel.Doc(context.Package).MainDocumentPart!,
+                paragraph, list, op.ListLevel ?? 0, op.ListId ?? 0);
+
         if (op.StyleId is null && op.Alignment is null
             && op.IndentLeftTwips is null && op.IndentRightTwips is null
             && op.IndentFirstLineTwips is null
             && op.SpacingBeforeTwips is null && op.SpacingAfterTwips is null
+            && op.PageBreakBefore is null
             && !HasBorder(op))
             return;
 
@@ -227,6 +337,14 @@ internal sealed class FormatHandler : IOperationHandler
 
         if (op.StyleId is not null)
             ReplaceChild(pPr, new ParagraphStyleId { Val = op.StyleId });
+
+        // w:pageBreakBefore is a property of the paragraph rather than a break character in
+        // the text, so the page still starts here after the text above it is edited.
+        if (op.PageBreakBefore is bool breakBefore)
+        {
+            if (breakBefore) ReplaceChild(pPr, new PageBreakBefore());
+            else pPr.GetFirstChild<PageBreakBefore>()?.Remove();
+        }
 
         if (op.Alignment is not null)
             ReplaceChild(pPr, new Justification { Val = ParseAlignment(op.Alignment) });
@@ -241,7 +359,24 @@ internal sealed class FormatHandler : IOperationHandler
             var ind = existing is null ? new Indentation() : (Indentation)existing.CloneNode(deep: true);
             if (op.IndentLeftTwips is int left) ind.Left = left.ToString();
             if (op.IndentRightTwips is int right) ind.Right = right.ToString();
-            if (op.IndentFirstLineTwips is int firstLine) ind.FirstLine = firstLine.ToString();
+
+            // WordprocessingML has no negative first-line indent: w:firstLine is unsigned,
+            // and a hanging indent - the first line set back from the rest, which is how
+            // every bullet and numbered list is built - is the separate w:hanging attribute.
+            // Writing a negative into w:firstLine produces a document Word offers to repair.
+            if (op.IndentFirstLineTwips is int firstLine)
+            {
+                if (firstLine < 0)
+                {
+                    ind.FirstLine = null;
+                    ind.Hanging = (-firstLine).ToString();
+                }
+                else
+                {
+                    ind.Hanging = null;
+                    ind.FirstLine = firstLine.ToString();
+                }
+            }
             ReplaceChild(pPr, ind);
         }
 
@@ -261,47 +396,68 @@ internal sealed class FormatHandler : IOperationHandler
     // ── Borders ──────────────────────────────────────────────────────────
 
     private static bool HasBorder(FormatOp op) =>
-        op.BorderStyle is not null || op.BorderSizeEighths is not null || op.BorderColor is not null;
+        op.BorderStyle is not null || op.BorderSizeEighths is not null ||
+        op.BorderColor is not null || op.BorderEdges is not null;
 
-    private static ParagraphBorders BuildParagraphBorders(FormatOp op)
+    /// <summary>The edge names a plan may ask for, for an error message that helps.</summary>
+    public const string BorderEdgeNames = "top, left, bottom, right, insideH, insideV";
+
+    /// <summary>Whether every name in the list is one this module knows.</summary>
+    public static bool AreEdges(string? edges) =>
+        edges is null || Edges(edges).Count > 0;
+
+    /// <summary>
+    /// Parses the edge list. An unset list means all four sides plus, on a table, the
+    /// inside rules - the behaviour a border had before edges could be named.
+    /// </summary>
+    private static HashSet<string> Edges(string? edges)
+    {
+        var all = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+            { "top", "left", "bottom", "right", "insideh", "insidev" };
+
+        if (string.IsNullOrWhiteSpace(edges)) return all;
+
+        var named = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var edge in edges!.Split(','))
+        {
+            var trimmed = edge.Trim();
+            if (trimmed.Length == 0) continue;
+            if (!all.Contains(trimmed)) return new HashSet<string>();   // unknown: refuse
+            named.Add(trimmed);
+        }
+        return named;
+    }
+
+    /// <summary>
+    /// Builds the border elements for the named edges, in the order the schema declares
+    /// them: top, left, bottom, right, insideH, insideV. Any other order and Word offers
+    /// to repair the document.
+    /// </summary>
+    private static IEnumerable<OpenXmlElement> BorderEdgesOf(FormatOp op, bool inside)
     {
         var style = ParseBorderStyle(op.BorderStyle);
         var size = (uint)(op.BorderSizeEighths ?? 4);
         var color = op.BorderColor ?? "auto";
-        return new ParagraphBorders(
-            new TopBorder    { Val = style, Size = size, Color = color },
-            new LeftBorder   { Val = style, Size = size, Color = color },
-            new BottomBorder { Val = style, Size = size, Color = color },
-            new RightBorder  { Val = style, Size = size, Color = color });
+        var wanted = Edges(op.BorderEdges);
+
+        if (wanted.Contains("top")) yield return new TopBorder { Val = style, Size = size, Color = color };
+        if (wanted.Contains("left")) yield return new LeftBorder { Val = style, Size = size, Color = color };
+        if (wanted.Contains("bottom")) yield return new BottomBorder { Val = style, Size = size, Color = color };
+        if (wanted.Contains("right")) yield return new RightBorder { Val = style, Size = size, Color = color };
+
+        if (!inside) yield break;
+        if (wanted.Contains("insideH")) yield return new InsideHorizontalBorder { Val = style, Size = size, Color = color };
+        if (wanted.Contains("insideV")) yield return new InsideVerticalBorder { Val = style, Size = size, Color = color };
     }
 
-    private static TableBorders BuildTableBorders(FormatOp op)
-    {
-        var style = ParseBorderStyle(op.BorderStyle);
-        var size = (uint)(op.BorderSizeEighths ?? 4);
-        var color = op.BorderColor ?? "auto";
-        // top, left, bottom, right, insideH, insideV - the order the schema declares.
-        // Any other and Word offers to repair the document.
-        return new TableBorders(
-            new TopBorder { Val = style, Size = size, Color = color },
-            new LeftBorder { Val = style, Size = size, Color = color },
-            new BottomBorder { Val = style, Size = size, Color = color },
-            new RightBorder { Val = style, Size = size, Color = color },
-            new InsideHorizontalBorder { Val = style, Size = size, Color = color },
-            new InsideVerticalBorder { Val = style, Size = size, Color = color });
-    }
+    private static ParagraphBorders BuildParagraphBorders(FormatOp op) =>
+        new(BorderEdgesOf(op, inside: false).ToArray());
 
-    private static TableCellBorders BuildTableCellBorders(FormatOp op)
-    {
-        var style = ParseBorderStyle(op.BorderStyle);
-        var size = (uint)(op.BorderSizeEighths ?? 4);
-        var color = op.BorderColor ?? "auto";
-        return new TableCellBorders(
-            new TopBorder { Val = style, Size = size, Color = color },
-            new LeftBorder { Val = style, Size = size, Color = color },
-            new BottomBorder { Val = style, Size = size, Color = color },
-            new RightBorder { Val = style, Size = size, Color = color });
-    }
+    private static TableBorders BuildTableBorders(FormatOp op) =>
+        new(BorderEdgesOf(op, inside: true).ToArray());
+
+    private static TableCellBorders BuildTableCellBorders(FormatOp op) =>
+        new(BorderEdgesOf(op, inside: false).ToArray());
 
     // ── Parsing ──────────────────────────────────────────────────────────
 
@@ -359,6 +515,8 @@ internal sealed class FormatHandler : IOperationHandler
         op.Alignment is not null ||
         op.IndentLeftTwips is not null || op.IndentRightTwips is not null || op.IndentFirstLineTwips is not null ||
         op.SpacingBeforeTwips is not null || op.SpacingAfterTwips is not null ||
+        op.PageBreakBefore is not null || op.ListStyle is not null ||
+        op.ColumnWidthsPx is not null ||
         HasBorder(op) ||
         op.WidthPx is not null || op.HeightPx is not null;
 
@@ -453,12 +611,44 @@ internal sealed class FormatHandler : IOperationHandler
         typeof(FontSize), typeof(FontSizeComplexScript), typeof(Highlight), typeof(Underline)
     };
 
-    private static readonly Type[] ParagraphPropertyOrder =
+    /// <summary>
+    /// The order <c>CT_PPr</c> declares these in. <c>w:pageBreakBefore</c> comes <em>before</em>
+    /// <c>w:numPr</c>, not after it - putting a page break on a numbered paragraph is what
+    /// turns that into a document Word offers to repair.
+    /// </summary>
+    internal static readonly Type[] ParagraphPropertyOrder =
     {
-        typeof(ParagraphStyleId), typeof(NumberingProperties), typeof(ParagraphBorders),
-        typeof(SpacingBetweenLines), typeof(Indentation), typeof(Justification),
-        typeof(OutlineLevel)
+        typeof(ParagraphStyleId), typeof(PageBreakBefore), typeof(NumberingProperties),
+        typeof(ParagraphBorders), typeof(SpacingBetweenLines), typeof(Indentation),
+        typeof(Justification), typeof(OutlineLevel)
     };
+
+    /// <summary>
+    /// Places a child of <c>w:pPr</c> where the schema wants it. Shared so the numbering
+    /// writer cannot drift from this one - the two disagreeing is exactly the bug this
+    /// order exists to prevent.
+    /// </summary>
+    internal static void PlaceParagraphProperty(ParagraphProperties properties, OpenXmlElement child)
+    {
+        var rank = Rank(ParagraphPropertyOrder, child);
+        if (rank < 0)
+        {
+            properties.AppendChild(child);
+            return;
+        }
+
+        foreach (var existing in properties.ChildElements)
+        {
+            var existingRank = Rank(ParagraphPropertyOrder, existing);
+            if (existingRank >= 0 && existingRank > rank)
+            {
+                properties.InsertBefore(child, existing);
+                return;
+            }
+        }
+
+        properties.AppendChild(child);
+    }
 
     private static readonly Type[] TablePropertyOrder =
     {

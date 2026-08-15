@@ -322,6 +322,89 @@ public class SlideShapeTests
         Assert.Contains("no paragraph style table", Assert.Single(report.Errors).Message);
     }
 
+    [Fact]
+    public void Resizing_a_table_frame_rescales_its_columns()
+    {
+        var client = Client();
+        var withTable = Apply(client, new PowerPointModule().CreateBlank(), new InsertTableOp
+        {
+            Target = new NodeAnchor { Kind = "slide", Path = "slide#256" },
+            Table = new TableData
+            {
+                Headers = new[] { "Account", "H1", "Status" },
+                Rows = new List<IReadOnlyList<string>> { new[] { "Compass", "6.2", "Open" } }
+            }
+        });
+
+        var table = client.Inspect(withTable).Nodes.Single(n => n.Kind == "table");
+        var frame = "shape#" + table.Path.Substring("table#".Length);
+
+        var widened = Apply(client, withTable, new FormatOp
+        {
+            Target = new NodeAnchor { Kind = "shape", Path = frame },
+            WidthPx = 1104
+        });
+
+        var grid = GridOf(widened);
+        Assert.Equal(3, grid.Count);
+
+        // The grid totals the frame exactly: a table that keeps its old grid renders at
+        // its old width and the resize looks like it did nothing.
+        Assert.Equal(1104 * 9525L, grid.Sum(c => c.Width!.Value));
+
+        // Equal columns in, equal columns out.
+        Assert.All(grid, c => Assert.InRange(c.Width!.Value, 1104 * 9525L / 3 - 2, 1104 * 9525L / 3 + 2));
+        AssertValid(widened);
+    }
+
+    [Fact]
+    public void A_table_can_name_a_built_in_style()
+    {
+        var client = Client();
+        var deck = Apply(client, new PowerPointModule().CreateBlank(), new InsertTableOp
+        {
+            Target = new NodeAnchor { Kind = "slide", Path = "slide#256" },
+            Table = new TableData
+            {
+                Headers = new[] { "Account", "H1" },
+                Rows = new List<IReadOnlyList<string>> { new[] { "Compass", "6.2" } },
+                StyleId = "none"
+            }
+        });
+
+        using var stream = new MemoryStream(deck);
+        using var document = PresentationDocument.Open(stream, isEditable: false);
+        var properties = document.PresentationPart!.SlideParts
+            .SelectMany(p => p.Slide.Descendants<A.TableProperties>()).Single();
+
+        Assert.Equal("{2D5ABB26-0587-4C30-8999-92F81FD0307C}",
+            properties.GetFirstChild<A.TableStyleId>()!.Text);
+
+        // a:tableStyleId closes a:tblPr; before the grid it would invalidate the table.
+        Assert.Equal(properties.ChildElements.Count - 1,
+            properties.ChildElements.ToList().FindIndex(c => c is A.TableStyleId));
+        AssertValid(deck);
+    }
+
+    [Fact]
+    public void A_table_style_that_is_not_built_in_is_refused()
+    {
+        var client = Client();
+        var report = Preview(client, new PowerPointModule().CreateBlank(), new InsertTableOp
+        {
+            Target = new NodeAnchor { Kind = "slide", Path = "slide#256" },
+            Table = new TableData
+            {
+                Headers = new[] { "Account" },
+                StyleId = "TableGrid"
+            }
+        });
+
+        var error = Assert.Single(report.Errors);
+        Assert.Equal(ValidationErrorCodes.InvalidOperation, error.Code);
+        Assert.Contains("none, grid, themed, banded", error.Message);
+    }
+
     // ── helpers ───────────────────────────────────────────────────────────────
 
     /// <summary>The body placeholder of the slide the bullet tests author.</summary>
@@ -343,6 +426,15 @@ public class SlideShapeTests
             .Where(p => p.ParaId.StartsWith("slide257/shape3/p", StringComparison.Ordinal))
             .Select(p => p.Text)
             .ToList();
+
+    private static List<A.GridColumn> GridOf(byte[] deck)
+    {
+        using var stream = new MemoryStream(deck);
+        using var document = PresentationDocument.Open(stream, isEditable: false);
+        return document.PresentationPart!.SlideParts
+            .SelectMany(p => p.Slide.Descendants<A.GridColumn>())
+            .ToList();
+    }
 
     private static IEnumerable<A.Paragraph> ParagraphsOf(byte[] deck)
     {

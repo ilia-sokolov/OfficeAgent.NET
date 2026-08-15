@@ -54,7 +54,8 @@ public sealed class PlanOperationJsonConverter : JsonConverter<PlanOperation>
             ["headerFooter"] = typeof(HeaderFooterOp),
             ["insertMedia"] = typeof(InsertMediaOp),
             ["transition"] = typeof(TransitionOp),
-            ["animate"] = typeof(AnimateOp)
+            ["animate"] = typeof(AnimateOp),
+            ["backgroundImage"] = typeof(BackgroundImageOp)
         };
 
     private static string KnownVerbs => string.Join(", ", ByVerb.Keys.OrderBy(v => v, StringComparer.Ordinal));

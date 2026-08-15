@@ -32,7 +32,8 @@ internal sealed class SlideFormatHandler : IOperationHandler
     public bool CanHandle(PlanOperation operation) =>
         operation is FormatOp { Target: TextSpanAnchor } ||
         operation is FormatOp { Target: NodeAnchor { Kind: "image" } } ||
-        operation is FormatOp { Target: NodeAnchor { Kind: "shape" } };
+        operation is FormatOp { Target: NodeAnchor { Kind: "shape" } } ||
+        operation is FormatOp { Target: NodeAnchor { Kind: "slide" } };
 
     /// <inheritdoc />
     public OperationPreview Preview(ApplyContext context, PlanOperation operation)
@@ -45,6 +46,7 @@ internal sealed class SlideFormatHandler : IOperationHandler
 
         return op.Target switch
         {
+            NodeAnchor { Kind: "slide" } slide => PreviewBackground(op, slide, context),
             NodeAnchor { Kind: "shape" } shape => PreviewShape(op, shape, context),
             NodeAnchor node => PreviewImage(op, node, context),
             _ => PreviewText(op, (TextSpanAnchor)op.Target!, context)
@@ -56,6 +58,14 @@ internal sealed class SlideFormatHandler : IOperationHandler
     {
         var op = (FormatOp)operation;
 
+        if (op.Target is NodeAnchor { Kind: "slide" } slideAnchor)
+        {
+            var slide = SlideList.Target(context, slideAnchor)
+                ?? throw new InvalidOperationException($"Slide '{slideAnchor.Path}' vanished before apply.");
+            SlidePaint.SetBackground(slide, op.FillColor!);
+            return;
+        }
+
         if (op.Target is NodeAnchor { Kind: "shape" } shapeAnchor)
         {
             var located = ShapeNodeProvider.Locate(shapeAnchor.Path, context.Package)
@@ -65,6 +75,9 @@ internal sealed class SlideFormatHandler : IOperationHandler
                 op.YPx is { } y ? Emu.FromPixels(y) : null,
                 op.WidthPx is { } w ? Emu.FromPixels(w) : null,
                 op.HeightPx is { } h ? Emu.FromPixels(h) : null);
+            SlidePaint.SetShapeFill(located.Element, op.FillColor, op.LineColor, op.LineWidthPx);
+            if (op.VerticalAlignment is { Length: > 0 } vertical)
+                SlidePaint.SetVerticalAlignment(located.Element, vertical);
             return;
         }
 
@@ -254,6 +267,43 @@ internal sealed class SlideFormatHandler : IOperationHandler
         if (op.HeightPx is { } height) transform.Extents.Cy = height * EmuPerPixel;
     }
 
+    // ── slide background ──────────────────────────────────────────────────────
+
+    /// <summary>
+    /// A slide target paints the background and nothing else. The rest of the vocabulary
+    /// needs something to apply to - a run, a paragraph, a box - and a slide is none of
+    /// them, so accepting bold here would change nothing while appearing to succeed.
+    /// </summary>
+    private static OperationPreview PreviewBackground(FormatOp op, NodeAnchor anchor, ApplyContext context)
+    {
+        var slide = SlideList.Target(context, anchor);
+        if (slide is null) return OperationPreview.Fail(SlideList.NoSuchSlide(anchor));
+
+        if (op.FillColor is null)
+            return OperationPreview.Fail(new ValidationError(
+                ValidationErrorCodes.InvalidOperation,
+                "Formatting a slide sets its background, so fillColor is required - a hex " +
+                "colour such as \"1F3A5F\", or \"none\" to clear it. To style the slide's " +
+                "text, target a paragraph; to style a box on it, target a shape.",
+                anchor));
+
+        if (!SlidePaint.IsColour(op.FillColor))
+            return OperationPreview.Fail(new ValidationError(
+                ValidationErrorCodes.InvalidOperation,
+                $"'{op.FillColor}' is not a colour. Use six hex digits such as \"1F3A5F\", or \"none\".",
+                anchor));
+
+        return OperationPreview.Ok(new ProposedChange
+        {
+            Target = anchor,
+            Verb = "format",
+            Before = slide.Part.Slide.CommonSlideData?.Background is null ? "inherited" : "painted",
+            After = SlidePaint.IsNone(op.FillColor) ? "background cleared" : $"background #{SlidePaint.Hex(op.FillColor)}",
+            Context = $"slide {slide.Number}",
+            BlastRadius = 1
+        });
+    }
+
     // ── shape geometry ────────────────────────────────────────────────────────
 
     /// <summary>
@@ -271,11 +321,31 @@ internal sealed class SlideFormatHandler : IOperationHandler
                 $"No shape with path '{anchor.Path}'. Shape paths come from inspect_document.nodes.",
                 anchor));
 
-        if (op.WidthPx is null && op.HeightPx is null && op.XPx is null && op.YPx is null)
+        if (op.WidthPx is null && op.HeightPx is null && op.XPx is null && op.YPx is null &&
+            op.FillColor is null && op.LineColor is null && op.LineWidthPx is null &&
+            op.VerticalAlignment is null)
             return OperationPreview.Fail(new ValidationError(
                 ValidationErrorCodes.InvalidOperation,
-                "Formatting a shape moves or resizes it, so widthPx, heightPx, xPx or yPx is required. " +
+                "Formatting a shape moves, resizes or paints it, so one of widthPx, heightPx, " +
+                "xPx, yPx, fillColor, lineColor, lineWidthPx or verticalAlignment is required. " +
                 "To style its text, target a paragraph instead.",
+                anchor));
+
+        foreach (var (name, value) in new[] { ("fillColor", op.FillColor), ("lineColor", op.LineColor) })
+            if (value is not null && !SlidePaint.IsColour(value))
+                return OperationPreview.Fail(new ValidationError(
+                    ValidationErrorCodes.InvalidOperation,
+                    $"'{value}' is not a colour for {name}. Use six hex digits such as \"1F3A5F\", or \"none\".",
+                    anchor));
+
+        if (op.LineWidthPx is < 0)
+            return OperationPreview.Fail(new ValidationError(
+                ValidationErrorCodes.InvalidOperation, "lineWidthPx cannot be negative.", anchor));
+
+        if (op.VerticalAlignment is not null && !SlidePaint.IsAnchor(op.VerticalAlignment))
+            return OperationPreview.Fail(new ValidationError(
+                ValidationErrorCodes.InvalidOperation,
+                $"'{op.VerticalAlignment}' is not a vertical alignment. Expected top, middle, or bottom.",
                 anchor));
 
         if (op.WidthPx is <= 0 || op.HeightPx is <= 0)
@@ -295,9 +365,13 @@ internal sealed class SlideFormatHandler : IOperationHandler
             : "inherited from layout";
 
         var parts = new List<string>();
-        if (op.XPx is { } px || op.YPx is { } py) parts.Add($"at {op.XPx?.ToString() ?? "="},{op.YPx?.ToString() ?? "="}");
+        if (op.XPx is not null || op.YPx is not null) parts.Add($"at {op.XPx?.ToString() ?? "="},{op.YPx?.ToString() ?? "="}");
         if (op.WidthPx is not null || op.HeightPx is not null)
             parts.Add($"{op.WidthPx?.ToString() ?? "auto"}×{op.HeightPx?.ToString() ?? "auto"}");
+        if (op.FillColor is not null) parts.Add(SlidePaint.IsNone(op.FillColor) ? "no fill" : $"fill #{SlidePaint.Hex(op.FillColor)}");
+        if (op.LineColor is not null) parts.Add(SlidePaint.IsNone(op.LineColor) ? "no outline" : $"outline #{SlidePaint.Hex(op.LineColor)}");
+        if (op.LineWidthPx is { } lw) parts.Add($"outline {lw}px");
+        if (op.VerticalAlignment is { Length: > 0 } va) parts.Add($"text {va}");
 
         return OperationPreview.Ok(new ProposedChange
         {
@@ -324,7 +398,15 @@ internal sealed class SlideFormatHandler : IOperationHandler
             op.IndentFirstLineTwips is not null) rejected.Add("indents");
         if (op.SpacingBeforeTwips is not null || op.SpacingAfterTwips is not null) rejected.Add("spacing");
         if (op.BorderStyle is { Length: > 0 } || op.BorderSizeEighths is not null ||
-            op.BorderColor is { Length: > 0 }) rejected.Add("borders");
+            op.BorderColor is { Length: > 0 } || op.BorderEdges is { Length: > 0 })
+            rejected.Add("borders");
+        if (op.PageBreakBefore is not null)
+            rejected.Add("pageBreakBefore (a deck has slides, not pages - use insertSlide)");
+        if (op.ColumnWidthsPx is not null)
+            rejected.Add("columnWidthsPx (a deck's table follows its frame - resize that with widthPx)");
+        if (op.ListStyle is { Length: > 0 } || op.ListLevel is not null || op.ListId is not null)
+            rejected.Add("listStyle/listLevel/listId (a slide's bullets come from its layout - " +
+                         "use the 'level' on insert for depth)");
 
         return rejected.Count == 0
             ? null

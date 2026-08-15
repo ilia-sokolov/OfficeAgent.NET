@@ -98,10 +98,16 @@ internal sealed class InsertImageHandler : IOperationHandler
             op.Base64Bytes
             ?? throw new InvalidOperationException("insertImage Base64Bytes is null at apply time; the ImageDocumentId was not resolved by the client."));
 
+        // The image belongs to the part the drawing lives in, not to the document part. A
+        // relationship id is only meaningful within its own part, so a picture placed in a
+        // header or footer whose bytes were added to the main part references an id that
+        // does not exist there - and Word calls the file corrupt.
+        var owner = PartOf(paragraph) ?? main;
+
         // An image is a reference to a shared resource: when identical bytes are already
-        // embedded in the document, point the new drawing at that existing ImagePart
+        // embedded in the same part, point the new drawing at that existing ImagePart
         // instead of duplicating the bytes in the package.
-        var relationshipId = ReferenceOrAddImagePart(main, imageType, bytes);
+        var relationshipId = ReferenceOrAddImagePart(owner, imageType, bytes);
 
         // Each drawing needs its own DocProperties id; deriving it from the (now shared)
         // relationship id would collide when the same image is referenced more than once.
@@ -121,20 +127,33 @@ internal sealed class InsertImageHandler : IOperationHandler
     }
 
     /// <summary>
-    /// Returns the relationship id for the image bytes, reusing an already-embedded
-    /// <see cref="ImagePart"/> whose content is byte-identical or adding a fresh part
-    /// when none matches. Deduplicating keeps a repeated image a single shared resource.
+    /// The part that owns an element: the header, footer, or the document body. Walking to
+    /// the root is the only way there - a paragraph does not know its own part.
     /// </summary>
-    private static string ReferenceOrAddImagePart(MainDocumentPart main, PartTypeInfo imageType, byte[] bytes)
+    private static OpenXmlPartContainer? PartOf(OpenXmlElement element)
     {
-        foreach (var existing in main.ImageParts)
-            if (PartContentEquals(existing, bytes))
-                return main.GetIdOfPart(existing);
+        var root = element;
+        while (root.Parent is not null) root = root.Parent;
+        return (root as OpenXmlPartRootElement)?.OpenXmlPart;
+    }
 
-        var imagePart = main.AddImagePart(imageType);
+    /// <summary>
+    /// Returns the relationship id for the image bytes, reusing an already-embedded
+    /// <see cref="ImagePart"/> in the same part whose content is byte-identical, or adding
+    /// a fresh part when none matches. Deduplicating keeps a repeated image a single shared
+    /// resource; the reuse is per part, because a relationship id does not cross one.
+    /// </summary>
+    private static string ReferenceOrAddImagePart(
+        OpenXmlPartContainer owner, PartTypeInfo imageType, byte[] bytes)
+    {
+        foreach (var existing in owner.GetPartsOfType<ImagePart>())
+            if (PartContentEquals(existing, bytes))
+                return owner.GetIdOfPart(existing);
+
+        var imagePart = owner.AddNewPart<ImagePart>(imageType.ContentType);
         using (var source = new MemoryStream(bytes, writable: false))
             imagePart.FeedData(source);
-        return main.GetIdOfPart(imagePart);
+        return owner.GetIdOfPart(imagePart);
     }
 
     /// <summary>Returns a DocProperties id one greater than any drawing already present.</summary>

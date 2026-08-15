@@ -18,6 +18,30 @@ internal static class SlideTableBuilder
     private const long RowHeight = 370840L;
 
     /// <summary>
+    /// The built-in table styles a plan may name. PresentationML identifies a table style
+    /// by GUID rather than by name, and the deck does not have to carry a table-styles part
+    /// for these - PowerPoint resolves its own built-ins. Names are used rather than the
+    /// GUIDs so a plan stays readable, and because a mistyped GUID fails silently as an
+    /// unstyled table where a mistyped name can be refused.
+    /// </summary>
+    private static readonly Dictionary<string, string> Styles =
+        new(StringComparer.OrdinalIgnoreCase)
+        {
+            ["none"] = "{2D5ABB26-0587-4C30-8999-92F81FD0307C}",
+            ["grid"] = "{5940675A-B579-460E-94D1-54222C63F5DA}",
+            ["themed"] = "{3C2FFA5D-87B4-456A-9821-1D502468CF0F}",
+            ["banded"] = "{5C22544A-7EE6-4342-B048-85BDC9FD1C3A}"
+        };
+
+    /// <summary>The style names a plan may use, for an error message that helps.</summary>
+    public static string StyleNames => string.Join(", ", Styles.Keys);
+
+    /// <summary>Whether the name is one this module knows.</summary>
+    public static bool IsStyle(string? name) => name is not null && Styles.ContainsKey(name);
+
+    private static string StyleGuid(string name) => Styles[name];
+
+    /// <summary>
     /// Builds a <c>p:graphicFrame</c> holding a table with the supplied content. Headers,
     /// when present, become the first row and the table is marked <c>firstRow</c> so the
     /// deck's table style renders them as a header band.
@@ -36,9 +60,13 @@ internal static class SlideTableBuilder
         for (var i = 0; i < columnCount; i++)
             grid.Append(new A.GridColumn { Width = columnWidth });
 
-        var table = new A.Table(
-            new A.TableProperties { FirstRow = data.Headers.Count > 0, BandRow = true },
-            grid);
+        var properties = new A.TableProperties { FirstRow = data.Headers.Count > 0, BandRow = true };
+
+        // a:tableStyleId is the last child of a:tblPr, after the fill and the effect.
+        if (data.StyleId is { Length: > 0 } style)
+            properties.Append(new A.TableStyleId { Text = StyleGuid(style) });
+
+        var table = new A.Table(properties, grid);
 
         foreach (var row in rows)
             table.Append(BuildRow(row, columnCount));

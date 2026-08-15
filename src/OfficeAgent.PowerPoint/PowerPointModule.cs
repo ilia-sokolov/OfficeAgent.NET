@@ -128,6 +128,7 @@ public sealed class PowerPointModule : IFormatModule, IBlankDocumentFactory, IPl
             new SlideInsertMediaHandler(),
             new SlideTransitionHandler(),
             new SlideAnimateHandler(),
+            new SlideBackgroundImageHandler(),
             new SlideRemoveHandler(),
             new SlideMoveHandler(),
             new SlideDuplicateHandler()

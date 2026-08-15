@@ -52,8 +52,9 @@ guessing which line was meant; see [Anchor stability](#anchor-stability).
 | Verb | Target | Notes |
 | --- | --- | --- |
 | `changeText` | paragraph | Works across slides, table cells, and notes. An empty `expect` writes into an empty paragraph — the route to filling a new deck's placeholder. `mode: "Tracked"` is **refused** — PresentationML has no redline vocabulary |
-| `format` | paragraph / image node / shape node | bold, italic, underline, `sizeHalfPoints`, `fontFamily`, `color`, `highlight`, `alignment`; `widthPx`/`heightPx` resizes an image; on a **shape** node `xPx`/`yPx`/`widthPx`/`heightPx` move and resize anything - text box, table frame, picture - and nothing else is accepted there. An empty `expect` styles the whole paragraph. Word-only measures (`styleId`, indents, spacing, borders) are **refused**, not ignored |
-| `insertTable` | slide node | Placed below existing content |
+| `format` | paragraph / image node / shape node / slide node | bold, italic, underline, `sizeHalfPoints`, `fontFamily`, `color`, `highlight`, `alignment`; `widthPx`/`heightPx` resizes an image; on a **shape** node `xPx`/`yPx`/`widthPx`/`heightPx` move and resize anything - text box, table frame, picture - and `fillColor`, `lineColor`, `lineWidthPx` and `verticalAlignment` (`top`/`middle`/`bottom`) paint it; on a **slide** node `fillColor` paints the background. `none` clears a fill or an outline. An empty `expect` styles the whole paragraph. Word-only measures (`styleId`, indents, spacing, borders, `pageBreakBefore`) are **refused**, not ignored |
+| `backgroundImage` | none (every slide), or slide node | An image behind the slide, stretched to fill it. `opacity` 0–1 — set it for any photograph with text over it. No image at all clears the background. A flat colour is `format` with `fillColor` |
+| `insertTable` | slide node | Placed below existing content. `table.styleId` names a built-in look — `none` (no rules), `grid`, `themed`, `banded`. Left unset, PowerPoint draws its default boxed grid. Resizing the frame with `format` rescales the columns |
 | `removeTable` | table node | Removes the frame, not just the `a:tbl` |
 | `insertTableRows` / `removeTableRows` | table node | `Start`/`End`/`Before`/`After`; negative indices count from the end |
 | `insertTableColumns` / `removeTableColumns` | table node | Grid and rows stay in step |
