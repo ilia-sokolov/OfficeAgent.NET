@@ -412,10 +412,20 @@ public sealed class FileSystemDocumentProvider : IDocumentProvider, IDocumentCre
             throw Error(ProviderErrorCode.AccessDenied,
                 "The provider's own index directory cannot be registered as a document.");
 
+        // The boundary is enforced before existence is probed. Asking whether the file
+        // exists first means asking *through* whatever links are in the path: the answer
+        // then depends on the target rather than on the link, so the same escape attempt
+        // reports NotFound or AccessDenied according to what happens to be on the other
+        // side. It also answers an existence question about a location outside the root.
+        // The boundary is enforced before existence is probed. Asking whether the file
+        // exists first means asking *through* whatever links are in the path: the answer
+        // then depends on the target rather than on the link, so the same escape attempt
+        // reports NotFound or AccessDenied according to what happens to be on the other
+        // side. It also answers an existence question about a location outside the root.
+        EnsureNoReparsePoints(fullPath, rootWithSeparator);
+
         if (!File.Exists(fullPath))
             throw Error(ProviderErrorCode.NotFound, $"The source file '{fullPath}' does not exist.");
-
-        EnsureNoReparsePoints(fullPath, rootWithSeparator);
 
         var extension = NormalizeExtension(Path.GetExtension(fullPath));
         if (!_allowedExtensions.Contains(extension))
@@ -437,6 +447,13 @@ public sealed class FileSystemDocumentProvider : IDocumentProvider, IDocumentCre
                      StringSplitOptions.RemoveEmptyEntries))
         {
             current = Path.Combine(current, component);
+
+            // Stop at the first component that is not there. Whether the path exists is
+            // decided by the caller afterwards; asking for the attributes of a missing
+            // entry would throw an exception that says nothing useful. A link whose target
+            // cannot be followed still fails here, on the link itself, which is the point.
+            if (!File.Exists(current) && !Directory.Exists(current)) return;
+
             var attributes = File.GetAttributes(current);
             if ((attributes & FileAttributes.ReparsePoint) == FileAttributes.ReparsePoint)
                 throw Error(

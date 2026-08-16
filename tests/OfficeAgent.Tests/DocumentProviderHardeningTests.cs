@@ -99,6 +99,31 @@ public class DocumentProviderHardeningTests
     }
 
     [Fact]
+    public async Task Register_rejects_a_link_it_cannot_follow_rather_than_calling_it_missing()
+    {
+        // The escape attempt is the same whether or not the target is reachable. On a
+        // machine that does not evaluate symlinks - which is how this first showed up, on a
+        // CI runner - the file behind the link cannot be seen at all, and probing existence
+        // before the boundary reported NotFound for what is an access violation.
+        using var workspace = new Workspace();
+        using var outsider = new Workspace();
+        var link = Path.Combine(workspace.Root, "linked");
+        if (!TryCreateDirectoryLink(link, Path.Combine(outsider.Root, "never-created"))) return;
+
+        try
+        {
+            var error = await Assert.ThrowsAsync<DocumentProviderException>(() =>
+                workspace.Provider().RegisterAsync(Path.Combine(link, "secret.docx")));
+
+            Assert.Equal(ProviderErrorCode.AccessDenied, error.Code);
+        }
+        finally
+        {
+            if (Directory.Exists(link)) Directory.Delete(link);
+        }
+    }
+
+    [Fact]
     public async Task Register_rejects_missing_source()
     {
         using var workspace = new Workspace();
@@ -364,8 +389,22 @@ public class DocumentProviderHardeningTests
         using (await provider.OpenReadAsync(saved)) { }   // the new version is readable
     }
 
+    /// <summary>
+    /// Creates a directory that is a reparse point, by whatever means the machine allows.
+    /// </summary>
+    /// <remarks>
+    /// A junction is tried first on Windows because creating a <em>symbolic</em> link needs
+    /// SeCreateSymbolicLinkPrivilege, which an ordinary developer account does not hold. The
+    /// symlink-only version of this helper therefore returned false on most workstations and
+    /// every test that used it skipped in silence - so the escape paths these tests exist to
+    /// cover were only ever exercised on CI, and a real ordering defect in the provider sat
+    /// undetected locally until a build agent found it. A junction needs no privilege, is a
+    /// reparse point all the same, and makes these run everywhere.
+    /// </remarks>
     private static bool TryCreateDirectoryLink(string path, string target)
     {
+        if (OperatingSystem.IsWindows() && TryCreateJunction(path, target)) return true;
+
         try
         {
             Directory.CreateSymbolicLink(path, target);
@@ -382,6 +421,35 @@ public class DocumentProviderHardeningTests
         catch (IOException)
         {
             // Windows reports a missing symbolic-link privilege as IOException.
+            return false;
+        }
+    }
+
+    private static bool TryCreateJunction(string path, string target)
+    {
+        try
+        {
+            var info = new System.Diagnostics.ProcessStartInfo("cmd.exe")
+            {
+                RedirectStandardOutput = true,
+                RedirectStandardError = true,
+                UseShellExecute = false,
+                CreateNoWindow = true
+            };
+            info.ArgumentList.Add("/c");
+            info.ArgumentList.Add("mklink");
+            info.ArgumentList.Add("/J");
+            info.ArgumentList.Add(path);
+            info.ArgumentList.Add(target);
+
+            using var process = System.Diagnostics.Process.Start(info);
+            if (process is null) return false;
+
+            if (!process.WaitForExit(15_000)) return false;
+            return process.ExitCode == 0 && Directory.Exists(path);
+        }
+        catch (Exception)
+        {
             return false;
         }
     }
