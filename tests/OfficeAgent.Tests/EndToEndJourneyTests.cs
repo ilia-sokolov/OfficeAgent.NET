@@ -74,6 +74,41 @@ public class EndToEndJourneyTests
     }
 
     [Fact]
+    public async Task Tool_plan_snapshot_rejects_document_drift()
+    {
+        using var host = new AgentHost();
+        var tools = host.Tools;
+        host.Stage("contract.docx", DocxFactory.Contract());
+        var documentId = Field(
+            await tools.RegisterDocument("workspace", "contract.docx"), "documentId");
+
+        using var inspected = Json(await tools.InspectDocument("workspace", documentId));
+        var snapshot = inspected.RootElement.GetProperty("snapshot").GetString()!;
+        using var hits = Json(await tools.FindInDocument("workspace", documentId, "Acme Corp"));
+        var paraId = hits.RootElement[0].GetProperty("paraId").GetString()!;
+
+        var drift = $$"""
+            [ { "op": "changeText",
+                "target": { "paraId": "{{paraId}}", "expect": "Acme Corp", "occurrence": 0 },
+                "with": "Acme Holdings", "mode": "Direct" } ]
+            """;
+        using var changed = Json(await tools.ApplyPlan("workspace", documentId, drift));
+        Assert.True(changed.RootElement.GetProperty("committed").GetBoolean());
+
+        var stalePlan = JsonSerializer.Serialize(new
+        {
+            snapshot = new { eTag = snapshot },
+            operations = Array.Empty<object>()
+        });
+        using var preview = Json(await tools.PreviewPlan("workspace", documentId, stalePlan));
+
+        Assert.False(preview.RootElement.GetProperty("isValid").GetBoolean());
+        Assert.Contains(
+            preview.RootElement.GetProperty("errors").EnumerateArray(),
+            error => error.GetProperty("Code").GetString() == "stale-snapshot");
+    }
+
+    [Fact]
     public async Task Journey_draft_a_new_document_and_keep_editing_it()
     {
         using var host = new AgentHost();

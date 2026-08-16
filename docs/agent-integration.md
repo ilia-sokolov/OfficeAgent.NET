@@ -3,8 +3,10 @@
 `OfficeAgent.AgentFramework` exposes the OfficeAgent workflow as
 Microsoft.Extensions.AI `AIFunction` tools through `OfficeAgentTools`. The tools
 address documents by `(connectionId, documentId)` and route every call through
-`OfficeAgentClient`, so the language model never sees a file path or credential
-and cannot leave the storage connection the host configured. By default the host
+`OfficeAgentClient`, so the default tool surface gives the model opaque ids and
+never credentials. Opt-in registration and composite tools also accept a path
+or SharePoint source from the model. In either case, the provider enforces the
+configured connection boundary. By default the host
 pre-registers documents (`OfficeAgentClient.RegisterAsync`) and threads the
 resulting opaque id into the agent's system prompt; hosts that want the agent to
 stage its own ids opt in to the registration tools (below).
@@ -14,6 +16,15 @@ including bad input - is returned as structured JSON, so the model gets an error
 it can read and react to instead of an exception.
 
 ## Wire up
+
+Install the integration, format modules, and dependency-injection container:
+
+```bash
+dotnet add package OfficeAgent.AgentFramework
+dotnet add package OfficeAgent.Word
+dotnet add package OfficeAgent.PowerPoint
+dotnet add package Microsoft.Extensions.DependencyInjection
+```
 
 ```csharp
 using Microsoft.Extensions.DependencyInjection;
@@ -48,12 +59,35 @@ The `seeded.ItemId` goes into the system prompt; the LLM threads it through ever
 The default agent surface is read-and-edit only - registration and removal are
 host responsibilities, and the agent cannot supply file paths.
 
+The function schemas use strict mode: every listed argument is required on the
+wire even when it has a semantic default. Send the defaults shown below rather
+than omitting a property.
+
 | Tool | Purpose |
 | --- | --- |
-| `inspect_document(connectionId, documentId, fidelity?, paragraphOffset?, paragraphLimit?)` | Returns outline, paragraphs (with their containing table when applicable), content controls, nodes (tables, images, document properties, revisions), styles, and a snapshot etag. Pages large documents. |
-| `find_in_document(connectionId, documentId, pattern, regex?, wholeWord?, caseSensitive?)` | Returns content-verified anchors usable as plan targets. |
-| `preview_plan(connectionId, documentId, planJson)` | Validates a `DocumentPlan` JSON without writing. Returns `{ isValid, changes, errors }`. |
-| `apply_plan(connectionId, documentId, planJson, saveMode?, newName?)` | Applies the plan atomically and saves through the provider. `saveMode` is `Replace` (default), `NewVersion`, or `NewDocument` (with `newName`); an unrecognised value is refused rather than defaulted. Returns `{ isValid, committed, outputConnectionId, outputDocumentId, outputVersion, outputName, outputContentType, changes, errors }`. |
+| `inspect_document(connectionId, documentId, fidelity, paragraphOffset, paragraphLimit)` | Returns format-specific structure and a snapshot etag. Send `"content"`, `0`, and `200` for the defaults. Pages large documents. |
+| `find_in_document(connectionId, documentId, pattern, regex, wholeWord, caseSensitive)` | Returns content-verified anchors usable as plan targets. Send `false` for each default search flag. |
+| `preview_plan(connectionId, documentId, planJson)` | Validates a `DocumentPlan` JSON without writing. Returns the canonical plan-report envelope below, with `committed: false` and null output fields. |
+| `apply_plan(connectionId, documentId, planJson, saveMode, newName)` | Applies the plan atomically and saves through the provider. Send `"Replace"` and `""` for the defaults; other modes are `NewVersion` and `NewDocument`. `NewDocument` optionally accepts `newName`; when it is empty, the provider derives a versioned sibling name. An unrecognised mode is refused. |
+
+Plan reports always contain `isValid`, `committed`, `sourceDocumentId`,
+`outputConnectionId`, `outputDocumentId`, `outputVersion`, `outputName`,
+`outputContentType`, `changes`, and `errors`. Non-applicable values are `null`.
+
+`inspect_document` returns `snapshot` as an etag string. To detect drift in the
+format's covered text hosts, copy it into the plan token:
+
+```json
+{
+  "snapshot": { "eTag": "<snapshot string from inspect_document>" },
+  "operations": []
+}
+```
+
+For Word, the etag covers body/header/footer/footnote/endnote XML; for PowerPoint,
+slide and notes XML. It does not cover properties, comments, sections,
+media/image bytes, masters, or layouts. Omit `snapshot` only when per-anchor
+checks are sufficient. The engine does not insert it automatically.
 
 ## Let the agent stage its own documents
 
@@ -66,17 +100,17 @@ offers separate least-privilege switches for existing documents and new ones:
 | --- | --- | --- |
 | `register_document(connectionId, source)` | `AllowRegistration` | Registers an existing document with a configured connection and returns its opaque `documentId`. `source` is connection-specific: a path under the filesystem connection's root, or - for a SharePoint connection - the document's SharePoint/OneDrive URL or a `driveId/itemId` pair. Filesystem traversal, disallowed extensions, and oversized files are rejected by the provider. |
 | `remove_document(connectionId, documentId)` | `AllowRegistration` | Removes the registration only - the underlying file is never deleted. |
-| `open_document(connectionId, source, fidelity?, paragraphOffset?, paragraphLimit?)` | `AllowRegistration` | `register_document` + `inspect_document` in one call. Returns `{ connectionId, documentId, name, contentType, version }` followed by the whole `inspect_document` payload. |
-| `edit_document(connectionId, source, planJson, saveMode?, newName?)` | `AllowRegistration` | `register_document` + anchor resolution + `apply_plan` in one call. Targets may name text directly instead of a paragraph id. Returns the `apply_plan` shape plus `sourceDocumentId`. |
+| `open_document(connectionId, source, fidelity, paragraphOffset, paragraphLimit)` | `AllowRegistration` | `register_document` + `inspect_document` in one call. Send the same explicit paging defaults as `inspect_document`. |
+| `edit_document(connectionId, source, planJson, saveMode, newName)` | `AllowRegistration` | `register_document` + anchor resolution + `apply_plan` in one call. Send `"Replace"` and `""` for the defaults. Targets may name text directly instead of a paragraph id. |
 | `create_document(connectionId, name, planJson)` | `AllowCreation` | Creates a **new** document in the connection, registers it, and optionally applies an initial plan in the same call. Pass `""` for no initial plan. Returns the `apply_plan` shape, so the new id arrives as `outputDocumentId`. `name` is a bare file name with its extension; a name already in use is refused rather than overwritten, and an initial plan that fails validation creates nothing at all. |
 
 A new `.docx` contains one empty paragraph, addressed as paragraph id
 `auto-0000`, over a style catalogue carrying `Heading1`–`Heading3`,
 `ListParagraph` and `TableGrid`, so `styleId` works from the first operation. An
-initial plan can target `{ "paraId": "auto-0000", "expect": "" }`; use
-`"position": "Before"` to keep the empty anchor as the trailing paragraph.
-`changeText` needs a non-empty `expect`, so filling that first paragraph is an
-`insert` — a new **deck** is the other way round, see
+initial plan can fill it with `changeText` targeting
+`{ "paraId": "auto-0000", "expect": "" }`. Alternatively, use an `insert` with
+`"position": "Before"` to preserve the empty anchor as a trailing paragraph. A
+new **deck** uses its initial slide anchor; see
 [PowerPoint support](powerpoint.md#creating-a-deck).
 
 ### Addressing text instead of paragraph ids
@@ -151,8 +185,7 @@ app.MapGet("/documents/{connectionId}/{documentId}", async (
     CancellationToken cancellationToken) =>
 {
     using var content = await client.OpenReadAsync(
-        DocumentReference.ForFileSystem(connectionId, documentId),
-        cancellationToken);
+        connectionId, documentId, cancellationToken);
     using var buffer = new MemoryStream();
     await content.Stream.CopyToAsync(buffer, cancellationToken);
 
@@ -193,7 +226,7 @@ host.
 
 The host pre-registers the document and writes the resulting `(connectionId, documentId)` into the system prompt. The agent then:
 
-1. `inspect_document` → understand the structure and capture the snapshot etag.
+1. `inspect_document` → understand the structure, capture the snapshot etag, and copy it to `plan.snapshot.eTag`.
 2. `find_in_document` → obtain content-verified anchors for any text targets.
 3. Draft a `DocumentPlan` referencing those anchors.
 4. `preview_plan` → surface any validation errors to the user.
@@ -212,7 +245,7 @@ work is two calls or one:
 
 | Code | Meaning |
 | --- | --- |
-| `stale-snapshot` | The document drifted since inspection. Call `inspect_document` again before retrying. |
+| `stale-snapshot` | Covered text-host or slide/notes XML drifted since inspection. Call `inspect_document` again before retrying. |
 | `expect-mismatch` | A text anchor's expected content is no longer in the live document. Re-find that anchor. |
 | `not-found` / `access-denied` | The supplied `documentId` is wrong or outside the connection's reach. |
 | `version-conflict` | A `Replace` save lost a race. Re-inspect and re-author the plan. |
@@ -235,7 +268,8 @@ The same core tool surface is available to any MCP-capable agent (Claude code, C
 [`OfficeAgent.Mcp` server](mcp-server.md) - stdio for local hosting, streamable
 HTTP for the cloud. When registration or creation is enabled, the MCP server also
 adds `list_connections`, which returns
-`{connectionId, provider, canCreateDocuments}` entries so the agent can discover
-the available connections and creation capability. The MCP server advertises this
+`{connectionId, provider, canCreateDocuments}` entries. The boolean means that
+at least one creatable format is configured; it does not enumerate formats or
+prove that the provider is reachable and authorized. The MCP server advertises this
 prompt guidance as its server instructions, so MCP clients pick up the contract
 automatically.

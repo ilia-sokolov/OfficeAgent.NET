@@ -3,8 +3,9 @@ namespace OfficeAgent.Mcp;
 /// <summary>
 /// Configuration for the OfficeAgent MCP server, bound from the <c>OfficeAgent</c>
 /// section (appsettings, environment variables with the <c>OfficeAgent__</c> prefix,
-/// or command line). Connections are host configuration; the agent only ever sees
-/// connection ids and opaque document ids.
+/// or command line). Connections and credentials are host configuration. Editing
+/// uses opaque ids; when registration is enabled, source-addressed tools also accept
+/// provider-relative paths, SharePoint URLs, or <c>driveId/itemId</c> pairs.
 /// </summary>
 public sealed class OfficeAgentMcpOptions
 {
@@ -19,9 +20,9 @@ public sealed class OfficeAgentMcpOptions
     public string Transport { get; set; } = "http";
 
     /// <summary>
-    /// Gets or sets whether the <c>register_document</c> / <c>remove_document</c> /
-    /// <c>list_connections</c> tools are exposed, letting agents discover the configured
-    /// connections, register documents with them, and remove registrations themselves.
+    /// Gets or sets whether <c>register_document</c>, <c>remove_document</c>,
+    /// <c>open_document</c>, <c>edit_document</c>, and <c>list_connections</c> are
+    /// exposed, letting agents discover connections and stage existing documents.
     /// Defaults to <see langword="true"/>: an MCP client usually has no other channel to
     /// stage ids, unlike an in-process host. Set to <see langword="false"/> to pin agents
     /// to ids the host hands out by other means. Authoring brand-new documents is a
@@ -31,11 +32,14 @@ public sealed class OfficeAgentMcpOptions
 
     /// <summary>
     /// Gets or sets whether <c>create_document</c> is exposed when at least one
-    /// connection allows <c>.docx</c>; SharePoint connections additionally require an
-    /// explicit creation destination. Defaults to <see langword="false"/>: letting
+    /// connection allows a format for which a blank-document factory is registered
+    /// (currently <c>.docx</c> or <c>.pptx</c>); SharePoint connections additionally
+    /// require an explicit creation destination. Defaults to <see langword="false"/>: letting
     /// an agent author new files under a connection root is a capability a host should
     /// choose, and an upgrade must not hand it to deployments that never asked for it.
-    /// Turning it on adds document creation only - registration and editing are unchanged.
+    /// Turning it on adds <c>create_document</c> and, when registration is disabled,
+    /// <c>list_connections</c> for creation discovery. Registration and composite tools
+    /// remain unchanged.
     /// </summary>
     public bool AllowCreation { get; set; }
 
@@ -116,6 +120,13 @@ public sealed class SharePointConnectionOptions
     /// delegated permissions.
     /// </summary>
     public string OnBehalfOfScope { get; set; } = "https://graph.microsoft.com/.default";
+
+    /// <summary>
+    /// Gets or sets the Graph application scope requested by the app-only
+    /// client-credentials flow. Change this together with <see cref="GraphBaseUrl"/>
+    /// and <see cref="LoginAuthority"/> for a sovereign cloud.
+    /// </summary>
+    public string AppOnlyScope { get; set; } = "https://graph.microsoft.com/.default";
 
     /// <summary>
     /// Gets or sets the path of a JSON registration index. When set, registrations

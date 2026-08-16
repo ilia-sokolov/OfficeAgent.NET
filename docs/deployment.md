@@ -40,10 +40,11 @@ That puts `officeagent-mcp` on your PATH. (No global install? Use
 **2a. Claude Code.**
 
 ```bash
-claude mcp add officeagent \
+claude mcp add \
   --env OfficeAgent__FileSystemConnections__0__ConnectionId=documents \
   --env OfficeAgent__FileSystemConnections__0__RootPath=/Users/me/Documents/agent-workspace \
-  -- officeagent-mcp --stdio
+  --transport stdio \
+  officeagent -- officeagent-mcp --stdio
 ```
 
 The `--` separates Claude Code's flags from the launched command. Project-scoped
@@ -107,29 +108,56 @@ export ASPNETCORE_URLS=http://0.0.0.0:8080
 officeagent-mcp
 ```
 
-Deploy as a container or app service (Azure Container Apps, App Service, or
-anywhere). Point your platform's liveness probe at `/healthz`.
+Build and run the repository's container image for a local filesystem-backed
+deployment:
+
+```bash
+docker build -t officeagent-mcp .
+docker run --rm -p 8080:8080 \
+  -v /absolute/path/to/documents:/data/documents \
+  -e OfficeAgent__FileSystemConnections__0__ConnectionId=documents \
+  -e OfficeAgent__FileSystemConnections__0__RootPath=/data/documents \
+  officeagent-mcp
+```
+
+Deploy the same image to Azure Container Apps, App Service, or another container
+platform. `/healthz` is a **liveness** endpoint: it proves that the process and
+configuration started, not that a provider is reachable or authorized. Add a
+deployment-time provider preflight (for example, register and inspect a harmless
+test document) when readiness matters.
 
 ### B2. Put authentication in front
 
-**The open-source server ships no auth layer - do not expose it bare.** Front it
-with an API gateway (Azure API Management, a reverse proxy, Front Door) that
-terminates TLS and requires an API key or OAuth. Copilot Studio's MCP wizard can
-send no-auth, API key (header or query), or OAuth 2.0, so the gateway pattern
-maps directly onto every client below.
+**The open-source server ships no authentication or per-caller authorization
+layer - do not expose it bare.** Front it with an API gateway (Azure API
+Management, a reverse proxy, Front Door) that terminates TLS, authenticates the
+caller, and authorizes that caller for the requested OfficeAgent connection.
+Authentication alone is insufficient: without a connection ACL, every accepted
+caller can address every configured connection and registered id.
 
-> If you use the On-Behalf-Of identity mode, the gateway must **forward the
-> caller's `Authorization` bearer token through to the server** (don't strip or
-> replace it) - that user token is what the server exchanges for a per-user Graph
-> token.
+Use an API key only with `appOnly`. Use OAuth 2.0 for `onBehalfOf`, because the
+server needs an API-audience user access token to exchange for Graph access.
+
+> In On-Behalf-Of mode, validate issuer, audience, signature, expiry, and required
+> delegated scope at the edge, then forward the original `Authorization` bearer
+> token to OfficeAgent. The token audience must be the middle-tier API, not
+> Microsoft Graph. The current token provider does not implement Conditional
+> Access claims-challenge round trips; workflows that require one fail and must
+> be resumed after the client obtains a suitable token.
 
 ### B3. Connect each client to the hosted URL
+
+The static API-key/bearer examples below assume an `appOnly` SharePoint
+connection. For `onBehalfOf`, configure the client and gateway for interactive
+OAuth so each request carries that signed-in user's middle-tier API token.
 
 **Claude Code** (remote):
 
 ```bash
-claude mcp add --transport http officeagent https://officeagent.example.com/ \
-  --header "x-api-key: ${OFFICEAGENT_KEY}"
+claude mcp add \
+  --header "x-api-key: ${OFFICEAGENT_KEY}" \
+  --transport http \
+  officeagent https://officeagent.example.com/
 ```
 
 **Codex CLI** (remote) - in `~/.codex/config.toml`; keep the token in an env var,
@@ -137,16 +165,16 @@ not the file:
 
 ```toml
 [mcp_servers.officeagent]
-transport = { type = "streamable_http", url = "https://officeagent.example.com/" }
+url = "https://officeagent.example.com/"
 bearer_token_env_var = "OFFICEAGENT_TOKEN"
 ```
 
 **Copilot Studio:**
 
 1. Make sure the agent uses **generative orchestration** (Settings) - MCP tools require it.
-2. **Tools → Add a tool → Model Context Protocol.**
+2. **Tools → Add a tool → New tool → Model Context Protocol.**
 3. Enter a name, description, and the **server URL** (your gateway endpoint).
-4. Pick the auth type matching your gateway (API key in a header is simplest; OAuth 2.0 is supported, including dynamic client registration).
+4. Pick the auth type matching your gateway: API key for `appOnly`, or OAuth 2.0 for `onBehalfOf` (dynamic client registration is supported).
 5. Add it - the wizard lists the advertised tools; toggle off any you don't want (for example `register_document`).
 
 **Microsoft 365 Copilot** (declarative agent - MCP support is GA via the
@@ -173,17 +201,24 @@ Two layers, kept separate:
 
 | `AuthMode` | Acts as | Use when |
 | --- | --- | --- |
-| `onBehalfOf` | The signed-in user | Multi-user hosted agents (Copilot Studio, M365 Copilot). Each user is limited to what they can already open in SharePoint. Requires the inbound user token's audience to be your middle-tier API (`ClientId`), the user's consent to it, and a matching delegated Graph permission (e.g. `Files.ReadWrite.All`). Hosted HTTP only. |
-| `appOnly` (default) | A shared app identity | Unattended / back-office agents with no user present. **Scope the app registration narrowly with `Sites.Selected`** so it can reach only the intended sites. |
+| `onBehalfOf` | The signed-in user | Multi-user hosted agents. Effective access is the intersection of the app's consented delegated Graph permissions and the user's SharePoint permissions. Requires OAuth, an inbound token for the middle-tier API (`ClientId`), and a delegated Graph scope such as `Files.ReadWrite.All`. Hosted HTTP only. |
+| `appOnly` (default) | A shared app identity | Unattended agents. Every caller shares that identity, so isolate audiences with separate deployments and identities where necessary. Prefer `Sites.Selected`, then explicitly assign the app to each allowed site with the required `write` role. |
+
+`Sites.Selected` admin consent does not grant access by itself. A SharePoint or
+Graph administrator must also create a site permission for the application on
+each intended site and grant `write` (or another sufficient role). Verify that
+assignment before starting the server.
 
 ### Pre-flight checklist for a hosted deployment
 
-- [ ] TLS terminated and an auth gateway in front of the server (never exposed bare).
+- [ ] TLS terminated and an auth gateway in front of the server (never exposed bare); its policy maps callers to permitted connection ids.
 - [ ] `AuthMode` chosen deliberately; for `onBehalfOf`, the gateway forwards the caller's bearer token unchanged.
-- [ ] For `appOnly`, the app registration uses `Sites.Selected`, not tenant-wide Graph permissions.
+- [ ] Hosted clients that use `onBehalfOf` are configured for interactive OAuth, not a shared API key or service token.
+- [ ] For `appOnly`, the app registration uses `Sites.Selected`, admin consent is complete, and the app has an explicit `write` assignment on every intended site.
 - [ ] Client secret supplied from a secret store / environment, never committed.
-- [ ] `RegistrationIndexPath` set if you need registrations to survive restarts (filesystem connections persist automatically; SharePoint defaults to in-memory). For multiple instances, implement `ISharePointRegistrationStore` over shared storage.
+- [ ] `RegistrationIndexPath` set if registrations must survive restarts. Protect the JSON file as sensitive application state, include it in backups, and use it from only one process. For multiple instances, implement `ISharePointRegistrationStore` over shared storage.
 - [ ] `MaximumBytes` and `AllowedExtensions` reviewed against your documents (defaults: 100 MB, `.docx`). Add `.pptx` for connections that serve decks.
+- [ ] Every filesystem root is owned by the service/trusted administrators. Its ACL denies untrusted principals permission to create, rename, or replace directory entries; container volumes are not shared with untrusted writers.
 - [ ] `DefaultChangeMode` set per connection if `Tracked` is not what you want when a plan omits `mode` - notably `Direct` for a connection serving `.pptx`, since a deck refuses tracked changes.
 - [ ] `AllowRegistration` left on only if agents should stage their own document ids; otherwise set `false`. When on, the server exposes `register_document`, `remove_document`, and the source-addressed composites `open_document` and `edit_document`. All four reach the same documents under the same connection boundary - the composites only save round trips, they do not widen it.
 - [ ] `AllowCreation` enabled only if agents should create files. Each SharePoint creation connection has both `CreationDriveId` and `CreationFolderItemId`; `list_connections` reports `canCreateDocuments` per connection whenever registration or creation discovery is enabled.

@@ -136,7 +136,8 @@ public sealed class OfficeAgentClient
     /// <see cref="DocumentReference.ItemId"/>. The provider stores only the reference
     /// (path, URL, drive id, …), not the bytes - the host owns the underlying file's
     /// lifecycle. <paramref name="source"/> is provider-specific: a filesystem path for
-    /// the filesystem provider, a drive-relative path for the SharePoint provider. The
+    /// the filesystem provider, or a SharePoint/OneDrive URL or <c>driveId/itemId</c>
+    /// pair for the SharePoint provider. The
     /// connection id alone selects the provider, whatever its type.
     /// </summary>
     public async Task<DocumentReference> RegisterAsync(
@@ -147,8 +148,8 @@ public sealed class OfficeAgentClient
         var provider = _providers.ResolveConnection(connectionId);
         var reference = await provider.RegisterAsync(source, cancellationToken).ConfigureAwait(false);
         _logger.LogInformation(
-            "Provider register {Provider}:{ConnectionId} '{Source}' → {ItemId}",
-            provider.Provider, provider.ConnectionId, source, reference.ItemId);
+            "Provider register {Provider}:{ConnectionId} → {ItemId}",
+            provider.Provider, provider.ConnectionId, reference.ItemId);
         return reference;
     }
 
@@ -176,7 +177,9 @@ public sealed class OfficeAgentClient
     /// </para>
     /// <para>
     /// A blank Word document holds a single empty body paragraph, which inspection
-    /// addresses as paragraph id <c>auto-0000</c>; an initial plan targets that anchor.
+    /// addresses as paragraph id <c>auto-0000</c>. A blank PowerPoint deck holds one
+    /// slide with an empty title paragraph at <c>slide256/shape2/p0</c>. An initial plan
+    /// targets the anchor for the selected format.
     /// </para>
     /// <para>
     /// Only the format-independent part of <paramref name="name"/> is checked before the
@@ -316,6 +319,13 @@ public sealed class OfficeAgentClient
         DocumentReference reference,
         CancellationToken cancellationToken = default) =>
         OpenWithTelemetryAsync(reference, cancellationToken);
+
+    /// <summary>Opens a provider document by its opaque connection and document ids.</summary>
+    public Task<DocumentContent> OpenReadAsync(
+        string connectionId,
+        string documentId,
+        CancellationToken cancellationToken = default) =>
+        OpenReadAsync(ReferenceFor(connectionId, documentId), cancellationToken);
 
     /// <summary>Inspects a provider document.</summary>
     public async Task<InspectResult> InspectAsync(

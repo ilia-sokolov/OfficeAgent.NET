@@ -162,6 +162,34 @@ public class McpServerTests
         Assert.DoesNotContain("create_document", OfficeAgentMcpServer.InstructionsFor(options));
     }
 
+    [Theory]
+    [InlineData("onBehalf0f")]
+    [InlineData("shared")]
+    public void Unknown_sharepoint_auth_mode_fails_closed(string authMode)
+    {
+        var options = new OfficeAgentMcpOptions
+        {
+            SharePointConnections =
+            {
+                new SharePointConnectionOptions
+                {
+                    ConnectionId = "legal",
+                    AuthMode = authMode,
+                    TenantId = "00000000-0000-0000-0000-000000000000",
+                    ClientId = "api-client-id",
+                    ClientSecret = "api-secret"
+                }
+            }
+        };
+
+        var error = Assert.Throws<InvalidOperationException>(() =>
+            OfficeAgentMcpServer.BuildToolset(options));
+
+        Assert.Contains("legal", error.Message);
+        Assert.Contains(authMode, error.Message);
+        Assert.Contains("appOnly or onBehalfOf", error.Message);
+    }
+
     [Fact]
     public void Sharepoint_creation_is_exposed_only_with_a_configured_destination()
     {

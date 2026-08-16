@@ -39,6 +39,66 @@ public class DocumentProviderHardeningTests
     }
 
     [Fact]
+    public async Task Register_rejects_file_through_an_intermediate_directory_link()
+    {
+        using var workspace = new Workspace();
+        using var outsider = new Workspace();
+        outsider.Stage(DocxFactory.Contract(), "secret.docx");
+        var link = Path.Combine(workspace.Root, "linked");
+        if (!TryCreateDirectoryLink(link, outsider.Root)) return;
+
+        try
+        {
+            var error = await Assert.ThrowsAsync<DocumentProviderException>(() =>
+                workspace.Provider().RegisterAsync(Path.Combine(link, "secret.docx")));
+            Assert.Equal(ProviderErrorCode.AccessDenied, error.Code);
+        }
+        finally
+        {
+            if (Directory.Exists(link)) Directory.Delete(link);
+        }
+    }
+
+    [Fact]
+    public async Task Open_and_save_revalidate_links_created_after_registration()
+    {
+        using var workspace = new Workspace();
+        using var outsider = new Workspace();
+        var provider = workspace.Provider();
+        var originalDirectory = Path.Combine(workspace.Root, "contracts");
+        Directory.CreateDirectory(originalDirectory);
+        var originalPath = Path.Combine(originalDirectory, "contract.docx");
+        File.WriteAllBytes(originalPath, DocxFactory.Contract());
+        var registered = await provider.RegisterAsync(originalPath);
+
+        var parkedDirectory = Path.Combine(workspace.Root, "contracts-original");
+        Directory.Move(originalDirectory, parkedDirectory);
+        outsider.Stage(DocxFactory.Contract(), "contract.docx");
+        if (!TryCreateDirectoryLink(originalDirectory, outsider.Root))
+        {
+            Directory.Move(parkedDirectory, originalDirectory);
+            return;
+        }
+
+        try
+        {
+            var openError = await Assert.ThrowsAsync<DocumentProviderException>(() =>
+                provider.OpenReadAsync(registered));
+            Assert.Equal(ProviderErrorCode.AccessDenied, openError.Code);
+
+            using var replacement = new MemoryStream(DocxFactory.Contract());
+            var saveError = await Assert.ThrowsAsync<DocumentProviderException>(() =>
+                provider.SaveAsync(registered, replacement, new SaveDocumentOptions()));
+            Assert.Equal(ProviderErrorCode.AccessDenied, saveError.Code);
+        }
+        finally
+        {
+            if (Directory.Exists(originalDirectory)) Directory.Delete(originalDirectory);
+            Directory.Move(parkedDirectory, originalDirectory);
+        }
+    }
+
+    [Fact]
     public async Task Register_rejects_missing_source()
     {
         using var workspace = new Workspace();
@@ -302,6 +362,28 @@ public class DocumentProviderHardeningTests
 
         Assert.NotNull(saved.Version);
         using (await provider.OpenReadAsync(saved)) { }   // the new version is readable
+    }
+
+    private static bool TryCreateDirectoryLink(string path, string target)
+    {
+        try
+        {
+            Directory.CreateSymbolicLink(path, target);
+            return true;
+        }
+        catch (UnauthorizedAccessException)
+        {
+            return false;
+        }
+        catch (PlatformNotSupportedException)
+        {
+            return false;
+        }
+        catch (IOException)
+        {
+            // Windows reports a missing symbolic-link privilege as IOException.
+            return false;
+        }
     }
 
     private sealed class Workspace : IDisposable

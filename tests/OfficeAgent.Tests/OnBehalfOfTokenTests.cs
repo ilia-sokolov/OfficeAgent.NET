@@ -58,13 +58,16 @@ public class OnBehalfOfTokenTests
     }
 
     [Fact]
-    public async Task Surfaces_consent_required_errors_from_entra()
+    public async Task Token_failure_exposes_only_status_and_stable_error_code()
     {
         using var entra = new FakeEntra { FailWith = (HttpStatusCode.BadRequest, "invalid_grant", "AADSTS65001: The user has not consented.") };
         var provider = new OnBehalfOfAccessTokenProvider(Options(), entra.Client, () => "user-token-alice");
 
         var ex = await Assert.ThrowsAsync<InvalidOperationException>(() => provider.GetAccessTokenAsync());
-        Assert.Contains("AADSTS65001", ex.Message);
+        Assert.Contains("status 400", ex.Message);
+        Assert.Contains("invalid_grant", ex.Message);
+        Assert.DoesNotContain("AADSTS65001", ex.Message);
+        Assert.DoesNotContain(Options().TenantId, ex.Message);
     }
 
     [Fact]

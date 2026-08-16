@@ -425,23 +425,24 @@ public sealed class SharePointDocumentProvider : IDocumentProvider, IDocumentCre
     {
         if (response.IsSuccessStatusCode) return;
 
-        var detail = await ReadGraphErrorAsync(response).ConfigureAwait(false);
+        var graphCode = await ReadGraphErrorCodeAsync(response).ConfigureAwait(false);
+        var suffix = string.IsNullOrEmpty(graphCode) ? string.Empty : $" Graph code: {graphCode}.";
         throw response.StatusCode switch
         {
             HttpStatusCode.NotFound => Error(ProviderErrorCode.NotFound,
-                $"The referenced SharePoint item no longer exists. {detail}".TrimEnd(), itemId),
+                $"The referenced SharePoint item no longer exists.{suffix}", itemId),
             HttpStatusCode.Unauthorized or HttpStatusCode.Forbidden => Error(ProviderErrorCode.AccessDenied,
-                $"Graph refused access to the item. {detail}".TrimEnd(), itemId),
+                $"Graph refused access to the item.{suffix}", itemId),
             HttpStatusCode.PreconditionFailed => new DocumentVersionConflictException(
                 "(If-Match)", "(changed)", ProviderName, ConnectionId, itemId),
             HttpStatusCode.RequestEntityTooLarge => Error(ProviderErrorCode.ContentTooLarge,
-                $"Graph rejected the content as too large. {detail}".TrimEnd(), itemId),
+                $"Graph rejected the content as too large.{suffix}", itemId),
             _ => Error(ProviderErrorCode.IO,
-                $"Graph request failed with status {(int)response.StatusCode}. {detail}".TrimEnd(), itemId)
+                $"Graph request failed with status {(int)response.StatusCode}.{suffix}", itemId)
         };
     }
 
-    private static async Task<string> ReadGraphErrorAsync(HttpResponseMessage response)
+    private static async Task<string> ReadGraphErrorCodeAsync(HttpResponseMessage response)
     {
         try
         {
@@ -449,8 +450,8 @@ public sealed class SharePointDocumentProvider : IDocumentProvider, IDocumentCre
             if (string.IsNullOrWhiteSpace(payload)) return string.Empty;
             using var json = JsonDocument.Parse(payload);
             return json.RootElement.TryGetProperty("error", out var error) &&
-                   error.TryGetProperty("message", out var message)
-                ? message.GetString() ?? string.Empty
+                   error.TryGetProperty("code", out var code)
+                ? code.GetString() ?? string.Empty
                 : string.Empty;
         }
         catch (JsonException)

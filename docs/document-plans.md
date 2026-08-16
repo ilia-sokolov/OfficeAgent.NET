@@ -462,7 +462,7 @@ Returned by `preview_plan` and `apply_plan` in the `errors` array. Stable wire c
 
 | Code | Meaning |
 | --- | --- |
-| `stale-snapshot` | The plan's snapshot does not match the live document. Re-inspect and rebuild. |
+| `stale-snapshot` | The plan's format-specific text-host snapshot does not match live content. Re-inspect and rebuild. |
 | `anchor-not-found` | The target anchor cannot be resolved in the live document. |
 | `expect-mismatch` | The live content no longer matches the anchor's `expect`. |
 | `ambiguous-anchor` | The target is not specific enough to edit safely. |

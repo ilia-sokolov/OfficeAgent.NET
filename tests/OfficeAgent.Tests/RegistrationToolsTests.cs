@@ -85,6 +85,11 @@ public class RegistrationToolsTests
         var report = JsonDocument.Parse(await tools.RegisterDocument("workspace", "../outside.docx"));
         Assert.False(report.RootElement.GetProperty("isValid").GetBoolean());
         Assert.Equal("access-denied", report.RootElement.GetProperty("errors")[0].GetProperty("Code").GetString());
+        Assert.DoesNotContain(workspace.Root, report.RootElement.GetRawText());
+
+        var missing = JsonDocument.Parse(await tools.RegisterDocument("workspace", "missing.docx"));
+        Assert.Equal("not-found", missing.RootElement.GetProperty("errors")[0].GetProperty("Code").GetString());
+        Assert.DoesNotContain(workspace.Root, missing.RootElement.GetRawText());
     }
 
     [Fact]

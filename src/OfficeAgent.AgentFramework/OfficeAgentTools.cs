@@ -16,11 +16,12 @@ public sealed class OfficeAgentToolsOptions
 {
     /// <summary>
     /// Gets whether the agent may register documents with provider connections and
-    /// remove registrations (<c>register_document</c> / <c>remove_document</c>). The
+    /// remove registrations (<c>register_document</c>, <c>remove_document</c>,
+    /// <c>open_document</c>, and <c>edit_document</c>). The
     /// default is <see langword="false"/>: the host pre-registers documents and the
     /// agent only ever sees opaque ids. Enabling this lets the agent hand
-    /// provider-relative sources (a path under a filesystem root, a drive-relative
-    /// SharePoint path) to the configured connections; the connection boundary,
+    /// provider-relative sources (a path under a filesystem root, or a SharePoint URL
+    /// or <c>driveId/itemId</c> pair) to the configured connections; the connection boundary,
     /// extension allow-list, and size limits still apply, and removing a
     /// registration never deletes the underlying content. Creating new documents is a
     /// separate opt-in; see <see cref="AllowCreation"/>.
@@ -46,7 +47,8 @@ public sealed class OfficeAgentToolsOptions
 /// sees credentials or absolute storage locations; by default it cannot register
 /// documents, escape the connection, or delete content the provider only
 /// references. Hosts that want the agent to manage its own registrations opt in
-/// via <see cref="OfficeAgentToolsOptions.AllowRegistration"/>.
+/// via <see cref="OfficeAgentToolsOptions.AllowRegistration"/>; creation is a
+/// separate opt-in through <see cref="OfficeAgentToolsOptions.AllowCreation"/>.
 /// </summary>
 public sealed class OfficeAgentTools
 {
@@ -87,8 +89,8 @@ public sealed class OfficeAgentTools
         - Saving edits the document in place (saveMode "Replace", the default), so outputDocumentId is the same id you passed in. If the user wants the original kept, pass saveMode "NewVersion" to write a sibling revision instead, and tell them where the result landed.
 
         Plan shape, anchors, safety loop
-        - Plan body is { "operations": [ ... ] }. Do NOT set contractVersion or snapshot - the engine fills them.
-        - Available operations (the JSON shape of each is in the preview_plan description): changeText, insert (a paragraph), insertTable, removeTable, format, fill, comment, setProperty, revision, insertTableRows, removeTableRows, insertTableColumns, removeTableColumns, insertImage, removeImage, backgroundImage, copyStyles, clearStyles, and - Word only - headerFooter - and - decks only - insertSlide, removeSlide, moveSlide, duplicateSlide, insertShape, removeShape, section, headerFooter, insertMedia, transition, animate. Create a table with insertTable; delete one with removeTable. These are plan operations inside preview_plan/apply_plan, not separate tools.
+        - Plan body is { "snapshot": { "eTag": "<snapshot from inspect_document>" }, "operations": [ ... ] }. Copy the scalar snapshot string returned by inspect_document into snapshot.eTag to detect drift in Word body/header/footer/footnote/endnote XML or PowerPoint slide/notes XML. It does not cover properties, comments, sections, media/image bytes, masters, or layouts; their anchors and provider version checks still apply. Omit snapshot only deliberately. Do not set contractVersion.
+        - Available operations (the JSON shape of each is in the preview_plan description): changeText, insert (a paragraph), insertTable, removeTable, format, fill, comment, headerFooter, insertTableRows, removeTableRows, insertTableColumns, removeTableColumns, insertImage, removeImage, backgroundImage, copyStyles, clearStyles; Word also supports setProperty and revision; decks also support insertSlide, removeSlide, moveSlide, duplicateSlide, insertShape, removeShape, section, insertMedia, transition, and animate. headerFooter has format-specific fields described below. Create a table with insertTable; delete one with removeTable. These are plan operations inside preview_plan/apply_plan, not separate tools.
         - Call inspect_document or find_in_document before building a plan to obtain anchor ids; never invent paragraph ids, occurrence numbers, content-control tags, or node paths.
         - Tables and images only appear in inspect_document.nodes, never in the paragraphs list. Copy the path from there rather than composing one: Word uses "table#N"/"image#N", a deck uses "table#{slideId}/{shapeId}"/"image#{slideId}/{shapeId}". To recognise table content, look for paragraphs whose `in` field matches a table path.
         - Preview before you apply. If preview reports stale-snapshot, re-inspect and rebuild. If preview reports expect-mismatch, the document drifted - re-inspect/find that operation.
@@ -113,12 +115,12 @@ public sealed class OfficeAgentTools
         - Slides: insertSlide adds one, and several in one plan is how you author a whole deck. { "op": "insertSlide", "slide": { "layout": "titleAndContent", "title": "FY27 Priorities", "body": ["Finish the migration", "Rebuild the pipeline"], "notes": "Do not commit to a date." } }. Layouts are title, titleAndContent, sectionHeader, titleOnly, blank; omit "layout" and one is chosen from what you supply. Position defaults to the end of the deck - use "position": "Start"/"Before"/"After" with a slide target to place it elsewhere.
         - removeSlide, moveSlide and duplicateSlide take a slide target: { "op": "moveSlide", "target": { "kind": "slide", "path": "slide#259" }, "position": "After", "relativeTo": "slide#256" }. duplicateSlide defaults to landing right after the original. Removing the deck's only slide is refused, because PowerPoint cannot open a deck with none.
         - A slide added in one plan cannot be edited by a later operation in that SAME plan - its id does not exist until the plan is applied. Set its text through insertSlide's own title/body/notes, or apply, re-inspect, then edit.
-        - format on a deck covers bold, italic, underline, sizeHalfPoints, fontFamily, color, highlight, alignment, and widthPx/heightPx on an image. Word-only measures (styleId, indents, spacing, borders) are refused rather than ignored. Anchor the span you want styled, or use an empty "expect" to style a whole paragraph.
+        - format on a deck covers bold, italic, underline, sizeHalfPoints, fontFamily, color, highlight and alignment on text; widthPx/heightPx on an image; xPx/yPx/widthPx/heightPx, fillColor, lineColor, lineWidthPx and verticalAlignment on a shape; and fillColor on a slide. Word-only measures (styleId, indents, spacing, borders) are refused rather than ignored. Anchor the span you want styled, or use an empty "expect" to style a whole paragraph.
         - To write into an empty placeholder - the state a newly created deck's title is in - use changeText with an empty expect: { "op": "changeText", "target": { "paraId": "slide256/shape2/p0", "expect": "" }, "with": "Quarterly Review", "mode": "Direct" }. That still verifies the paragraph is blank, so it fails rather than overwriting text that drifted in.
         - Add a bullet or line to text that is already there with insert, targeting the paragraph it goes next to: { "op": "insert", "target": { "paraId": "slide257/shape3/p1", "expect": "Rebuild the pipeline" }, "position": "After", "text": "Hold headcount flat", "level": 1 }. It inherits the neighbour's bullet and run styling; "level" (0-8) makes it a sub-bullet. styleId is Word-only and refused here.
         - IMPORTANT: a slide paragraph id is positional, so inserting renumbers every later paragraph in the SAME shape. A plan that inserts and then addresses that shape at the same or a higher p-index is refused with operation-conflict. Apply the insert, re-inspect, then send the rest as a second plan. Earlier paragraphs, other shapes and other slides are unaffected.
         - Shapes: insertShape adds a free-standing text box to a slide - { "op": "insertShape", "target": { "kind": "slide", "path": "slide#257" }, "text": ["Draft"], "xPx": 40, "yPx": 620, "widthPx": 420, "heightPx": 50 }. Text belonging in the title or body should go through the placeholders instead. removeShape deletes any shape by its { "kind": "shape", "path": "shape#{slideId}/{shapeId}" } node; removing a placeholder is refused because the layout would re-offer it empty and the slide would look unchanged.
-        - Move or resize ANY shape - text box, table, picture - with format on its shape node: { "op": "format", "target": { "kind": "shape", "path": "shape#257/4" }, "xPx": 120, "yPx": 560, "widthPx": 700, "heightPx": 44 }. A shape-targeted format only moves and resizes; to style text, target a paragraph.
+        - Move, resize or paint ANY shape - text box, table, picture - with format on its shape node: { "op": "format", "target": { "kind": "shape", "path": "shape#257/4" }, "xPx": 120, "yPx": 560, "widthPx": 700, "heightPx": 44, "fillColor": "FFF2CC", "lineColor": "7F6000" }. Shape formatting does not style the text inside it; target a paragraph for that.
         """;
 
     /// <summary>
@@ -200,10 +202,10 @@ public sealed class OfficeAgentTools
                 "create_document",
                 "Create and register a new document in a host-configured connection, optionally applying an initial plan before writing. " +
                 "name is a bare file name such as 'quarterly-report.docx'; an existing name is never overwritten. " +
-                "The extension picks the format: '.docx' makes a Word document, '.pptx' makes a PowerPoint deck. Use list_connections to see which connections accept which. " +
+                "The extension picks the format: '.docx' makes a Word document, '.pptx' makes a PowerPoint deck. " +
                 "Pass planJson \"\" for a minimal document. The starting anchor differs by format: a Word document has one empty paragraph at { \"paraId\": \"auto-0000\", \"expect\": \"\" }; a deck has one empty title placeholder at { \"paraId\": \"slide256/shape2/p0\", \"expect\": \"\" }, and its slide-targeted verbs use { \"kind\": \"slide\", \"path\": \"slide#256\" }. " +
                 "Plan-validation errors guarantee no write. Provider and cancellation errors may occur after storage accepted the file, so do not retry the same name; report the possibly unregistered name to the host for recovery. " +
-                "Returns the apply_plan shape: {isValid, committed, outputConnectionId, outputDocumentId, outputVersion, outputName, outputContentType, changes, errors}.")));
+                "Returns {isValid, committed, sourceDocumentId, outputConnectionId, outputDocumentId, outputVersion, outputName, outputContentType, changes, errors}; non-applicable values are null.")));
         }
         return functions.ToArray();
     }
@@ -212,14 +214,14 @@ public sealed class OfficeAgentTools
     {
         AIFunctionFactory.Create(InspectDocument, Opts(
             "inspect_document",
-            "Inspect a document by (connectionId, documentId) - a Word document or a PowerPoint deck. Returns outline (headings, or one entry per slide), paragraphs (with their `in` containment - a table path in Word, a slide's shape or table cell in a deck), content controls, nodes (tables/images/docProperties/revisions in Word; slides/tables/images/comments in a deck - paths for node-targeted operations come from here), styles, and a snapshot etag for drift detection. Use paragraphOffset/paragraphLimit to page; fidelity='outline'|'structure'|'content' to control payload size.")),
+            "Inspect a document by (connectionId, documentId) - a Word document or a PowerPoint deck. Returns outline (headings, or one entry per slide), paragraphs (with their `in` containment - a table path in Word, a slide's shape or table cell in a deck), content controls, format-specific nodes (including tables/images/properties/revisions in Word and slides/shapes/tables/images/comments/media/sections in a deck), styles, and a snapshot etag for drift detection. Copy node paths from this result. Use paragraphOffset/paragraphLimit to page; fidelity='outline'|'structure'|'content' to control payload size.")),
         AIFunctionFactory.Create(FindInDocument, Opts(
             "find_in_document",
             "Find text in a document by (connectionId, documentId) - a Word document or a PowerPoint deck, including slide notes and table cells. Returns content-verified anchors (paragraphId + expected + occurrence) usable as plan targets.")),
         AIFunctionFactory.Create(PreviewPlan, Opts(
             "preview_plan",
-            "Dry-run a DocumentPlan JSON against (connectionId, documentId). Returns {isValid, changes, errors} without writing. " +
-            "Plan shape: { \"operations\": [ ... ] }. Do NOT set contractVersion or snapshot. Each operation is one object. Concrete examples:\n\n" +
+            "Dry-run a DocumentPlan JSON against (connectionId, documentId). Returns {isValid, committed, sourceDocumentId, outputConnectionId, outputDocumentId, outputVersion, outputName, outputContentType, changes, errors}; the output fields are null and committed is false. " +
+            "Plan shape: { \"snapshot\": { \"eTag\": \"<snapshot string from inspect_document>\" }, \"operations\": [ ... ] }. The snapshot detects drift in Word text-host XML or PowerPoint slide/notes XML; other parts rely on anchors and provider version checks. Omit it only intentionally. Do not set contractVersion. Each operation is one object. Concrete examples:\n\n" +
             "// Replace text:\n" +
             "{ \"op\": \"changeText\", \"target\": { \"paraId\": \"w14:...\", \"expect\": \"Acme Corp\", \"occurrence\": 0 }, \"with\": \"Globex Inc.\", \"mode\": \"Tracked\" }\n\n" +
             "// Unified formatting (paragraph/run/table/row/cell/image):\n" +
@@ -246,7 +248,7 @@ public sealed class OfficeAgentTools
             "{ \"op\": \"headerFooter\", \"header\": \"Northwind Traders\", \"footer\": \"Confidential\", \"showPageNumber\": true, \"alignment\": \"edges\", \"differentFirstPage\": true }")),
         AIFunctionFactory.Create(ApplyPlan, Opts(
             "apply_plan",
-            "Apply a DocumentPlan JSON to (connectionId, documentId) and save through the provider. Returns {committed, outputConnectionId, outputDocumentId, outputVersion, outputName, outputContentType, changes, errors}. saveMode: 'Replace' (default, overwrites the source after an optimistic version check), 'NewVersion' (keeps the source and mints a new id under the same connection), 'NewDocument' (mints a fresh id with an optional newName for display). On any failure nothing is written."))
+            "Apply a DocumentPlan JSON to (connectionId, documentId) and save through the provider. Returns {isValid, committed, sourceDocumentId, outputConnectionId, outputDocumentId, outputVersion, outputName, outputContentType, changes, errors}; non-applicable values are null. saveMode: 'Replace' (default, overwrites the source after an optimistic version check), 'NewVersion' (keeps the source and mints a new id under the same connection), 'NewDocument' (mints a fresh id with an optional newName for display). On any failure nothing is written."))
     };
 
     /// <summary>Inspects a document and returns paginated JSON.</summary>
@@ -477,10 +479,10 @@ public sealed class OfficeAgentTools
         {
             return SerializeError(
                 ProviderCodeToWire(ex.Code),
-                ex.Message,
+                ProviderMessage(ex.Code),
                 ex.Provider, ex.ConnectionId, ex.ItemId);
         }
-        catch (Exception ex) { return SerializeError("internal-error", ex.Message); }
+        catch (Exception) { return SerializeError("internal-error", "An unexpected internal error occurred."); }
     }
 
     private static AIFunctionFactoryOptions Opts(string name, string description) => new()
@@ -530,6 +532,25 @@ public sealed class OfficeAgentTools
         ProviderErrorCode.IO => "io-error",
         ProviderErrorCode.AlreadyExists => "already-exists",
         _ => "provider-error"
+    };
+
+    /// <summary>
+    /// Provider exceptions are host diagnostics and may contain absolute paths,
+    /// tenant details, or upstream response text. Tool callers receive a stable,
+    /// actionable message keyed only by the public provider error code.
+    /// </summary>
+    private static string ProviderMessage(ProviderErrorCode code) => code switch
+    {
+        ProviderErrorCode.NotFound => "The document or registration was not found.",
+        ProviderErrorCode.AccessDenied => "The source is outside the connection boundary or access was denied.",
+        ProviderErrorCode.ContentTooLarge => "The document exceeds the connection's size limit.",
+        ProviderErrorCode.ExtensionNotAllowed => "The document extension is not allowed by this connection.",
+        ProviderErrorCode.VersionConflict => "The document changed after it was opened. Inspect it again before retrying.",
+        ProviderErrorCode.InvalidArgument => "The document provider rejected an argument.",
+        ProviderErrorCode.ConfigurationError => "The document connection is not configured for this operation.",
+        ProviderErrorCode.IO => "The document provider operation failed.",
+        ProviderErrorCode.AlreadyExists => "A document with that name already exists.",
+        _ => "The document provider operation failed."
     };
 
     /// <summary>
@@ -635,6 +656,7 @@ public sealed class OfficeAgentTools
         {
             isValid = false,
             committed = false,
+            sourceDocumentId = (string?)null,
             outputConnectionId = (string?)null,
             outputDocumentId = (string?)null,
             outputVersion = (string?)null,

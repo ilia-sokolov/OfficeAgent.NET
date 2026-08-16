@@ -134,6 +134,22 @@ public class SharePointProviderTests
     }
 
     [Fact]
+    public async Task Graph_error_message_is_not_exposed_by_registration()
+    {
+        const string upstreamDetail = "Resource https://tenant.example/sites/legal/folder-secret was denied.";
+        using var drive = new FakeGraphDrive { ResolutionFailureMessage = upstreamDetail };
+        var provider = drive.Provider();
+
+        var error = await Assert.ThrowsAsync<DocumentProviderException>(() =>
+            provider.RegisterAsync(drive.UrlFor("missing-item")));
+
+        Assert.Equal(ProviderErrorCode.NotFound, error.Code);
+        Assert.Contains("itemNotFound", error.Message);
+        Assert.DoesNotContain(upstreamDetail, error.Message);
+        Assert.DoesNotContain("folder-secret", error.Message);
+    }
+
+    [Fact]
     public async Task Register_by_drive_and_item_id_assigns_opaque_id_and_opens_by_it()
     {
         using var drive = new FakeGraphDrive();
@@ -434,6 +450,7 @@ public class SharePointProviderTests
         public bool SawAuthorizedGraphCall { get; private set; }
         public bool SawAuthorizedDownloadCall { get; private set; }
         public string? CreationFailureMessage { get; init; }
+        public string? ResolutionFailureMessage { get; init; }
 
         /// <summary>Seeds a drive item and returns its Graph item id.</summary>
         public string Seed(string name, byte[] bytes)
@@ -527,7 +544,10 @@ public class SharePointProviderTests
                     var id = decoded.Substring(decoded.LastIndexOf('/') + 1);
                     return Task.FromResult(_drive._byId.TryGetValue(id, out var entry)
                         ? Item(entry)
-                        : GraphError(HttpStatusCode.NotFound, "itemNotFound"));
+                        : GraphError(
+                            HttpStatusCode.NotFound,
+                            "itemNotFound",
+                            _drive.ResolutionFailureMessage));
                 }
 
                 var prefix = $"{GraphBase}/drives/{Uri.EscapeDataString(DriveId)}";

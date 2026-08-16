@@ -5,6 +5,13 @@ A host that registers both serves either format from one client: the engine
 routes each document to the module that can handle it, so nothing in the calling
 code switches on file type.
 
+```bash
+dotnet add package OfficeAgent.Core
+dotnet add package OfficeAgent.Word        # only when serving .docx too
+dotnet add package OfficeAgent.PowerPoint
+dotnet add package Microsoft.Extensions.DependencyInjection
+```
+
 ```csharp
 services
     .AddWordFormat()
@@ -384,7 +391,7 @@ already resized.
 
 ## Known gaps
 
-- `format` on a shape moves and resizes it; it does not reach shape fills, outlines, or table styles.
+- `format` supports shape and slide fills, shape outlines, and shape geometry; it does not directly restyle the cells inside an existing table.
 - Animations are limited to the effects PresentationML expresses as a filtered `p:animEffect`. Fly-in, zoom, grow and the motion paths are refused rather than approximated — see [available effects](#available-effects).
 - A slide has no header. `p:hf` carries one, but it governs notes and handout pages, which is why PowerPoint greys the box out on the Slide tab.
 - `setProperty` and `revision` are not implemented; a deck has no document-property vocabulary of its own and no redline model.

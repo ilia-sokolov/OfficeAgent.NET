@@ -204,9 +204,12 @@ public sealed class OnBehalfOfAccessTokenProvider : IAccessTokenProvider
         using var response = await _http.SendAsync(request, cancellationToken).ConfigureAwait(false);
         var payload = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
         if (!response.IsSuccessStatusCode)
+        {
+            var errorCode = ReadErrorCode(payload);
+            var suffix = string.IsNullOrEmpty(errorCode) ? string.Empty : $", error '{errorCode}'";
             throw new InvalidOperationException(
-                $"On-Behalf-Of token exchange failed with status {(int)response.StatusCode} for tenant '{_options.TenantId}'. " +
-                $"{DescribeError(payload)}".TrimEnd());
+                $"On-Behalf-Of token exchange failed (status {(int)response.StatusCode}{suffix}).");
+        }
 
         using var json = JsonDocument.Parse(payload);
         var token = json.RootElement.GetProperty("access_token").GetString()
@@ -215,15 +218,15 @@ public sealed class OnBehalfOfAccessTokenProvider : IAccessTokenProvider
         return (token, expiresIn);
     }
 
-    private static string DescribeError(string payload)
+    private static string ReadErrorCode(string payload)
     {
         if (string.IsNullOrWhiteSpace(payload)) return string.Empty;
         try
         {
             using var json = JsonDocument.Parse(payload);
-            return json.RootElement.TryGetProperty("error_description", out var description)
-                ? description.GetString()?.Split('\n')[0] ?? string.Empty
-                : json.RootElement.TryGetProperty("error", out var error) ? error.GetString() ?? string.Empty : string.Empty;
+            return json.RootElement.TryGetProperty("error", out var error)
+                ? error.GetString() ?? string.Empty
+                : string.Empty;
         }
         catch (JsonException)
         {

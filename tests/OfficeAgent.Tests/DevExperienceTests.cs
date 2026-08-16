@@ -32,7 +32,8 @@ public class DevExperienceTests
         var result = await client.CommitAsync("workspace", doc.ItemId, plan);
         Assert.True(result.Committed);
 
-        using var content = await client.OpenReadAsync(result.Document!);
+        using var content = await client.OpenReadAsync(
+            result.Document!.ConnectionId, result.Document.ItemId);
         using var saved = WordprocessingDocument.Open(content.Stream, false);
         var text = string.Concat(saved.MainDocumentPart!.Document.Body!.Descendants<Text>().Select(t => t.Text));
         Assert.Contains("Globex Inc.", text);

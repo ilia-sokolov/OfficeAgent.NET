@@ -51,7 +51,15 @@ export AGENT_SHAREPOINT_CONNECTION_ID='legal'
 dotnet run --project samples/AgentEdit
 ```
 
-A non-destructive save writes the edited revision as a versioned sibling derived from the source name (`<source>.v2.docx` - e.g. `contract.docx` → `contract.v2.docx`) in the same library; the source stays untouched. `export <output.docx>` works the same way - the host resolves the opaque id through the provider and writes the bytes locally. This sample uses app-only application identity (client credentials); for a multi-user host that should act as the signed-in user, configure the SharePoint provider's On-Behalf-Of mode instead (see [docs/document-providers.md](../../docs/document-providers.md)).
+The tools use `Replace` by default, so a normal successful edit updates the
+registered source after an optimistic version check. If the agent explicitly
+sends `saveMode: "NewVersion"`, the provider writes a sibling such as
+`contract.v2.docx`, preserves the source, and returns a new id. `export
+<output.docx>` works in either case: the host resolves the current opaque id and
+writes its bytes locally. This sample uses app-only application identity (client
+credentials); for a multi-user host that should act as the signed-in user,
+configure the SharePoint provider's On-Behalf-Of mode instead (see
+[docs/document-providers.md](../../docs/document-providers.md)).
 
 ## Try these prompts
 

@@ -17,6 +17,10 @@ public sealed class FileSystemDocumentProviderOptions
     /// absolute paths are rejected when they escape it). New revisions written by
     /// <see cref="FileSystemDocumentProvider.SaveAsync"/> in NewVersion/NewDocument
     /// mode are placed beside the source file under this root.
+    /// The root is a host-managed trust boundary: untrusted operating-system
+    /// principals must not be able to create, rename, or replace directory entries
+    /// beneath it. The provider rejects traversal and reparse points before each
+    /// access, but path validation and I/O are not one atomic filesystem operation.
     /// </summary>
     public string RootPath { get; set; } = string.Empty;
 
@@ -40,8 +44,9 @@ public sealed class FileSystemDocumentProviderOptions
 /// owns, addressed by an opaque item id assigned at registration time. The provider
 /// never copies, mirrors, or owns content - it only persists the id → path mapping
 /// under <c>{root}/.officeagent/index.json</c> and routes open/save back to the
-/// referenced path. The agent only sees opaque ids and never receives a filesystem
-/// path. New documents created through <see cref="CreateAsync"/> are the one case
+/// referenced path. Default edit tools use opaque ids; opt-in registration tools may
+/// accept a connection-relative source path. New documents created through
+/// <see cref="CreateAsync"/> are the one case
 /// where the provider owns the bytes it writes: they land directly under the root.
 /// </summary>
 public sealed class FileSystemDocumentProvider : IDocumentProvider, IDocumentCreatingProvider, IConnectionEditingDefaults
@@ -188,7 +193,10 @@ public sealed class FileSystemDocumentProvider : IDocumentProvider, IDocumentCre
         CancellationToken cancellationToken = default)
     {
         ValidateReference(reference);
-        var path = LookupPath(reference.ItemId);
+        // Revalidate on every access. A directory inside the root could have been
+        // replaced with a link after registration; stored mappings do not bypass the
+        // connection boundary.
+        var path = ResolveAndValidateSource(LookupPath(reference.ItemId));
 
         var info = new FileInfo(path);
         if (!info.Exists)
@@ -226,7 +234,8 @@ public sealed class FileSystemDocumentProvider : IDocumentProvider, IDocumentCre
                 "Replace mode overwrites the source in place and cannot rename. Use Mode=NewVersion/NewDocument with NewName to mint a renamed document.",
                 source.ItemId);
 
-        var sourcePath = LookupPath(source.ItemId);
+        // Revalidate the stored path immediately before reading or publishing output.
+        var sourcePath = ResolveAndValidateSource(LookupPath(source.ItemId));
         var sourceName = Path.GetFileName(sourcePath);
         var sourceDir = Path.GetDirectoryName(sourcePath)
             ?? throw Error(ProviderErrorCode.IO, "The referenced file has no parent directory.", source.ItemId);
@@ -406,10 +415,7 @@ public sealed class FileSystemDocumentProvider : IDocumentProvider, IDocumentCre
         if (!File.Exists(fullPath))
             throw Error(ProviderErrorCode.NotFound, $"The source file '{fullPath}' does not exist.");
 
-        var attributes = File.GetAttributes(fullPath);
-        if ((attributes & FileAttributes.ReparsePoint) == FileAttributes.ReparsePoint)
-            throw Error(ProviderErrorCode.AccessDenied,
-                "Symlinks and reparse points are not accepted as document sources.");
+        EnsureNoReparsePoints(fullPath, rootWithSeparator);
 
         var extension = NormalizeExtension(Path.GetExtension(fullPath));
         if (!_allowedExtensions.Contains(extension))
@@ -417,6 +423,26 @@ public sealed class FileSystemDocumentProvider : IDocumentProvider, IDocumentCre
                 $"Documents with extension '{extension}' are not allowed by this connection. Allowed: {string.Join(", ", _allowedExtensions)}.");
 
         return fullPath;
+    }
+
+    private void EnsureNoReparsePoints(string fullPath, string rootWithSeparator)
+    {
+        // Check every component beneath the configured root, not only the final file.
+        // Otherwise root/link/file.docx can lexically remain under root while link
+        // resolves to an arbitrary directory outside it.
+        var relative = fullPath.Substring(rootWithSeparator.Length);
+        var current = _root;
+        foreach (var component in relative.Split(
+                     new[] { Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar },
+                     StringSplitOptions.RemoveEmptyEntries))
+        {
+            current = Path.Combine(current, component);
+            var attributes = File.GetAttributes(current);
+            if ((attributes & FileAttributes.ReparsePoint) == FileAttributes.ReparsePoint)
+                throw Error(
+                    ProviderErrorCode.AccessDenied,
+                    "Symlinks and reparse points are not accepted as document sources.");
+        }
     }
 
     /// <summary>Validates a caller-supplied display name (used only by NewName saves).</summary>

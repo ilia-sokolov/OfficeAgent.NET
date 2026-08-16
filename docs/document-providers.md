@@ -4,10 +4,12 @@ A document provider is a **registry of references**: it persists where each
 document lives (a filesystem path, a URL, a drive id, …), not the bytes
 themselves. Hosts register an existing document with a connection to receive an
 opaque id; later reads and saves route back to the referenced location. The
-agent only sees the opaque id, never a path or URL. Provider contracts and
+default edit tools use only the opaque id. Opt-in registration and composite
+tools accept a source path or URL from the caller, so that value can enter model
+context. Provider contracts and
 implementations live in the `OfficeAgent.Core.DocumentProviders` namespace.
 
-Every reference contains a provider name, a host-configured connection id, an **opaque, provider-assigned document id**, and an optional version. Ids are tokens, not addresses - a caller never constructs one. The id is minted on `RegisterAsync` and echoed back on every subsequent open and save.
+Every reference contains a provider name, a host-configured connection id, an **opaque, provider-assigned document id**, and an optional version. Ids are tokens, not addresses. `RegisterAsync` mints an id. `Replace` preserves it; `NewVersion`, `NewDocument`, and creation mint an id for the new item.
 
 ## Register a connection
 
@@ -26,9 +28,24 @@ services
 
 The filesystem provider only accepts source paths that lie under its configured root. It persists the id → path mapping in `{root}/.officeagent/index.json` and rejects path-like ids, traversal escapes, symlinks/reparse points, disallowed extensions, oversized files, and stale versions. New documents created through the connection are written directly under that root.
 
+Treat that root as a host-managed trust boundary. The provider checks every path
+component for links before registration, open, and save, but pathname validation
+and I/O are not an atomic filesystem transaction. Use filesystem ACLs so
+untrusted principals cannot create, rename, or replace directory entries beneath
+the root while OfficeAgent runs. A user may have write access to an existing
+file without receiving directory create/delete/rename rights. Stage uploads
+through the trusted host instead of giving an untrusted uploader direct directory
+control.
+
 Connection ids are host-chosen and must be unique across providers: the `(connectionId, documentId)` overloads resolve the provider from the connection id alone, whatever its type.
 
 ## The SharePoint provider
+
+```bash
+dotnet add package OfficeAgent.Core
+dotnet add package OfficeAgent.SharePoint
+dotnet add package Microsoft.Extensions.DependencyInjection
+```
 
 `OfficeAgent.SharePoint` ships an `IDocumentProvider` over the Microsoft Graph drive-item REST endpoints - one connection across the tenant's drives, no Graph SDK dependency:
 
@@ -62,13 +79,14 @@ The same boundary rules apply, over Microsoft Graph:
 - **Tokens stay out of references and tool results.** Authentication is an `IAccessTokenProvider` - two are included (see below). Content downloads use Graph's pre-authenticated URL, so the bearer token never travels to the storage endpoint.
 - **Registrations are pluggable.** `InMemoryRegistrationStore` is the default; `JsonFileRegistrationStore` survives restarts; implement `ISharePointRegistrationStore` over shared storage for multi-instance hosts.
 - **Creation has one explicit destination.** Set both `CreationDriveId` and `CreationFolderItemId` to allow new documents in that folder. Existing-document registration remains cross-drive. Uploads use `conflictBehavior=fail`, so creation never overwrites an existing SharePoint item.
+- **Simple uploads are limited to 250 MB.** The provider does not implement Graph upload sessions, so keep `MaximumBytes` at or below that limit.
 
 ### Choosing an authentication mode
 
 | Provider | Identity used | When |
 | --- | --- | --- |
-| `OnBehalfOfAccessTokenProvider` | **The signed-in user** | Hosted multi-user agents (Copilot Studio, M365 Copilot). The provider exchanges the caller's inbound token for a Graph token via the OAuth2 On-Behalf-Of flow, so SharePoint permissions are enforced per user. |
-| `AppOnlyAccessTokenProvider` | A shared app identity | Unattended / daemon hosts where no user is present. Scope the app registration narrowly (`Sites.Selected`). |
+| `OnBehalfOfAccessTokenProvider` | **The signed-in user** | Hosted multi-user agents. Effective access is the intersection of consented delegated Graph scopes and the user's SharePoint access. |
+| `AppOnlyAccessTokenProvider` | A shared app identity | Unattended hosts. Prefer `Sites.Selected`, then assign the app to each intended site with a sufficient role such as `write`. |
 
 To plug in your own credential flow (Azure.Identity, MSAL, managed identity, or a token you already hold), implement `IAccessTokenProvider` and register it directly.
 
@@ -85,7 +103,12 @@ services.AddSharePointOnBehalfOfAuthentication(o =>
 services.AddSharePointDocumentProvider("legal");
 ```
 
-On a stdio host there is no inbound user token, so On-Behalf-Of is a hosted-HTTP concern; a call with no captured token fails with a clear error rather than silently falling back to an app identity.
+On a stdio host there is no inbound user token, so On-Behalf-Of is a hosted-HTTP concern; a call with no captured token fails with a clear error rather than silently falling back to an app identity. The inbound token must target the middle-tier API, and the edge must validate it and forward it unchanged. The bundled provider does not complete Conditional Access claims-challenge round trips.
+
+`Sites.Selected` admin consent alone grants no site access. An administrator must
+create an application permission assignment on every intended site and grant
+the required role. For sovereign clouds, configure the Graph base URL, login
+authority, OBO scope, and app-only scope as one consistent set.
 
 Other cloud or document-management integrations implement `IDocumentProvider` and register one singleton per connection. Credentials live in host configuration, managed identity, delegated identity, or a secret store - **never** on `DocumentReference`.
 
@@ -155,6 +178,14 @@ content or retrying an ambiguous write.
 The filesystem provider implements creation and writes new documents directly
 under the connection root. A SharePoint connection implements creation when its
 `CreationDriveId` and `CreationFolderItemId` identify the destination folder.
+
+Graph throttling and transient failures are not retried automatically. If a
+write times out or receives a throttling response, reconcile storage state before
+retrying: Graph may have accepted the bytes even when the response was lost.
+Microsoft Graph does not support replacing a sensitivity-labeled file with
+application permissions. An app-only connection cannot use `Replace` for that
+case; use On-Behalf-Of/delegated access or a separately validated workflow, and
+include a labeled file in preflight tests.
 
 ## Remove (unregister) a document
 

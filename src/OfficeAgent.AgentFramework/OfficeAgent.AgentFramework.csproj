@@ -2,7 +2,7 @@
 
   <PropertyGroup>
     <TargetFrameworks>netstandard2.0;net8.0</TargetFrameworks>
-    <Description>Microsoft.Extensions.AI tool adapter for OfficeAgent.NET, a translation layer between AI agents and OOXML: projects inspect, find, preview, and apply as AIFunctions for Microsoft Agent Framework agents, with structured JSON results. Documents are pre-registered by the host; the agent works only with the opaque (connectionId, documentId) it is given.</Description>
+    <Description>Microsoft.Extensions.AI tool adapter for OfficeAgent.NET: projects Word and PowerPoint inspect, find, preview, and apply workflows as AIFunctions with structured JSON results, plus opt-in document registration, composite open/edit, and creation tools for filesystem or SharePoint connections.</Description>
   </PropertyGroup>
 
   <ItemGroup>

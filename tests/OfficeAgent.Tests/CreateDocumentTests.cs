@@ -297,9 +297,8 @@ public class CreateDocumentTests
             badName.RootElement.GetProperty("errors")[0].GetProperty("Code").GetString());
         Assert.Equal("invalid-argument",
             invalidCharacter.RootElement.GetProperty("errors")[0].GetProperty("Code").GetString());
-        Assert.Contains("invalid filename",
-            invalidCharacter.RootElement.GetProperty("errors")[0].GetProperty("Message").GetString(),
-            StringComparison.OrdinalIgnoreCase);
+        Assert.Equal("The document provider rejected an argument.",
+            invalidCharacter.RootElement.GetProperty("errors")[0].GetProperty("Message").GetString());
         Assert.Equal("already-exists",
             duplicate.RootElement.GetProperty("errors")[0].GetProperty("Code").GetString());
     }

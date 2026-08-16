@@ -55,21 +55,23 @@ connection to one directory.
 macOS/Linux:
 
 ```bash
-claude mcp add officeagent \
+claude mcp add \
   --env OfficeAgent__FileSystemConnections__0__ConnectionId=documents \
   --env OfficeAgent__FileSystemConnections__0__RootPath=/absolute/path/to/documents \
   --env OfficeAgent__AllowCreation=true \
-  -- officeagent-mcp --stdio
+  --transport stdio \
+  officeagent -- officeagent-mcp --stdio
 ```
 
 PowerShell:
 
 ```powershell
-claude mcp add officeagent `
+claude mcp add `
   --env OfficeAgent__FileSystemConnections__0__ConnectionId=documents `
   --env OfficeAgent__FileSystemConnections__0__RootPath=C:\officeagent-documents `
   --env OfficeAgent__AllowCreation=true `
-  -- officeagent-mcp --stdio
+  --transport stdio `
+  officeagent -- officeagent-mcp --stdio
 ```
 
 `AllowCreation` is off by default and is what adds `create_document`; drop that
@@ -108,6 +110,9 @@ Configuration for other clients, streamable HTTP hosting, containers, and
 SharePoint is in [Deployment and client setup](docs/deployment.md).
 The server does not provide an authentication layer for HTTP hosting; put it
 behind the authentication and network controls appropriate for your environment.
+Filesystem roots are also trust boundaries: their ACLs must prevent untrusted
+principals from creating, renaming, or replacing directory entries while the
+server runs.
 
 ## .NET quick start
 
@@ -182,8 +187,8 @@ targeting a different location. Applying a plan is all-or-nothing.
 
 The Word module supports changes to text, paragraphs, tables, images, styles,
 content controls, comments, document properties, and tracked revisions. The
-PowerPoint module implements everything a deck can express except document
-properties and revisions: text, bullets, run and paragraph formatting, template
+PowerPoint module implements a broad, explicitly documented set of deck
+operations: text, bullets, run and paragraph formatting, template
 slots, style copying, tables, images, text boxes, embedded video and audio,
 speaker notes, resolvable comments, footers and slide numbers, sections,
 transitions and animations, and the slide lifecycle - adding, removing,
@@ -197,14 +202,16 @@ Documents are accessed through configured providers. After registration,
 editing calls use a `(connectionId, documentId)` pair instead of a storage path
 or credentials. The filesystem provider restricts registrations to its root;
 the SharePoint provider uses the permissions of its configured identity.
-`CreateAsync` starts a new document inside a connection: the engine mints a
-minimal valid `.docx`, applies an optional initial plan in memory, and then asks
+`CreateAsync` starts a new document inside a connection: the requested `.docx`
+or `.pptx` extension selects a registered blank-document factory. The engine
+applies an optional initial plan in memory, and then asks
 the provider to create and register it without overwriting an existing name.
 
 ## Documentation
 
 | Guide | Covers |
 | --- | --- |
+| [Documentation hub](docs/README.md) | Learning paths, package map, and the complete documentation set |
 | [Getting started](docs/getting-started.md) | A complete edit from service registration to reading the result |
 | [Concepts](docs/concepts.md) | Anchors, snapshots, plans, providers, transactions, and capabilities |
 | [Document plans](docs/document-plans.md) | JSON shapes and validation rules for every operation |
@@ -214,6 +221,7 @@ the provider to create and register it without overwriting an existing name.
 | [MCP server](docs/mcp-server.md) | Server configuration, transports, security notes, and tool contracts |
 | [Deployment and client setup](docs/deployment.md) | Codex, Claude Code, Microsoft Copilot clients, containers, and Azure |
 | [Operations](docs/operations.md) | Concurrency, streams, cancellation, telemetry, and production concerns |
+| [Troubleshooting](docs/troubleshooting.md) | Startup, registration, validation, concurrency, and provider failures |
 | [Failure modes](docs/operations.md#failure-modes-you-should-handle) | Common plan errors and what to do next |
 
 ## Contributing

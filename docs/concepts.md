@@ -1,83 +1,128 @@
 # Concepts
 
-OfficeAgent.NET is a translation layer between AI agents and OOXML: the agent expresses intent as a typed plan, and the library turns it into valid Open XML manipulations. It keeps document understanding separate from document mutation - an agent receives stable addresses (*anchors*) and a typed *plan* shape; it never writes Open XML.
+OfficeAgent.NET is a translation layer between AI agents and OOXML. An agent
+expresses intent as a typed document plan; a format module validates that plan
+and performs the Open XML changes. The agent works with engine-issued addresses
+instead of editing package XML.
 
 ## Document providers
 
-A document lives behind an `IDocumentProvider`. Hosts register one or more provider *connections* - filesystem and SharePoint providers ship in the box; Google Drive, a database, or anything else implement the same `RegisterAsync` / `OpenReadAsync` / `SaveAsync` / `RemoveAsync` interface.
+Documents live behind `IDocumentProvider` connections. Filesystem and SharePoint
+providers ship with the project; another store can implement the same
+`RegisterAsync`, `OpenReadAsync`, `SaveAsync`, and `RemoveAsync` contract.
 
-A provider is a **registry of references**: it persists only where each document lives (a path, URL, drive id, …), never the bytes themselves. Registering a document with a connection mints an **opaque, provider-assigned `documentId`**, and every later call addresses the document by `(connectionId, documentId)`. The provider routes reads and saves back to the referenced location. The agent cannot construct an id, escape the connection, or see a filesystem path or credential. By default it cannot register documents either; hosts opt in to the registration tools when the agent should stage its own ids (the MCP server enables them by default - an MCP client has no other channel).
+A provider stores references, not document bytes. Registering an existing
+document mints an opaque `documentId`; later calls address it by
+`(connectionId, documentId)`. The default in-process tools expose only those ids
+and never credentials. Opt-in registration and composite tools also accept a
+path, SharePoint URL, or `driveId/itemId` from the model. The MCP server enables
+registration by default because an MCP client has no other staging channel.
+Those source values can enter model context, but the provider still enforces its
+configured root or identity boundary.
 
 ## Inspect
 
-`InspectAsync` returns a structured caller-facing model:
+`InspectAsync` returns a format-specific structured model. Common fields include
+the format, snapshot etag, paragraph text and ids, style catalog, and
+addressable nodes.
 
-- format and snapshot etag;
-- outline nodes derived from heading styles;
-- paragraphs with stable ids, style ids, and their logical text (including which paragraphs live inside a table cell);
-- structural anchors for content controls and bookmarks (by tag);
-- the style catalog;
-- **nodes** - non-paragraph addressable objects (tables, images, document properties, tracked revisions) with their stable path strings.
+- Word inspection includes outline headings, content controls, bookmarks,
+  tables, images, document properties, and revisions.
+- PowerPoint inspection uses slide/shape-scoped paragraph ids and nodes for
+  slides, shapes, tables, images, comments, media, and sections.
+
+See [Document plans](document-plans.md) and
+[PowerPoint support](powerpoint.md) for exact target paths.
 
 ## Anchors
 
-An anchor is an engine-issued address. The caller (or the LLM) does not invent anchors - it reuses the ones returned by `InspectAsync` / `FindAsync`.
+An anchor is an engine-issued address. Callers reuse anchors from
+`InspectAsync` or `FindAsync`; they do not invent them.
 
 | Anchor | Targets | Example |
 | --- | --- | --- |
-| `TextSpanAnchor` | expected text in a paragraph | `{ paraId, expect, occurrence }` |
-| `StructuralAnchor` | a named slot: a Word content control or bookmark, a deck's shape name | `{ tag, kind: "contentControl" }` |
-| `NodeAnchor` | table, image, document property, revision | `{ kind: "table", path: "table#0" }` |
-| `StyleAnchor` | a named style | `{ styleId: "Heading1" }` |
+| `TextSpanAnchor` | Expected text in a paragraph | `{ paraId, expect, occurrence }` |
+| `StructuralAnchor` | A named slot, such as a content control, bookmark, or deck shape name | `{ tag, kind: "contentControl" }` |
+| `NodeAnchor` | A format node such as a table, image, slide, shape, property, or revision | `{ kind: "table", path: "table#0" }` |
+| `StyleAnchor` | A named style | `{ styleId: "Heading1" }` |
 
-Text and node anchors carry expected content. At apply time the engine re-verifies the live document against the anchor; if the content has drifted, the operation fails safely with `expect-mismatch` rather than editing the wrong run.
+Text and node anchors carry expected content. At apply time the engine checks
+the live document again. Drift produces `expect-mismatch` instead of an edit at
+the wrong location.
 
 ## Snapshots and drift detection
 
-`Inspect` returns a `SnapshotToken` etag covering every editable host (body, headers, footers, footnotes, endnotes). Plans may carry that snapshot in `DocumentPlan.Snapshot`; if the live document has drifted since inspection, validation fails with `stale-snapshot`. Leaving the snapshot unset opts out of document-level drift and relies on per-anchor verification.
+`Inspect` returns a `SnapshotToken` etag over the format's text hosts. For Word
+it hashes body, header, footer, footnote, and endnote XML. For PowerPoint it
+hashes slide and speaker-notes XML. It does not cover properties, comments,
+sections, media/image bytes, masters, or layouts. Put the token in
+`DocumentPlan.Snapshot` to detect drift in that covered content; a mismatch
+produces `stale-snapshot`. Omitting it relies only on per-anchor checks.
 
-## Document plan
+## Document plans
 
-A `DocumentPlan` is a typed list of operations against anchors. The plan and every operation type are JSON-serialisable so an LLM can produce them.
+A `DocumentPlan` is a JSON-serializable list of typed operations:
 
 ```jsonc
 {
   "operations": [
     {
       "op": "changeText",
-      "target": { "paraId": "w14:00000002", "expect": "Acme Corp", "occurrence": 0 },
-      "with":   "Globex Inc.",
-      "mode":   "Tracked"
+      "target": {
+        "paraId": "w14:00000002",
+        "expect": "Acme Corp",
+        "occurrence": 0
+      },
+      "with": "Globex Inc.",
+      "mode": "Tracked"
     }
   ]
 }
 ```
 
-The Word module ships 17 verbs covering text, runs, tables (create / remove / rows / columns), images, styles, comments, properties, and revisions. See [document-plans.md](document-plans.md).
+The vocabulary is shared, but each format implements only operations it can
+express. An unsupported operation produces `unsupported-operation`, and no part
+of the plan is written. Some verbs, including `headerFooter`, have
+format-specific semantics; slide lifecycle, shape, section, media, transition,
+and animation operations are deck-only. Use the maintained
+[operation reference](document-plans.md#supported-verbs) instead of relying
+on verb counts.
 
-The verb vocabulary is shared, not per-format: each module implements the subset its format can express, and an operation a module does not implement comes back as `unsupported-operation` with nothing in the plan applied. The PowerPoint module implements all but `setProperty` and `revision`, plus eleven verbs only a deck has - `insertSlide`, `removeSlide`, `moveSlide`, `duplicateSlide`, `insertShape`, `removeShape`, `section`, `headerFooter`, `insertMedia`, `transition`, `animate` - which Word reports as unsupported in turn; see [powerpoint.md](powerpoint.md). Because the vocabulary is shared, a plan need not declare a format - set `DocumentPlan.Format` only to *assert* one, which fails a mismatch with `contract-mismatch`.
+`DocumentPlan.Format` defaults to `Unspecified`. Set it only to assert a format;
+a mismatch produces `contract-mismatch`. An operation without `mode` uses the
+connection's default change mode—`Tracked` unless configured otherwise. A deck
+rejects tracked changes because PresentationML has no redline model.
 
-A `changeText` that does not state a `mode` takes the connection's configured default, which is `Tracked` unless the host changed it - see [document-providers.md](document-providers.md#default-change-mode).
+## Preview and commit
 
-## Preview / commit
+- `PreviewAsync` validates the complete plan and reports proposed changes and
+  errors without writing.
+- `CommitAsync` revalidates against live state, applies the complete plan in
+  memory, and saves through the provider. A plan is never partially committed.
 
-- `PreviewAsync` validates the whole plan against the current document and returns a *change report* - proposed before/after, declared capability per change, and any validation errors. Nothing is written.
-- `CommitAsync` applies the plan atomically and saves through the provider. Every operation is re-verified against live state immediately before it runs; if any step fails, no partial result is written.
-
-The default save mode is `Replace`: the edit lands in the document it was aimed at, after an optimistic-concurrency check on the source version, and the returned `documentId` is the one you passed in. `NewVersion` preserves the source and mints a fresh `documentId` for the result instead. `NewDocument` mints a fresh id with a caller-supplied display name.
+`Replace` is the default save mode and uses optimistic concurrency. `NewVersion`
+preserves the source, writes a versioned sibling, and returns a new id.
+`NewDocument` also returns a new id. `NewName` is optional; when omitted, the
+provider derives a versioned sibling name just as it does for `NewVersion`.
 
 ## Capabilities
 
-Every proposed change declares what kind of engine support it needs:
+Every proposed change declares the engine capability it needs:
 
-- **`Deterministic`** - the engine completes the edit with pure Open XML.
-- **`DeferredToWordOnOpen`** - the XML can be written, but Word refreshes the displayed value when the file is opened (e.g. `setProperty` for `updateOnOpen`).
-- **`NeedsRenderer`** - a layout or calculation engine is required (pagination, field recalculation, table-of-contents rendering). The engine rejects these instead of guessing.
+- `Deterministic`: pure Open XML completes the edit.
+- `DeferredToWordOnOpen`: Word refreshes a displayed value when the file opens.
+- `NeedsRenderer`: layout or calculation is required. The engine refuses these
+  changes rather than guessing.
 
-## Transactions and anchor stabilisation
+## Transactions and anchor stabilization
 
-Before commit, the format module stabilises anchor ids: Word assigns a durable `w14:paraId` to any paragraph that lacks one and maps the positional `auto-NNNN` ids returned by inspection to the stable ids. Each operation is then re-verified against live state immediately before it is applied, so an operation that inserts a paragraph cannot redirect a later operation's anchor.
+Before a Word commit, the module gives paragraphs without a durable
+`w14:paraId` one and maps positional `auto-NNNN` ids to the new ids. Re-inspect
+after a commit: saved bytes and ids may have changed, so a previous snapshot or
+`auto-NNNN` address is not a safe follow-up target.
 
-Stabilisation is per format. PresentationML has no id to mint, so the PowerPoint module stabilises nothing and instead implements `IPlanValidatingModule`: an optional interface the validator calls once per plan, which it uses to refuse a plan that both inserts a paragraph and addresses that same text body positionally - see [powerpoint.md](powerpoint.md#anchor-stability).
-
-Because stabilisation rewrites the saved bytes, the snapshot returned by `Inspect` will not match the *saved* document - re-inspect before authoring a follow-up plan. The same applies to the ids themselves: a Word paragraph that inspected as `auto-0004` may come back as `w14:…` after the first commit, so a follow-up plan reuses ids from a fresh inspection rather than from the previous one.
+PresentationML has no equivalent paragraph id. The PowerPoint module instead
+refuses a plan that inserts a paragraph and then positionally addresses the same
+text body at or after that insertion. Apply the insert, re-inspect, and send a
+second plan. Slide and shape node paths use durable OOXML ids and survive slide
+reordering. See [PowerPoint anchor stability](powerpoint.md#anchor-stability).

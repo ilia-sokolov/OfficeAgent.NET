@@ -296,7 +296,8 @@ public static class OfficeAgentMcpServer
 
     private static IAccessTokenProvider CreateTokenProvider(SharePointConnectionOptions connection, HttpClient http)
     {
-        return connection.AuthMode?.Trim().ToLowerInvariant() switch
+        var authMode = connection.AuthMode?.Trim().ToLowerInvariant();
+        return authMode switch
         {
             "onbehalfof" or "on-behalf-of" or "obo" => new OnBehalfOfAccessTokenProvider(new OnBehalfOfOptions
             {
@@ -306,14 +307,17 @@ public static class OfficeAgentMcpServer
                 Scope = connection.OnBehalfOfScope,
                 Authority = connection.LoginAuthority
             }, http),
-            // "appOnly" (the default): authenticate as the app's own identity, no user.
-            _ => new AppOnlyAccessTokenProvider(new AppOnlyOptions
+            "apponly" or "app-only" or "application" => new AppOnlyAccessTokenProvider(new AppOnlyOptions
             {
                 TenantId = connection.TenantId,
                 ClientId = connection.ClientId,
                 ClientSecret = connection.ClientSecret,
+                Scope = connection.AppOnlyScope,
                 Authority = connection.LoginAuthority
-            }, http)
+            }, http),
+            _ => throw new InvalidOperationException(
+                $"SharePoint connection '{connection.ConnectionId}' has AuthMode '{connection.AuthMode}'. " +
+                "Expected appOnly or onBehalfOf.")
         };
     }
 }

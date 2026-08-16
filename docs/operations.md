@@ -69,6 +69,45 @@ What you get:
 - `Warning` log lines when apply aborts mid-plan (with the failing code and message).
 - `Debug` log lines for inspect, find, and dry-run apply.
 
+Treat logs as application data. Information events contain connection ids,
+opaque item ids, and document names; debug events can contain search patterns or
+validation messages derived from document content. Registration logging does not
+record the raw source path or SharePoint URL. Restrict log access and retention,
+and avoid debug logging in production unless it is needed for a bounded incident.
+
+## Registration-state durability
+
+Filesystem connections persist registrations in
+`{root}/.officeagent/index.json`. SharePoint uses memory unless
+`RegistrationIndexPath` is configured. A JSON registration index is sensitive
+application state: restrict its ACL, back it up with the referenced documents,
+and let only one process write it. For a multi-instance deployment, implement
+`ISharePointRegistrationStore` over shared storage with appropriate concurrency
+control.
+
+## Filesystem root trust boundary
+
+The filesystem provider rejects traversal and checks every existing component
+for a symlink or reparse point at registration, open, and save. These checks
+protect against caller-supplied link paths and links introduced between calls.
+They cannot make a pathname check and the later read/write one atomic operation
+against a separate process racing a directory rename.
+
+Enforce the remaining boundary with operating-system ACLs: only the OfficeAgent
+service identity and trusted administrators may create, delete, rename, or
+replace entries below a connection root. Grant a human who must edit an existing
+document file-write permission without directory mutation rights. Do not mount
+the same container volume into an untrusted workload. For untrusted uploads,
+copy validated bytes into the root through the trusted host.
+
+## Provider retries
+
+OfficeAgent does not automatically retry Microsoft Graph requests or interpret
+`Retry-After`. Reads can be retried with normal bounded backoff. A timed-out or
+throttled write is ambiguous: first reopen the existing id, or look up the
+requested new name, to determine whether Graph committed it. If the source
+changed, re-inspect and rebuild the plan; do not replay a stale plan blindly.
+
 ## Output paths
 
 `ApplyResult` exposes the committed bytes three ways:
@@ -93,6 +132,9 @@ All three throw `InvalidOperationException` when the plan was a dry run or did n
 | `DocumentVersionConflictException` from a `Replace` save | Another writer changed the document between this commit's open and its save | Re-inspect and re-author the plan against the current bytes; nothing was overwritten |
 | `Errors` contains `unsupported-operation` on a deck | The verb is Word-only - the PowerPoint module implements a subset | Use a verb the deck supports, or record the intent as a comment. See [PowerPoint support](powerpoint.md) |
 | `Errors` contains `invalid-operation` naming mode `Tracked` on a deck | PresentationML has no redline vocabulary | Send `"mode": "Direct"`, or set the connection's `DefaultChangeMode` so deck plans need not restate it |
+| MCP server exits during startup | No document connection, an invalid `AuthMode`, or incomplete provider configuration | Read the configuration error, correct the named connection, and restart; invalid authentication modes never fall back to app-only |
+| Graph returns 429 or a transient 5xx | Throttling or a service interruption | Respect `Retry-After` in the host; reconcile an attempted write before retrying |
+| A create call reports an I/O error but the name is now occupied | Storage accepted the file before registration or the response failed | Inspect the destination and register the surviving item; do not overwrite or blindly retry the name |
 
 ## Versioning
 
