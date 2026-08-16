@@ -49,4 +49,12 @@ public sealed class FindHit
 
     /// <summary>Gets surrounding text for preview display.</summary>
     public string Context { get; init; } = string.Empty;
+
+    /// <summary>
+    /// Gets the text host the match lives in, for documents whose text spans
+    /// multiple hosts. Word values are <c>body</c>, <c>header</c>, <c>footer</c>,
+    /// <c>footnote</c>, and <c>endnote</c>. Null when the format has no such concept
+    /// (a deck is all slide or note text).
+    /// </summary>
+    public string? Location { get; init; }
 }

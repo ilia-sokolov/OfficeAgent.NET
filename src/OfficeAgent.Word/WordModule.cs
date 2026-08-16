@@ -238,11 +238,12 @@ public sealed class WordModule : IFormatModule, IBlankDocumentFactory
 
         Regex? regex = BuildRegex(query);
 
-        foreach (var (paragraph, paraId, _) in WordModel.Paragraphs(package))
+        foreach (var (paragraph, paraId, hostKey) in WordModel.Paragraphs(package))
         {
             var text = WordModel.Text.GetLogicalText(paragraph);
             if (text.Length == 0) continue;
 
+            var location = WordModel.LocationOf(hostKey);
             var seen = new Dictionary<string, int>(StringComparer.Ordinal);
 
             if (regex is not null)
@@ -250,7 +251,7 @@ public sealed class WordModule : IFormatModule, IBlankDocumentFactory
                 foreach (Match m in regex.Matches(text))
                 {
                     if (m.Length == 0) continue;
-                    AddHit(hits, seen, paraId, text, m.Value, m.Index);
+                    AddHit(hits, seen, paraId, text, m.Value, m.Index, location);
                 }
             }
             else
@@ -260,7 +261,7 @@ public sealed class WordModule : IFormatModule, IBlankDocumentFactory
                 {
                     int idx = text.IndexOf(query.Pattern, from, comparison);
                     if (idx < 0) break;
-                    AddHit(hits, seen, paraId, text, text.Substring(idx, query.Pattern.Length), idx);
+                    AddHit(hits, seen, paraId, text, text.Substring(idx, query.Pattern.Length), idx, location);
                     from = idx + query.Pattern.Length;
                 }
             }
@@ -269,7 +270,7 @@ public sealed class WordModule : IFormatModule, IBlankDocumentFactory
         return hits;
     }
 
-    private static void AddHit(List<FindHit> hits, Dictionary<string, int> seen, string paraId, string paragraphText, string matched, int index)
+    private static void AddHit(List<FindHit> hits, Dictionary<string, int> seen, string paraId, string paragraphText, string matched, int index, string location)
     {
         int occurrence = seen.TryGetValue(matched, out var n) ? n : 0;
         seen[matched] = occurrence + 1;
@@ -278,7 +279,8 @@ public sealed class WordModule : IFormatModule, IBlankDocumentFactory
         {
             Anchor = new TextSpanAnchor { Id = paraId, ParaId = paraId, Expect = matched, Occurrence = occurrence },
             Text = matched,
-            Context = WordModel.Snippet(paragraphText, index, matched.Length)
+            Context = WordModel.Snippet(paragraphText, index, matched.Length),
+            Location = location
         });
     }
 
