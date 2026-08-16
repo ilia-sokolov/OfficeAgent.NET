@@ -217,7 +217,7 @@ public sealed class OfficeAgentTools
             "Inspect a document by (connectionId, documentId) - a Word document or a PowerPoint deck. Returns outline (headings, or one entry per slide), paragraphs (with their `in` containment - a table path in Word, a slide's shape or table cell in a deck), content controls, format-specific nodes (including tables/images/properties/revisions in Word and slides/shapes/tables/images/comments/media/sections in a deck), styles, and a snapshot etag for drift detection. Copy node paths from this result. Use paragraphOffset/paragraphLimit to page; fidelity='outline'|'structure'|'content' to control payload size.")),
         AIFunctionFactory.Create(FindInDocument, Opts(
             "find_in_document",
-            "Find text in a document by (connectionId, documentId) - a Word document or a PowerPoint deck, including slide notes and table cells. Returns content-verified anchors (paragraphId + expected + occurrence) usable as plan targets.")),
+            "Find text in a document by (connectionId, documentId) - a Word document or a PowerPoint deck, including slide notes and table cells. Returns content-verified anchors (paragraphId + expected + occurrence) usable as plan targets. Each hit also carries its source location for Word: 'body', 'header', 'footer', 'footnote', or 'endnote' (null in a deck), so identical text in different hosts can be told apart before a plan targets one.")),
         AIFunctionFactory.Create(PreviewPlan, Opts(
             "preview_plan",
             "Dry-run a DocumentPlan JSON against (connectionId, documentId). Returns {isValid, committed, sourceDocumentId, outputConnectionId, outputDocumentId, outputVersion, outputName, outputContentType, changes, errors}; the output fields are null and committed is false. " +
@@ -315,7 +315,8 @@ public sealed class OfficeAgentTools
                 paraId = (h.Anchor as TextSpanAnchor)?.ParaId,
                 expect = h.Text,
                 occurrence = (h.Anchor as TextSpanAnchor)?.Occurrence ?? 0,
-                context = h.Context
+                context = h.Context,
+                location = h.Location
             }), Json);
         });
 

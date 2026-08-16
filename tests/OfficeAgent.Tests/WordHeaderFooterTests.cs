@@ -236,6 +236,35 @@ public class WordHeaderFooterTests
     }
 
     [Fact]
+    public void Find_reports_the_host_a_match_lives_in()
+    {
+        var client = Client();
+
+        var withHeader = Apply(client, Blank(), new HeaderFooterOp { Header = "Acme Corp" });
+        var inspect = client.Inspect(withHeader);
+        var document = Apply(client, withHeader,
+            new ChangeTextOp
+            {
+                Target = new TextSpanAnchor
+                {
+                    ParaId = inspect.Paragraphs.First(p => p.Location != "header").ParaId,
+                    Expect = string.Empty
+                },
+                With = "Acme Corp supplies the goods.",
+                Mode = ChangeMode.Direct
+            });
+
+        var hits = client.Find(
+            new StreamHandle(new MemoryStream(document)),
+            new FindQuery("Acme Corp"));
+
+        Assert.Equal(
+            new[] { "body", "header" },
+            hits.Select(h => h.Location).OrderBy(location => location).ToArray());
+        AssertValid(document);
+    }
+
+    [Fact]
     public void The_same_logo_in_the_body_and_the_header_is_stored_in_both()
     {
         var client = Client();
