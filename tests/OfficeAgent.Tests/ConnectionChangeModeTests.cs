@@ -98,6 +98,49 @@ public class ConnectionChangeModeTests
             parsed.RootElement.GetProperty("errors").ToString());
     }
 
+    [Fact]
+    public async Task A_structural_verb_follows_the_connection_too()
+    {
+        using var tracked = new ModeWorkspace(ChangeMode.Tracked);
+        using var direct = new ModeWorkspace(ChangeMode.Direct);
+
+        // The gap this closes: an insert written straight into a document whose connection
+        // asked for redlines leaves the reviewer the text edit marked and the new clause
+        // silently present.
+        Assert.True(await HasRevisions(tracked, ModeWorkspace.InsertPlan));
+        Assert.False(await HasRevisions(direct, ModeWorkspace.InsertPlan));
+    }
+
+    [Fact]
+    public void Every_verb_that_carries_a_mode_is_covered_by_the_connection_default()
+    {
+        // The default is written onto the JSON by verb name. Deriving that list from
+        // ITrackedOperation rather than keeping it by hand is what stops a new verb from
+        // quietly ignoring the connection's policy - this asserts the derivation reaches
+        // the verbs it should.
+        var trackable = PlanOperationJsonConverter.ByVerb
+            .Where(pair => typeof(ITrackedOperation).IsAssignableFrom(pair.Value))
+            .Select(pair => pair.Key)
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+        Assert.Superset(
+            new HashSet<string>(new[]
+            {
+                "changeText", "insert", "fill", "format",
+                "insertTable", "removeTable",
+                "insertTableRows", "removeTableRows",
+                "insertTableColumns", "removeTableColumns",
+                "insertImage", "removeImage",
+                "insertBreak", "note"
+            }, StringComparer.OrdinalIgnoreCase),
+            trackable);
+
+        // Verbs that change no content have no mode to inherit.
+        Assert.DoesNotContain("revision", trackable);
+        Assert.DoesNotContain("setProperty", trackable);
+        Assert.DoesNotContain("pageSetup", trackable);
+    }
+
     // ── helpers ───────────────────────────────────────────────────────────────
 
     private const string DeckPlan = """
@@ -139,6 +182,12 @@ public class ConnectionChangeModeTests
             { "operations": [ { "op": "changeText",
                 "target": { "paraId": "w14:00000002", "expect": "Acme Corp" },
                 "with": "Globex Inc." } ] }
+            """;
+
+        public const string InsertPlan = """
+            { "operations": [ { "op": "insert",
+                "target": { "paraId": "w14:00000002", "expect": "Acme Corp" },
+                "position": "After", "text": "The Supplier shall indemnify the Client." } ] }
             """;
 
         private readonly ServiceProvider _services;

@@ -146,15 +146,43 @@ internal static class WordModel
         return aliases;
     }
 
+    /// <summary>
+    /// Mints one <c>w14:paraId</c> that no paragraph in the document already carries,
+    /// comments included.
+    /// </summary>
+    /// <remarks>
+    /// A comment's paragraphs live outside the text hosts <see cref="Stabilize"/> walks,
+    /// but they share the document's paraId space: <c>commentsExtended</c> addresses a
+    /// comment by the paraId of its last paragraph, so a comment that collides with a body
+    /// paragraph makes a thread point at prose.
+    /// </remarks>
+    public static string MintParaId(IOpenXmlPackage package)
+    {
+        var used = ExistingParaIds(package);
+        using var rng = RandomNumberGenerator.Create();
+        return NewParaId(rng, used);
+    }
+
     /// <summary>Collects the ids already in the document, so a minted one cannot collide.</summary>
     private static HashSet<string> ExistingParaIds(IOpenXmlPackage package)
     {
         var used = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-        foreach (var (root, _) in TextHosts(package))
+
+        foreach (var root in ParagraphRoots(package))
             foreach (var paragraph in root.Descendants<Paragraph>())
                 if (paragraph.ParagraphId?.Value is { Length: > 0 } id)
                     used.Add(id);
         return used;
+    }
+
+    /// <summary>Every part that can hold a paragraph carrying a <c>w14:paraId</c>.</summary>
+    private static IEnumerable<OpenXmlElement> ParagraphRoots(IOpenXmlPackage package)
+    {
+        foreach (var (root, _) in TextHosts(package))
+            yield return root;
+
+        if (Main(package).WordprocessingCommentsPart?.Comments is { } comments)
+            yield return comments;
     }
 
     /// <summary>
@@ -222,6 +250,12 @@ internal static class WordModel
 /// id already present across every text host so revisions written by this engine
 /// never clash with revisions Word or other tools wrote earlier.
 /// </summary>
+/// <remarks>
+/// Every revision marker in WordprocessingML - run insertions and deletions, paragraph
+/// marks, row and cell markers, and the <c>*PrChange</c> formatting revisions - draws on
+/// one id space, so the seed reads all of them rather than the two run wrappers this
+/// engine happened to write first.
+/// </remarks>
 internal sealed class WordRevisionIdAllocator
 {
     private int _next;
@@ -230,12 +264,10 @@ internal sealed class WordRevisionIdAllocator
     {
         int max = 0;
         foreach (var (root, _) in WordModel.TextHosts(package))
-        {
-            foreach (var ins in root.Descendants<InsertedRun>())
-                if (int.TryParse(ins.Id?.Value, out var id) && id > max) max = id;
-            foreach (var del in root.Descendants<DeletedRun>())
-                if (int.TryParse(del.Id?.Value, out var id) && id > max) max = id;
-        }
+            foreach (var element in root.Descendants<OpenXmlElement>())
+                if (WordRevisions.TagOf(element) is not null &&
+                    int.TryParse(WordRevisions.IdOf(element), out var id) && id > max)
+                    max = id;
         _next = max + 1;
     }
 

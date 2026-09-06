@@ -186,7 +186,11 @@ or optional document snapshot has changed, validation fails instead of silently
 targeting a different location. Applying a plan is all-or-nothing.
 
 The Word module supports changes to text, paragraphs, tables, images, styles,
-content controls, comments, document properties, and tracked revisions. The
+content controls, comment threads, footnotes and endnotes, page geometry and
+breaks, document properties, and tracked revisions. Every verb that changes
+content records a redline when the connection asks for one - an inserted clause,
+a deleted row and a restyled heading all come back as revisions a reviewer
+accepts or rejects, not only a replaced phrase. The
 PowerPoint module implements a broad, explicitly documented set of deck
 operations: text, bullets, run and paragraph formatting, template
 slots, style copying, tables, images, text boxes, embedded video and audio,
@@ -252,9 +256,10 @@ OfficeAgent.NET edits Word `.docx` files and PowerPoint `.pptx` decks; it does
 not automate the Office desktop applications. An Excel module can be added
 through `IFormatModule`, but it does not ship today.
 
-The deck module refuses the two verbs a presentation has no vocabulary for -
-`setProperty` and `revision` - per operation, rather than applying part of a
-plan. PresentationML has no redline model, so tracked changes are Word-only, and
+The deck module refuses the verbs a presentation has no vocabulary for -
+`setProperty`, `revision`, `pageSetup`, `insertBreak` and `note` - per
+operation, rather than applying part of a plan, and refuses an explicit tracked
+mode on any verb that carries one. PresentationML has no redline model, so tracked changes are Word-only, and
 a slide has no header (that is a notes and handout concept). Animations cover
 the effects expressible as a filtered `p:animEffect`; fly-in, zoom and motion
 paths are refused rather than approximated. See

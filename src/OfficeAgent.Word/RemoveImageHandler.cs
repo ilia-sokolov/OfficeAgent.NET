@@ -18,6 +18,10 @@ namespace OfficeAgent.Word;
 /// </summary>
 internal sealed class RemoveImageHandler : IOperationHandler
 {
+    private readonly TimeProvider _clock;
+
+    public RemoveImageHandler(TimeProvider clock) => _clock = clock;
+
     private readonly ImageNodeProvider _images = new();
 
     public bool CanHandle(PlanOperation operation) =>
@@ -52,6 +56,19 @@ internal sealed class RemoveImageHandler : IOperationHandler
             ?? throw new InvalidOperationException($"Image '{anchor.Path}' vanished before apply.");
 
         var (drawing, host) = located;
+
+        if (WordRevisionMarker.IsTracked(op.Mode))
+        {
+            // The drawing stays, struck through, and so do its bytes: a rejected deletion
+            // has to restore the picture, which a released ImagePart could not. Only the
+            // run holding the drawing is marked - text sharing the paragraph is not part
+            // of this edit.
+            var imageRun = drawing.Parent as Run
+                ?? throw new InvalidOperationException(
+                    $"Image '{anchor.Path}' is not inside a run, so its removal cannot be tracked.");
+            new WordRevisionMarker(context.Package, _clock).MarkRunDeleted(imageRun);
+            return;
+        }
 
         // The drawing references its bytes through a blip relationship scoped to the
         // hosting part; capture it before the drawing is detached.

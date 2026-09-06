@@ -102,7 +102,8 @@ public class NewVerbsExtendedTests
                 new RemoveTableColumnsOp
                 {
                     Target = new NodeAnchor { Kind = "table", Path = "table#0" },
-                    ColumnIndices = new[] { 1 } // remove "Population mil" column
+                    ColumnIndices = new[] { 1 }, // remove "Population mil" column
+                    Mode = ChangeMode.Direct
                 }
             }
         };
@@ -265,7 +266,7 @@ public class NewVerbsExtendedTests
         {
             Operations = new PlanOperation[]
             {
-                new RemoveImageOp { Target = new NodeAnchor { Kind = "image", Path = "image#0" } }
+                new RemoveImageOp { Target = new NodeAnchor { Kind = "image", Path = "image#0" }, Mode = ChangeMode.Direct }
             }
         });
         Assert.True(remove.Committed);
@@ -331,7 +332,7 @@ public class NewVerbsExtendedTests
         {
             Operations = new PlanOperation[]
             {
-                new RemoveImageOp { Target = new NodeAnchor { Kind = "image", Path = "image#0" } }
+                new RemoveImageOp { Target = new NodeAnchor { Kind = "image", Path = "image#0" }, Mode = ChangeMode.Direct }
             }
         }));
         using (var doc = WordprocessingDocument.Open(new MemoryStream(afterFirst), false))
@@ -345,7 +346,7 @@ public class NewVerbsExtendedTests
         {
             Operations = new PlanOperation[]
             {
-                new RemoveImageOp { Target = new NodeAnchor { Kind = "image", Path = "image#0" } }
+                new RemoveImageOp { Target = new NodeAnchor { Kind = "image", Path = "image#0" }, Mode = ChangeMode.Direct }
             }
         }));
         using (var doc = WordprocessingDocument.Open(new MemoryStream(afterSecond), false))

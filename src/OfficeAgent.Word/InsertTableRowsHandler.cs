@@ -15,6 +15,9 @@ namespace OfficeAgent.Word;
 internal sealed class InsertTableRowsHandler : IOperationHandler
 {
     private readonly TableNodeProvider _tables = new();
+    private readonly TimeProvider _clock;
+
+    public InsertTableRowsHandler(TimeProvider clock) => _clock = clock;
 
     public bool CanHandle(PlanOperation operation) =>
         operation is InsertTableRowsOp { Target: NodeAnchor { Kind: "table" } };
@@ -61,6 +64,15 @@ internal sealed class InsertTableRowsHandler : IOperationHandler
         var newRows = op.Rows.Select(cells => BuildRow(templateRow, cells)).ToList();
 
         InsertAt(table, existing, newRows, op.Position, op.RowIndex);
+
+        // After insertion: a row still detached from the table has no parent to wrap its
+        // runs against.
+        if (WordRevisionMarker.IsTracked(op.Mode))
+        {
+            var marker = new WordRevisionMarker(context.Package, _clock);
+            foreach (var row in newRows)
+                marker.MarkRowInserted(row);
+        }
     }
 
     internal static void InsertAt(
@@ -133,6 +145,7 @@ internal sealed class InsertTableRowsHandler : IOperationHandler
 
         var clone = (TableRow)templateRow.CloneNode(deep: true);
         ClearParagraphIds(clone);
+        ClearRevisionMarkup(clone);
         var templateCells = clone.Elements<TableCell>().ToList();
         int i = 0;
         foreach (var cell in templateCells)
@@ -157,6 +170,18 @@ internal sealed class InsertTableRowsHandler : IOperationHandler
             paragraph.ParagraphId = null;
             paragraph.TextId = null;
         }
+    }
+
+    /// <summary>
+    /// Drops the revision markup the clone inherited. The template row may itself be a
+    /// pending insertion or deletion; carrying that over would tell a reviewer that a row
+    /// this plan just added was added - or deleted - by someone else, earlier. The row's
+    /// own mode decides what markup it gets, and it gets it after insertion.
+    /// </summary>
+    private static void ClearRevisionMarkup(TableRow row)
+    {
+        foreach (var marker in row.Descendants<TrackChangeType>().ToList())
+            marker.Remove();
     }
 
     private static void ReplaceCellText(TableCell cell, string text)

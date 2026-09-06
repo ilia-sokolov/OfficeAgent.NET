@@ -27,7 +27,8 @@ the format, snapshot etag, paragraph text and ids, style catalog, and
 addressable nodes.
 
 - Word inspection includes outline headings, content controls, bookmarks,
-  tables, images, document properties, and revisions.
+  tables, images, document properties, comments, footnotes and endnotes, and
+  revisions.
 - PowerPoint inspection uses slide/shape-scoped paragraph ids and nodes for
   slides, shapes, tables, images, comments, media, and sections.
 
@@ -43,7 +44,7 @@ An anchor is an engine-issued address. Callers reuse anchors from
 | --- | --- | --- |
 | `TextSpanAnchor` | Expected text in a paragraph | `{ paraId, expect, occurrence }` |
 | `StructuralAnchor` | A named slot, such as a content control, bookmark, or deck shape name | `{ tag, kind: "contentControl" }` |
-| `NodeAnchor` | A format node such as a table, image, slide, shape, property, or revision | `{ kind: "table", path: "table#0" }` |
+| `NodeAnchor` | A format node such as a table, image, comment, note, slide, shape, property, or revision | `{ kind: "table", path: "table#0" }` |
 | `StyleAnchor` | A named style | `{ styleId: "Heading1" }` |
 
 Text and node anchors carry expected content. At apply time the engine checks

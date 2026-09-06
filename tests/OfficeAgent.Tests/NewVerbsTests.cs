@@ -185,7 +185,8 @@ public class NewVerbsTests
             {
                 new RemoveTableOp
                 {
-                    Target = new NodeAnchor { Kind = "table", Path = "table#0" }
+                    Target = new NodeAnchor { Kind = "table", Path = "table#0" },
+                    Mode = ChangeMode.Direct
                 }
             }
         };

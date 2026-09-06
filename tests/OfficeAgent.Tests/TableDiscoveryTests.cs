@@ -86,7 +86,8 @@ public class TableDiscoveryTests
                 new RemoveTableRowsOp
                 {
                     Target = new NodeAnchor { Kind = "table", Path = "table#0" },
-                    RowIndices = new[] { -1 } // last row
+                    RowIndices = new[] { -1 }, // last row
+                    Mode = ChangeMode.Direct
                 }
             }
         };
@@ -111,7 +112,8 @@ public class TableDiscoveryTests
                 new RemoveTableRowsOp
                 {
                     Target = new NodeAnchor { Kind = "table", Path = "table#0" },
-                    OnlyIfEmpty = true
+                    OnlyIfEmpty = true,
+                    Mode = ChangeMode.Direct
                 }
             }
         };

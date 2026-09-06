@@ -27,13 +27,8 @@ internal sealed class SlideChangeTextHandler : IOperationHandler
         var op = (ChangeTextOp)operation;
         var anchor = (TextSpanAnchor)op.Target;
 
-        if (op.Mode == ChangeMode.Tracked)
-            return OperationPreview.Fail(new ValidationError(
-                ValidationErrorCodes.InvalidOperation,
-                "PowerPoint has no tracked-changes representation, so mode 'Tracked' cannot be honoured. " +
-                "Re-issue this operation with mode 'Direct', or add a comment to record the intent.",
-                anchor));
-
+        // The tracked-mode refusal lives in PowerPointModule.ValidatePlan, which applies it
+        // to every verb carrying a mode rather than to this one alone.
         var paragraph = PowerPointModel.ResolveParagraph(context, anchor.ParaId);
         if (paragraph is null)
             return OperationPreview.Fail(new ValidationError(

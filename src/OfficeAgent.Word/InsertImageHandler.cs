@@ -25,6 +25,10 @@ internal sealed class InsertImageHandler : IOperationHandler
     // 9525 EMU per pixel at 96 DPI.
     private const long EmuPerPixel = 9525;
 
+    private readonly TimeProvider _clock;
+
+    public InsertImageHandler(TimeProvider clock) => _clock = clock;
+
     public bool CanHandle(PlanOperation operation) =>
         operation is InsertImageOp { Target: TextSpanAnchor };
 
@@ -124,6 +128,9 @@ internal sealed class InsertImageHandler : IOperationHandler
             paragraph.InsertBeforeSelf(imageParagraph);
         else
             paragraph.InsertAfterSelf(imageParagraph);
+
+        if (WordRevisionMarker.IsTracked(op.Mode))
+            new WordRevisionMarker(context.Package, _clock).MarkParagraphInserted(imageParagraph);
     }
 
     /// <summary>

@@ -20,6 +20,10 @@ internal sealed class FormatHandler : IOperationHandler
     // 9525 EMU per pixel at 96 DPI.
     private const long EmuPerPixel = 9525;
 
+    private readonly TimeProvider _clock;
+
+    public FormatHandler(TimeProvider clock) => _clock = clock;
+
     public bool CanHandle(PlanOperation operation) =>
         operation is FormatOp { Target: TextSpanAnchor }
         || operation is FormatOp { Target: NodeAnchor { Kind: "table" or "tableRow" or "tableCell" or "image" } };
@@ -113,24 +117,32 @@ internal sealed class FormatHandler : IOperationHandler
     public void Apply(ApplyContext context, PlanOperation operation)
     {
         var op = (FormatOp)operation;
+
+        // One marker for the whole operation: a format that touches a dozen runs is one
+        // edit by one author at one moment, and Word groups the revisions accordingly.
+        var marker = WordRevisionMarker.IsTracked(op.Mode)
+            ? new WordRevisionMarker(context.Package, _clock)
+            : null;
+
         switch (op.Target)
         {
-            case TextSpanAnchor ts: ApplyToParagraphSpan(context, op, ts); break;
-            case NodeAnchor n when n.Kind == "table": ApplyToTable(context, op, n); break;
-            case NodeAnchor n when n.Kind == "tableRow": ApplyToRow(context, op, n); break;
-            case NodeAnchor n when n.Kind == "tableCell": ApplyToCell(context, op, n); break;
+            case TextSpanAnchor ts: ApplyToParagraphSpan(context, op, ts, marker); break;
+            case NodeAnchor n when n.Kind == "table": ApplyToTable(context, op, n, marker); break;
+            case NodeAnchor n when n.Kind == "tableRow": ApplyToRow(context, op, n, marker); break;
+            case NodeAnchor n when n.Kind == "tableCell": ApplyToCell(context, op, n, marker); break;
             case NodeAnchor n when n.Kind == "image": ApplyToImage(context, op, n); break;
         }
     }
 
     // ── Target: paragraph + span runs ─────────────────────────────────────
 
-    private static void ApplyToParagraphSpan(ApplyContext context, FormatOp op, TextSpanAnchor anchor)
+    private static void ApplyToParagraphSpan(
+        ApplyContext context, FormatOp op, TextSpanAnchor anchor, WordRevisionMarker? marker)
     {
         var paragraph = WordModel.ResolveParagraph(context, anchor.ParaId)
             ?? throw new InvalidOperationException($"Paragraph '{anchor.ParaId}' vanished before apply.");
 
-        ApplyParagraphProperties(context, paragraph, op);
+        ApplyParagraphProperties(context, paragraph, op, marker);
 
         IReadOnlyList<Run> runs;
         if (string.IsNullOrEmpty(anchor.Expect))
@@ -149,15 +161,17 @@ internal sealed class FormatHandler : IOperationHandler
         }
 
         foreach (var run in runs)
-            ApplyRunProperties(run, op);
+            ApplyRunProperties(run, op, marker);
     }
 
     // ── Target: whole table ───────────────────────────────────────────────
 
-    private static void ApplyToTable(ApplyContext context, FormatOp op, NodeAnchor anchor)
+    private static void ApplyToTable(
+        ApplyContext context, FormatOp op, NodeAnchor anchor, WordRevisionMarker? marker)
     {
         var table = TableLocator.FindTable(context.Package, anchor.Path)!;
         var properties = table.GetFirstChild<TableProperties>() ?? table.InsertAt(new TableProperties(), 0)!;
+        var before = Snapshot(properties);
 
         if (op.StyleId is not null)
         {
@@ -172,7 +186,25 @@ internal sealed class FormatHandler : IOperationHandler
 
         if (op.ColumnWidthsPx is { Count: > 0 } widths)
             SetColumnWidths(table, properties, widths);
+
+        if (marker is not null && Changed(before, properties))
+            marker.RecordTablePropertiesChange(table, before);
     }
+
+    /// <summary>
+    /// A detached copy of a property container, taken before it is edited so the
+    /// corresponding <c>*PrChange</c> can record what "reject" restores.
+    /// </summary>
+    private static T? Snapshot<T>(T? properties) where T : OpenXmlElement =>
+        properties is null ? null : (T)properties.CloneNode(deep: true);
+
+    /// <summary>
+    /// Whether an edit actually changed the properties. A <c>format</c> that sets a
+    /// property to the value it already had is not a revision, and recording one would
+    /// leave a reviewer an edit with nothing in it to accept.
+    /// </summary>
+    private static bool Changed(OpenXmlElement? before, OpenXmlElement? after) =>
+        !string.Equals(before?.OuterXml ?? string.Empty, after?.OuterXml ?? string.Empty, StringComparison.Ordinal);
 
     /// <summary>
     /// Sets the column widths, in the three places Word reads them from: the grid, every
@@ -227,14 +259,18 @@ internal sealed class FormatHandler : IOperationHandler
 
     // ── Target: table row ─────────────────────────────────────────────────
 
-    private static void ApplyToRow(ApplyContext context, FormatOp op, NodeAnchor anchor)
+    private static void ApplyToRow(
+        ApplyContext context, FormatOp op, NodeAnchor anchor, WordRevisionMarker? marker)
     {
         var row = TableLocator.FindRow(context.Package, anchor.Path)!;
 
         if (op.HeightPx is int h)
         {
             var rowProperties = row.GetFirstChild<TableRowProperties>() ?? row.InsertAt(new TableRowProperties(), 0)!;
+            var beforeRow = Snapshot(rowProperties);
             ReplaceChild(rowProperties, new TableRowHeight { Val = (uint)(h * 15) }); // 1px ≈ 15 twips at 96dpi
+            if (marker is not null && Changed(beforeRow, rowProperties))
+                marker.RecordRowPropertiesChange(row, beforeRow);
         }
 
         // A row has no borders of its own in WordprocessingML - the cells carry them. A
@@ -245,27 +281,40 @@ internal sealed class FormatHandler : IOperationHandler
             {
                 var cellProperties = cell.GetFirstChild<TableCellProperties>()
                     ?? cell.InsertAt(new TableCellProperties(), 0)!;
+                var beforeCell = Snapshot(cellProperties);
                 ReplaceChild(cellProperties, BuildTableCellBorders(op));
+                if (marker is not null && Changed(beforeCell, cellProperties))
+                    marker.RecordCellPropertiesChange(cell, beforeCell);
             }
 
-        ApplyCharacterAndParagraphPropertiesToContainer(context, row, op);
+        ApplyCharacterAndParagraphPropertiesToContainer(context, row, op, marker);
     }
 
     // ── Target: table cell ────────────────────────────────────────────────
 
-    private static void ApplyToCell(ApplyContext context, FormatOp op, NodeAnchor anchor)
+    private static void ApplyToCell(
+        ApplyContext context, FormatOp op, NodeAnchor anchor, WordRevisionMarker? marker)
     {
         var cell = TableLocator.FindCell(context.Package, anchor.Path)!;
         var properties = cell.GetFirstChild<TableCellProperties>() ?? cell.InsertAt(new TableCellProperties(), 0)!;
+        var before = Snapshot(properties);
 
         if (HasBorder(op))
             ReplaceChild(properties, BuildTableCellBorders(op));
 
-        ApplyCharacterAndParagraphPropertiesToContainer(context, cell, op);
+        if (marker is not null && Changed(before, properties))
+            marker.RecordCellPropertiesChange(cell, before);
+
+        ApplyCharacterAndParagraphPropertiesToContainer(context, cell, op, marker);
     }
 
     // ── Target: image ─────────────────────────────────────────────────────
 
+    /// <remarks>
+    /// Resizing is not tracked, and cannot be: WordprocessingML records a revision against
+    /// runs, paragraphs, and table structure, and has no vocabulary for the extent of an
+    /// inline drawing. A caller asking for a tracked resize gets the resize.
+    /// </remarks>
     private static void ApplyToImage(ApplyContext context, FormatOp op, NodeAnchor anchor)
     {
         var drawing = FindDrawing(context.Package, anchor.Path)!;
@@ -288,17 +337,26 @@ internal sealed class FormatHandler : IOperationHandler
 
     // ── Helpers ──────────────────────────────────────────────────────────
 
-    private static void ApplyCharacterAndParagraphPropertiesToContainer(ApplyContext context, OpenXmlElement container, FormatOp op)
+    private static void ApplyCharacterAndParagraphPropertiesToContainer(
+        ApplyContext context, OpenXmlElement container, FormatOp op, WordRevisionMarker? marker)
     {
-        foreach (var paragraph in container.Descendants<Paragraph>())
+        foreach (var paragraph in container.Descendants<Paragraph>().ToList())
         {
-            ApplyParagraphProperties(context, paragraph, op);
-            foreach (var run in paragraph.Elements<Run>())
-                ApplyRunProperties(run, op);
+            ApplyParagraphProperties(context, paragraph, op, marker);
+            foreach (var run in paragraph.Elements<Run>().ToList())
+                ApplyRunProperties(run, op, marker);
         }
     }
 
-    private static void ApplyRunProperties(Run run, FormatOp op)
+    private static void ApplyRunProperties(Run run, FormatOp op, WordRevisionMarker? marker)
+    {
+        var before = Snapshot(run.RunProperties);
+        ApplyRunPropertiesCore(run, op);
+        if (marker is not null && Changed(before, run.RunProperties))
+            marker.RecordRunPropertiesChange(run, before);
+    }
+
+    private static void ApplyRunPropertiesCore(Run run, FormatOp op)
     {
         var rPr = run.RunProperties ??= new RunProperties();
 
@@ -316,7 +374,16 @@ internal sealed class FormatHandler : IOperationHandler
         if (op.Color is not null) ReplaceChild(rPr, new WColor { Val = op.Color });
     }
 
-    private static void ApplyParagraphProperties(ApplyContext context, Paragraph paragraph, FormatOp op)
+    private static void ApplyParagraphProperties(
+        ApplyContext context, Paragraph paragraph, FormatOp op, WordRevisionMarker? marker)
+    {
+        var before = Snapshot(paragraph.ParagraphProperties);
+        ApplyParagraphPropertiesCore(context, paragraph, op);
+        if (marker is not null && Changed(before, paragraph.ParagraphProperties))
+            marker.RecordParagraphPropertiesChange(paragraph, before);
+    }
+
+    private static void ApplyParagraphPropertiesCore(ApplyContext context, Paragraph paragraph, FormatOp op)
     {
         // Numbering is written first: it creates the w:pPr the rest of this then fills in,
         // and it owns the one child that has to sit ahead of the indent and the spacing.
@@ -604,23 +671,34 @@ internal sealed class FormatHandler : IOperationHandler
         _ => Array.Empty<Type>()
     };
 
+    /// <remarks>
+    /// <c>w:rPrChange</c> is listed because it closes <c>CT_RPr</c>: a formatting revision
+    /// recorded on the run first, and a property written after it, would otherwise append
+    /// past it and produce a file Word offers to repair.
+    /// </remarks>
     private static readonly Type[] RunPropertyOrder =
     {
         typeof(RunStyle), typeof(RunFonts), typeof(Bold), typeof(BoldComplexScript),
         typeof(Italic), typeof(ItalicComplexScript), typeof(WColor), typeof(Spacing),
-        typeof(FontSize), typeof(FontSizeComplexScript), typeof(Highlight), typeof(Underline)
+        typeof(FontSize), typeof(FontSizeComplexScript), typeof(Highlight), typeof(Underline),
+        typeof(RunPropertiesChange)
     };
 
     /// <summary>
     /// The order <c>CT_PPr</c> declares these in. <c>w:pageBreakBefore</c> comes <em>before</em>
     /// <c>w:numPr</c>, not after it - putting a page break on a numbered paragraph is what
-    /// turns that into a document Word offers to repair.
+    /// turns that into a document Word offers to repair. The three trailing entries -
+    /// the paragraph mark's run properties, the section properties, and the formatting
+    /// revision - close <c>CT_PPr</c> and are listed so a property written after any of
+    /// them still lands ahead of them.
     /// </summary>
     internal static readonly Type[] ParagraphPropertyOrder =
     {
         typeof(ParagraphStyleId), typeof(PageBreakBefore), typeof(NumberingProperties),
         typeof(ParagraphBorders), typeof(SpacingBetweenLines), typeof(Indentation),
-        typeof(Justification), typeof(OutlineLevel)
+        typeof(Justification), typeof(OutlineLevel),
+        typeof(ParagraphMarkRunProperties), typeof(SectionProperties),
+        typeof(ParagraphPropertiesChange)
     };
 
     /// <summary>
@@ -654,13 +732,15 @@ internal sealed class FormatHandler : IOperationHandler
     {
         typeof(TableStyle), typeof(TableWidth), typeof(TableJustification),
         typeof(TableIndentation), typeof(TableBorders), typeof(Shading),
-        typeof(TableLayout), typeof(TableCellMarginDefault), typeof(TableLook)
+        typeof(TableLayout), typeof(TableCellMarginDefault), typeof(TableLook),
+        typeof(TablePropertiesChange)
     };
 
     private static readonly Type[] TableCellPropertyOrder =
     {
         typeof(TableCellWidth), typeof(GridSpan), typeof(TableCellBorders),
-        typeof(Shading), typeof(TableCellMargin), typeof(TableCellVerticalAlignment)
+        typeof(Shading), typeof(TableCellMargin), typeof(TableCellVerticalAlignment),
+        typeof(CellInsertion), typeof(CellDeletion), typeof(TableCellPropertiesChange)
     };
 
     private static Drawing? FindDrawing(IOpenXmlPackage package, string path)
