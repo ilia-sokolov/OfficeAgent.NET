@@ -36,24 +36,27 @@ public sealed class WordModule : IFormatModule, IBlankDocumentFactory
         Handlers = new IOperationHandler[]
         {
             new ChangeTextHandler(clock),
-            new FillHandler(),
+            new FillHandler(clock),
             new CommentHandler(clock),
-            new InsertHandler(),
-            new FormatHandler(),
+            new InsertHandler(clock),
+            new FormatHandler(clock),
             new SetPropertyHandler(),
             new RevisionHandler(),
-            new InsertTableHandler(),
-            new RemoveTableHandler(),
-            new InsertTableRowsHandler(),
-            new RemoveTableRowsHandler(),
-            new InsertTableColumnsHandler(),
-            new RemoveTableColumnsHandler(),
+            new InsertTableHandler(clock),
+            new RemoveTableHandler(clock),
+            new InsertTableRowsHandler(clock),
+            new RemoveTableRowsHandler(clock),
+            new InsertTableColumnsHandler(clock),
+            new RemoveTableColumnsHandler(clock),
             new CopyStylesHandler(),
             new ClearStylesHandler(),
-            new InsertImageHandler(),
-            new RemoveImageHandler(),
+            new InsertImageHandler(clock),
+            new RemoveImageHandler(clock),
             new WordHeaderFooterHandler(),
-            new WordBackgroundImageHandler()
+            new WordBackgroundImageHandler(),
+            new WordPageSetupHandler(),
+            new WordInsertBreakHandler(clock),
+            new WordNoteHandler(clock)
         }
         .Concat(extraHandlers ?? Enumerable.Empty<IOperationHandler>())
         .ToList();
@@ -63,7 +66,9 @@ public sealed class WordModule : IFormatModule, IBlankDocumentFactory
             new DocPropertyNodeProvider(),
             new RevisionNodeProvider(),
             new TableNodeProvider(),
-            new ImageNodeProvider()
+            new ImageNodeProvider(),
+            new CommentNodeProvider(),
+            new NoteNodeProvider()
         }
         .Concat(extraProviders ?? Enumerable.Empty<IWordNodeProvider>())
         .ToList();

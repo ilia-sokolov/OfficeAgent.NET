@@ -27,6 +27,17 @@ public sealed class PowerPointModule : IFormatModule, IBlankDocumentFactory, IPl
     /// </remarks>
     public IEnumerable<ValidationError> ValidatePlan(DocumentPlan plan, ApplyContext context)
     {
+        // PresentationML has no redline vocabulary, so a tracked request is refused rather
+        // than silently written as a direct edit. Checked once, for every verb that carries
+        // a mode, so a new one cannot ship without the refusal.
+        foreach (var operation in plan.Operations)
+            if (operation is ITrackedOperation { Mode: ChangeMode.Tracked })
+                yield return new ValidationError(
+                    ValidationErrorCodes.InvalidOperation,
+                    "PowerPoint has no tracked-changes representation, so mode 'Tracked' cannot be honoured. " +
+                    "Re-issue this operation with mode 'Direct', or add a comment to record the intent.",
+                    operation.Target);
+
         var insertions = plan.Operations
             .OfType<InsertOp>()
             .Where(op => op.Target is TextSpanAnchor)

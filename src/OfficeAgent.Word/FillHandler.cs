@@ -7,9 +7,16 @@ namespace OfficeAgent.Word;
 
 /// <summary>
 /// Populates a Word content control (by tag) without disturbing surrounding styles.
+/// Under <see cref="ChangeMode.Tracked"/> the slot's previous contents are struck through
+/// and the new value arrives as an insertion, so filling a template in a document under
+/// review reads as an edit rather than as text that was always there.
 /// </summary>
 internal sealed class FillHandler : IOperationHandler
 {
+    private readonly TimeProvider _clock;
+
+    public FillHandler(TimeProvider clock) => _clock = clock;
+
     public bool CanHandle(PlanOperation operation) =>
         operation is FillOp { Target: StructuralAnchor };
 
@@ -43,7 +50,34 @@ internal sealed class FillHandler : IOperationHandler
         var sdt = FindContentControl(context, anchor.Tag)
             ?? throw new InvalidOperationException($"Content control '{anchor.Tag}' not found at apply time.");
 
-        SetText(sdt, op.Value);
+        if (WordRevisionMarker.IsTracked(op.Mode))
+            SetTextTracked(context, sdt, op.Value);
+        else
+            SetText(sdt, op.Value);
+    }
+
+    /// <summary>
+    /// Replaces the slot's contents as a redline: everything in it is marked deleted and
+    /// the new value is added as an insertion beside it.
+    /// </summary>
+    private void SetTextTracked(ApplyContext context, SdtElement sdt, string value)
+    {
+        var content = ContentOf(sdt);
+        if (content is null) return;
+
+        var marker = new WordRevisionMarker(context.Package, _clock);
+        marker.MarkContentDeleted(content);
+
+        if (value.Length == 0) return;
+
+        // A block-level control holds paragraphs, not runs; the new run joins the last
+        // paragraph in it rather than becoming an invalid direct child.
+        var host = content is SdtContentBlock
+            ? (OpenXmlElement)(content.Elements<Paragraph>().LastOrDefault() ?? content.AppendChild(new Paragraph()))
+            : content;
+
+        var run = host.AppendChild(new Run(new Text(value) { Space = SpaceProcessingModeValues.Preserve }));
+        marker.WrapInserted(run);
     }
 
     private static SdtElement? FindContentControl(ApplyContext context, string tag)

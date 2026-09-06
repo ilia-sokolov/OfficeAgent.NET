@@ -42,6 +42,36 @@ Table-row, table-cell, and image paths come from `inspect_document.nodes`:
 | `table#N/cell#R/C` | cell at row R, column C |
 | `image#N` | the N-th inline image |
 
+## Change mode
+
+Every verb that changes Word content carries an optional `mode`: `Tracked` writes the edit
+as revision markup a reviewer accepts or rejects, `Direct` writes it into the content. It
+applies to `changeText`, `insert`, `fill`, `format`, `insertTable`, `removeTable`, the table
+row and column verbs, `insertImage`, `removeImage`, `insertBreak`, and `note`.
+
+An operation that does not state a mode takes the connection's `DefaultChangeMode`, which is
+`Tracked` unless the host configured otherwise — see
+[document providers](document-providers.md#default-change-mode). An operation that does state
+one is never overridden.
+
+Tracking is not decoration on the text edit alone. Under `Tracked`:
+
+- an inserted paragraph has both its runs and its **paragraph mark** marked inserted, so
+  rejecting it removes the paragraph rather than leaving a blank one;
+- a removed row stays in place, struck through, with its cell text moved into `w:delText`,
+  until someone accepts the deletion — the same for a removed table, column, or image, whose
+  bytes are kept because a rejected deletion has to restore the picture;
+- `format` records the properties it replaced (`w:rPrChange` / `w:pPrChange` and their table
+  equivalents), so rejecting restores exactly what was there. A format that changes nothing
+  records no revision.
+
+Resizing an image is the one exception: WordprocessingML has no revision for the extent of a
+drawing, so a tracked resize is applied directly.
+
+PresentationML has no revision vocabulary. A deck **refuses** an explicit `"mode": "Tracked"`
+on any verb rather than writing an untracked edit the caller did not ask for; omitting the
+mode there means `Direct`.
+
 ## Supported verbs
 
 A text-span target resolves across the body, headers, footers, footnotes, and endnotes.
@@ -55,10 +85,8 @@ paragraph that carries them.
 
 ### `changeText`
 
-Replace a content-verified text span. An operation that does not state a `mode` takes the
-connection's `DefaultChangeMode`, which is `Tracked` unless the host configured otherwise -
-see [document providers](document-providers.md#default-change-mode). An operation that does
-state one is never overridden.
+Replace a content-verified text span. `mode` behaves as described under
+[change mode](#change-mode).
 
 ```json
 { "op": "changeText",
@@ -160,14 +188,37 @@ In Word a slot is a content control or bookmark (`kind: "contentControl"`). On a
 
 ### `comment`
 
-Attach a review comment.
+The review conversation: attach a comment, answer one, close one, or delete one.
 
 ```json
 { "op": "comment",
   "target": { "paraId": "w14:…", "expect": "Acme Corp", "occurrence": 0 },
   "text":   "Confirm the counterparty name.",
   "author": "Reviewer", "initials": "R" }
+
+{ "op": "comment",
+  "target": { "kind": "comment", "path": "comment#1" },
+  "action": "Reply",
+  "text":   "Confirmed with legal on the 14th." }
+
+{ "op": "comment", "target": { "kind": "comment", "path": "comment#1" }, "action": "Resolve" }
+{ "op": "comment", "target": { "kind": "comment", "path": "comment#1" }, "action": "Remove" }
 ```
+
+`Add` (the default) takes a text-span anchor. `Reply`, `Resolve`, and `Remove` take a comment
+node anchor whose path comes from `inspect`, which lists each comment with its author, its
+text, whether it is resolved, and which comment it replies to.
+
+A Word comment lives in two parts: the body in `comments.xml`, and the thread — reply
+parentage and the resolved flag — in `commentsExtended.xml`, keyed by the `w14:paraId` of the
+comment's last paragraph. Every comment this engine writes gets that id and an entry in that
+part, so it can be replied to and resolved like any other. `Resolve` keeps the comment and
+its replies; only the status changes, so the review history survives. `Remove` on a thread's
+first comment removes its replies with it — a reply with nothing to reply to is a comment
+Word cannot display.
+
+On a deck, `Add` targets the slide and only `Add` and `Resolve` are implemented; `Reply` and
+`Remove` return `unsupported-operation` there.
 
 ### `insert`
 
@@ -442,9 +493,105 @@ PowerPoint only; a Word document reports them as `unsupported-operation`. Severa
 
 `position` is `Start`, `End`, `Before`, or `After`. `insertSlide` defaults to `End` and takes its reference slide from `target`; `moveSlide` and `duplicateSlide` target the slide they act on and name the reference in `relativeTo`. `duplicateSlide` defaults to landing immediately after the original.
 
+### `pageSetup`
+
+Set a Word section's page geometry. Measurements are twips — 1/20 point, 1440 to the inch —
+the unit `format`'s indents and spacing already use.
+
+```json
+{ "op": "pageSetup",
+  "paperSize":   "A4",
+  "orientation": "Landscape",
+  "marginTopTwips": 720, "marginLeftTwips": 1080 }
+
+{ "op": "pageSetup",
+  "target": { "paraId": "w14:…", "expect": "…" },
+  "pageWidthTwips": 15840, "pageHeightTwips": 12240 }
+```
+
+`paperSize` is `A3`, `A4`, `A5`, `Letter`, `Legal`, `Tabloid`, or `Executive`; give
+`pageWidthTwips`/`pageHeightTwips` for anything else. Naming both is refused rather than
+resolved by a silent precedence rule. `orientation` has the last word on which dimension is
+which, so landscape A4 is those two fields together.
+
+The margins are `marginTopTwips`, `marginBottomTwips`, `marginLeftTwips`,
+`marginRightTwips`, `headerDistanceTwips`, `footerDistanceTwips`, and `gutterTwips`. An edge
+you do not name keeps its current value.
+
+No target sets the document's **final** section, which is the whole document until something
+splits it. A paragraph target sets the section that paragraph belongs to, which is how a
+landscape run of pages in the middle of a portrait report is written: `insertBreak` twice,
+then `pageSetup` on a paragraph between them.
+
+### `insertBreak`
+
+Insert a page, column, or section break relative to an anchor paragraph. Word only.
+
+```json
+{ "op": "insertBreak",
+  "target":   { "paraId": "w14:…", "expect": "…" },
+  "kind":     "Page",
+  "position": "After" }
+
+{ "op": "insertBreak",
+  "target": { "paraId": "w14:…", "expect": "…" },
+  "kind":   "SectionNextPage" }
+```
+
+`kind` is `Page`, `Column`, `SectionNextPage`, `SectionContinuous`, `SectionEvenPage`, or
+`SectionOddPage`.
+
+The break lands in a paragraph of its own rather than on the anchored paragraph's
+`w:pageBreakBefore`, so removing it later is removing one paragraph and nothing else. Use
+[`format`](#format)'s `pageBreakBefore` instead when the page must keep starting at a given
+paragraph however the text above it is edited.
+
+A section break is not a character: it is a `w:sectPr` in a paragraph's properties describing
+the section that *ends* there. The new paragraph therefore carries a copy of the section it
+splits — the pages before the break keep their geometry, headers, and footers — and the
+body's own `w:sectPr` goes on governing everything after it. Change the new section with
+`pageSetup`.
+
+### `note`
+
+Create, rewrite, or delete a footnote or endnote. Word only.
+
+```json
+{ "op": "note",
+  "target": { "paraId": "w14:…", "expect": "thirty days" },
+  "kind":   "Footnote",
+  "text":   "Subject to clause 8.2." }
+
+{ "op": "note",
+  "target": { "kind": "note", "path": "footnote#1" },
+  "action": "Update",
+  "text":   "Subject to clause 8.3, as amended." }
+
+{ "op": "note", "target": { "kind": "note", "path": "footnote#1" }, "action": "Remove" }
+```
+
+`Add` (the default) takes a text-span anchor and places the reference immediately after the
+named text, or at the end of the paragraph when `expect` is empty. The reference belongs in
+body text; a note anchored in a header, footer, or another note is refused. `Update` and
+`Remove` take a note node anchor whose path comes from `inspect` — `footnote#1`, `endnote#2`
+— and the path decides the kind, so `kind` is ignored there.
+
+Word owns the numbering: a note added between two others renumbers everything after it,
+which is the point of a real note over a superscript typed into the text. The handler creates
+the notes part with the separator entries Word treats as mandatory, and defines the
+`FootnoteText`/`FootnoteReference` styles when the document does not, because a `w:pStyle`
+with no definition renders as ordinary body text — a note that does not look like one.
+`styleId` overrides the note body's paragraph style.
+
+A note's body is an ordinary paragraph in an ordinary text host (`location` `footnote` or
+`endnote` in `inspect`), so `changeText`, `format`, and `comment` all reach it once it
+exists. `Update` replaces its wording wholesale, keeping the reference mark that carries its
+number.
+
 ### `revision`
 
-Accept or reject tracked revisions.
+Accept or reject tracked revisions. Every marker WordprocessingML defines is addressable, not
+only the run wrappers.
 
 ```json
 { "op": "revision",
@@ -452,9 +599,35 @@ Accept or reject tracked revisions.
   "action": "Accept" }
 
 { "op": "revision",
+  "target": { "kind": "revision", "path": "author:Jane Doe" },
+  "action": "Reject" }
+
+{ "op": "revision",
   "target": { "kind": "revision", "path": "ins#5" },
   "action": "Reject" }
 ```
+
+`inspect` lists each revision as a node of kind `revision`, with its author and date in the
+summary, under one of these paths:
+
+| Path | Marker |
+| --- | --- |
+| `ins#N` / `del#N` | An inserted or deleted run (`w:ins` / `w:del`). |
+| `moveFrom#N` / `moveTo#N` | The two halves of a tracked move. |
+| `markIns#N` / `markDel#N` | An inserted or deleted paragraph mark — a paragraph split or joined. |
+| `rowIns#N` / `rowDel#N` | An inserted or deleted table row. |
+| `cellIns#N` / `cellDel#N` | A cell added or removed by a tracked column change. |
+| `runFormat#N` / `paraFormat#N` | A run or paragraph formatting change (`w:rPrChange` / `w:pPrChange`). |
+| `tableFormat#N` / `rowFormat#N` / `cellFormat#N` | A table, row, or cell formatting change. |
+
+`all` selects every revision in the document; `author:<name>` selects one person's, which is
+how a redline is cleared one reviewer at a time. Both are set selections, so matching nothing
+is not an error — a named id that matches nothing still is.
+
+Accepting a deleted paragraph mark merges the paragraph with the next one, because deleting a
+pilcrow is what joining two paragraphs means; rejecting an inserted one does the same, since
+the split it recorded never happened. Rejecting a formatting revision restores exactly the
+properties recorded in its `*PrChange`.
 
 ## Validation errors
 

@@ -5,9 +5,18 @@ using DocumentFormat.OpenXml.Wordprocessing;
 
 namespace OfficeAgent.Word;
 
-/// <summary>Inserts a new paragraph relative to an anchored paragraph. Tables are inserted by <see cref="InsertTableHandler"/>.</summary>
+/// <summary>
+/// Inserts a new paragraph relative to an anchored paragraph. Tables are inserted by
+/// <see cref="InsertTableHandler"/>. Under <see cref="ChangeMode.Tracked"/> the paragraph
+/// arrives as a redline - its runs and its paragraph mark both marked inserted, so
+/// rejecting it removes the paragraph rather than emptying it.
+/// </summary>
 internal sealed class InsertHandler : IOperationHandler
 {
+    private readonly TimeProvider _clock;
+
+    public InsertHandler(TimeProvider clock) => _clock = clock;
+
     public bool CanHandle(PlanOperation operation) =>
         operation is InsertOp { Target: TextSpanAnchor };
 
@@ -56,6 +65,9 @@ internal sealed class InsertHandler : IOperationHandler
             paragraph.InsertBeforeSelf(element);
         else
             paragraph.InsertAfterSelf(element);
+
+        if (WordRevisionMarker.IsTracked(op.Mode))
+            new WordRevisionMarker(context.Package, _clock).MarkParagraphInserted(element);
     }
 
     private static Paragraph BuildParagraph(InsertOp op)

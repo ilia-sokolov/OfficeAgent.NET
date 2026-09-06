@@ -56,6 +56,31 @@ public enum ChangeMode
 }
 
 /// <summary>
+/// Implemented by every operation whose result Word can record either directly or as a
+/// tracked revision. One interface rather than a hand-kept list, so a verb that grows a
+/// <c>mode</c> is covered by the connection default and the module contract automatically.
+/// </summary>
+/// <remarks>
+/// <see cref="Mode"/> is nullable on every operation but <see cref="ChangeTextOp"/>, whose
+/// non-nullable <c>Mode</c> predates this interface and stays on the wire as it was. Null
+/// means "the module decides": the Word module reads it as <see cref="ChangeMode.Tracked"/>,
+/// matching both <see cref="ChangeTextOp"/>'s default and the shipped connection default,
+/// so a plan that edits a contract lands as a redline whichever verb it uses. The
+/// PowerPoint module reads it as <see cref="ChangeMode.Direct"/> - PresentationML has no
+/// revision vocabulary - and refuses an explicit <see cref="ChangeMode.Tracked"/> rather
+/// than writing an untracked edit the caller did not ask for.
+/// </remarks>
+public interface ITrackedOperation
+{
+    /// <summary>
+    /// Gets how the edit is recorded, or <see langword="null"/> to let the format module
+    /// decide. Word writes <see cref="ChangeMode.Tracked"/> as revision markup a reviewer
+    /// can accept or reject, and <see cref="ChangeMode.Direct"/> straight into the content.
+    /// </summary>
+    ChangeMode? Mode { get; }
+}
+
+/// <summary>
 /// Represents the base type for all plan operations. Only operations implemented by
 /// a registered module are part of the wire contract; reserved/future verbs are
 /// intentionally absent so an agent never sees a verb that always fails.
@@ -77,18 +102,21 @@ public abstract class PlanOperation
 /// <summary>
 /// Populates a structural slot such as a content control or bookmark.
 /// </summary>
-public sealed class FillOp : PlanOperation
+public sealed class FillOp : PlanOperation, ITrackedOperation
 {
     /// <summary>
     /// Gets the value to place in the target slot.
     /// </summary>
     public string Value { get; init; } = string.Empty;
+
+    /// <inheritdoc />
+    public ChangeMode? Mode { get; init; }
 }
 
 /// <summary>
 /// Replaces content-verified text.
 /// </summary>
-public sealed class ChangeTextOp : PlanOperation
+public sealed class ChangeTextOp : PlanOperation, ITrackedOperation
 {
     /// <summary>
     /// Gets the replacement text.
@@ -99,6 +127,13 @@ public sealed class ChangeTextOp : PlanOperation
     /// Gets how the replacement is represented in the document.
     /// </summary>
     public ChangeMode Mode { get; init; } = ChangeMode.Tracked;
+
+    /// <summary>
+    /// The non-nullable <see cref="Mode"/> above is this operation's wire contract and
+    /// predates <see cref="ITrackedOperation"/>; the interface view is explicit so the
+    /// property keeps its shape for existing callers.
+    /// </summary>
+    ChangeMode? ITrackedOperation.Mode => Mode;
 }
 
 /// <summary>
@@ -117,8 +152,11 @@ public enum InsertPosition
 /// Inserts a new paragraph relative to an anchor. To insert a table, use
 /// <see cref="InsertTableOp"/>.
 /// </summary>
-public sealed class InsertOp : PlanOperation
+public sealed class InsertOp : PlanOperation, ITrackedOperation
 {
+    /// <inheritdoc />
+    public ChangeMode? Mode { get; init; }
+
     /// <summary>
     /// Gets where the new content is inserted relative to the target.
     /// </summary>
@@ -166,10 +204,10 @@ public sealed class TableData
 
 /// <summary>
 /// Specifies the lifecycle action for a comment operation. Which actions a module
-/// implements depends on the module, not on the format: both formats can record a
-/// resolved comment - PresentationML in the modern comment's status, WordprocessingML in
-/// the <c>commentsExtended</c> part's <c>w15:done</c> - but only the PowerPoint module
-/// implements <see cref="Resolve"/> today. The Word module reports it as
+/// implements depends on the module, not on the format: both record a resolved comment -
+/// PresentationML in the modern comment's status, WordprocessingML in the
+/// <c>commentsExtended</c> part's <c>w15:done</c> - but the PowerPoint module implements
+/// only <see cref="Add"/> and <see cref="Resolve"/> and reports the rest as
 /// <c>unsupported-operation</c>.
 /// </summary>
 public enum CommentAction
@@ -182,16 +220,34 @@ public enum CommentAction
     /// <see cref="NodeAnchor"/>. The comment and its replies are kept; only its status
     /// changes, so the review history survives.
     /// </summary>
-    Resolve
+    Resolve,
+
+    /// <summary>
+    /// Add a reply to an existing comment, addressed by a comment <see cref="NodeAnchor"/>.
+    /// The reply joins that comment's thread and anchors to the same span, which is what
+    /// makes it a reply rather than a second comment that happens to sit nearby.
+    /// </summary>
+    Reply,
+
+    /// <summary>
+    /// Delete a comment, addressed by a comment <see cref="NodeAnchor"/>. Deleting the
+    /// first comment of a thread deletes its replies with it - a reply with nothing to
+    /// reply to is a comment Word cannot display.
+    /// </summary>
+    Remove
 }
 
 /// <summary>
-/// Performs a review comment action.
+/// Performs a review comment action. <see cref="CommentAction.Add"/> takes a
+/// <see cref="TextSpanAnchor"/> naming the span to annotate; every other action takes a
+/// <see cref="NodeAnchor"/> with <c>kind=comment</c> and a path from inspect, such as
+/// <c>comment#3</c>.
 /// </summary>
 public sealed class CommentOp : PlanOperation
 {
     /// <summary>
-    /// Gets the comment body.
+    /// Gets the comment body, for <see cref="CommentAction.Add"/> and
+    /// <see cref="CommentAction.Reply"/>.
     /// </summary>
     public string Text { get; init; } = string.Empty;
 
@@ -224,8 +280,11 @@ public sealed class CommentOp : PlanOperation
 /// <item><see cref="NodeAnchor"/> <c>kind=image</c> - resize to <see cref="WidthPx"/> × <see cref="HeightPx"/>.</item>
 /// </list>
 /// </summary>
-public sealed class FormatOp : PlanOperation
+public sealed class FormatOp : PlanOperation, ITrackedOperation
 {
+    /// <inheritdoc />
+    public ChangeMode? Mode { get; init; }
+
     /// <summary>A named style to apply (paragraph style for paragraphs/rows/cells; table style for tables).</summary>
     public string? StyleId { get; init; }
 
@@ -435,8 +494,11 @@ public enum TablePosition
 /// Each row is a list of cell texts; missing trailing cells are left empty.
 /// Use <see cref="Position"/> and <see cref="RowIndex"/> to control placement.
 /// </summary>
-public sealed class InsertTableRowsOp : PlanOperation
+public sealed class InsertTableRowsOp : PlanOperation, ITrackedOperation
 {
+    /// <inheritdoc />
+    public ChangeMode? Mode { get; init; }
+
     /// <summary>The rows to insert.</summary>
     public IReadOnlyList<IReadOnlyList<string>> Rows { get; init; } =
         Array.Empty<IReadOnlyList<string>>();
@@ -457,8 +519,11 @@ public sealed class InsertTableRowsOp : PlanOperation
 /// When <see cref="OnlyIfEmpty"/> is true, only rows whose every cell is whitespace
 /// are removed, which is the safe choice when the LLM wants to "clean up" blank rows.
 /// </summary>
-public sealed class RemoveTableRowsOp : PlanOperation
+public sealed class RemoveTableRowsOp : PlanOperation, ITrackedOperation
 {
+    /// <inheritdoc />
+    public ChangeMode? Mode { get; init; }
+
     /// <summary>The row indices to remove. If empty and <see cref="OnlyIfEmpty"/> is true, every empty row is removed.</summary>
     public IReadOnlyList<int> RowIndices { get; init; } = Array.Empty<int>();
 
@@ -471,8 +536,11 @@ public sealed class RemoveTableRowsOp : PlanOperation
 /// <see cref="Columns"/> is a column-major list of cell texts (one per row,
 /// header first). Shorter columns are padded with empty cells.
 /// </summary>
-public sealed class InsertTableColumnsOp : PlanOperation
+public sealed class InsertTableColumnsOp : PlanOperation, ITrackedOperation
 {
+    /// <inheritdoc />
+    public ChangeMode? Mode { get; init; }
+
     /// <summary>Column-major data; one inner list per new column, one entry per row.</summary>
     public IReadOnlyList<IReadOnlyList<string>> Columns { get; init; } =
         Array.Empty<IReadOnlyList<string>>();
@@ -488,8 +556,11 @@ public sealed class InsertTableColumnsOp : PlanOperation
 /// Removes one or more columns from an existing table by zero-based index.
 /// Negative indices count from the right (-1 = last column).
 /// </summary>
-public sealed class RemoveTableColumnsOp : PlanOperation
+public sealed class RemoveTableColumnsOp : PlanOperation, ITrackedOperation
 {
+    /// <inheritdoc />
+    public ChangeMode? Mode { get; init; }
+
     /// <summary>The column indices to remove.</summary>
     public IReadOnlyList<int> ColumnIndices { get; init; } = Array.Empty<int>();
 }
@@ -499,8 +570,11 @@ public sealed class RemoveTableColumnsOp : PlanOperation
 /// A first-class table verb so an agent can create a table directly; the generic
 /// <see cref="InsertOp"/> inserts paragraphs only.
 /// </summary>
-public sealed class InsertTableOp : PlanOperation
+public sealed class InsertTableOp : PlanOperation, ITrackedOperation
 {
+    /// <inheritdoc />
+    public ChangeMode? Mode { get; init; }
+
     /// <summary>Gets where the new table is inserted relative to the target paragraph.</summary>
     public InsertPosition Position { get; init; } = InsertPosition.After;
 
@@ -513,8 +587,10 @@ public sealed class InsertTableOp : PlanOperation
 /// <c>Kind="table"</c> and <c>Path="table#N"</c>. The table and all of its rows are
 /// deleted; to drop only some rows or columns, use the row/column verbs instead.
 /// </summary>
-public sealed class RemoveTableOp : PlanOperation
+public sealed class RemoveTableOp : PlanOperation, ITrackedOperation
 {
+    /// <inheritdoc />
+    public ChangeMode? Mode { get; init; }
 }
 
 /// <summary>
@@ -552,8 +628,11 @@ public sealed class ClearStylesOp : PlanOperation
 /// Exactly one of the two routes must be set. The image is placed inline in a new
 /// paragraph before or after the anchor paragraph per <see cref="Position"/>.
 /// </summary>
-public sealed class InsertImageOp : PlanOperation
+public sealed class InsertImageOp : PlanOperation, ITrackedOperation
 {
+    /// <inheritdoc />
+    public ChangeMode? Mode { get; init; }
+
     /// <summary>Base64-encoded image bytes. Mutually exclusive with <see cref="ImageDocumentId"/>.</summary>
     public string? Base64Bytes { get; init; }
 
@@ -591,8 +670,10 @@ public sealed class InsertImageOp : PlanOperation
 /// by <c>inspect_document.nodes</c>. The underlying image resource is released once no
 /// other drawing still references it, so removal leaves no orphaned image bytes behind.
 /// </summary>
-public sealed class RemoveImageOp : PlanOperation
+public sealed class RemoveImageOp : PlanOperation, ITrackedOperation
 {
+    /// <inheritdoc />
+    public ChangeMode? Mode { get; init; }
 }
 
 /// <summary>
@@ -1058,4 +1139,194 @@ public sealed class AnimateOp : PlanOperation
 
     /// <summary>Gets how long the effect waits after its trigger, in milliseconds.</summary>
     public int? DelayMs { get; init; }
+}
+
+/// <summary>
+/// Specifies the page orientation of a Word section.
+/// </summary>
+public enum PageOrientation
+{
+    /// <summary>Taller than wide.</summary>
+    Portrait,
+
+    /// <summary>Wider than tall.</summary>
+    Landscape
+}
+
+/// <summary>
+/// Sets the page geometry of a Word section: paper size, orientation, and margins.
+/// WordprocessingML only - a slide's size is a property of the presentation, not of
+/// anything a plan addresses per-slide.
+/// </summary>
+/// <remarks>
+/// <para>
+/// Every measurement is in twips (1/20 point, 1440 to the inch), the unit
+/// <see cref="FormatOp.IndentLeftTwips"/> and its neighbours already use, so one document
+/// does not mix units. <see cref="PaperSize"/> is a convenience over
+/// <see cref="PageWidthTwips"/>/<see cref="PageHeightTwips"/>; naming both is an error
+/// rather than a silent precedence rule.
+/// </para>
+/// <para>
+/// A null target sets the document's final section - which is the whole document until
+/// something splits it. A <see cref="TextSpanAnchor"/> target sets the section the named
+/// paragraph belongs to, so a landscape run of pages in the middle of a report is
+/// <c>insertBreak</c> twice and <c>pageSetup</c> once.
+/// </para>
+/// </remarks>
+public sealed class PageSetupOp : PlanOperation
+{
+    /// <summary>
+    /// Gets a named paper size: A3, A4, A5, Letter, Legal, Tabloid, or Executive. Applied
+    /// before <see cref="Orientation"/>, which may swap the two dimensions.
+    /// </summary>
+    public string? PaperSize { get; init; }
+
+    /// <summary>Gets the page width in twips. Mutually exclusive with <see cref="PaperSize"/>.</summary>
+    public int? PageWidthTwips { get; init; }
+
+    /// <summary>Gets the page height in twips. Mutually exclusive with <see cref="PaperSize"/>.</summary>
+    public int? PageHeightTwips { get; init; }
+
+    /// <summary>
+    /// Gets the orientation. Setting it swaps the page dimensions when they disagree, so
+    /// orientation alone is enough to turn a section sideways.
+    /// </summary>
+    public PageOrientation? Orientation { get; init; }
+
+    /// <summary>Gets the top margin in twips.</summary>
+    public int? MarginTopTwips { get; init; }
+
+    /// <summary>Gets the bottom margin in twips.</summary>
+    public int? MarginBottomTwips { get; init; }
+
+    /// <summary>Gets the left margin in twips.</summary>
+    public int? MarginLeftTwips { get; init; }
+
+    /// <summary>Gets the right margin in twips.</summary>
+    public int? MarginRightTwips { get; init; }
+
+    /// <summary>Gets the distance from the top of the page to the header, in twips.</summary>
+    public int? HeaderDistanceTwips { get; init; }
+
+    /// <summary>Gets the distance from the bottom of the page to the footer, in twips.</summary>
+    public int? FooterDistanceTwips { get; init; }
+
+    /// <summary>Gets the binding gutter added to the inside margin, in twips.</summary>
+    public int? GutterTwips { get; init; }
+}
+
+/// <summary>
+/// Specifies what kind of break <see cref="InsertBreakOp"/> inserts.
+/// </summary>
+public enum BreakKind
+{
+    /// <summary>Start a new page here.</summary>
+    Page,
+
+    /// <summary>Start a new column here, in a multi-column section.</summary>
+    Column,
+
+    /// <summary>End the section here; the next one starts on a new page.</summary>
+    SectionNextPage,
+
+    /// <summary>End the section here; the next one continues on the same page.</summary>
+    SectionContinuous,
+
+    /// <summary>End the section here; the next one starts on the next even page.</summary>
+    SectionEvenPage,
+
+    /// <summary>End the section here; the next one starts on the next odd page.</summary>
+    SectionOddPage
+}
+
+/// <summary>
+/// Inserts a page, column, or section break relative to an anchored paragraph.
+/// WordprocessingML only - a deck breaks pages by adding a slide.
+/// </summary>
+/// <remarks>
+/// The break lands in a paragraph of its own rather than on the anchored paragraph's
+/// <c>w:pageBreakBefore</c>, so removing it later is removing one paragraph and nothing
+/// else. Use <see cref="FormatOp.PageBreakBefore"/> instead when the page should keep
+/// starting at that paragraph however the text above it is edited.
+/// A section break clones the section it splits, so the pages before it keep the geometry
+/// they had; change the new section with <see cref="PageSetupOp"/>.
+/// </remarks>
+public sealed class InsertBreakOp : PlanOperation, ITrackedOperation
+{
+    /// <summary>Gets the kind of break to insert.</summary>
+    public BreakKind Kind { get; init; } = BreakKind.Page;
+
+    /// <summary>Gets where the break is inserted relative to the target paragraph.</summary>
+    public InsertPosition Position { get; init; } = InsertPosition.After;
+
+    /// <inheritdoc />
+    public ChangeMode? Mode { get; init; }
+}
+
+/// <summary>
+/// Distinguishes a footnote, printed at the foot of its page, from an endnote, collected
+/// at the end of the document.
+/// </summary>
+public enum NoteKind
+{
+    /// <summary>A note at the foot of the page carrying its reference.</summary>
+    Footnote,
+
+    /// <summary>A note collected at the end of the document.</summary>
+    Endnote
+}
+
+/// <summary>
+/// Specifies the lifecycle action for a <see cref="NoteOp"/>.
+/// </summary>
+public enum NoteAction
+{
+    /// <summary>Create a note and place its reference mark at the target.</summary>
+    Add,
+
+    /// <summary>Replace the text of an existing note, addressed by a note node anchor.</summary>
+    Update,
+
+    /// <summary>Delete a note and its reference mark, addressed by a note node anchor.</summary>
+    Remove
+}
+
+/// <summary>
+/// Creates, rewrites, or deletes a footnote or endnote. WordprocessingML only.
+/// </summary>
+/// <remarks>
+/// <para>
+/// Word owns the numbering: a note added between two others renumbers everything after it,
+/// which is the point of a real note over a superscript typed into the text.
+/// </para>
+/// <para>
+/// <see cref="NoteAction.Add"/> takes a <see cref="TextSpanAnchor"/> and places the
+/// reference immediately after the named text - or at the end of the paragraph when
+/// <see cref="TextSpanAnchor.Expect"/> is empty. <see cref="NoteAction.Update"/> and
+/// <see cref="NoteAction.Remove"/> take a <see cref="NodeAnchor"/> with
+/// <c>kind=note</c> and a path from inspect, such as <c>footnote#2</c> or
+/// <c>endnote#1</c>; on those the path decides the kind and <see cref="Kind"/> is ignored.
+/// The body text of an existing note is also an ordinary paragraph, so <c>changeText</c>
+/// edits it in place - <see cref="NoteAction.Update"/> replaces the note wholesale.
+/// </para>
+/// </remarks>
+public sealed class NoteOp : PlanOperation, ITrackedOperation
+{
+    /// <summary>Gets which kind of note to add. Ignored by Update and Remove, whose path names it.</summary>
+    public NoteKind Kind { get; init; } = NoteKind.Footnote;
+
+    /// <summary>Gets the lifecycle action.</summary>
+    public NoteAction Action { get; init; } = NoteAction.Add;
+
+    /// <summary>Gets the note text, for <see cref="NoteAction.Add"/> and <see cref="NoteAction.Update"/>.</summary>
+    public string Text { get; init; } = string.Empty;
+
+    /// <summary>
+    /// Gets the paragraph style for the note body. Defaults to the document's
+    /// <c>FootnoteText</c>/<c>EndnoteText</c> style when it defines one.
+    /// </summary>
+    public string? StyleId { get; init; }
+
+    /// <inheritdoc />
+    public ChangeMode? Mode { get; init; }
 }

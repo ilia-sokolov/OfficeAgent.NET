@@ -90,20 +90,25 @@ public sealed class OfficeAgentTools
 
         Plan shape, anchors, safety loop
         - Plan body is { "snapshot": { "eTag": "<snapshot from inspect_document>" }, "operations": [ ... ] }. Copy the scalar snapshot string returned by inspect_document into snapshot.eTag to detect drift in Word body/header/footer/footnote/endnote XML or PowerPoint slide/notes XML. It does not cover properties, comments, sections, media/image bytes, masters, or layouts; their anchors and provider version checks still apply. Omit snapshot only deliberately. Do not set contractVersion.
-        - Available operations (the JSON shape of each is in the preview_plan description): changeText, insert (a paragraph), insertTable, removeTable, format, fill, comment, headerFooter, insertTableRows, removeTableRows, insertTableColumns, removeTableColumns, insertImage, removeImage, backgroundImage, copyStyles, clearStyles; Word also supports setProperty and revision; decks also support insertSlide, removeSlide, moveSlide, duplicateSlide, insertShape, removeShape, section, insertMedia, transition, and animate. headerFooter has format-specific fields described below. Create a table with insertTable; delete one with removeTable. These are plan operations inside preview_plan/apply_plan, not separate tools.
+        - Available operations (the JSON shape of each is in the preview_plan description): changeText, insert (a paragraph), insertTable, removeTable, format, fill, comment, headerFooter, insertTableRows, removeTableRows, insertTableColumns, removeTableColumns, insertImage, removeImage, backgroundImage, copyStyles, clearStyles; Word also supports setProperty, revision, pageSetup, insertBreak and note; decks also support insertSlide, removeSlide, moveSlide, duplicateSlide, insertShape, removeShape, section, insertMedia, transition, and animate. headerFooter has format-specific fields described below. Create a table with insertTable; delete one with removeTable. These are plan operations inside preview_plan/apply_plan, not separate tools.
         - Call inspect_document or find_in_document before building a plan to obtain anchor ids; never invent paragraph ids, occurrence numbers, content-control tags, or node paths.
         - Tables and images only appear in inspect_document.nodes, never in the paragraphs list. Copy the path from there rather than composing one: Word uses "table#N"/"image#N", a deck uses "table#{slideId}/{shapeId}"/"image#{slideId}/{shapeId}". To recognise table content, look for paragraphs whose `in` field matches a table path.
         - Preview before you apply. If preview reports stale-snapshot, re-inspect and rebuild. If preview reports expect-mismatch, the document drifted - re-inspect/find that operation.
-        - Change mode: in a Word document default to "Tracked" unless the user explicitly approves direct edits. A PowerPoint deck has no tracked-changes representation and REFUSES mode "Tracked", so use "Direct" there and say that edits to a deck cannot be redlined; add a comment if the change needs to be flagged for review.
+        - Change mode: in a Word document default to "Tracked" unless the user explicitly approves direct edits. "mode" is not only for changeText - it belongs on every verb that changes content (insert, insertTable, removeTable, the table row/column verbs, insertImage, removeImage, format, fill, insertBreak, note), and Word tracks all of them when it is omitted. A tracked structural edit is a real redline: an added paragraph and its paragraph mark come back as insertions, a removed row stays in place struck through until someone accepts it, and a format records what it replaced. A PowerPoint deck has no tracked-changes representation and REFUSES mode "Tracked" on any of these, so use "Direct" there and say that edits to a deck cannot be redlined; add a comment if the change needs to be flagged for review.
+        - Reviewing an existing Word redline: inspect_document.nodes lists every revision (kind "revision") with its author and date, under paths like "ins#7", "del#7", "markIns#7" (a paragraph split), "rowIns#7"/"rowDel#7", "cellIns#7"/"cellDel#7", and "runFormat#7"/"paraFormat#7" (formatting changes). Resolve them with { "op": "revision", "target": { "kind": "revision", "path": "…" }, "action": "Accept" | "Reject" } - "all" takes every revision in the document and "author:<name>" takes one person's.
+        - Word comments are a conversation, not a write-only log: inspect_document.nodes lists each one (kind "comment") with its author, its text, whether it is resolved, and which comment it replies to. Answer one with action "Reply", close it with "Resolve", delete it with "Remove". Read the open comments before editing a document under review - they usually say what the edit should be.
         - Reject operations that need a renderer (pagination, field recalculation); explain the limitation instead.
         - An image behind the content is backgroundImage, not insertImage: { "op": "backgroundImage", "base64Bytes": "iVBORw0KGgo...", "imageType": "png", "opacity": 0.2 }. On a deck a slide target paints one slide and no target paints every slide; in Word there is no target and the image repeats on every page. ALWAYS set opacity for a photograph behind text - at full strength almost any image destroys the contrast the text needs, and 0.1-0.3 is the usable range. Supply no image at all to take an existing background away. A flat colour is format with fillColor instead, and a picture IN the text is still insertImage.
         - Real list numbering (Word only): { "op": "format", "target": {…}, "listStyle": "clause", "listLevel": 0, "listId": 0 }. listStyle is bullet, decimal (1./a./i.), clause (1./1.1/1.1.1) or none. listLevel is 0-8. NEVER type the number into the text as well - Word draws it, and a paragraph reading "1. Connect the drive" in a numbered list comes out as "1. 1. Connect the drive". Paragraphs sharing a listStyle AND a listId are one running sequence; a different listId starts a separate one, which is how a second chapter restarts its steps at 1. This is what makes an inserted clause renumber the rest.
+        - Word page geometry: { "op": "pageSetup", "paperSize": "A4", "orientation": "Landscape", "marginTopTwips": 720 }. Measurements are twips - 1440 to the inch - matching the indents and spacing on format. paperSize is A3, A4, A5, Letter, Legal, Tabloid or Executive; give pageWidthTwips/pageHeightTwips instead for anything else, never both. No target sets the document's final section - the whole document until something splits it; a paragraph target sets the section that paragraph belongs to. Margins you do not name keep their current value.
+        - Word breaks: { "op": "insertBreak", "target": {…}, "kind": "Page", "position": "After" }. kind is Page, Column, SectionNextPage, SectionContinuous, SectionEvenPage or SectionOddPage. The break lands in a paragraph of its own, so removing it later is removing one paragraph. A landscape run of pages in the middle of a portrait report is insertBreak twice and then pageSetup targeting a paragraph between them. Use format's pageBreakBefore instead when the page must keep starting at a given paragraph however the text above it changes.
+        - Word footnotes and endnotes: { "op": "note", "target": { "paraId": "w14:…", "expect": "thirty days" }, "kind": "Footnote", "text": "Subject to clause 8.2." } puts the reference right after that text, or at the end of the paragraph when expect is empty. Word owns the numbering, so a note added in the middle renumbers the rest - never type a superscript number into the text yourself. Existing notes appear in inspect_document.nodes as kind "note" with paths "footnote#1"/"endnote#1"; rewrite one with action "Update" or delete it with action "Remove". A note's body is also an ordinary paragraph (location "footnote"/"endnote"), so changeText and format edit it in place.
         - Word running heads: { "op": "headerFooter", "header": "Northwind Traders", "footer": "Confidential", "showPageNumber": true, "alignment": "edges" }. alignment "edges" puts the text left and the page number right on one line; otherwise left/center/right. The page number is a field, so it stays right as the document grows. differentFirstPage:true gives the first page its own header and footer, which is how a cover page keeps the running head off it - then write that page's own with scope "firstPage" (scope is default, firstPage or evenPage). Clear either with an empty string. showSlideNumber/showFooter/dateTime are deck-only and are REFUSED here.
 
         Working with a PowerPoint deck
         - Each slide is one outline entry. Paragraph ids read "slide{slideId}/shape{shapeId}/p{n}", with "notes/..." for speaker notes and ".../r{row}c{col}/..." inside a table cell.
         - A slide has no text flow, so insertTable, insertImage, and an added comment target the SLIDE - { "kind": "slide", "path": "slide#256" } - not a paragraph. Resolve a comment with { "op": "comment", "action": "Resolve", "target": { "kind": "comment", "path": "comment#256/{id}" } }.
-        - Only these verbs work on a deck: changeText, insert, format, fill, copyStyles, clearStyles, insertTable, removeTable, insertTableRows, removeTableRows, insertTableColumns, removeTableColumns, insertImage, removeImage, backgroundImage, insertShape, removeShape, insertMedia, comment, section, headerFooter, transition, animate, insertSlide, removeSlide, moveSlide, duplicateSlide. Only setProperty, revision and the Word-only anchors return "unsupported-operation".
+        - Only these verbs work on a deck: changeText, insert, format, fill, copyStyles, clearStyles, insertTable, removeTable, insertTableRows, removeTableRows, insertTableColumns, removeTableColumns, insertImage, removeImage, backgroundImage, insertShape, removeShape, insertMedia, comment, section, headerFooter, transition, animate, insertSlide, removeSlide, moveSlide, duplicateSlide. Only setProperty, revision, pageSetup, insertBreak, note and the Word-only anchors return "unsupported-operation".
         - Slide transitions: { "op": "transition", "effect": "push", "direction": "up", "durationMs": 700 }. No target applies it to every slide, which is PowerPoint's "Apply To All"; a slide target sets just that one. effect "none" removes it. Set advanceAfterMs for a self-running deck and advanceOnClick:false to stop clicks skipping ahead.
         - Shape animations target a SHAPE node: { "op": "animate", "target": { "kind": "shape", "path": "shape#257/2" }, "effect": "fade", "kind": "Entrance", "trigger": "OnClick", "durationMs": 600 }. trigger is OnClick, WithPrevious or AfterPrevious and decides where the effect lands in the slide's sequence - a new click step, alongside the previous effect, or straight after it. Effects play in the order you send the operations. effect "none" removes that shape's animations.
         - Available animations: appear, fade, wipe, blinds, checkerboard, circle, diamond, dissolve, plus, randomBar, split, wedge, wheel, box. Fly-in, zoom, grow and motion paths are NOT available - they need interpolated properties rather than a filter - and are refused rather than approximated. Say so plainly if the user asks for one.
@@ -214,7 +219,7 @@ public sealed class OfficeAgentTools
     {
         AIFunctionFactory.Create(InspectDocument, Opts(
             "inspect_document",
-            "Inspect a document by (connectionId, documentId) - a Word document or a PowerPoint deck. Returns outline (headings, or one entry per slide), paragraphs (with their `in` containment - a table path in Word, a slide's shape or table cell in a deck), content controls, format-specific nodes (including tables/images/properties/revisions in Word and slides/shapes/tables/images/comments/media/sections in a deck), styles, and a snapshot etag for drift detection. Copy node paths from this result. Use paragraphOffset/paragraphLimit to page; fidelity='outline'|'structure'|'content' to control payload size.")),
+            "Inspect a document by (connectionId, documentId) - a Word document or a PowerPoint deck. Returns outline (headings, or one entry per slide), paragraphs (with their `in` containment - a table path in Word, a slide's shape or table cell in a deck), content controls, format-specific nodes (including tables/images/properties/revisions/comments/notes in Word and slides/shapes/tables/images/comments/media/sections in a deck), styles, and a snapshot etag for drift detection. Copy node paths from this result. Use paragraphOffset/paragraphLimit to page; fidelity='outline'|'structure'|'content' to control payload size.")),
         AIFunctionFactory.Create(FindInDocument, Opts(
             "find_in_document",
             "Find text in a document by (connectionId, documentId) - a Word document or a PowerPoint deck, including slide notes and table cells. Returns content-verified anchors (paragraphId + expected + occurrence) usable as plan targets.")),
@@ -228,12 +233,26 @@ public sealed class OfficeAgentTools
             "{ \"op\": \"format\", \"target\": { \"paraId\": \"w14:...\", \"expect\": \"important\", \"occurrence\": 0 }, \"highlight\": \"yellow\", \"bold\": true, \"color\": \"FF0000\" }\n" +
             "{ \"op\": \"format\", \"target\": { \"kind\": \"table\",     \"path\": \"table#0\" }, \"styleId\": \"TableGrid\", \"borderStyle\": \"single\" }\n" +
             "{ \"op\": \"format\", \"target\": { \"kind\": \"image\",     \"path\": \"image#0\" }, \"widthPx\": 320, \"heightPx\": 200 }\n\n" +
-            "// Fill / comment / insert paragraph / setProperty / revision:\n" +
+            "// Fill / comment / insert paragraph / setProperty:\n" +
             "{ \"op\": \"fill\", \"target\": { \"tag\": \"ClientName\" }, \"value\": \"Globex\" }\n" +
             "{ \"op\": \"comment\", \"target\": { \"paraId\": \"w14:...\", \"expect\": \"...\" }, \"text\": \"Confirm this.\" }\n" +
             "{ \"op\": \"insert\", \"target\": { \"paraId\": \"w14:...\", \"expect\": \"...\" }, \"position\": \"After\", \"text\": \"New paragraph.\" }\n" +
-            "{ \"op\": \"setProperty\", \"target\": { \"kind\": \"docProperty\", \"path\": \"core/title\" }, \"value\": \"My Title\" }\n" +
-            "{ \"op\": \"revision\",   \"target\": { \"kind\": \"revision\",    \"path\": \"all\" }, \"action\": \"Accept\" }\n\n" +
+            "{ \"op\": \"setProperty\", \"target\": { \"kind\": \"docProperty\", \"path\": \"core/title\" }, \"value\": \"My Title\" }\n\n" +
+            "// Every verb above that changes Word content also takes \"mode\": \"Tracked\" (the default - the edit lands as a redline a reviewer accepts or rejects) or \"Direct\". A deck refuses \"Tracked\": PresentationML has no revision markup.\n\n" +
+            "// Review an existing redline. Revision paths come from inspect_document.nodes (kind \"revision\"): 'ins#7', 'del#7', 'markIns#7', 'rowIns#7', 'cellDel#7', 'runFormat#7', 'paraFormat#7'. 'all' takes every one; 'author:<name>' takes one person's:\n" +
+            "{ \"op\": \"revision\", \"target\": { \"kind\": \"revision\", \"path\": \"all\" }, \"action\": \"Accept\" }\n" +
+            "{ \"op\": \"revision\", \"target\": { \"kind\": \"revision\", \"path\": \"author:Jane Doe\" }, \"action\": \"Reject\" }\n\n" +
+            "// Reply to, resolve, or delete an existing comment (comment paths from inspect_document.nodes, kind \"comment\"):\n" +
+            "{ \"op\": \"comment\", \"target\": { \"kind\": \"comment\", \"path\": \"comment#1\" }, \"action\": \"Reply\", \"text\": \"Forty-five, per the MSA.\" }\n" +
+            "{ \"op\": \"comment\", \"target\": { \"kind\": \"comment\", \"path\": \"comment#1\" }, \"action\": \"Resolve\" }\n" +
+            "{ \"op\": \"comment\", \"target\": { \"kind\": \"comment\", \"path\": \"comment#1\" }, \"action\": \"Remove\" }\n\n" +
+            "// Word page geometry, breaks, and notes. All measurements are twips (1440 to the inch). Word only:\n" +
+            "{ \"op\": \"pageSetup\", \"paperSize\": \"A4\", \"orientation\": \"Landscape\", \"marginTopTwips\": 720, \"marginLeftTwips\": 1080 }\n" +
+            "{ \"op\": \"insertBreak\", \"target\": { \"paraId\": \"w14:...\", \"expect\": \"...\" }, \"kind\": \"Page\", \"position\": \"After\" }\n" +
+            "{ \"op\": \"insertBreak\", \"target\": { \"paraId\": \"w14:...\", \"expect\": \"...\" }, \"kind\": \"SectionNextPage\" }   // then pageSetup with a target inside the new section\n" +
+            "{ \"op\": \"note\", \"target\": { \"paraId\": \"w14:...\", \"expect\": \"thirty days\" }, \"kind\": \"Footnote\", \"text\": \"Subject to clause 8.2.\" }\n" +
+            "{ \"op\": \"note\", \"target\": { \"kind\": \"note\", \"path\": \"footnote#1\" }, \"action\": \"Update\", \"text\": \"Revised wording.\" }\n" +
+            "{ \"op\": \"note\", \"target\": { \"kind\": \"note\", \"path\": \"footnote#1\" }, \"action\": \"Remove\" }\n\n" +
             "// Insert a whole new table after a paragraph, or remove an entire table (table path from inspect_document.nodes):\n" +
             "{ \"op\": \"insertTable\", \"target\": { \"paraId\": \"w14:...\", \"expect\": \"...\" }, \"position\": \"After\", \"table\": { \"headers\": [\"Region\", \"Q1\"], \"rows\": [[\"NL\", \"41850\"]] } }\n" +
             "{ \"op\": \"removeTable\",  \"target\": { \"kind\": \"table\", \"path\": \"table#0\" } }\n\n" +
@@ -573,6 +592,17 @@ public sealed class OfficeAgentTools
     }
 
     /// <summary>
+    /// The verbs that carry a <c>mode</c>, read off <see cref="ITrackedOperation"/> rather
+    /// than listed here. A verb that grows a mode is covered the moment it implements the
+    /// interface, and a verb that never had one cannot inherit this policy by accident.
+    /// </summary>
+    private static readonly HashSet<string> TrackedVerbs = new(
+        PlanOperationJsonConverter.ByVerb
+            .Where(pair => typeof(ITrackedOperation).IsAssignableFrom(pair.Value))
+            .Select(pair => pair.Key),
+        StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>
     /// Writes the connection's default change mode into every operation that did not name
     /// one. This has to happen on the JSON, before deserializing: once a
     /// <see cref="ChangeTextOp"/> exists, its property initializer has already turned an
@@ -587,9 +617,7 @@ public sealed class OfficeAgentTools
         foreach (var operation in operations)
         {
             if (operation is not JsonObject op) continue;
-            // Only changeText carries a mode; naming it keeps an unrelated verb that
-            // happens to grow a "mode" property from silently inheriting this policy.
-            if (op["op"]?.GetValue<string>() is not "changeText") continue;
+            if (op["op"]?.GetValue<string>() is not { } verb || !TrackedVerbs.Contains(verb)) continue;
             if (op.ContainsKey("mode")) continue;
 
             op["mode"] = connectionDefault.ToString();

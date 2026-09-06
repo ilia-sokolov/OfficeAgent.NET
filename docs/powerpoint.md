@@ -84,7 +84,7 @@ guessing which line was meant; see [Anchor stability](#anchor-stability).
 | `moveSlide` | slide node | `position` + `relativeTo` |
 | `duplicateSlide` | slide node | Copy gets its own slide id, shape ids, and notes; lands after the original by default |
 
-Verbs the module does not implement — `setProperty` and `revision` — are reported per-operation as
+Verbs the module does not implement — `setProperty`, `revision`, `pageSetup`, `insertBreak` and `note` — are reported per-operation as
 `unsupported-operation`, and nothing in the plan is applied. The slide, shape,
 section, header-footer, media, transition and animation verbs run the other way:
 a Word document reports *them* as unsupported.
@@ -394,6 +394,7 @@ already resized.
 - `format` supports shape and slide fills, shape outlines, and shape geometry; it does not directly restyle the cells inside an existing table.
 - Animations are limited to the effects PresentationML expresses as a filtered `p:animEffect`. Fly-in, zoom, grow and the motion paths are refused rather than approximated — see [available effects](#available-effects).
 - A slide has no header. `p:hf` carries one, but it governs notes and handout pages, which is why PowerPoint greys the box out on the Slide tab.
-- `setProperty` and `revision` are not implemented; a deck has no document-property vocabulary of its own and no redline model.
+- `setProperty`, `revision`, `pageSetup`, `insertBreak` and `note` are not implemented; a deck has no document-property vocabulary of its own, no redline model, no page geometry to set per slide, and no footnotes.
+- A deck refuses an explicit `"mode": "Tracked"` on any verb that carries one, rather than writing an untracked edit the caller did not ask for. Omitting the mode there means `Direct`.
 - Legacy `p:cm` comments are neither read nor written.
 - Charts and SmartArt are not addressable.
