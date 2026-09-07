@@ -1,3 +1,4 @@
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using OfficeAgent.Abstractions;
 using OfficeAgent.Core;
@@ -126,11 +127,95 @@ public class McpServerTests
     }
 
     [Fact]
-    public void Server_refuses_to_start_without_connections()
+    public void Server_refuses_to_start_with_neither_connections_nor_inline_content()
     {
         var ex = Assert.Throws<InvalidOperationException>(() =>
             OfficeAgentMcpServer.BuildToolset(new OfficeAgentMcpOptions()));
-        Assert.Contains("at least one connection", ex.Message);
+
+        // Every tool it could expose would fail on its first call, so the message names
+        // both ways out rather than only the storage one.
+        Assert.Contains("either a connection or inline content", ex.Message);
+        Assert.Contains("AllowInlineContent", ex.Message);
+    }
+
+    [Fact]
+    public void Inline_content_alone_is_enough_to_start()
+    {
+        var names = OfficeAgentMcpServer
+            .BuildToolset(new OfficeAgentMcpOptions { AllowInlineContent = true })
+            .Select(t => t.ProtocolTool.Name)
+            .ToArray();
+
+        Assert.Equal(
+            new[] { "create_document_content", "inspect_document_content", "edit_document_content" }.OrderBy(n => n),
+            names.OrderBy(n => n));
+    }
+
+    [Fact]
+    public void With_no_connection_the_connection_addressed_tools_are_not_offered()
+    {
+        var names = OfficeAgentMcpServer
+            .BuildToolset(new OfficeAgentMcpOptions { AllowInlineContent = true, AllowCreation = true })
+            .Select(t => t.ProtocolTool.Name)
+            .ToArray();
+
+        // AllowRegistration defaults to true and AllowCreation is on, but there is no
+        // connectionId in existence for either to name.
+        Assert.DoesNotContain("inspect_document", names);
+        Assert.DoesNotContain("apply_plan", names);
+        Assert.DoesNotContain("register_document", names);
+        Assert.DoesNotContain("create_document", names);
+        Assert.DoesNotContain("list_connections", names);
+    }
+
+    [Fact]
+    public void Inline_content_is_configured_from_the_file_or_the_environment_like_any_other_setting()
+    {
+        var file = Path.Combine(Path.GetTempPath(), $"officeagent-inline-{Guid.NewGuid():N}.json");
+        File.WriteAllText(file, """{ "OfficeAgent": { "AllowInlineContent": true } }""");
+
+        const string variable = "OfficeAgent__AllowInlineContent";
+        try
+        {
+            Assert.True(Bind(file, environment: null).AllowInlineContent);
+            Assert.True(Bind(configFile: null, environment: "true").AllowInlineContent);
+
+            // The environment outranks the file, which is the precedence every other
+            // setting follows - it is what lets one value be overridden per deployment.
+            Assert.False(Bind(file, environment: "false").AllowInlineContent);
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable(variable, null);
+            File.Delete(file);
+        }
+
+        static OfficeAgentMcpOptions Bind(string? configFile, string? environment)
+        {
+            Environment.SetEnvironmentVariable(variable, environment);
+
+            var configuration = new ConfigurationBuilder();
+            configuration.AddEnvironmentVariables();
+            if (configFile is not null) OfficeAgentConfiguration.AddFile(configuration, configFile);
+
+            return OfficeAgentConfiguration.Bind(configuration.Build());
+        }
+    }
+
+    [Fact]
+    public void Inline_content_sits_alongside_a_connection_when_both_are_configured()
+    {
+        var options = new OfficeAgentMcpOptions { AllowInlineContent = true };
+        options.FileSystemConnections.Add(new FileSystemConnectionOptions
+        {
+            ConnectionId = "workspace",
+            RootPath = Path.GetTempPath()
+        });
+
+        var names = OfficeAgentMcpServer.BuildToolset(options).Select(t => t.ProtocolTool.Name).ToArray();
+
+        Assert.Contains("inspect_document", names);
+        Assert.Contains("edit_document_content", names);
     }
 
     [Fact]

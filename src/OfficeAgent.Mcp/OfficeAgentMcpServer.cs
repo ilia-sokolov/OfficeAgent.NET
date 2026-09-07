@@ -31,13 +31,15 @@ public static class OfficeAgentMcpServer
     public static string InstructionsFor(OfficeAgentMcpOptions options)
     {
         var creationEnabled = CreationEnabled(options);
-        if (!options.AllowRegistration && !creationEnabled)
-            return OfficeAgentTools.SystemPromptGuidance;
+        var hasConnections = HasConnections(options);
+        var registrationEnabled = options.AllowRegistration && hasConnections;
 
         return OfficeAgentTools.SystemPromptGuidance
-            + (options.AllowRegistration ? OfficeAgentTools.RegistrationPromptGuidance : string.Empty)
+            + (registrationEnabled ? OfficeAgentTools.RegistrationPromptGuidance : string.Empty)
             + (creationEnabled ? OfficeAgentTools.CreationPromptGuidance : string.Empty)
-            + ConnectionInventory(options, options.AllowRegistration, creationEnabled);
+            + (HasEphemeral(options) ? OfficeAgentTools.EphemeralPromptGuidance : string.Empty)
+            + (options.AllowInlineContent ? OfficeAgentTools.InlineContentPromptGuidance : string.Empty)
+            + ConnectionInventory(options, registrationEnabled, creationEnabled);
     }
 
     /// <summary>
@@ -55,7 +57,18 @@ public static class OfficeAgentMcpServer
         var sharePointRegistration = registrationEnabled
             ? " a register_document source is a SharePoint/OneDrive URL or a \"driveId/itemId\" pair."
             : string.Empty;
-        var lines = options.FileSystemConnections
+        var session = HasEphemeral(options)
+            ? new[]
+            {
+                $"- \"{options.EphemeralConnectionId.Trim()}\" (session): documents live here for this run only, " +
+                "held by the server rather than in storage; import_document_content puts one in and " +
+                "export_document_content takes the result out." +
+                (creationEnabled ? " create_document makes a new document in it; the name's extension picks the format." : string.Empty)
+            }
+            : Array.Empty<string>();
+
+        var lines = session
+            .Concat(options.FileSystemConnections
             .Select(c => $"- \"{c.ConnectionId}\" (filesystem):" + filesystemRegistration
                 + (creationEnabled && AllowsCreatableExtension(c.AllowedExtensions)
                     ? " create_document writes new documents into this connection's root; the name's extension picks the format."
@@ -70,7 +83,7 @@ public static class OfficeAgentMcpServer
                             ? " create_document is not configured for this connection."
                             : creationEnabled
                                 ? " create_document is not available because this connection allows no creatable extension."
-                            : string.Empty)))
+                            : string.Empty))))
             .ToList();
 
         return lines.Count == 0
@@ -86,10 +99,16 @@ public static class OfficeAgentMcpServer
     public static IServiceCollection AddOfficeAgentMcp(this IServiceCollection services, OfficeAgentMcpOptions options)
     {
         if (options is null) throw new ArgumentNullException(nameof(options));
-        if (options.FileSystemConnections.Count == 0 && options.SharePointConnections.Count == 0)
+
+        // A server with neither storage nor inline content has nothing any tool could act
+        // on, and every tool it exposed would fail on the first call. One or the other has
+        // to be configured; which one is the host's choice.
+        if (!HasConnections(options) && !options.AllowInlineContent)
             throw new InvalidOperationException(
-                "The OfficeAgent MCP server requires at least one connection. Configure " +
-                "OfficeAgent:FileSystemConnections or OfficeAgent:SharePointConnections.");
+                "The OfficeAgent MCP server requires either a connection or inline content. Configure " +
+                "OfficeAgent:FileSystemConnections or OfficeAgent:SharePointConnections, set " +
+                "OfficeAgent:EphemeralConnectionId to hold documents in memory for the session, or set " +
+                "OfficeAgent:AllowInlineContent to true to pass documents in and out as base64.");
 
         AddFormats(services);
         services.AddOfficeAgent();
@@ -100,6 +119,15 @@ public static class OfficeAgentMcpServer
             ParseChangeMode(connection.DefaultChangeMode, connection.ConnectionId);
         foreach (var connection in options.SharePointConnections)
             ParseChangeMode(connection.DefaultChangeMode, connection.ConnectionId);
+
+        if (HasEphemeral(options))
+        {
+            services.AddMemoryDocumentProvider(options.EphemeralConnectionId.Trim(), o =>
+            {
+                o.MaximumTotalBytes = options.EphemeralMaximumTotalBytes;
+                o.AllowedExtensions = CreatableExtensions.Value.ToList();
+            });
+        }
 
         foreach (var connection in options.FileSystemConnections)
         {
@@ -127,22 +155,42 @@ public static class OfficeAgentMcpServer
         if (tools is null) throw new ArgumentNullException(nameof(tools));
         if (options is null) throw new ArgumentNullException(nameof(options));
         var creationEnabled = CreationEnabled(options);
+        var hasConnections = HasConnections(options);
+
         var toolList = tools
             .AsAIFunctions(new OfficeAgentToolsOptions
             {
                 AllowRegistration = options.AllowRegistration,
-                AllowCreation = creationEnabled
+                AllowCreation = creationEnabled,
+                AllowInlineContent = options.AllowInlineContent,
+                AllowEphemeralDocuments = HasEphemeral(options),
+                // With no connection configured there is no connectionId any of the
+                // document tools could be given, so they are left out rather than offered
+                // and failed on first use.
+                AllowConnectionAddressing = hasConnections
             })
             .Select(function => McpServerTool.Create(function))
             .ToList();
 
         // A tool is the reliable discovery channel for either staging capability; unlike
         // server instructions, clients consistently surface it.
-        if (options.AllowRegistration || creationEnabled)
+        if (hasConnections && (options.AllowRegistration || creationEnabled))
             toolList.Add(ConnectionsTool(options, creationEnabled));
 
         return toolList;
     }
+
+    /// <summary>
+    /// Whether any connection exists for a document tool to name - a session connection
+    /// counts, because an agent addresses documents in it exactly as it would in storage.
+    /// </summary>
+    private static bool HasConnections(OfficeAgentMcpOptions options) =>
+        options.FileSystemConnections.Count > 0 ||
+        options.SharePointConnections.Count > 0 ||
+        HasEphemeral(options);
+
+    private static bool HasEphemeral(OfficeAgentMcpOptions options) =>
+        !string.IsNullOrWhiteSpace(options.EphemeralConnectionId);
 
     /// <summary>
     /// Builds the <c>list_connections</c> tool from the configured connections, so an
@@ -174,13 +222,26 @@ public static class OfficeAgentMcpServer
     internal static string ConnectionsPayload(OfficeAgentMcpOptions options)
     {
         var creationEnabled = CreationEnabled(options);
-        var connections = options.FileSystemConnections
+        var ephemeral = HasEphemeral(options)
+            ? new[]
+            {
+                new
+                {
+                    connectionId = options.EphemeralConnectionId.Trim(),
+                    provider = "session",
+                    canCreateDocuments = creationEnabled
+                }
+            }
+            : Array.Empty<object>().Select(_ => new { connectionId = "", provider = "", canCreateDocuments = false });
+
+        var connections = ephemeral
+            .Concat(options.FileSystemConnections
             .Select(c => new
             {
                 connectionId = c.ConnectionId,
                 provider = "filesystem",
                 canCreateDocuments = creationEnabled && AllowsCreatableExtension(c.AllowedExtensions)
-            })
+            }))
             .Concat(options.SharePointConnections
                 .Select(c => new
                 {
@@ -196,7 +257,8 @@ public static class OfficeAgentMcpServer
 
     private static bool CreationEnabled(OfficeAgentMcpOptions options) =>
         options.AllowCreation &&
-        (options.FileSystemConnections.Any(c => AllowsCreatableExtension(c.AllowedExtensions)) ||
+        (HasEphemeral(options) ||
+         options.FileSystemConnections.Any(c => AllowsCreatableExtension(c.AllowedExtensions)) ||
          options.SharePointConnections.Any(c =>
              HasSharePointCreationTarget(c) && AllowsCreatableExtension(c.AllowedExtensions)));
 

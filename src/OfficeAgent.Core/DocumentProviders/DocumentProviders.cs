@@ -147,6 +147,9 @@ public sealed class DocumentProviderRegistry
     public DocumentProviderRegistry(IEnumerable<IDocumentProvider> providers) =>
         _providers = providers.ToArray();
 
+    /// <summary>Gets the configured providers, in registration order.</summary>
+    public IReadOnlyList<IDocumentProvider> All => _providers;
+
     /// <summary>Returns the provider configured for a reference.</summary>
     public IDocumentProvider Resolve(DocumentReference reference)
     {

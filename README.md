@@ -39,6 +39,7 @@ it for a workflow that depends on Office's layout or calculation engine.
 | Use OfficeAgent from C# | [Getting started](docs/getting-started.md) |
 | Add tools to a Microsoft Agent Framework agent | [Agent integration](docs/agent-integration.md) |
 | Host the MCP server or use SharePoint | [MCP server](docs/mcp-server.md) and [document providers](docs/document-providers.md) |
+| Edit documents with no storage configured | [Documents with no storage](docs/mcp-server.md#documents-with-no-storage) |
 | Contribute | [Contributing](#contributing) |
 
 ## MCP quick start
@@ -77,6 +78,25 @@ claude mcp add `
 `AllowCreation` is off by default and is what adds `create_document`; drop that
 line for an agent that may only edit documents that already exist.
 
+If there is no directory to connect - documents arrive as attachments, or the
+host has nowhere to put a root - the server can run with no storage at all.
+Set `EphemeralConnectionId` and the server keeps documents in its own memory for
+the session, which the agent then edits by opaque id exactly as it would a stored
+document:
+
+```json
+{ "OfficeAgent": { "EphemeralConnectionId": "session", "AllowCreation": true } }
+```
+
+`import_document_content` puts a document the host holds into the session and
+`export_document_content` takes the finished bytes back out; everything between
+is the ordinary tool surface. `AllowInlineContent` is the other option - three
+tools that carry the document as base64 in both directions, holding no state -
+and it suits a single self-contained call rather than a sequence of edits. Both
+settings work as environment variables or in a configuration file. See
+[Documents with no storage](docs/mcp-server.md#documents-with-no-storage) for
+which to use and why it matters.
+
 Run `claude mcp list` to confirm that `officeagent` is connected. Then ask the
 client to edit a file in the configured directory, for example:
 
@@ -100,6 +120,34 @@ OfficeAgent__FileSystemConnections__0__AllowedExtensions__0=.docx
 OfficeAgent__FileSystemConnections__0__AllowedExtensions__1=.pptx
 OfficeAgent__FileSystemConnections__0__DefaultChangeMode=Direct
 ```
+
+Past one or two settings, put them in a file instead and point the server at it
+with `--config` - the same `OfficeAgent` section, where a list is a list:
+
+```json
+{
+  "OfficeAgent": {
+    "AllowCreation": true,
+    "FileSystemConnections": [
+      {
+        "ConnectionId": "documents",
+        "RootPath": "C:\\officeagent-documents",
+        "AllowedExtensions": [ ".docx", ".pptx" ],
+        "DefaultChangeMode": "Direct"
+      }
+    ]
+  }
+}
+```
+
+```bash
+claude mcp add --transport stdio officeagent -- officeagent-mcp --stdio --config ./officeagent.json
+```
+
+Environment variables still override the file, so a container can keep setting
+one value without restating the rest. See
+[Deployment and client setup](docs/deployment.md) and
+[MCP server](docs/mcp-server.md) for where the file is looked for.
 
 OfficeAgent does not send the complete `.docx` package through the model, but
 the MCP client and model do receive document text and structure returned by the

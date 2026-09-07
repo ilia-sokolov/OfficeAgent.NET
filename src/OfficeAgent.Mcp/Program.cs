@@ -5,8 +5,9 @@
 //   officeagent-mcp               streamable HTTP on ASP.NET Core for cloud or
 //                                 shared hosting; MCP endpoint at /, health at /healthz
 //
-// Configuration comes from appsettings.json, environment variables prefixed
-// OfficeAgent__, and the command line. See docs/mcp-server.md.
+// Configuration comes from appsettings.json, an optional JSON file named by --config or
+// OFFICEAGENT_CONFIG, environment variables prefixed OfficeAgent__, and the command line,
+// in that order of increasing precedence. See docs/mcp-server.md.
 
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
@@ -19,10 +20,14 @@ using OfficeAgent.SharePoint;
 
 var version = typeof(OfficeAgentMcpServer).Assembly.GetName().Version?.ToString(3) ?? "0.0.0";
 
-if (UseStdio(args))
+var configurationPath = OfficeAgentConfiguration.ResolvePath(args);
+
+if (UseStdio(args, configurationPath))
 {
     var builder = Host.CreateApplicationBuilder(args);
-    var options = Bind(builder.Configuration);
+    if (configurationPath is not null)
+        OfficeAgentConfiguration.AddFile(builder.Configuration, configurationPath);
+    var options = OfficeAgentConfiguration.Bind(builder.Configuration);
 
     // stdout carries JSON-RPC frames in stdio mode; logs must go to stderr.
     builder.Logging.AddConsole(o => o.LogToStandardErrorThreshold = LogLevel.Trace);
@@ -41,7 +46,9 @@ if (UseStdio(args))
 else
 {
     var builder = WebApplication.CreateBuilder(args);
-    var options = Bind(builder.Configuration);
+    if (configurationPath is not null)
+        OfficeAgentConfiguration.AddFile(builder.Configuration, configurationPath);
+    var options = OfficeAgentConfiguration.Bind(builder.Configuration);
 
     builder.Services
         .AddMcpServer(o =>
@@ -83,18 +90,15 @@ static string? BearerToken(HttpContext context)
         : null;
 }
 
-static bool UseStdio(string[] args)
+static bool UseStdio(string[] args, string? configurationPath)
 {
     if (args.Contains("--stdio", StringComparer.OrdinalIgnoreCase)) return true;
-    var probe = new ConfigurationBuilder()
-        .AddJsonFile("appsettings.json", optional: true)
-        .AddEnvironmentVariables()
-        .AddCommandLine(args)
-        .Build();
-    return string.Equals(
-        probe[$"{OfficeAgentMcpOptions.SectionName}:Transport"], "stdio", StringComparison.OrdinalIgnoreCase);
-}
 
-static OfficeAgentMcpOptions Bind(IConfiguration configuration) =>
-    configuration.GetSection(OfficeAgentMcpOptions.SectionName).Get<OfficeAgentMcpOptions>()
-    ?? new OfficeAgentMcpOptions();
+    var probe = new ConfigurationBuilder().AddJsonFile("appsettings.json", optional: true);
+    if (configurationPath is not null)
+        probe.AddJsonFile(configurationPath, optional: false);
+    var configuration = probe.AddEnvironmentVariables().AddCommandLine(args).Build();
+
+    return string.Equals(
+        configuration[$"{OfficeAgentMcpOptions.SectionName}:Transport"], "stdio", StringComparison.OrdinalIgnoreCase);
+}

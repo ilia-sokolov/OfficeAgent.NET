@@ -268,6 +268,172 @@ public sealed class CommentOp : PlanOperation
 }
 
 /// <summary>
+/// The character and paragraph properties a plan can set, whether it is formatting one
+/// element with <see cref="FormatOp"/> or defining a style with <see cref="DefineStyleOp"/>.
+/// </summary>
+/// <remarks>
+/// Stated once so the two verbs cannot drift into two vocabularies for the same idea: a
+/// plan that knows how to make a paragraph bold already knows how to make a style bold.
+/// </remarks>
+public interface ITextFormat
+{
+    /// <summary>Font family name (e.g. "Calibri", "Arial").</summary>
+    string? FontFamily { get; }
+
+    /// <summary>Font size in half-points: 24 = 12pt, 22 = 11pt, 20 = 10pt.</summary>
+    int? SizeHalfPoints { get; }
+
+    /// <summary>Bold text.</summary>
+    bool? Bold { get; }
+
+    /// <summary>Italic text.</summary>
+    bool? Italic { get; }
+
+    /// <summary>Single underline.</summary>
+    bool? Underline { get; }
+
+    /// <summary>Highlight colour name.</summary>
+    string? Highlight { get; }
+
+    /// <summary>Hex RGB font colour, e.g. "FF0000".</summary>
+    string? Color { get; }
+
+    /// <summary>Paragraph horizontal alignment: left, center, right, justify.</summary>
+    string? Alignment { get; }
+
+    /// <summary>Left indent in twips (1/20 of a point; 1440 = 1 inch).</summary>
+    int? IndentLeftTwips { get; }
+
+    /// <summary>Right indent in twips.</summary>
+    int? IndentRightTwips { get; }
+
+    /// <summary>First-line indent in twips; negative values become a hanging indent.</summary>
+    int? IndentFirstLineTwips { get; }
+
+    /// <summary>Spacing before the paragraph in twips.</summary>
+    int? SpacingBeforeTwips { get; }
+
+    /// <summary>Spacing after the paragraph in twips.</summary>
+    int? SpacingAfterTwips { get; }
+
+    /// <summary>Border style: single, double, dotted, dashed, thick, none.</summary>
+    string? BorderStyle { get; }
+
+    /// <summary>Border width in eighths of a point (8 = 1pt).</summary>
+    int? BorderSizeEighths { get; }
+
+    /// <summary>Border hex RGB colour, e.g. "000000".</summary>
+    string? BorderColor { get; }
+
+    /// <summary>Which edges a border applies to; unset means every edge.</summary>
+    string? BorderEdges { get; }
+}
+
+/// <summary>
+/// Defines or updates a style in the document's style catalogue, so a look is stated once
+/// and every paragraph carrying the style follows it.
+/// </summary>
+/// <remarks>
+/// <para>
+/// The alternative - writing the same direct formatting onto every paragraph - produces a
+/// document that looks right and cannot be maintained: changing the heading colour means
+/// finding every heading, and a reader who edits the style in Word sees nothing happen.
+/// </para>
+/// <para>
+/// Defining a style that already exists updates it; properties left <see langword="null"/>
+/// keep the value they had. There is deliberately no way to delete a style: removing one
+/// that is in use silently reflows every paragraph that carried it.
+/// </para>
+/// <para>
+/// <see cref="ITextFormat.Highlight"/> is the one property of the shared vocabulary a style
+/// cannot carry: <c>w:highlight</c> is a property of a run, and WordprocessingML refuses it
+/// inside a style. Setting it here is an error rather than a silent omission. Colour the
+/// text with <see cref="ITextFormat.Color"/>, or highlight the span with a
+/// <see cref="FormatOp"/>.
+/// </para>
+/// </remarks>
+public sealed class DefineStyleOp : PlanOperation, ITextFormat
+{
+    /// <summary>The style id plans and paragraphs reference, e.g. <c>"Quote"</c>.</summary>
+    public string StyleId { get; init; } = string.Empty;
+
+    /// <summary>The display name shown in Word's style gallery. Defaults to the style id.</summary>
+    public string? Name { get; init; }
+
+    /// <summary>What the style applies to: <c>paragraph</c> (default), <c>character</c>, or <c>table</c>.</summary>
+    public string Type { get; init; } = "paragraph";
+
+    /// <summary>The style this one inherits from; unset inherits nothing.</summary>
+    public string? BasedOn { get; init; }
+
+    /// <summary>The style applied to the next paragraph when the user presses Enter.</summary>
+    public string? Next { get; init; }
+
+    /// <summary>
+    /// The outline level a heading contributes to the document outline: 1 for a top-level
+    /// heading. Unset leaves the style out of the outline, which is what body text wants.
+    /// </summary>
+    public int? OutlineLevel { get; init; }
+
+    /// <summary>
+    /// Whether Word offers the style in its gallery. Defaults to <see langword="true"/>:
+    /// a style an author cannot find is one they will re-create with direct formatting.
+    /// </summary>
+    public bool Quick { get; init; } = true;
+
+    /// <inheritdoc />
+    public string? FontFamily { get; init; }
+
+    /// <inheritdoc />
+    public int? SizeHalfPoints { get; init; }
+
+    /// <inheritdoc />
+    public bool? Bold { get; init; }
+
+    /// <inheritdoc />
+    public bool? Italic { get; init; }
+
+    /// <inheritdoc />
+    public bool? Underline { get; init; }
+
+    /// <inheritdoc />
+    public string? Highlight { get; init; }
+
+    /// <inheritdoc />
+    public string? Color { get; init; }
+
+    /// <inheritdoc />
+    public string? Alignment { get; init; }
+
+    /// <inheritdoc />
+    public int? IndentLeftTwips { get; init; }
+
+    /// <inheritdoc />
+    public int? IndentRightTwips { get; init; }
+
+    /// <inheritdoc />
+    public int? IndentFirstLineTwips { get; init; }
+
+    /// <inheritdoc />
+    public int? SpacingBeforeTwips { get; init; }
+
+    /// <inheritdoc />
+    public int? SpacingAfterTwips { get; init; }
+
+    /// <inheritdoc />
+    public string? BorderStyle { get; init; }
+
+    /// <inheritdoc />
+    public int? BorderSizeEighths { get; init; }
+
+    /// <inheritdoc />
+    public string? BorderColor { get; init; }
+
+    /// <inheritdoc />
+    public string? BorderEdges { get; init; }
+}
+
+/// <summary>
 /// Unified formatting verb. Applies any combination of a named style (<see cref="StyleId"/>)
 /// and direct character / paragraph / border properties to the target element. Every
 /// property is optional; properties left <see langword="null"/> are not changed. The handler
@@ -280,7 +446,7 @@ public sealed class CommentOp : PlanOperation
 /// <item><see cref="NodeAnchor"/> <c>kind=image</c> - resize to <see cref="WidthPx"/> × <see cref="HeightPx"/>.</item>
 /// </list>
 /// </summary>
-public sealed class FormatOp : PlanOperation, ITrackedOperation
+public sealed class FormatOp : PlanOperation, ITrackedOperation, ITextFormat
 {
     /// <inheritdoc />
     public ChangeMode? Mode { get; init; }

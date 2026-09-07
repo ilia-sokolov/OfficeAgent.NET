@@ -205,7 +205,24 @@ public sealed class FileSystemDocumentProvider : IDocumentProvider, IDocumentCre
             throw Error(ProviderErrorCode.ContentTooLarge,
                 $"Document exceeds the configured maximum of {_maximumBytes} bytes.", reference.ItemId);
 
-        var bytes = await ReadAllBytesAsync(path, cancellationToken).ConfigureAwait(false);
+        // A file another process holds exclusively - a document open in Word - fails here,
+        // before any edit is attempted. Reported as an IO error naming the file, because a
+        // raw IOException is outside the error vocabulary this contract defines and reaches
+        // callers as an unexplained internal failure.
+        byte[] bytes;
+        try
+        {
+            bytes = await ReadAllBytesAsync(path, cancellationToken).ConfigureAwait(false);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            throw Error(
+                ProviderErrorCode.IO,
+                $"The document could not be read: {ex.Message} " +
+                $"'{Path.GetFileName(path)}' is most likely open in another process.",
+                reference.ItemId, ex);
+        }
+
         var version = ComputeVersion(bytes);
         if (!string.IsNullOrEmpty(reference.Version) &&
             !string.Equals(reference.Version, version, StringComparison.Ordinal))
@@ -243,7 +260,24 @@ public sealed class FileSystemDocumentProvider : IDocumentProvider, IDocumentCre
         var expectedVersion = options.ExpectedVersion ?? source.Version;
         if (!string.IsNullOrEmpty(expectedVersion))
         {
-            var actualVersion = await ComputeVersionStreamingAsync(sourcePath, cancellationToken).ConfigureAwait(false);
+            // The optimistic check reads the file, so it meets the same locks the write
+            // does - a document open in Word fails here rather than at the replace. It is
+            // reported the same way for the same reason: a raw IOException is outside the
+            // error vocabulary this contract defines.
+            string actualVersion;
+            try
+            {
+                actualVersion = await ComputeVersionStreamingAsync(sourcePath, cancellationToken).ConfigureAwait(false);
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+            {
+                throw Error(
+                    ProviderErrorCode.IO,
+                    $"The document could not be read to check its version: {ex.Message} " +
+                    $"'{sourceName}' is most likely open in another process; nothing was changed.",
+                    source.ItemId, ex);
+            }
+
             if (!string.Equals(expectedVersion, actualVersion, StringComparison.Ordinal))
                 throw new DocumentVersionConflictException(expectedVersion!, actualVersion, ProviderName, ConnectionId, source.ItemId);
         }
@@ -623,7 +657,34 @@ public sealed class FileSystemDocumentProvider : IDocumentProvider, IDocumentCre
 #endif
     }
 
-    private static async Task WriteAtomicallyAsync(
+    /// <remarks>
+    /// A failure that outlives the retry is reported as a provider IO error naming the
+    /// destination. Letting the raw <see cref="IOException"/> escape put it outside every
+    /// error code the contract defines, and it reached callers as an unexplained internal
+    /// error - the one outcome a caller can do nothing with.
+    /// </remarks>
+    private async Task WriteAtomicallyAsync(
+        string destinationPath,
+        byte[] bytes,
+        bool replace,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            await WriteAtomicallyCoreAsync(destinationPath, bytes, replace, cancellationToken).ConfigureAwait(false);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            throw Error(
+                ProviderErrorCode.IO,
+                $"The document could not be written to '{Path.GetFileName(destinationPath)}': {ex.Message} " +
+                "The destination is most likely held open by another process; nothing was changed.",
+                itemId: null,
+                innerException: ex);
+        }
+    }
+
+    private static async Task WriteAtomicallyCoreAsync(
         string destinationPath,
         byte[] bytes,
         bool replace,
@@ -642,18 +703,82 @@ public sealed class FileSystemDocumentProvider : IDocumentProvider, IDocumentCre
             cancellationToken.ThrowIfCancellationRequested();
             await Task.Run(() => File.WriteAllBytes(temporaryPath, bytes), cancellationToken).ConfigureAwait(false);
 #endif
-            if (replace && File.Exists(destinationPath))
-            {
-                File.Replace(temporaryPath, destinationPath, null);
-            }
-            else
-            {
-                File.Move(temporaryPath, destinationPath);
-            }
+            await PublishAsync(temporaryPath, destinationPath, replace, cancellationToken).ConfigureAwait(false);
         }
         finally
         {
             if (File.Exists(temporaryPath)) File.Delete(temporaryPath);
         }
+    }
+
+    /// <summary>
+    /// Moves the finished temporary file into place, retrying briefly while the
+    /// destination is held by something else.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// On Windows this is where a save fails for a reason that has nothing to do with the
+    /// caller: an antivirus scanner, the search indexer, or a preview handler opens the
+    /// destination for a moment after it was last written, and <see cref="File.Replace"/>
+    /// answers <c>"Unable to remove the file to be replaced"</c>. It is transient by
+    /// definition - the interfering process lets go - so the fix is to wait and try again
+    /// rather than to fail an edit the engine had already completed.
+    /// </para>
+    /// <para>
+    /// The retry is bounded and short. A destination held open by something that is not
+    /// going to let go - a document open in Word, say - has to surface as an error, and
+    /// promptly, rather than stalling a request that cannot succeed.
+    /// </para>
+    /// </remarks>
+    private static async Task PublishAsync(
+        string temporaryPath, string destinationPath, bool replace, CancellationToken cancellationToken)
+    {
+        const int attempts = 5;
+
+        for (var attempt = 1; ; attempt++)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            try
+            {
+                // File.Replace preserves the destination's identity, which File.Move would
+                // not; it is only usable when there is a destination to replace.
+                if (replace && File.Exists(destinationPath))
+                    File.Replace(temporaryPath, destinationPath, null);
+                else
+                    File.Move(temporaryPath, destinationPath);
+                return;
+            }
+            catch (Exception ex) when (attempt < attempts && IsTransient(ex))
+            {
+                // 20ms, 40ms, 80ms, 160ms: long enough for a scanner to finish with the
+                // file, short enough that a genuine lock is reported quickly.
+                await Task.Delay(TimeSpan.FromMilliseconds(10 * (1 << attempt)), cancellationToken)
+                    .ConfigureAwait(false);
+            }
+        }
+    }
+
+    /// <summary>
+    /// Whether the failure is the kind another attempt can get past: the file was busy,
+    /// not missing, not forbidden by its permissions, and not on a full disk.
+    /// </summary>
+    private static bool IsTransient(Exception exception) => exception switch
+    {
+        FileNotFoundException => false,
+        DirectoryNotFoundException => false,
+        PathTooLongException => false,
+        IOException io => !IsDiskFull(io),
+        UnauthorizedAccessException => true,
+        _ => false
+    };
+
+    /// <summary>A full disk does not empty itself, so retrying only delays the report.</summary>
+    private static bool IsDiskFull(IOException exception)
+    {
+        const int ErrorDiskFull = 0x70;
+        const int ErrorHandleDiskFull = 0x27;
+
+        var code = exception.HResult & 0xFFFF;
+        return code == ErrorDiskFull || code == ErrorHandleDiskFull;
     }
 }

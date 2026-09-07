@@ -172,6 +172,50 @@ Copy direct formatting from one text span to another, or clear it on the target.
 
 `scope` is `run`, `paragraph`, or `all`. Empty `expect` means the whole paragraph. Only *direct* formatting travels or is removed - a deck's layout and master, and a Word document's style definitions, are never touched, so clearing returns the text to the look its template gives it.
 
+### `defineStyle`
+
+Define or update a style in the document's style catalogue, so a look is stated once instead of being written onto every paragraph that wants it. WordprocessingML only.
+
+```json
+{ "op": "defineStyle",
+  "styleId": "Quote",
+  "name": "Pull Quote",
+  "basedOn": "Normal",
+  "next": "Normal",
+  "fontFamily": "Georgia",
+  "sizeHalfPoints": 24,
+  "italic": true,
+  "color": "444444",
+  "alignment": "center",
+  "indentLeftTwips": 720,
+  "spacingBeforeTwips": 240 }
+```
+
+| Field | Meaning |
+| --- | --- |
+| `styleId` | the identifier plans and paragraphs reference. No whitespace - it is not the display name |
+| `name` | the name Word shows in its style gallery. Defaults to `styleId` when a style is first defined |
+| `type` | `paragraph` (default), `character`, or `table` |
+| `basedOn` | the style this one inherits from |
+| `next` | the style applied to the next paragraph when the author presses Enter |
+| `outlineLevel` | 1-9, for a heading that should appear in the document outline |
+| `quick` | whether Word offers the style in its gallery. Default `true` |
+
+Every character and paragraph property that `format` takes is available here and means the same thing, with one exception: a style cannot carry a `highlight`. `w:highlight` is a property of a run, and WordprocessingML refuses it inside a style, so setting it is an error rather than a silent omission - use `color` for the text colour, or highlight the span itself with `format`.
+
+Define a style and use it in the same plan; the definition is applied before the `format` that names it:
+
+```json
+{ "operations": [
+  { "op": "defineStyle", "styleId": "Quote", "italic": true },
+  { "op": "format", "target": { "paraId": "w14:…", "expect": "" }, "styleId": "Quote" }
+] }
+```
+
+Defining a style that already exists updates it, and properties the operation does not mention keep the values they had - so making the quotes one point smaller is a one-property plan, not a restatement of the style. A style may be based on one the same plan defines, in either order. A style that inherits from itself, directly or through a chain, is refused, as is one based on a style neither the document nor the plan defines.
+
+There is deliberately no way to delete a style: removing one that is in use silently reflows every paragraph that carried it.
+
 ### `fill`
 
 Populate a named slot by tag. Slot tags come from `inspect_document.contentControls`, each carrying the `kind` that says what it is.

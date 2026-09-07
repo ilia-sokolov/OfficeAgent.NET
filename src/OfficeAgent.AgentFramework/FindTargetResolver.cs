@@ -56,24 +56,39 @@ internal sealed class FindTargetResolver
         JsonObject plan,
         CancellationToken cancellationToken)
     {
+        if (!NeedsResolving(plan)) return Array.Empty<Failure>();
+
+        // One storage read for the whole plan; repeated patterns then cost nothing.
+        using var content = await _client.OpenReadAsync(reference, cancellationToken).ConfigureAwait(false);
+        var bytes = await ReadAllAsync(content.Stream, cancellationToken).ConfigureAwait(false);
+
+        return Resolve(bytes, content.Reference.Name, plan);
+    }
+
+    /// <summary>
+    /// The same binding against content the caller already holds, for the inline-content
+    /// tools: there is no storage to read from, and the document arrived with the plan.
+    /// </summary>
+    internal IReadOnlyList<Failure> Resolve(byte[] document, string? name, JsonObject plan)
+    {
+        if (!NeedsResolving(plan)) return Array.Empty<Failure>();
+        return BindAll(document, name, plan);
+    }
+
+    /// <summary>Whether any operation names its target by text rather than by anchor.</summary>
+    private static bool NeedsResolving(JsonObject plan) =>
+        plan["operations"] is JsonArray operations &&
+        operations.Any(node => node is JsonObject op && op["target"] is JsonObject target && HasFind(target));
+
+    private IReadOnlyList<Failure> BindAll(byte[] bytes, string? name, JsonObject plan)
+    {
         var failures = new List<Failure>();
-        if (plan["operations"] is not JsonArray operations || operations.Count == 0)
-            return failures;
+        var operations = (JsonArray)plan["operations"]!;
 
         var pending = operations
             .Select((node, index) => (Node: node as JsonObject, Index: index))
             .Where(entry => entry.Node?["target"] is JsonObject target && HasFind(target))
             .ToList();
-        if (pending.Count == 0) return failures;
-
-        // One storage read for the whole plan; repeated patterns then cost nothing.
-        byte[] bytes;
-        string? name;
-        using (var content = await _client.OpenReadAsync(reference, cancellationToken).ConfigureAwait(false))
-        {
-            name = content.Reference.Name;
-            bytes = await ReadAllAsync(content.Stream, cancellationToken).ConfigureAwait(false);
-        }
 
         var matchesByPattern = new Dictionary<string, IReadOnlyList<FindHit>>(StringComparer.Ordinal);
 

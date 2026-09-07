@@ -81,13 +81,50 @@ Notes for production:
 
 ## Configuration reference
 
-Everything binds from the `OfficeAgent` section - `appsettings.json`, `OfficeAgent__`-prefixed environment variables, or command line:
+Everything binds from the `OfficeAgent` section - `appsettings.json`, a configuration file named with `--config`, `OfficeAgent__`-prefixed environment variables, or the command line, in that order of increasing precedence.
+
+### A configuration file
+
+Connections do not have to be written as indexed environment variables. `--config` names a JSON file carrying the same `OfficeAgent` section, where a list of extensions is simply a list:
+
+```bash
+officeagent-mcp --stdio --config ./officeagent.json
+```
+
+```json
+{
+  "OfficeAgent": {
+    "AllowCreation": true,
+    "FileSystemConnections": [
+      {
+        "ConnectionId": "documents",
+        "RootPath": "C:\\officeagent-documents",
+        "AllowedExtensions": [ ".docx", ".pptx" ],
+        "DefaultChangeMode": "Direct"
+      }
+    ]
+  }
+}
+```
+
+With no `--config`, the server reads `OFFICEAGENT_CONFIG`, then `%APPDATA%\OfficeAgent\config.json` (`~/.config/officeagent/config.json` elsewhere). The working directory is never searched: a connection root is a trust boundary, and a stdio server starts in whatever directory its client happened to be in. A file named explicitly and not found is an error rather than a silent fallback.
+
+The file sits *below* the environment, so `OfficeAgent__` variables and the command line still override it and existing deployments are unaffected. The two merge per key rather than per connection: `OfficeAgent__FileSystemConnections__0__RootPath` re-roots the file's first connection instead of adding a second one.
+
+Declaring `AllowedExtensions` replaces the default rather than adding to it, so a connection can be restricted to `.pptx` alone.
+
+A connection whose value cannot be read - a `MaximumBytes` that is not a number, say - is reported by name. The configuration binder's own behaviour is to skip such an entry, which would otherwise surface much later as "no connections configured".
+
+### Settings
 
 | Key | Default | Meaning |
 | --- | --- | --- |
 | `Transport` | `http` | `http` or `stdio` (the `--stdio` flag also forces stdio). |
 | `AllowRegistration` | `true` | Expose `register_document` / `remove_document` / `open_document` / `edit_document` / `list_connections` - every tool that takes a connection-relative source. Unlike the in-process tools (opt-in), the MCP server defaults to on: an MCP client has no other channel to stage document ids. Set to `false` to pin agents to ids the host distributes itself. |
 | `AllowCreation` | `false` | Expose `create_document` when at least one connection allows a creatable extension (`.docx` or `.pptx`); SharePoint must also have a configured creation destination. Independent of `AllowRegistration`, so a host can permit creation without permitting arbitrary registration/removal. |
+| `AllowInlineContent` | `false` | Expose `create_document_content` / `inspect_document_content` / `edit_document_content`, which carry the document as base64 in both directions. Needs no connection. Best for a single self-contained call; see [Documents with no storage](#documents-with-no-storage) before using it for multi-step editing. |
+| `EphemeralConnectionId` | empty | Id of a session connection whose documents the server holds in memory for the life of the process - `"session"` by convention. Adds `import_document_content` / `export_document_content` and makes the ordinary connection-addressed tools usable with no storage. This is the one to reach for when several edits are coming. |
+| `EphemeralMaximumTotalBytes` | 100 MB | Total the session connection may hold at once. The store is process memory, so this bound is what keeps a long session from growing without limit. |
 | `FileSystemConnections[n]:ConnectionId` | - | Connection id agents address documents under. |
 | `FileSystemConnections[n]:RootPath` | - | Root directory; registrations must stay under it, and new documents are created in it. |
 | `FileSystemConnections[n]:MaximumBytes` | 100 MB | Size cap per document. |
@@ -134,6 +171,10 @@ with `OfficeAgent__SharePointConnections__0__ClientSecret` supplied from the env
 
 The MCP toolset is the projection of [the agent-integration surface](agent-integration.md): `inspect_document`, `find_in_document`, `preview_plan`, and `apply_plan`; `AllowRegistration` independently adds `register_document` / `remove_document` plus the composites `open_document` / `edit_document`, while `AllowCreation` adds `create_document` when at least one connection allows a creatable extension - `.docx` or `.pptx` (SharePoint also requires its creation destination). Either opt-in adds `list_connections`, which returns `{connectionId, provider, canCreateDocuments}` entries. That boolean means the connection is configured for at least one creatable format; it is not a format list, a permission check, or a readiness probe.
 
+Every tool named above addresses a document by `(connectionId, documentId)` and is offered
+only when a connection exists to name. `AllowInlineContent` adds a separate set that
+carries the document instead of an id - see [Documents with no connection](#documents-with-no-connection).
+
 The schemas are strict. Every field shown in a tool signature is required on the
 wire, including fields that have semantic defaults. Send `fidelity: "content"`,
 `paragraphOffset: 0`, `paragraphLimit: 200`, boolean search flags as `false`,
@@ -164,6 +205,133 @@ connection identity can reach (the intersection of delegated app scopes and
 user access under On-Behalf-Of). `create_document` writes only under the
 filesystem root or configured SharePoint folder and never overwrites a name;
 `remove_document` drops a registration without deleting content.
+
+## Documents with no storage
+
+There are two ways to run without configuring storage, and they are not interchangeable.
+
+**A session connection holds the documents here.** `EphemeralConnectionId` adds a
+connection whose documents live in the server process. The agent addresses them by opaque
+id exactly as it would documents in storage — `inspect_document`, `find_in_document`,
+`preview_plan`, `apply_plan`, `create_document` all work unchanged — and two extra tools
+move bytes across the boundary: `import_document_content` puts a document in,
+`export_document_content` takes the result out.
+
+```json
+{
+  "OfficeAgent": {
+    "EphemeralConnectionId": "session",
+    "AllowCreation": true
+  }
+}
+```
+
+**Inline content carries the document in the call.** `AllowInlineContent` adds
+`create_document_content`, `inspect_document_content` and `edit_document_content`, which
+take the document as base64 and hand the edited document straight back, holding nothing.
+
+Both can be on at once. Which to use is not a matter of taste:
+
+| | Session connection | Inline content |
+| --- | --- | --- |
+| What the agent passes | a short opaque id | the whole document, base64 |
+| Cost of the *n*th edit | unchanged | the whole file again, both ways |
+| Multi-step editing | reliable | **unreliable** — see below |
+| Server holds state | yes, for the session | no |
+| Result reaches the host | `export_document_content` | returned by every call |
+
+**Prefer the session connection whenever more than one edit is coming.** Chaining inline
+edits requires the model to reproduce the document exactly to make the second call, and
+models do not do that reliably. Measured on the same three-step task with the same model:
+
+| | Session connection | Inline content |
+| --- | --- | --- |
+| Result | succeeded | failed at step 2 |
+| Wall clock | 40 s | 722 s |
+| Largest tool input | 444 bytes | 3,076 bytes |
+| Failed calls | 0 | 3 |
+
+The inline run failed because the model reproduced 2,928 characters of base64 with one
+character wrong, then retried the same string twice. A document that arrives altered is
+refused as `invalid-argument` saying so, rather than as an unexplained error — but it
+cannot be repaired from the agent's side, because the agent's copy is the damaged one.
+
+Inline content remains the right tool for a single self-contained call: create a document
+and hand it back, or apply one known edit to content the host already holds.
+
+Session documents are not persisted. They live as long as the server process, are written
+to no storage, and are gone when it stops — export before finishing, or tell the user the
+result was not saved.
+
+### Inline content in detail
+
+The server normally refuses to start without a connection, because every tool it could
+expose would fail on its first call. `AllowInlineContent` is one of the two ways to satisfy
+that requirement: it adds three tools that carry the document itself rather than an id.
+
+It is an ordinary setting, so it can be given either way — as an environment variable:
+
+```bash
+claude mcp add \
+  --env OfficeAgent__AllowInlineContent=true \
+  --transport stdio \
+  officeagent -- officeagent-mcp --stdio
+```
+
+or in [a configuration file](#a-configuration-file):
+
+```json
+{
+  "OfficeAgent": {
+    "AllowInlineContent": true
+  }
+}
+```
+
+```bash
+officeagent-mcp --stdio --config ./officeagent.json
+```
+
+The usual precedence applies: the environment overrides the file, so a deployment that ships
+a file with `AllowInlineContent` on can still turn it off per host with
+`OfficeAgent__AllowInlineContent=false`.
+
+That is the whole configuration. With no connection configured the connection-addressed
+tools are not offered at all - no `inspect_document`, `apply_plan`, `register_document`,
+`create_document`, or `list_connections` - so the agent sees only the three tools that can
+work:
+
+| Tool | Takes | Returns |
+| --- | --- | --- |
+| `create_document_content` | `name`, optional `planJson` | `contentBase64` of a new document, authored by the plan |
+| `inspect_document_content` | `contentBase64` | The same payload as `inspect_document` |
+| `edit_document_content` | `contentBase64`, `planJson`, `preview` | `contentBase64` of the edited document |
+
+The loop is: create or receive base64 → optionally inspect → edit → hand the returned
+`contentBase64` back to the host. Nothing is stored, so the returned document is the only
+copy; the next edit takes the newest base64, and passing an older one silently discards the
+work in between. `contentBase64` is `null` whenever there is nothing to hand back - a
+preview, or a plan that failed - which is how a caller tells the two apart from the payload
+alone. Targets may name text directly (`{ "find": "Acme Corp" }`), so inspecting first is
+optional.
+
+Both modes can be on at once. A host that configures connections *and* sets
+`AllowInlineContent` gets both toolsets, and the agent picks by whether it holds an id or
+bytes.
+
+**What it costs.** These tools put the whole package in the model's context in both
+directions: the document going in, the edited document coming back. That is tokens in
+proportion to file size, and it puts the complete file - not just the text the inspect
+tools already return - in front of the model provider. It is off by default for that
+reason, and a deployment that configured a connection so documents would never travel that
+way should leave it off. Where it earns its place is a host that has no storage to offer:
+documents arriving as chat attachments, a sandbox with no writable root, or a client that
+already holds the bytes.
+
+The change mode still applies. A Word document edited inline defaults to `Tracked`, as any
+connection would; a deck defaults to `Direct`, because the bytes say it is a deck and
+PresentationML has no revision markup to honour `Tracked` with. An explicit
+`"mode": "Tracked"` on a deck is still refused.
 
 ## A complete loop, from any MCP client
 

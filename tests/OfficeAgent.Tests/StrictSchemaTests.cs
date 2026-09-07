@@ -22,8 +22,14 @@ public class StrictSchemaTests
         // Both opt-ins, so this is genuinely the widest surface: with creation off,
         // create_document's schema would never be checked here.
         var tools = new OfficeAgentTools(client)
-            .AsAIFunctions(new OfficeAgentToolsOptions { AllowRegistration = true, AllowCreation = true });
+            .AsAIFunctions(new OfficeAgentToolsOptions
+            {
+                AllowRegistration = true,
+                AllowCreation = true,
+                AllowInlineContent = true
+            });
         Assert.Contains("create_document", tools.Select(t => t.Name));
+        Assert.Contains("edit_document_content", tools.Select(t => t.Name));
 
         Assert.NotEmpty(tools);
         foreach (var tool in tools)

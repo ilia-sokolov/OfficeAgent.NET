@@ -43,6 +43,51 @@ public sealed class OfficeAgentMcpOptions
     /// </summary>
     public bool AllowCreation { get; set; }
 
+    /// <summary>
+    /// Gets or sets whether the inline-content tools are exposed:
+    /// <c>create_document_content</c>, <c>inspect_document_content</c>, and
+    /// <c>edit_document_content</c>, which take the document as base64 and return the
+    /// edited document the same way. They need no connection, so this is what makes the
+    /// server useful with no storage configured at all - for a host whose documents arrive
+    /// as attachments, or one that has nowhere to put a filesystem root.
+    /// </summary>
+    /// <remarks>
+    /// Defaults to <see langword="false"/>. These tools move the whole package through the
+    /// model's context in both directions, which costs tokens in proportion to file size
+    /// and puts the complete file - not just the text the inspect tools already return - in
+    /// front of the model provider. A deployment that configured a connection so documents
+    /// would never travel that way should leave this off; one that turns it on should size
+    /// its documents accordingly.
+    /// </remarks>
+    public bool AllowInlineContent { get; set; }
+
+    /// <summary>
+    /// Gets or sets the id of a session connection whose documents the server holds in
+    /// memory, or empty for none. Setting it - <c>"session"</c> is the conventional value -
+    /// gives the agent a connection it can create documents in and edit by opaque id with
+    /// no storage configured, and adds <c>import_document_content</c> and
+    /// <c>export_document_content</c> to move bytes in and out.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// This is the multi-step counterpart to <see cref="AllowInlineContent"/>. Passing a
+    /// document inline costs the whole file in context each way and requires the model to
+    /// reproduce it exactly to make a second edit - which it does not do reliably beyond a
+    /// couple of kilobytes. Against a session connection the model passes a short id and
+    /// the bytes never leave this process, so a ten-step edit costs no more context than a
+    /// one-step edit.
+    /// </para>
+    /// <para>
+    /// Nothing is persisted. The documents live for the life of the server process; a host
+    /// that needs the result takes it with <c>export_document_content</c> or configures
+    /// real storage. Creating documents in it still requires <see cref="AllowCreation"/>.
+    /// </para>
+    /// </remarks>
+    public string EphemeralConnectionId { get; set; } = string.Empty;
+
+    /// <summary>Gets or sets the total the session connection may hold at once. Defaults to 100 MB.</summary>
+    public long EphemeralMaximumTotalBytes { get; set; } = 100L * 1024 * 1024;
+
     /// <summary>Gets or sets the filesystem connections to expose.</summary>
     public IList<FileSystemConnectionOptions> FileSystemConnections { get; set; } =
         new List<FileSystemConnectionOptions>();

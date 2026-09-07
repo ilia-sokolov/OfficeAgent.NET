@@ -249,16 +249,21 @@ public sealed class OfficeAgentClient
     }
 
     /// <summary>
-    /// Mints the empty package a new document starts from, choosing the format module
-    /// from the requested file name's extension.
+    /// Mints the empty package a new document starts from and returns its bytes, choosing
+    /// the format module from the requested file name's extension. No provider is involved
+    /// and nothing is stored: this is the starting point for a caller that holds its own
+    /// document content, and the first step of the provider-backed
+    /// <see cref="CreateAsync(string, string, DocumentPlan?, CancellationToken)"/>.
     /// </summary>
-    private byte[] CreateBlankDocument(string name, IDocumentProvider provider)
+    /// <param name="name">A bare file name whose extension selects the format, such as <c>report.docx</c>.</param>
+    /// <returns>The bytes of an empty but valid document with at least one addressable anchor.</returns>
+    /// <exception cref="ArgumentException">The name is unusable, or no registered module can create that format.</exception>
+    public byte[] CreateBlank(string name)
     {
         if (string.IsNullOrWhiteSpace(name))
-            throw new DocumentProviderException(
-                ProviderErrorCode.InvalidArgument,
+            throw new ArgumentException(
                 "A document name is required, including its extension (for example 'report.docx').",
-                provider.Provider, provider.ConnectionId, itemId: null);
+                nameof(name));
 
         // Control characters and path separators are refused up front, before the name can
         // reach a log line or an error message: the connection-specific rules run later, at
@@ -266,33 +271,56 @@ public sealed class OfficeAgentClient
         // written to the host's log.
         if (name.Any(character => char.IsControl(character)) ||
             name.IndexOfAny(PortableInvalidDocumentNameChars) >= 0)
-            throw new DocumentProviderException(
-                ProviderErrorCode.InvalidArgument,
+            throw new ArgumentException(
                 "A document name must be a bare file name without path separators, control characters, or other invalid filename characters.",
-                provider.Provider, provider.ConnectionId, itemId: null);
+                nameof(name));
 
         // Surrounding whitespace and a trailing dot are silently stripped by Windows, so a
         // name carrying them would register under one spelling and land on disk under
         // another. Reject them here rather than let the extension lookup fail obscurely.
         if (!string.Equals(name, name.Trim(), StringComparison.Ordinal) ||
             name.EndsWith(".", StringComparison.Ordinal))
-            throw new DocumentProviderException(
-                ProviderErrorCode.InvalidArgument,
+            throw new ArgumentException(
                 $"The document name '{name}' must not begin or end with whitespace or end with a dot.",
-                provider.Provider, provider.ConnectionId, itemId: null);
+                nameof(name));
 
         var extension = Path.GetExtension(name);
         var factory = _blankDocumentFactories.FirstOrDefault(candidate =>
             !string.IsNullOrWhiteSpace(candidate.Extension) &&
             string.Equals(extension, candidate.Extension, StringComparison.OrdinalIgnoreCase));
         if (extension.Length == 0 || factory is null)
-            throw new DocumentProviderException(
-                ProviderErrorCode.InvalidArgument,
+            throw new ArgumentException(
                 $"No registered format module can create a document named '{name}'. " +
                 $"Creatable extensions: {(_blankDocumentFactories.Count == 0 ? "none (register a format module such as AddWordFormat())" : string.Join(", ", _blankDocumentFactories.Select(item => item.Extension)))}.",
-                provider.Provider, provider.ConnectionId, itemId: null);
+                nameof(name));
 
         return factory.CreateBlank();
+    }
+
+    /// <summary>The extensions a registered module can mint a blank document for.</summary>
+    public IReadOnlyList<string> CreatableExtensions =>
+        _blankDocumentFactories
+            .Select(factory => factory.Extension)
+            .Where(extension => !string.IsNullOrWhiteSpace(extension))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToArray();
+
+    /// <summary>
+    /// <see cref="CreateBlank"/> for the provider path, where a rejected name is a provider
+    /// error carrying the connection it was rejected for, not an argument error.
+    /// </summary>
+    private byte[] CreateBlankDocument(string name, IDocumentProvider provider)
+    {
+        try
+        {
+            return CreateBlank(name);
+        }
+        catch (ArgumentException ex)
+        {
+            throw new DocumentProviderException(
+                ProviderErrorCode.InvalidArgument, ex.Message,
+                provider.Provider, provider.ConnectionId, itemId: null);
+        }
     }
 
     private static readonly char[] PortableInvalidDocumentNameChars =
@@ -436,6 +464,24 @@ public sealed class OfficeAgentClient
     public ChangeMode DefaultChangeModeFor(string connectionId) =>
         _providers.DefaultChangeModeFor(connectionId);
 
+    /// <summary>
+    /// The in-memory store behind a connection, or <see langword="null"/> when that
+    /// connection is backed by real storage.
+    /// </summary>
+    /// <remarks>
+    /// An ephemeral connection has no path or URL to name a document by, so content has to
+    /// enter and leave through the store itself. Everything else about it - inspect, find,
+    /// preview, apply - goes through the ordinary provider surface, which is the point:
+    /// the agent works with an opaque id exactly as it would against storage.
+    /// </remarks>
+    public MemoryDocumentProvider? EphemeralConnection(string connectionId) =>
+        string.IsNullOrWhiteSpace(connectionId)
+            ? null
+            : _providers.All
+                .OfType<MemoryDocumentProvider>()
+                .FirstOrDefault(provider =>
+                    string.Equals(provider.ConnectionId, connectionId, StringComparison.Ordinal));
+
     // ── Internal helpers ──────────────────────────────────────────────────────
 
     private DocumentReference ReferenceFor(string connectionId, string documentId)
@@ -502,6 +548,10 @@ public sealed class OfficeAgentClient
             if (op is InsertImageOp image && !string.IsNullOrEmpty(image.ImageDocumentId))
             {
                 var bytes = await OpenImageBytesAsync(image.ImageConnectionId!, image.ImageDocumentId!, cancellationToken).ConfigureAwait(false);
+                // Every field is carried across, the change mode included: this rewrite
+                // exists to substitute the bytes, and an operation that came back with a
+                // different mode than it was sent with would be a redline the caller did
+                // not ask for - or the loss of one they did.
                 rewritten.Add(new InsertImageOp
                 {
                     Target = image.Target,
@@ -510,7 +560,8 @@ public sealed class OfficeAgentClient
                     WidthPx = image.WidthPx,
                     HeightPx = image.HeightPx,
                     Position = image.Position,
-                    AltText = image.AltText
+                    AltText = image.AltText,
+                    Mode = image.Mode
                 });
             }
             else if (op is BackgroundImageOp background && !string.IsNullOrEmpty(background.ImageDocumentId))

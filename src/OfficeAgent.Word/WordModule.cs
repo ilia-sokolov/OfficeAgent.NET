@@ -12,7 +12,7 @@ namespace OfficeAgent.Word;
 /// Provides Word inspection, search, and supported plan operation handling over
 /// WordprocessingML across the body, headers, footers, footnotes, and endnotes.
 /// </summary>
-public sealed class WordModule : IFormatModule, IBlankDocumentFactory
+public sealed class WordModule : IFormatModule, IBlankDocumentFactory, IPlanValidatingModule
 {
     public DocFormat Format => DocFormat.Word;
 
@@ -50,6 +50,7 @@ public sealed class WordModule : IFormatModule, IBlankDocumentFactory
             new RemoveTableColumnsHandler(clock),
             new CopyStylesHandler(),
             new ClearStylesHandler(),
+            new DefineStyleHandler(),
             new InsertImageHandler(clock),
             new RemoveImageHandler(clock),
             new WordHeaderFooterHandler(),
@@ -171,6 +172,78 @@ public sealed class WordModule : IFormatModule, IBlankDocumentFactory
         Type = StyleValues.Table,
         StyleId = "TableGrid"
     };
+
+    /// <summary>
+    /// Checks the style inheritance the plan will leave behind.
+    /// </summary>
+    /// <remarks>
+    /// A single handler cannot do this. Operations are validated against the document as it
+    /// stands, so a plan that defines a base style and something derived from it would be
+    /// rejected for naming a parent that does not exist yet - the parent arrives one
+    /// operation later. Reading the whole plan first is what lets both be written together.
+    /// </remarks>
+    public IEnumerable<ValidationError> ValidatePlan(DocumentPlan plan, ApplyContext context)
+    {
+        var definitions = plan.Operations.OfType<DefineStyleOp>().ToList();
+        if (definitions.Count == 0) return Array.Empty<ValidationError>();
+
+        // Everything the document already defines, then everything the plan adds, so the
+        // graph is the one that will exist after the plan runs rather than before it.
+        var parents = new Dictionary<string, string?>(StringComparer.Ordinal);
+        var styles = WordModel.Doc(context.Package).MainDocumentPart?.StyleDefinitionsPart?.Styles;
+        if (styles is not null)
+        {
+            foreach (var style in styles.Elements<Style>())
+                if (style.StyleId?.Value is { Length: > 0 } id)
+                    parents[id] = style.GetFirstChild<BasedOn>()?.Val?.Value;
+        }
+
+        foreach (var definition in definitions)
+        {
+            if (string.IsNullOrWhiteSpace(definition.StyleId)) continue;
+            parents[definition.StyleId] = definition.BasedOn is { Length: > 0 } parent ? parent : null;
+        }
+
+        var errors = new List<ValidationError>();
+        foreach (var definition in definitions)
+        {
+            if (definition.BasedOn is not { Length: > 0 } basedOn) continue;
+            if (string.IsNullOrWhiteSpace(definition.StyleId)) continue;
+
+            if (!parents.ContainsKey(basedOn))
+            {
+                errors.Add(new ValidationError(
+                    ValidationErrorCodes.InvalidOperation,
+                    $"Style '{definition.StyleId}' is based on '{basedOn}', which the document does not " +
+                    "define and this plan does not add.",
+                    definition.Target));
+                continue;
+            }
+
+            if (InheritanceCycle(parents, definition.StyleId) is { } cycle)
+                errors.Add(new ValidationError(
+                    ValidationErrorCodes.InvalidOperation,
+                    $"Style '{definition.StyleId}' would inherit from itself: {cycle}.",
+                    definition.Target));
+        }
+
+        return errors;
+    }
+
+    private static string? InheritanceCycle(IReadOnlyDictionary<string, string?> parents, string start)
+    {
+        var seen = new HashSet<string>(StringComparer.Ordinal);
+        var path = new List<string>();
+        var current = start;
+
+        while (true)
+        {
+            path.Add(current);
+            if (!seen.Add(current)) return string.Join(" -> ", path);
+            if (!parents.TryGetValue(current, out var parent) || parent is null) return null;
+            current = parent;
+        }
+    }
 
     public IReadOnlyDictionary<string, string> Stabilize(IOpenXmlPackage package) =>
         WordModel.Stabilize(package);

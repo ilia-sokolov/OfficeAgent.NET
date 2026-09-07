@@ -356,22 +356,30 @@ internal sealed class FormatHandler : IOperationHandler
             marker.RecordRunPropertiesChange(run, before);
     }
 
-    private static void ApplyRunPropertiesCore(Run run, FormatOp op)
-    {
-        var rPr = run.RunProperties ??= new RunProperties();
+    private static void ApplyRunPropertiesCore(Run run, FormatOp op) =>
+        WriteRunProperties(run.RunProperties ??= new RunProperties(), op);
 
+    /// <summary>
+    /// Writes the character properties into a <c>w:rPr</c>-shaped container. Shared with the
+    /// style writer, whose container is <see cref="StyleRunProperties"/> rather than
+    /// <see cref="RunProperties"/> and takes the same children in the same order - except
+    /// <c>w:highlight</c>, which a style cannot carry and which the style handler refuses
+    /// before reaching here.
+    /// </summary>
+    internal static void WriteRunProperties(OpenXmlCompositeElement properties, ITextFormat op)
+    {
         if (op.FontFamily is { Length: > 0 } font)
-            ReplaceChild(rPr, new RunFonts { Ascii = font, HighAnsi = font, ComplexScript = font });
+            ReplaceChild(properties, new RunFonts { Ascii = font, HighAnsi = font, ComplexScript = font });
         if (op.SizeHalfPoints is int sz)
         {
-            ReplaceChild(rPr, new FontSize { Val = sz.ToString() });
-            ReplaceChild(rPr, new FontSizeComplexScript { Val = sz.ToString() });
+            ReplaceChild(properties, new FontSize { Val = sz.ToString() });
+            ReplaceChild(properties, new FontSizeComplexScript { Val = sz.ToString() });
         }
-        if (op.Bold == true) ReplaceChild(rPr, new Bold());
-        if (op.Italic == true) ReplaceChild(rPr, new Italic());
-        if (op.Underline == true) ReplaceChild(rPr, new Underline { Val = UnderlineValues.Single });
-        if (op.Highlight is not null) ReplaceChild(rPr, new Highlight { Val = ParseHighlight(op.Highlight) });
-        if (op.Color is not null) ReplaceChild(rPr, new WColor { Val = op.Color });
+        if (op.Bold == true) ReplaceChild(properties, new Bold());
+        if (op.Italic == true) ReplaceChild(properties, new Italic());
+        if (op.Underline == true) ReplaceChild(properties, new Underline { Val = UnderlineValues.Single });
+        if (op.Highlight is not null) ReplaceChild(properties, new Highlight { Val = ParseHighlight(op.Highlight) });
+        if (op.Color is not null) ReplaceChild(properties, new WColor { Val = op.Color });
     }
 
     private static void ApplyParagraphProperties(
@@ -413,6 +421,16 @@ internal sealed class FormatHandler : IOperationHandler
             else pPr.GetFirstChild<PageBreakBefore>()?.Remove();
         }
 
+        WriteParagraphFormatting(pPr, op);
+    }
+
+    /// <summary>
+    /// Writes the alignment, indent, spacing and border properties into a <c>w:pPr</c>-shaped
+    /// container. Shared with the style writer, whose container is
+    /// <see cref="StyleParagraphProperties"/>; the children and their order are the same.
+    /// </summary>
+    internal static void WriteParagraphFormatting(OpenXmlCompositeElement pPr, ITextFormat op)
+    {
         if (op.Alignment is not null)
             ReplaceChild(pPr, new Justification { Val = ParseAlignment(op.Alignment) });
 
@@ -462,7 +480,7 @@ internal sealed class FormatHandler : IOperationHandler
 
     // ── Borders ──────────────────────────────────────────────────────────
 
-    private static bool HasBorder(FormatOp op) =>
+    private static bool HasBorder(ITextFormat op) =>
         op.BorderStyle is not null || op.BorderSizeEighths is not null ||
         op.BorderColor is not null || op.BorderEdges is not null;
 
@@ -500,7 +518,7 @@ internal sealed class FormatHandler : IOperationHandler
     /// them: top, left, bottom, right, insideH, insideV. Any other order and Word offers
     /// to repair the document.
     /// </summary>
-    private static IEnumerable<OpenXmlElement> BorderEdgesOf(FormatOp op, bool inside)
+    private static IEnumerable<OpenXmlElement> BorderEdgesOf(ITextFormat op, bool inside)
     {
         var style = ParseBorderStyle(op.BorderStyle);
         var size = (uint)(op.BorderSizeEighths ?? 4);
@@ -517,7 +535,7 @@ internal sealed class FormatHandler : IOperationHandler
         if (wanted.Contains("insideV")) yield return new InsideVerticalBorder { Val = style, Size = size, Color = color };
     }
 
-    private static ParagraphBorders BuildParagraphBorders(FormatOp op) =>
+    private static ParagraphBorders BuildParagraphBorders(ITextFormat op) =>
         new(BorderEdgesOf(op, inside: false).ToArray());
 
     private static TableBorders BuildTableBorders(FormatOp op) =>
@@ -666,6 +684,12 @@ internal sealed class FormatHandler : IOperationHandler
     {
         RunProperties => RunPropertyOrder,
         ParagraphProperties => ParagraphPropertyOrder,
+
+        // A style's property containers are different classes, but they declare their
+        // children in the same order, so they answer to the same tables. Leaving them out
+        // would make the style writer the one caller that appends blindly.
+        StyleRunProperties => RunPropertyOrder,
+        StyleParagraphProperties => ParagraphPropertyOrder,
         TableProperties => TablePropertyOrder,
         TableCellProperties => TableCellPropertyOrder,
         _ => Array.Empty<Type>()
@@ -706,7 +730,7 @@ internal sealed class FormatHandler : IOperationHandler
     /// writer cannot drift from this one - the two disagreeing is exactly the bug this
     /// order exists to prevent.
     /// </summary>
-    internal static void PlaceParagraphProperty(ParagraphProperties properties, OpenXmlElement child)
+    internal static void PlaceParagraphProperty(OpenXmlCompositeElement properties, OpenXmlElement child)
     {
         var rank = Rank(ParagraphPropertyOrder, child);
         if (rank < 0)

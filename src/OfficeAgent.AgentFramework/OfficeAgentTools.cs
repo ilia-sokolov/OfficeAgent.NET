@@ -36,6 +36,51 @@ public sealed class OfficeAgentToolsOptions
     /// only - registration and editing are unchanged.
     /// </summary>
     public bool AllowCreation { get; init; }
+
+    /// <summary>
+    /// Gets whether the inline-content tools are exposed: <c>create_document_content</c>,
+    /// <c>inspect_document_content</c>, and <c>edit_document_content</c>, which take the
+    /// document as base64 and hand the edited document straight back. They need no
+    /// provider connection at all, which is the point - a host with no storage to offer,
+    /// or one whose documents arrive as attachments, can still create and edit.
+    /// </summary>
+    /// <remarks>
+    /// The default is <see langword="false"/>, and deliberately so. These tools move the
+    /// whole package through the model's context in both directions: the document is
+    /// spelled out in the request, the edited document in the response. That costs tokens
+    /// in proportion to file size and puts the complete file - not just the text the
+    /// inspect tools already return - in front of the model provider. A host that
+    /// configured a storage connection precisely so that documents never travel that way
+    /// should leave this off.
+    /// </remarks>
+    public bool AllowInlineContent { get; init; }
+
+    /// <summary>
+    /// Gets whether the tools that address documents by <c>(connectionId, documentId)</c>
+    /// are exposed at all - the four core tools, and the registration and creation tools
+    /// the two options above gate. The default is <see langword="true"/>.
+    /// </summary>
+    /// <remarks>
+    /// A host with no provider connections configured sets this to false, so an agent is
+    /// not handed <c>inspect_document</c> and friends when there is no connection any call
+    /// to them could name. The same reasoning as the plan's verb map: a tool that can only
+    /// fail is worse than no tool, because the agent spends a turn discovering that.
+    /// </remarks>
+    public bool AllowConnectionAddressing { get; init; } = true;
+
+    /// <summary>
+    /// Gets whether <c>import_document_content</c> and <c>export_document_content</c> are
+    /// exposed: the two tools that move bytes into and out of a connection whose documents
+    /// this process holds for the session.
+    /// </summary>
+    /// <remarks>
+    /// They exist because an ephemeral connection has no path or URL to name a document
+    /// by, so content has to enter and leave some other way. Everything between those two
+    /// points is the ordinary connection-addressed surface, working on a short opaque id -
+    /// which is what makes multi-step editing reliable, where passing the whole document
+    /// back and forth is not.
+    /// </remarks>
+    public bool AllowEphemeralDocuments { get; init; }
 }
 
 /// <summary>
@@ -83,14 +128,14 @@ public sealed class OfficeAgentTools
         You are editing Microsoft Office documents through the OfficeAgent tools - a Word document (.docx) or a PowerPoint deck (.pptx). inspect_document reports which: format "Word" or "PowerPoint". A few rules below differ by format, and each says so.
 
         Document addressing
-        - Storage connections are host-configured and so is each document's registration. The host gives you an OPAQUE, provider-assigned documentId for every document you are allowed to work with; all document tools address it as (connectionId, documentId). Never invent a documentId, never pass a filename or path as one, and never ask the user to send raw file bytes through this conversation.
+        - Storage connections are host-configured and so is each document's registration. The host gives you an OPAQUE, provider-assigned documentId for every document you are allowed to work with; the connection-addressed document tools address it as (connectionId, documentId). Never invent a documentId, and never pass a filename or path as one. Do not ask the user to paste file bytes into the conversation; if a tool whose name ends in _content is available, that tool - and only that tool - takes the document as base64, and its own section below says how.
         - The connectionId and documentId are already in your instructions or in the conversation context. NEVER ask the user for them - the user does not know or manage these values. If a request mentions "the document", it means the current document you were given; start working with it immediately.
         - apply_plan returns outputDocumentId, outputName, and outputContentType for the saved revision. Use outputDocumentId as the next call's documentId if you keep editing. When the work is complete, tell the user the document is ready; the host retrieves its bytes and presents the download or attachment. Do not place document base64 in the final response.
         - Saving edits the document in place (saveMode "Replace", the default), so outputDocumentId is the same id you passed in. If the user wants the original kept, pass saveMode "NewVersion" to write a sibling revision instead, and tell them where the result landed.
 
         Plan shape, anchors, safety loop
         - Plan body is { "snapshot": { "eTag": "<snapshot from inspect_document>" }, "operations": [ ... ] }. Copy the scalar snapshot string returned by inspect_document into snapshot.eTag to detect drift in Word body/header/footer/footnote/endnote XML or PowerPoint slide/notes XML. It does not cover properties, comments, sections, media/image bytes, masters, or layouts; their anchors and provider version checks still apply. Omit snapshot only deliberately. Do not set contractVersion.
-        - Available operations (the JSON shape of each is in the preview_plan description): changeText, insert (a paragraph), insertTable, removeTable, format, fill, comment, headerFooter, insertTableRows, removeTableRows, insertTableColumns, removeTableColumns, insertImage, removeImage, backgroundImage, copyStyles, clearStyles; Word also supports setProperty, revision, pageSetup, insertBreak and note; decks also support insertSlide, removeSlide, moveSlide, duplicateSlide, insertShape, removeShape, section, insertMedia, transition, and animate. headerFooter has format-specific fields described below. Create a table with insertTable; delete one with removeTable. These are plan operations inside preview_plan/apply_plan, not separate tools.
+        - Available operations (the JSON shape of each is in the preview_plan description): changeText, insert (a paragraph), insertTable, removeTable, format, fill, comment, headerFooter, insertTableRows, removeTableRows, insertTableColumns, removeTableColumns, insertImage, removeImage, backgroundImage, copyStyles, clearStyles; Word also supports defineStyle, setProperty, revision, pageSetup, insertBreak and note; decks also support insertSlide, removeSlide, moveSlide, duplicateSlide, insertShape, removeShape, section, insertMedia, transition, and animate. headerFooter has format-specific fields described below. Create a table with insertTable; delete one with removeTable. These are plan operations inside preview_plan/apply_plan, not separate tools.
         - Call inspect_document or find_in_document before building a plan to obtain anchor ids; never invent paragraph ids, occurrence numbers, content-control tags, or node paths.
         - Tables and images only appear in inspect_document.nodes, never in the paragraphs list. Copy the path from there rather than composing one: Word uses "table#N"/"image#N", a deck uses "table#{slideId}/{shapeId}"/"image#{slideId}/{shapeId}". To recognise table content, look for paragraphs whose `in` field matches a table path.
         - Preview before you apply. If preview reports stale-snapshot, re-inspect and rebuild. If preview reports expect-mismatch, the document drifted - re-inspect/find that operation.
@@ -108,7 +153,7 @@ public sealed class OfficeAgentTools
         Working with a PowerPoint deck
         - Each slide is one outline entry. Paragraph ids read "slide{slideId}/shape{shapeId}/p{n}", with "notes/..." for speaker notes and ".../r{row}c{col}/..." inside a table cell.
         - A slide has no text flow, so insertTable, insertImage, and an added comment target the SLIDE - { "kind": "slide", "path": "slide#256" } - not a paragraph. Resolve a comment with { "op": "comment", "action": "Resolve", "target": { "kind": "comment", "path": "comment#256/{id}" } }.
-        - Only these verbs work on a deck: changeText, insert, format, fill, copyStyles, clearStyles, insertTable, removeTable, insertTableRows, removeTableRows, insertTableColumns, removeTableColumns, insertImage, removeImage, backgroundImage, insertShape, removeShape, insertMedia, comment, section, headerFooter, transition, animate, insertSlide, removeSlide, moveSlide, duplicateSlide. Only setProperty, revision, pageSetup, insertBreak, note and the Word-only anchors return "unsupported-operation".
+        - Only these verbs work on a deck: changeText, insert, format, fill, copyStyles, clearStyles, insertTable, removeTable, insertTableRows, removeTableRows, insertTableColumns, removeTableColumns, insertImage, removeImage, backgroundImage, insertShape, removeShape, insertMedia, comment, section, headerFooter, transition, animate, insertSlide, removeSlide, moveSlide, duplicateSlide. Only defineStyle, setProperty, revision, pageSetup, insertBreak, note and the Word-only anchors return "unsupported-operation".
         - Slide transitions: { "op": "transition", "effect": "push", "direction": "up", "durationMs": 700 }. No target applies it to every slide, which is PowerPoint's "Apply To All"; a slide target sets just that one. effect "none" removes it. Set advanceAfterMs for a self-running deck and advanceOnClick:false to stop clicks skipping ahead.
         - Shape animations target a SHAPE node: { "op": "animate", "target": { "kind": "shape", "path": "shape#257/2" }, "effect": "fade", "kind": "Entrance", "trigger": "OnClick", "durationMs": 600 }. trigger is OnClick, WithPrevious or AfterPrevious and decides where the effect lands in the slide's sequence - a new click step, alongside the previous effect, or straight after it. Effects play in the order you send the operations. effect "none" removes that shape's animations.
         - Available animations: appear, fade, wipe, blinds, checkerboard, circle, diamond, dissolve, plus, randomBar, split, wedge, wheel, box. Fly-in, zoom, grow and motion paths are NOT available - they need interpolated properties rather than a filter - and are refused rather than approximated. Say so plainly if the user asks for one.
@@ -158,6 +203,37 @@ public sealed class OfficeAgentTools
         - Plan-validation errors mean nothing was written. A provider or cancellation error can occur after storage accepted the file, so do not retry the same name; report the possibly unregistered file name to the host/operator for recovery.
         """;
 
+    /// <summary>
+    /// System-prompt guidance to append when the inline-content tools are exposed. It
+    /// carries the exception to the document-addressing rules above, because those rules
+    /// assume every document has a connection behind it and these tools have none.
+    /// </summary>
+    public const string InlineContentPromptGuidance = """
+
+        Working on documents passed in as content
+        - create_document_content(name, planJson), inspect_document_content(contentBase64), and edit_document_content(contentBase64, planJson) work on a document you hold the bytes of. They take NO connectionId and NO documentId, and nothing is stored: the base64 they return is the only copy of the result.
+        - This is the exception to "never put document bytes in the conversation". It applies to THESE tools only: when a connection-addressed tool would do, use it instead, because it does not spend context on the file.
+        - The loop is: create_document_content or the caller's own base64 -> (optional) inspect_document_content for anchors -> edit_document_content -> hand the returned contentBase64 to the host. Keep the newest contentBase64 and pass that one to the next edit; an earlier one is a stale document and editing it silently discards the work in between.
+        - Batch the work. Every call spends the whole file twice - once going in, once coming back - so put the operations you know about into one plan rather than one call per edit.
+        - Targets may name text directly - { "find": "Acme Corp" } - so inspecting first is optional. Text matching more than once fails with "ambiguous-anchor" and lists the candidates; re-issue with { "find": "Acme Corp", "match": 2 } (zero-based). On a large document prefer fidelity "outline" or "structure" when you do inspect.
+        - preview=true on edit_document_content validates a plan and returns contentBase64 null. Use it when a plan is speculative; on a plan you are confident of, skip it, because a preview costs another full copy of the file.
+        - contentBase64 comes back null whenever there is no document to hand back - a preview, or a plan that failed. Null means nothing was produced: report the errors rather than looking for a document.
+        - Tell the user the document is ready and let the host deliver it. Do not paste contentBase64 into your reply to the user; it is for the host, not for reading.
+        """;
+
+    /// <summary>
+    /// System-prompt guidance to append when a session connection is configured.
+    /// </summary>
+    public const string EphemeralPromptGuidance = """
+
+        Session documents (a connection whose documents this server holds for you)
+        - A session connection behaves like any other: create_document makes a document in it, and inspect_document / find_in_document / preview_plan / apply_plan address it by (connectionId, documentId). The difference is that the bytes never leave the server, so the id is all you ever pass.
+        - import_document_content(connectionId, name, contentBase64) puts a document you were given into the session and returns its documentId. export_document_content(connectionId, documentId) hands the finished bytes back for the host to save.
+        - PREFER this over the _content tools whenever more than one edit is coming, and whenever the document is more than a page or two. Passing a document back as base64 means reproducing every character of it exactly; on anything sizeable that fails, and it fails as content that is no longer a readable package rather than as an obvious mistake. An id cannot be got wrong.
+        - Import once, edit as many times as you need, export once. Do not export between edits: each export spends the whole document in context for nothing.
+        - Documents in a session connection are gone when the server stops, and are written to no storage. Export before you finish, or tell the user the result was not saved anywhere.
+        """;
+
     /// <summary>Returns the four core AIFunctions the host registers with its agent.</summary>
     public AIFunction[] AsAIFunctions() => AsAIFunctions(new OfficeAgentToolsOptions());
 
@@ -172,8 +248,11 @@ public sealed class OfficeAgentTools
     public AIFunction[] AsAIFunctions(OfficeAgentToolsOptions options)
     {
         if (options is null) throw new ArgumentNullException(nameof(options));
-        var functions = new List<AIFunction>(CoreFunctions());
-        if (options.AllowRegistration)
+
+        var functions = new List<AIFunction>();
+        if (options.AllowConnectionAddressing) functions.AddRange(CoreFunctions());
+
+        if (options.AllowRegistration && options.AllowConnectionAddressing)
         {
             functions.Add(AIFunctionFactory.Create(RegisterDocument, Opts(
                 "register_document",
@@ -201,7 +280,7 @@ public sealed class OfficeAgentTools
                 "saveMode and newName behave as in apply_plan. Nothing is written unless every operation validates. " +
                 "Returns the apply_plan shape plus sourceDocumentId - the id of the document that was opened, usable for follow-up calls even when the edit failed.")));
         }
-        if (options.AllowCreation)
+        if (options.AllowCreation && options.AllowConnectionAddressing)
         {
             functions.Add(AIFunctionFactory.Create(CreateDocument, Opts(
                 "create_document",
@@ -212,21 +291,64 @@ public sealed class OfficeAgentTools
                 "Plan-validation errors guarantee no write. Provider and cancellation errors may occur after storage accepted the file, so do not retry the same name; report the possibly unregistered name to the host for recovery. " +
                 "Returns {isValid, committed, sourceDocumentId, outputConnectionId, outputDocumentId, outputVersion, outputName, outputContentType, changes, errors}; non-applicable values are null.")));
         }
+        if (options.AllowInlineContent)
+        {
+            functions.Add(AIFunctionFactory.Create(CreateDocumentContent, Opts(
+                "create_document_content",
+                "Create a new document from nothing and get its bytes back, with no storage connection involved. " +
+                "name is a bare file name whose extension picks the format: '.docx' makes a Word document, '.pptx' makes a PowerPoint deck. " +
+                "planJson is optional and authors the document before it is returned; several operations in one call turn nothing into a finished document. " +
+                "Pass planJson \"\" for an empty document. The starting anchor differs by format: a Word document has one empty paragraph at { \"paraId\": \"auto-0000\", \"expect\": \"\" }; a deck has one empty title placeholder at { \"paraId\": \"slide256/shape2/p0\", \"expect\": \"\" }. " +
+                "Returns {isValid, committed, name, contentBase64, contentBytes, changes, errors}. contentBase64 is the finished document - hand it to the host to save, or pass it straight back to edit_document_content to keep working. It is null when the plan failed, and then nothing was created.\n\n" +
+                PlanOperations)));
+            functions.Add(AIFunctionFactory.Create(InspectDocumentContent, Opts(
+                "inspect_document_content",
+                "Inspect a document supplied inline as base64, with no storage connection involved. " +
+                "Returns exactly what inspect_document returns - outline, paragraphs, content controls, nodes, styles, and a snapshot etag - for a document you hold the bytes of rather than one the host registered. " +
+                "Use paragraphOffset/paragraphLimit to page; fidelity='outline'|'structure'|'content' to control payload size. " +
+                "Prefer fidelity 'outline' or 'structure' on a large document: the bytes already cost you once on the way in.")));
+            functions.Add(AIFunctionFactory.Create(EditDocumentContent, Opts(
+                "edit_document_content",
+                "Edit a document supplied inline as base64 and get the edited document back, with no storage connection involved. " +
+                "planJson is an operations array [ … ] or { \"operations\": [ … ] }.\n" +
+                "Targets may name text directly instead of a paragraph id, so inspecting first is optional:\n" +
+                "{ \"op\": \"changeText\", \"target\": { \"find\": \"Acme Corp\" }, \"with\": \"Globex Inc.\" }\n" +
+                "If that text matches more than once the call fails with 'ambiguous-anchor' and lists each candidate; re-issue with { \"find\": \"Acme Corp\", \"match\": 2 } (zero-based) or use more surrounding text. Anchors from inspect_document_content work here too, and can be mixed in the same plan. " +
+                "Set preview=true to validate without producing a document - the report comes back with contentBase64 null and nothing is applied. " +
+                "Returns {isValid, committed, name, contentBase64, contentBytes, changes, errors}. contentBase64 carries the edited document and is null on a preview or a failure. " +
+                "Nothing is stored anywhere: the returned document is the only copy, so pass it on or hand it to the host before dropping it. " +
+                "Pass back the contentBase64 you were given, complete and unchanged - content that arrives altered or truncated is refused as invalid-argument, because it is no longer a readable package.\n\n" +
+                PlanOperations)));
+        }
+        if (options.AllowEphemeralDocuments)
+        {
+            functions.Add(AIFunctionFactory.Create(ImportDocumentContent, Opts(
+                "import_document_content",
+                "Put a document you hold the bytes of into a session connection and get back an opaque documentId. " +
+                "From then on use that id with the ordinary document tools - inspect_document, find_in_document, preview_plan, apply_plan - and never send the bytes again. " +
+                "Prefer this over edit_document_content whenever more than one edit is coming: passing a document back as base64 requires reproducing it exactly, and a long one will not survive that. " +
+                "The document is held by the server for this session only and is not written to any storage. " +
+                "Returns {connectionId, documentId, name, contentType, version}.")));
+            functions.Add(AIFunctionFactory.Create(ExportDocumentContent, Opts(
+                "export_document_content",
+                "Return the current bytes of a document held in a session connection, as base64, so the host can save or deliver it. " +
+                "Do this once, at the end - each call spends the whole document in context. Works only on session connections; a document in real storage is already saved where it belongs. " +
+                "Returns {connectionId, documentId, name, contentType, contentBytes, contentBase64}.")));
+        }
         return functions.ToArray();
     }
 
-    private AIFunction[] CoreFunctions() => new[]
-    {
-        AIFunctionFactory.Create(InspectDocument, Opts(
-            "inspect_document",
-            "Inspect a document by (connectionId, documentId) - a Word document or a PowerPoint deck. Returns outline (headings, or one entry per slide), paragraphs (with their `in` containment - a table path in Word, a slide's shape or table cell in a deck), content controls, format-specific nodes (including tables/images/properties/revisions/comments/notes in Word and slides/shapes/tables/images/comments/media/sections in a deck), styles, and a snapshot etag for drift detection. Copy node paths from this result. Use paragraphOffset/paragraphLimit to page; fidelity='outline'|'structure'|'content' to control payload size.")),
-        AIFunctionFactory.Create(FindInDocument, Opts(
-            "find_in_document",
-            "Find text in a document by (connectionId, documentId) - a Word document or a PowerPoint deck, including slide notes and table cells. Returns content-verified anchors (paragraphId + expected + occurrence) usable as plan targets. Each hit also carries its source location for Word: 'body', 'header', 'footer', 'footnote', or 'endnote' (null in a deck), so identical text in different hosts can be told apart before a plan targets one.")),
-        AIFunctionFactory.Create(PreviewPlan, Opts(
-            "preview_plan",
-            "Dry-run a DocumentPlan JSON against (connectionId, documentId). Returns {isValid, committed, sourceDocumentId, outputConnectionId, outputDocumentId, outputVersion, outputName, outputContentType, changes, errors}; the output fields are null and committed is false. " +
-            "Plan shape: { \"snapshot\": { \"eTag\": \"<snapshot string from inspect_document>\" }, \"operations\": [ ... ] }. The snapshot detects drift in Word text-host XML or PowerPoint slide/notes XML; other parts rely on anchors and provider version checks. Omit it only intentionally. Do not set contractVersion. Each operation is one object. Concrete examples:\n\n" +
+    /// <summary>
+    /// The operation vocabulary, shared by every tool that accepts a plan.
+    /// </summary>
+    /// <remarks>
+    /// Stated once because the tool that carries it is not always present. An
+    /// inline-content deployment has no preview_plan to refer an agent to, and an agent
+    /// that cannot see an operation's shape invents one - which is how a plan ends up
+    /// with an insert whose text never arrives.
+    /// </remarks>
+    public const string PlanOperations =
+        "Each operation is one object. Concrete examples:\n\n" +
             "// Replace text:\n" +
             "{ \"op\": \"changeText\", \"target\": { \"paraId\": \"w14:...\", \"expect\": \"Acme Corp\", \"occurrence\": 0 }, \"with\": \"Globex Inc.\", \"mode\": \"Tracked\" }\n\n" +
             "// Unified formatting (paragraph/run/table/row/cell/image):\n" +
@@ -246,6 +368,15 @@ public sealed class OfficeAgentTools
             "{ \"op\": \"comment\", \"target\": { \"kind\": \"comment\", \"path\": \"comment#1\" }, \"action\": \"Reply\", \"text\": \"Forty-five, per the MSA.\" }\n" +
             "{ \"op\": \"comment\", \"target\": { \"kind\": \"comment\", \"path\": \"comment#1\" }, \"action\": \"Resolve\" }\n" +
             "{ \"op\": \"comment\", \"target\": { \"kind\": \"comment\", \"path\": \"comment#1\" }, \"action\": \"Remove\" }\n\n" +
+            "// Define a style once instead of repeating direct formatting on every paragraph. Word only.\n" +
+            "// Define it first, then apply it with format's styleId - both can sit in the same plan:\n" +
+            "{ \"op\": \"defineStyle\", \"styleId\": \"Quote\", \"name\": \"Pull Quote\", \"basedOn\": \"Normal\", \"next\": \"Normal\",\n" +
+            "  \"fontFamily\": \"Georgia\", \"sizeHalfPoints\": 24, \"italic\": true, \"color\": \"444444\",\n" +
+            "  \"alignment\": \"center\", \"indentLeftTwips\": 720, \"spacingBeforeTwips\": 240 }\n" +
+            "{ \"op\": \"format\", \"target\": { \"paraId\": \"w14:...\", \"expect\": \"\" }, \"styleId\": \"Quote\" }\n" +
+            "// type is paragraph (default), character or table. outlineLevel 1-9 puts a heading in the outline.\n" +
+            "// Defining a style that exists updates it; properties you leave out keep their values. Styles are\n" +
+            "// never deleted. A style cannot carry a highlight - w:highlight belongs to a run, so use color here.\n\n" +
             "// Word page geometry, breaks, and notes. All measurements are twips (1440 to the inch). Word only:\n" +
             "{ \"op\": \"pageSetup\", \"paperSize\": \"A4\", \"orientation\": \"Landscape\", \"marginTopTwips\": 720, \"marginLeftTwips\": 1080 }\n" +
             "{ \"op\": \"insertBreak\", \"target\": { \"paraId\": \"w14:...\", \"expect\": \"...\" }, \"kind\": \"Page\", \"position\": \"After\" }\n" +
@@ -264,7 +395,21 @@ public sealed class OfficeAgentTools
             "{ \"op\": \"removeImage\", \"target\": { \"kind\": \"image\", \"path\": \"image#0\" } }\n" +
             "{ \"op\": \"backgroundImage\", \"base64Bytes\": \"iVBORw0KGgo...\", \"imageType\": \"png\", \"opacity\": 0.2 }\n" +
             "{ \"op\": \"backgroundImage\", \"target\": { \"kind\": \"slide\", \"path\": \"slide#256\" }, \"base64Bytes\": \"iVBORw0KGgo...\", \"opacity\": 0.15 }\n" +
-            "{ \"op\": \"headerFooter\", \"header\": \"Northwind Traders\", \"footer\": \"Confidential\", \"showPageNumber\": true, \"alignment\": \"edges\", \"differentFirstPage\": true }")),
+            "{ \"op\": \"headerFooter\", \"header\": \"Northwind Traders\", \"footer\": \"Confidential\", \"showPageNumber\": true, \"alignment\": \"edges\", \"differentFirstPage\": true }";
+
+    private AIFunction[] CoreFunctions() => new[]
+    {
+        AIFunctionFactory.Create(InspectDocument, Opts(
+            "inspect_document",
+            "Inspect a document by (connectionId, documentId) - a Word document or a PowerPoint deck. Returns outline (headings, or one entry per slide), paragraphs (with their `in` containment - a table path in Word, a slide's shape or table cell in a deck), content controls, format-specific nodes (including tables/images/properties/revisions/comments/notes in Word and slides/shapes/tables/images/comments/media/sections in a deck), styles, and a snapshot etag for drift detection. Copy node paths from this result. Use paragraphOffset/paragraphLimit to page; fidelity='outline'|'structure'|'content' to control payload size.")),
+        AIFunctionFactory.Create(FindInDocument, Opts(
+            "find_in_document",
+            "Find text in a document by (connectionId, documentId) - a Word document or a PowerPoint deck, including slide notes and table cells. Returns content-verified anchors (paragraphId + expected + occurrence) usable as plan targets. Each hit also carries its source location for Word: 'body', 'header', 'footer', 'footnote', or 'endnote' (null in a deck), so identical text in different hosts can be told apart before a plan targets one.")),
+        AIFunctionFactory.Create(PreviewPlan, Opts(
+            "preview_plan",
+            "Dry-run a DocumentPlan JSON against (connectionId, documentId). Returns {isValid, committed, sourceDocumentId, outputConnectionId, outputDocumentId, outputVersion, outputName, outputContentType, changes, errors}; the output fields are null and committed is false. " +
+            "Plan shape: { \"snapshot\": { \"eTag\": \"<snapshot string from inspect_document>\" }, \"operations\": [ ... ] }. The snapshot detects drift in Word text-host XML or PowerPoint slide/notes XML; other parts rely on anchors and provider version checks. Omit it only intentionally. Do not set contractVersion. " +
+            PlanOperations)),
         AIFunctionFactory.Create(ApplyPlan, Opts(
             "apply_plan",
             "Apply a DocumentPlan JSON to (connectionId, documentId) and save through the provider. Returns {isValid, committed, sourceDocumentId, outputConnectionId, outputDocumentId, outputVersion, outputName, outputContentType, changes, errors}; non-applicable values are null. saveMode: 'Replace' (default, overwrites the source after an optimistic version check), 'NewVersion' (keeps the source and mints a new id under the same connection), 'NewDocument' (mints a fresh id with an optional newName for display). On any failure nothing is written."))
@@ -478,6 +623,251 @@ public sealed class OfficeAgentTools
                 sourceDocumentId: reference.ItemId);
         });
 
+    // ── Inline content: no connection, no stored document ────────────────
+
+    /// <summary>
+    /// Creates a document from nothing and returns its bytes, optionally applying an
+    /// initial plan first. No provider is involved and nothing is stored.
+    /// </summary>
+    public Task<string> CreateDocumentContent(
+        string name,
+        string planJson = "",
+        CancellationToken cancellationToken = default)
+        => SafeContentAsync(name, async () =>
+        {
+            var bytes = _client.CreateBlank(name);
+            if (string.IsNullOrWhiteSpace(planJson))
+                return SerializeContent(new ChangeReport { IsValid = true }, committed: true, bytes, name);
+
+            return await EditBytesAsync(bytes, name, planJson, preview: false, cancellationToken).ConfigureAwait(false);
+        });
+
+    /// <summary>Inspects a document supplied as base64, returning the usual inspection payload.</summary>
+    public Task<string> InspectDocumentContent(
+        string contentBase64,
+        string fidelity = "content",
+        int paragraphOffset = 0,
+        int paragraphLimit = 200,
+        CancellationToken cancellationToken = default)
+        => SafeContentAsync(name: null, () =>
+        {
+            var bytes = DecodeContent(contentBase64);
+            var handle = new StreamHandle(new MemoryStream(bytes, writable: false));
+
+            var result = ReadingDocument(() =>
+                _client.Inspect(handle, new InspectOptions { Fidelity = ParseFidelity(fidelity) }));
+            return Task.FromResult(JsonSerializer.Serialize(
+                InspectPayload(result, paragraphOffset, paragraphLimit), Json));
+        });
+
+    /// <summary>
+    /// Applies a plan to a document supplied as base64 and returns the edited document the
+    /// same way. Nothing is stored; the caller owns the result.
+    /// </summary>
+    public Task<string> EditDocumentContent(
+        string contentBase64,
+        string planJson,
+        bool preview = false,
+        CancellationToken cancellationToken = default)
+        => SafeContentAsync(name: null, () =>
+            EditBytesAsync(DecodeContent(contentBase64), name: null, planJson, preview, cancellationToken));
+
+    /// <summary>
+    /// The shared body of the two inline verbs: bind any <c>find</c> targets against the
+    /// content in hand, apply, and hand the bytes back.
+    /// </summary>
+    private async Task<string> EditBytesAsync(
+        byte[] bytes, string? name, string planJson, bool preview, CancellationToken cancellationToken)
+    {
+        // Read the document once, before anything else touches it. It settles two things
+        // at the same time: that the content arrived intact - which is what every later
+        // step would otherwise discover as an opaque failure - and which format it is, so
+        // the change mode can be resolved without opening the package a second time.
+        var format = ReadingDocument(() => _client.Inspect(
+            new StreamHandle(new MemoryStream(bytes, writable: false), name),
+            new InspectOptions { Fidelity = Fidelity.Outline }).Format);
+
+        var planObject = ParsePlanObject(planJson);
+
+        var failures = new FindTargetResolver(_client).Resolve(bytes, name, planObject);
+        if (failures.Count > 0)
+            return SerializeContent(ReportOf(failures), committed: false, content: null, name);
+
+        var plan = DeserializePlan(ApplyInlineChangeMode(planObject, format));
+        var handle = new StreamHandle(new MemoryStream(bytes, writable: false), name);
+
+        if (preview)
+        {
+            var report = await _client.PreviewAsync(handle, plan, cancellationToken).ConfigureAwait(false);
+            return SerializeContent(report, committed: false, content: null, name);
+        }
+
+        using var applied = await _client.CommitAsync(handle, plan, cancellationToken).ConfigureAwait(false);
+        return SerializeContent(
+            applied.Report, applied.Committed, applied.Committed ? applied.ToBytes() : null, name);
+    }
+
+    /// <summary>
+    /// Fills in the change mode for a document that has no connection to inherit one from.
+    /// </summary>
+    /// <remarks>
+    /// The provider path takes this from the connection, because the host knows what kind
+    /// of documents a connection serves. Inline content has no host to ask - but the bytes
+    /// say what the document is, and PresentationML has no revision markup at all, so a
+    /// deck's only workable default is <see cref="ChangeMode.Direct"/>. Word keeps the
+    /// tracked default. A caller that explicitly asks a deck for <c>Tracked</c> is still
+    /// refused, which is the answer they should get.
+    /// </remarks>
+    private static JsonObject ApplyInlineChangeMode(
+        JsonObject planObject, OfficeAgent.Abstractions.DocumentFormat format) =>
+        format == OfficeAgent.Abstractions.DocumentFormat.PowerPoint
+            ? ApplyDefaultChangeMode(planObject, ChangeMode.Direct)
+            : planObject;
+
+    /// <summary>
+    /// Reads inline content, turning "these bytes are not a document" into something the
+    /// caller can act on.
+    /// </summary>
+    /// <remarks>
+    /// This is the likeliest way an inline call fails, and it used to surface as
+    /// <c>internal-error</c>, which tells an agent nothing. The content has to survive
+    /// being reproduced in full on the way back in, and a single altered character, or a
+    /// truncated tail, leaves valid base64 that is no longer a package. The underlying
+    /// message is kept on the end so a genuine engine fault is still diagnosable rather
+    /// than being reported as bad input.
+    /// </remarks>
+    private static T ReadingDocument<T>(Func<T> read)
+    {
+        try
+        {
+            return read();
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException and not OutOfMemoryException)
+        {
+            throw new ArgumentException(
+                "contentBase64 decoded, but the bytes are not a readable .docx or .pptx package. " +
+                "The usual cause is a copy of the content that differs from the original by a " +
+                "character or two - it does not survive being reproduced by hand. Do NOT re-send " +
+                "the same string: a second attempt reproduces the same copy and fails identically. " +
+                "Take the contentBase64 from the tool result verbatim, or ask the host for the " +
+                "document again. " +
+                $"Underlying error: {ex.Message}");
+        }
+    }
+
+    /// <summary>
+    /// Runs an inline tool, reporting a failure in the same shape its success uses.
+    /// </summary>
+    /// <remarks>
+    /// The connection-addressed wrapper answers with <c>outputDocumentId</c> and its
+    /// neighbours, which name nothing here and, worse, leave out the one field an agent was
+    /// told to read. An inline failure answers with <c>contentBase64: null</c> instead.
+    /// </remarks>
+    private static async Task<string> SafeContentAsync(string? name, Func<Task<string>> work)
+    {
+        try { return await work().ConfigureAwait(false); }
+        catch (OperationCanceledException) { return ContentError(name, "cancelled", "Operation was cancelled."); }
+        catch (JsonException ex) { return ContentError(name, "invalid-json", ex.Message); }
+        catch (ArgumentException ex) { return ContentError(name, "invalid-argument", ex.Message); }
+        catch (Exception) { return ContentError(name, "internal-error", "An unexpected internal error occurred."); }
+    }
+
+    private static string ContentError(string? name, string code, string message) =>
+        SerializeContent(
+            new ChangeReport
+            {
+                IsValid = false,
+                Errors = new[] { new ValidationError(code, message, target: null) }
+            },
+            committed: false, content: null, name);
+
+    // ── Ephemeral documents: a handle instead of the bytes ───────────────
+
+    /// <summary>
+    /// Puts a document the caller holds the bytes of into an ephemeral connection and
+    /// returns its opaque id, so every later call names the id rather than the content.
+    /// </summary>
+    public Task<string> ImportDocumentContent(
+        string connectionId,
+        string name,
+        string contentBase64,
+        CancellationToken cancellationToken = default)
+        => SafeAsync(() =>
+        {
+            var store = Ephemeral(connectionId);
+            var reference = store.Add(name, DecodeContent(contentBase64));
+
+            return Task.FromResult(JsonSerializer.Serialize(new
+            {
+                connectionId = reference.ConnectionId,
+                documentId = reference.ItemId,
+                name = reference.Name,
+                contentType = reference.ContentType,
+                version = reference.Version
+            }, Json));
+        });
+
+    /// <summary>Returns the bytes of a document held in an ephemeral connection.</summary>
+    public Task<string> ExportDocumentContent(
+        string connectionId,
+        string documentId,
+        CancellationToken cancellationToken = default)
+        => SafeAsync(() =>
+        {
+            // Restricted to ephemeral connections on purpose. Exporting from a filesystem
+            // or SharePoint connection would turn every readable document into base64 an
+            // agent can quote, which is a different capability than editing one in place.
+            var store = Ephemeral(connectionId);
+            var reference = store.Describe(documentId);
+            var bytes = store.Read(documentId);
+
+            return Task.FromResult(JsonSerializer.Serialize(new
+            {
+                connectionId,
+                documentId,
+                name = reference.Name,
+                contentType = reference.ContentType,
+                contentBytes = bytes.Length,
+                contentBase64 = Convert.ToBase64String(bytes)
+            }, Json));
+        });
+
+    /// <summary>
+    /// The ephemeral store behind a connection id, or an error naming the ones that exist.
+    /// </summary>
+    private MemoryDocumentProvider Ephemeral(string connectionId) =>
+        _client.EphemeralConnection(connectionId)
+        ?? throw new ArgumentException(
+            $"'{connectionId}' is not an in-memory connection. These tools work only on connections whose " +
+            "documents this server holds for the session; a document in storage is read and written in place " +
+            "by the connection-addressed tools instead.");
+
+    /// <summary>Target-binding failures as a report, so they reach the caller in the shape every other result uses.</summary>
+    private static ChangeReport ReportOf(IReadOnlyList<FindTargetResolver.Failure> failures) => new()
+    {
+        IsValid = false,
+        Errors = failures.Select(f => new ValidationError(f.Code, f.Message, target: null)).ToArray()
+    };
+
+    /// <summary>Decodes the document a caller supplied inline, naming the fix when it is not base64.</summary>
+    private static byte[] DecodeContent(string contentBase64)
+    {
+        if (string.IsNullOrWhiteSpace(contentBase64))
+            throw new ArgumentException(
+                "contentBase64 is required: pass the document's bytes, base64-encoded.", nameof(contentBase64));
+
+        try
+        {
+            return Convert.FromBase64String(contentBase64);
+        }
+        catch (FormatException)
+        {
+            throw new ArgumentException(
+                "contentBase64 is not valid base64. Pass the raw base64 of the .docx or .pptx package, " +
+                "with no data: prefix, quotes, or line wrapping.", nameof(contentBase64));
+        }
+    }
+
     /// <summary>Removes a document registration; the underlying content is left untouched.</summary>
     public Task<string> RemoveDocument(
         string connectionId,
@@ -648,6 +1038,34 @@ public sealed class OfficeAgentTools
 
         return plan;
     }
+
+    /// <summary>
+    /// The report for an inline edit, with the edited document in it. <c>contentBase64</c>
+    /// is null whenever there is nothing to hand back - a preview, or a plan that failed -
+    /// so an agent that finds it null knows not to look for a document.
+    /// </summary>
+    private static string SerializeContent(
+        ChangeReport report, bool committed, byte[]? content, string? name) =>
+        JsonSerializer.Serialize(new
+        {
+            isValid = report.IsValid,
+            committed,
+            name,
+            contentBase64 = content is null ? null : Convert.ToBase64String(content),
+            contentBytes = content?.Length,
+            changes = report.Changes.Select(c => new
+            {
+                c.Verb,
+                target = SummariseAnchor(c.Target),
+                c.Before, c.After, c.Context, c.BlastRadius,
+                capability = c.Capability.ToString()
+            }),
+            errors = report.Errors.Select(e => new
+            {
+                e.Code, e.Message,
+                target = SummariseAnchor(e.Target)
+            })
+        }, Json);
 
     private static string SerializeReport(
         ChangeReport report,
