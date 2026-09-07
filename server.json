@@ -2,32 +2,41 @@
   "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
   "name": "io.github.ilia-sokolov/officeagent",
   "title": "OfficeAgent.NET",
-  "description": "Create and edit real Word documents and PowerPoint decks (filesystem or SharePoint): typed change plans, tracked changes",
+  "description": "Create and edit Word and PowerPoint files with typed plans, tracked changes, comments, and tables",
   "repository": {
     "url": "https://github.com/ilia-sokolov/OfficeAgent.NET",
     "source": "github"
   },
-  "version": "0.6.0",
+  "version": "0.7.0",
   "packages": [
     {
       "registryType": "nuget",
       "identifier": "OfficeAgent.Mcp",
-      "version": "0.6.0",
-      "transport": { "type": "stdio" },
+      "version": "0.7.0",
+      "transport": {
+        "type": "stdio"
+      },
       "environmentVariables": [
         {
           "name": "OfficeAgent__FileSystemConnections__0__ConnectionId",
-          "description": "Connection id the agent uses to address documents (any non-empty string). The server requires at least one connection (filesystem or SharePoint) and exits on startup if none is configured",
-          "isRequired": true,
+          "description": "Connection id the agent uses to address documents on the filesystem (any non-empty string). Optional: with nothing configured the server starts with an in-memory session connection whose documents last only while it runs. Set this and RootPath to edit documents on disk instead; SharePoint is OfficeAgent__SharePointConnections__0__*",
+          "isRequired": false,
           "default": "documents",
           "placeholder": "documents"
         },
         {
           "name": "OfficeAgent__FileSystemConnections__0__RootPath",
-          "description": "Absolute path to the directory this filesystem connection may read and write documents under. Only .docx is allowed unless OfficeAgent__FileSystemConnections__0__AllowedExtensions__N adds more (.pptx for decks). To use SharePoint instead of the filesystem, set OfficeAgent__SharePointConnections__0__*",
+          "description": "Absolute path to the directory this filesystem connection may read and write documents under. Only .docx is allowed unless OfficeAgent__FileSystemConnections__0__AllowedExtensions__N adds more (.pptx for decks, which also want OfficeAgent__FileSystemConnections__0__DefaultChangeMode=Direct because a deck cannot record tracked changes)",
           "format": "filepath",
-          "isRequired": true,
+          "isRequired": false,
           "placeholder": "/path/to/documents"
+        },
+        {
+          "name": "OfficeAgent__AllowCreation",
+          "description": "Set to true to expose create_document, so an agent can author a new file in the connection rather than only editing existing ones. Off by default: creating agent-named files under a connection root is a capability the host should choose deliberately",
+          "isRequired": false,
+          "default": "false",
+          "placeholder": "true"
         }
       ]
     }

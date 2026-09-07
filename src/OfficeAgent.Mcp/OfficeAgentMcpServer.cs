@@ -32,7 +32,7 @@ public static class OfficeAgentMcpServer
     {
         var creationEnabled = CreationEnabled(options);
         var hasConnections = HasConnections(options);
-        var registrationEnabled = options.AllowRegistration && hasConnections;
+        var registrationEnabled = RegistrationEnabled(options);
 
         return OfficeAgentTools.SystemPromptGuidance
             + (registrationEnabled ? OfficeAgentTools.RegistrationPromptGuidance : string.Empty)
@@ -60,7 +60,7 @@ public static class OfficeAgentMcpServer
         var session = HasEphemeral(options)
             ? new[]
             {
-                $"- \"{options.EphemeralConnectionId.Trim()}\" (session): documents live here for this run only, " +
+                $"- \"{EphemeralId(options)}\" (session): documents live here for this run only, " +
                 "held by the server rather than in storage; import_document_content puts one in and " +
                 "export_document_content takes the result out." +
                 (creationEnabled ? " create_document makes a new document in it; the name's extension picks the format." : string.Empty)
@@ -100,16 +100,9 @@ public static class OfficeAgentMcpServer
     {
         if (options is null) throw new ArgumentNullException(nameof(options));
 
-        // A server with neither storage nor inline content has nothing any tool could act
-        // on, and every tool it exposed would fail on the first call. One or the other has
-        // to be configured; which one is the host's choice.
-        if (!HasConnections(options) && !options.AllowInlineContent)
-            throw new InvalidOperationException(
-                "The OfficeAgent MCP server requires either a connection or inline content. Configure " +
-                "OfficeAgent:FileSystemConnections or OfficeAgent:SharePointConnections, set " +
-                "OfficeAgent:EphemeralConnectionId to hold documents in memory for the session, or set " +
-                "OfficeAgent:AllowInlineContent to true to pass documents in and out as base64.");
-
+        // No configuration at all is not an error: EphemeralId supplies a session
+        // connection, so the server starts usable rather than exiting. StartupNotice tells
+        // the operator that is what happened.
         AddFormats(services);
         services.AddOfficeAgent();
 
@@ -122,7 +115,7 @@ public static class OfficeAgentMcpServer
 
         if (HasEphemeral(options))
         {
-            services.AddMemoryDocumentProvider(options.EphemeralConnectionId.Trim(), o =>
+            services.AddMemoryDocumentProvider(EphemeralId(options), o =>
             {
                 o.MaximumTotalBytes = options.EphemeralMaximumTotalBytes;
                 o.AllowedExtensions = CreatableExtensions.Value.ToList();
@@ -160,7 +153,7 @@ public static class OfficeAgentMcpServer
         var toolList = tools
             .AsAIFunctions(new OfficeAgentToolsOptions
             {
-                AllowRegistration = options.AllowRegistration,
+                AllowRegistration = RegistrationEnabled(options),
                 AllowCreation = creationEnabled,
                 AllowInlineContent = options.AllowInlineContent,
                 AllowEphemeralDocuments = HasEphemeral(options),
@@ -189,8 +182,68 @@ public static class OfficeAgentMcpServer
         options.SharePointConnections.Count > 0 ||
         HasEphemeral(options);
 
+    /// <summary>The session connection minted when the server is started with no configuration.</summary>
+    public const string DefaultSessionConnectionId = "session";
+
+    /// <summary>
+    /// Whether the host configured nothing at all - no storage, no session connection, no
+    /// inline content.
+    /// </summary>
+    private static bool IsZeroConfigured(OfficeAgentMcpOptions options) =>
+        options.FileSystemConnections.Count == 0 &&
+        options.SharePointConnections.Count == 0 &&
+        !options.AllowInlineContent &&
+        string.IsNullOrWhiteSpace(options.EphemeralConnectionId);
+
+    /// <summary>
+    /// The session connection the server will actually run with: the configured one, or the
+    /// implied one when nothing was configured.
+    /// </summary>
+    /// <remarks>
+    /// A server with no configuration used to refuse to start. Failing loudly was right
+    /// while there was nothing it could usefully do, but a session connection needs no
+    /// storage, no credentials and no filesystem reach - so there is now something, and
+    /// exiting instead is a worse answer than starting. The fallback is exactly equivalent
+    /// to setting <c>EphemeralConnectionId=session</c> and <c>AllowCreation=true</c>, and
+    /// <see cref="StartupNotice"/> says so on stderr, because a server that quietly does
+    /// something other than what the operator believes they configured is the failure this
+    /// has to avoid.
+    /// </remarks>
+    private static string EphemeralId(OfficeAgentMcpOptions options) =>
+        IsZeroConfigured(options)
+            ? DefaultSessionConnectionId
+            : options.EphemeralConnectionId?.Trim() ?? string.Empty;
+
+    /// <summary>
+    /// Whether the registration and source-addressed tools are worth offering.
+    /// </summary>
+    /// <remarks>
+    /// They take a source - a path under a root, or a SharePoint URL - so they need a
+    /// connection that has one. A session connection does not: its documents arrive through
+    /// import_document_content, and there is no external item for register_document to name.
+    /// Offering them on a session-only server would hand the agent three tools that can only
+    /// fail, which costs it a turn to discover.
+    /// </remarks>
+    private static bool RegistrationEnabled(OfficeAgentMcpOptions options) =>
+        options.AllowRegistration &&
+        (options.FileSystemConnections.Count > 0 || options.SharePointConnections.Count > 0);
+
     private static bool HasEphemeral(OfficeAgentMcpOptions options) =>
-        !string.IsNullOrWhiteSpace(options.EphemeralConnectionId);
+        !string.IsNullOrWhiteSpace(EphemeralId(options));
+
+    /// <summary>
+    /// A line for the operator when the server's effective configuration is not the one they
+    /// wrote, or <see langword="null"/> when it is. Logged to stderr at startup.
+    /// </summary>
+    public static string? StartupNotice(OfficeAgentMcpOptions options) =>
+        IsZeroConfigured(options)
+            ? "No storage is configured, so OfficeAgent started with an in-memory session " +
+              $"connection called '{DefaultSessionConnectionId}' and document creation enabled. " +
+              "Documents created there last only while this server runs and are written nowhere. " +
+              "To edit documents on disk instead, set OfficeAgent__FileSystemConnections__0__ConnectionId " +
+              "and OfficeAgent__FileSystemConnections__0__RootPath - see " +
+              "https://github.com/ilia-sokolov/OfficeAgent.NET/blob/main/docs/mcp-server.md"
+            : null;
 
     /// <summary>
     /// Builds the <c>list_connections</c> tool from the configured connections, so an
@@ -227,7 +280,7 @@ public static class OfficeAgentMcpServer
             {
                 new
                 {
-                    connectionId = options.EphemeralConnectionId.Trim(),
+                    connectionId = EphemeralId(options),
                     provider = "session",
                     canCreateDocuments = creationEnabled
                 }
@@ -255,12 +308,22 @@ public static class OfficeAgentMcpServer
         return JsonSerializer.Serialize(connections);
     }
 
+    /// <remarks>
+    /// <see cref="OfficeAgentMcpOptions.AllowCreation"/> guards authoring agent-named files
+    /// under a host's storage root, which is a decision the host should make. A
+    /// zero-configuration server has no root: its session connection starts empty and holds
+    /// nothing that outlives the process, so withholding creation there would leave an
+    /// agent with a connection it can do nothing with until a document is handed to it.
+    /// That is why the implied session comes with creation, and a session the host
+    /// configured deliberately still respects the flag.
+    /// </remarks>
     private static bool CreationEnabled(OfficeAgentMcpOptions options) =>
-        options.AllowCreation &&
-        (HasEphemeral(options) ||
-         options.FileSystemConnections.Any(c => AllowsCreatableExtension(c.AllowedExtensions)) ||
-         options.SharePointConnections.Any(c =>
-             HasSharePointCreationTarget(c) && AllowsCreatableExtension(c.AllowedExtensions)));
+        IsZeroConfigured(options) ||
+        (options.AllowCreation &&
+         (HasEphemeral(options) ||
+          options.FileSystemConnections.Any(c => AllowsCreatableExtension(c.AllowedExtensions)) ||
+          options.SharePointConnections.Any(c =>
+              HasSharePointCreationTarget(c) && AllowsCreatableExtension(c.AllowedExtensions))));
 
     private static bool HasSharePointCreationTarget(SharePointConnectionOptions connection) =>
         !string.IsNullOrWhiteSpace(connection.CreationDriveId) &&

@@ -67,6 +67,7 @@ and optimistic-concurrency conflicts instead of guessing.
 - [Document providers](document-providers.md) — filesystem and SharePoint storage.
 - [Operations](operations.md) — concurrency, memory, telemetry, and production operation.
 - [Troubleshooting](troubleshooting.md) — diagnose setup, identity, and edit failures.
+- [Releasing](releasing.md) — the maintainer steps for NuGet, the MCP Registry, GitHub releases, and repository metadata.
 
 ### Reference
 

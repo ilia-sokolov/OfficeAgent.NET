@@ -36,6 +36,16 @@ jobs:
           NUGET_API_KEY: ${{ steps.nuget-login.outputs.NUGET_API_KEY }}
         run: |
           for pkg in artifacts/*.nupkg; do
+            if [[ "$pkg" == *OfficeAgent.Mcp.* ]]; then
+              continue
+            fi
+            dotnet nuget push "$pkg" \
+              --api-key "$NUGET_API_KEY" \
+              --source https://api.nuget.org/v3/index.json \
+              --skip-duplicate
+          done
+
+          for pkg in artifacts/OfficeAgent.Mcp.*.nupkg; do
             dotnet nuget push "$pkg" \
               --api-key "$NUGET_API_KEY" \
               --source https://api.nuget.org/v3/index.json \

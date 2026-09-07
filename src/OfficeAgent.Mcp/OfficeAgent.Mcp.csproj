@@ -6,7 +6,7 @@
     <RollForward>LatestMajor</RollForward>
     <PackAsTool>true</PackAsTool>
     <ToolCommandName>officeagent-mcp</ToolCommandName>
-    <Description>Model Context Protocol (MCP) server for OfficeAgent.NET, a translation layer between AI agents and OOXML: exposes inspect, find, preview, apply, and optional document registration and creation as MCP tools over stdio (local) or streamable HTTP (cloud). Any MCP-capable agent can read and edit Word documents and PowerPoint decks through host-configured filesystem or SharePoint connections, with preview-before-apply and optimistic concurrency.</Description>
+    <Description>Model Context Protocol (MCP) server for OfficeAgent.NET, a translation layer between AI agents and OOXML: exposes inspect, find, preview, apply, and optional document registration and creation as MCP tools over stdio (local) or streamable HTTP (cloud). Any MCP-capable agent can read and edit Word documents and PowerPoint decks through host-configured filesystem or SharePoint connections, through a session connection the server holds in memory, or with the document passed inline as base64 - so it runs with or without storage. Preview-before-apply and optimistic concurrency throughout.</Description>
   </PropertyGroup>
 
   <ItemGroup>

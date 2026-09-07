@@ -32,6 +32,11 @@ if (UseStdio(args, configurationPath))
     // stdout carries JSON-RPC frames in stdio mode; logs must go to stderr.
     builder.Logging.AddConsole(o => o.LogToStandardErrorThreshold = LogLevel.Trace);
 
+    // Said before the transport starts, so an operator who configured nothing sees why the
+    // server is offering a session connection they did not ask for.
+    if (OfficeAgentMcpServer.StartupNotice(options) is { } notice)
+        Console.Error.WriteLine(notice);
+
     builder.Services
         .AddMcpServer(o =>
         {
@@ -49,6 +54,9 @@ else
     if (configurationPath is not null)
         OfficeAgentConfiguration.AddFile(builder.Configuration, configurationPath);
     var options = OfficeAgentConfiguration.Bind(builder.Configuration);
+
+    if (OfficeAgentMcpServer.StartupNotice(options) is { } notice)
+        Console.Error.WriteLine(notice);
 
     builder.Services
         .AddMcpServer(o =>

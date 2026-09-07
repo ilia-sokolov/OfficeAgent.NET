@@ -127,15 +127,61 @@ public class McpServerTests
     }
 
     [Fact]
-    public void Server_refuses_to_start_with_neither_connections_nor_inline_content()
+    public void With_nothing_configured_the_server_starts_on_a_session_connection()
     {
-        var ex = Assert.Throws<InvalidOperationException>(() =>
-            OfficeAgentMcpServer.BuildToolset(new OfficeAgentMcpOptions()));
+        // Installing the server and configuring nothing is the commonest first contact with
+        // it - from the MCP registry, where the filesystem settings are optional. Exiting
+        // there taught the reader nothing; a session connection needs no storage, no
+        // credentials and no filesystem reach, so there is something useful to offer.
+        var options = new OfficeAgentMcpOptions();
+        var names = OfficeAgentMcpServer.BuildToolset(options).Select(t => t.ProtocolTool.Name).ToArray();
 
-        // Every tool it could expose would fail on its first call, so the message names
-        // both ways out rather than only the storage one.
-        Assert.Contains("either a connection or inline content", ex.Message);
-        Assert.Contains("AllowInlineContent", ex.Message);
+        Assert.Contains("inspect_document", names);
+        Assert.Contains("apply_plan", names);
+        Assert.Contains("import_document_content", names);
+        Assert.Contains("export_document_content", names);
+
+        // Creation comes with it: the session starts empty, so without it the agent would
+        // hold a connection it can do nothing with until something is handed to it.
+        Assert.Contains("create_document", names);
+
+        var connections = OfficeAgentMcpServer.ConnectionsPayload(options);
+        Assert.Contains($"\"connectionId\":\"{OfficeAgentMcpServer.DefaultSessionConnectionId}\"", connections);
+        Assert.Contains("\"provider\":\"session\"", connections);
+    }
+
+    [Fact]
+    public void Starting_with_nothing_configured_says_so_on_stderr()
+    {
+        // Quietly doing something other than what the operator believes they configured is
+        // the failure this has to avoid - a typo in a connection variable must not look
+        // like a working server.
+        var notice = OfficeAgentMcpServer.StartupNotice(new OfficeAgentMcpOptions());
+
+        Assert.NotNull(notice);
+        Assert.Contains("No storage is configured", notice);
+        Assert.Contains(OfficeAgentMcpServer.DefaultSessionConnectionId, notice);
+        Assert.Contains("last only while this server runs", notice);
+        Assert.Contains("OfficeAgent__FileSystemConnections__0__RootPath", notice);
+    }
+
+    [Fact]
+    public void A_configured_server_is_left_alone_and_says_nothing()
+    {
+        using var root = new TemporaryRoot();
+
+        // The fallback applies only when nothing at all was configured; anything the host
+        // did configure is what it gets.
+        Assert.Null(OfficeAgentMcpServer.StartupNotice(OptionsFor(root)));
+        Assert.Null(OfficeAgentMcpServer.StartupNotice(
+            new OfficeAgentMcpOptions { AllowInlineContent = true }));
+        Assert.Null(OfficeAgentMcpServer.StartupNotice(
+            new OfficeAgentMcpOptions { EphemeralConnectionId = "scratch" }));
+
+        // And a session the host asked for still respects the creation opt-in.
+        var explicitSession = new OfficeAgentMcpOptions { EphemeralConnectionId = "scratch" };
+        Assert.DoesNotContain("create_document",
+            OfficeAgentMcpServer.BuildToolset(explicitSession).Select(t => t.ProtocolTool.Name));
     }
 
     [Fact]

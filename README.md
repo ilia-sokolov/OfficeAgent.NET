@@ -34,95 +34,79 @@ it for a workflow that depends on Office's layout or calculation engine.
 
 | I want to... | Start here |
 | --- | --- |
-| Add Word editing to a local MCP client | [Run the MCP server over stdio](#mcp-quick-start) |
+| Edit my first Word document | [Your first edit](#your-first-edit) |
 | Connect Codex, Claude Code, Copilot Studio, or Microsoft 365 Copilot | [Deployment and client setup](docs/deployment.md) |
 | Use OfficeAgent from C# | [Getting started](docs/getting-started.md) |
 | Add tools to a Microsoft Agent Framework agent | [Agent integration](docs/agent-integration.md) |
 | Host the MCP server or use SharePoint | [MCP server](docs/mcp-server.md) and [document providers](docs/document-providers.md) |
 | Edit documents with no storage configured | [Documents with no storage](docs/mcp-server.md#documents-with-no-storage) |
+| Teach an agent to review documents properly | [word-document-review skill](skills/word-document-review/SKILL.md) |
 | Contribute | [Contributing](#contributing) |
 
-## MCP quick start
+## Your first edit
 
-Install the server as a .NET tool:
+Install the server:
 
 ```bash
 dotnet tool install --global OfficeAgent.Mcp
 ```
 
-The following examples register it with Claude Code and limit its filesystem
-connection to one directory.
+Make a folder for the agent to work in and download the
+[sample contract](samples/documents/services-agreement.docx) into it — a fictional services
+agreement with a clause to change, a table, an open comment, and a pending redline:
 
-macOS/Linux:
+```bash
+mkdir -p ~/officeagent-documents
+curl -Lo ~/officeagent-documents/services-agreement.docx \
+  https://raw.githubusercontent.com/ilia-sokolov/OfficeAgent.NET/main/samples/documents/services-agreement.docx
+```
+
+Any `.docx` of your own works too — the sample just gives you something with a comment and a
+pending revision already in it.
+
+Register the server with Claude Code, pointed at that folder and nothing else:
 
 ```bash
 claude mcp add \
   --env OfficeAgent__FileSystemConnections__0__ConnectionId=documents \
-  --env OfficeAgent__FileSystemConnections__0__RootPath=/absolute/path/to/documents \
-  --env OfficeAgent__AllowCreation=true \
+  --env OfficeAgent__FileSystemConnections__0__RootPath=$HOME/officeagent-documents \
   --transport stdio \
   officeagent -- officeagent-mcp --stdio
 ```
 
-PowerShell:
+Then ask:
 
-```powershell
-claude mcp add `
-  --env OfficeAgent__FileSystemConnections__0__ConnectionId=documents `
-  --env OfficeAgent__FileSystemConnections__0__RootPath=C:\officeagent-documents `
-  --env OfficeAgent__AllowCreation=true `
-  --transport stdio `
-  officeagent -- officeagent-mcp --stdio
-```
+> In services-agreement.docx, change the payment terms from thirty days to forty-five days.
 
-`AllowCreation` is off by default and is what adds `create_document`; drop that
-line for an agent that may only edit documents that already exist.
+Open the file in Word. Clause 3 now reads **forty-five days** as a tracked change you can
+accept or reject, and everything else — the table, the comment, the redline that was
+already there — is exactly as it was. That is the whole idea: the document that comes out
+is the one that went in, minus the edit you asked for.
 
-If there is no directory to connect - documents arrive as attachments, or the
-host has nowhere to put a root - the server can run with no storage at all.
-Set `EphemeralConnectionId` and the server keeps documents in its own memory for
-the session, which the agent then edits by opaque id exactly as it would a stored
-document:
+[What else the sample is good for](samples/documents/README.md) — reviewing comments,
+accepting revisions, editing the table.
 
-```json
-{ "OfficeAgent": { "EphemeralConnectionId": "session", "AllowCreation": true } }
-```
+### If it does not work
 
-`import_document_content` puts a document the host holds into the session and
-`export_document_content` takes the finished bytes back out; everything between
-is the ordinary tool surface. `AllowInlineContent` is the other option - three
-tools that carry the document as base64 in both directions, holding no state -
-and it suits a single self-contained call rather than a sequence of edits. Both
-settings work as environment variables or in a configuration file. See
-[Documents with no storage](docs/mcp-server.md#documents-with-no-storage) for
-which to use and why it matters.
+| | |
+| --- | --- |
+| `claude mcp list` shows officeagent as failed | Check `RootPath` is an absolute path to a directory that exists. |
+| The agent says it cannot find the document | The name must be relative to `RootPath`, not a full path. |
+| `io-error` on save | The document is open in Word. Close it. |
 
-Run `claude mcp list` to confirm that `officeagent` is connected. Then ask the
-client to edit a file in the configured directory, for example:
+## Beyond the first edit
 
-> Change the payment terms in contract.docx from 30 to 45 days.
+The quick start above is deliberately the smallest thing that works. Four settings extend it:
 
-The server exposes tools to register, create, inspect, search, preview, and apply
-edits. Asking for a document that does not exist yet - "draft a project brief in
-`brief.docx`" - creates it in the configured directory rather than failing.
-Text replacements are tracked changes by default. A successful apply writes back
-to the document it edited, guarded by an optimistic version check; pass
-`saveMode: "NewVersion"` to keep the source and write a sibling such as
-`contract.v2.docx` instead.
+| Setting | Adds |
+| --- | --- |
+| `OfficeAgent__AllowCreation=true` | `create_document`, so "draft a project brief in brief.docx" makes a new file instead of failing |
+| `OfficeAgent__FileSystemConnections__0__AllowedExtensions__1=.pptx` | PowerPoint decks. Add `__DefaultChangeMode=Direct` with it — a deck has no redline vocabulary and refuses tracked changes |
+| `OfficeAgent__EphemeralConnectionId=session` | Names the in-memory session connection explicitly. With no configuration at all the server already falls back to one - this is for running it alongside storage, or under a different id |
+| `OfficeAgent__AllowInlineContent=true` | Tools that carry the document as base64, for a single self-contained call |
 
-A connection accepts `.docx` only until you say otherwise. To work on decks, add
-three more `--env` settings to the command above - `.pptx` in the extension
-allow-list, and a `Direct` default change mode, because a deck has no redline
-vocabulary and refuses tracked changes:
-
-```text
-OfficeAgent__FileSystemConnections__0__AllowedExtensions__0=.docx
-OfficeAgent__FileSystemConnections__0__AllowedExtensions__1=.pptx
-OfficeAgent__FileSystemConnections__0__DefaultChangeMode=Direct
-```
-
-Past one or two settings, put them in a file instead and point the server at it
-with `--config` - the same `OfficeAgent` section, where a list is a list:
+Past a couple of settings, use a file instead — the same `OfficeAgent` section, where a list
+is a list:
 
 ```json
 {
@@ -144,23 +128,33 @@ with `--config` - the same `OfficeAgent` section, where a list is a list:
 claude mcp add --transport stdio officeagent -- officeagent-mcp --stdio --config ./officeagent.json
 ```
 
-Environment variables still override the file, so a container can keep setting
-one value without restating the rest. See
-[Deployment and client setup](docs/deployment.md) and
-[MCP server](docs/mcp-server.md) for where the file is looked for.
+Environment variables still override the file. Windows, PowerShell, other MCP clients,
+HTTP hosting and SharePoint are in
+[Deployment and client setup](docs/deployment.md); every setting is listed in
+[MCP server](docs/mcp-server.md).
 
-OfficeAgent does not send the complete `.docx` package through the model, but
-the MCP client and model do receive document text and structure returned by the
-inspect and find tools. Only connect document folders and model providers that
-are appropriate for the data you are processing.
+### Teaching the agent to review, not just replace
 
-Configuration for other clients, streamable HTTP hosting, containers, and
-SharePoint is in [Deployment and client setup](docs/deployment.md).
-The server does not provide an authentication layer for HTTP hosting; put it
-behind the authentication and network controls appropriate for your environment.
-Filesystem roots are also trust boundaries: their ACLs must prevent untrusted
-principals from creating, renaming, or replacing directory entries while the
-server runs.
+[`skills/word-document-review`](skills/word-document-review/SKILL.md) is an
+[Agent Skill](https://code.claude.com/docs/en/skills) that teaches the review loop: read the
+comments and pending revisions before editing, keep edits as redlines, address documents by
+id rather than passing bytes around, and recover from each error code rather than retrying.
+Copy it into `.claude/skills/` in your project, or `~/.claude/skills/` for every project:
+
+```bash
+cp -r skills/word-document-review ~/.claude/skills/
+```
+
+### What reaches the model
+
+The inspect and find tools return document text and structure to the model — that is how it
+locates an edit. The `.docx` package itself does not travel that way *unless* you enable
+`AllowInlineContent`, whose tools carry the whole file as base64 in both directions by
+design. Connect folders and model providers appropriate for the data you are handling.
+
+The server ships no authentication layer for HTTP hosting; put it behind your own. A
+filesystem root is a trust boundary: its ACLs must stop untrusted principals creating,
+renaming or replacing entries while the server runs.
 
 ## .NET quick start
 
@@ -275,6 +269,7 @@ the provider to create and register it without overwriting an existing name.
 | [Operations](docs/operations.md) | Concurrency, streams, cancellation, telemetry, and production concerns |
 | [Troubleshooting](docs/troubleshooting.md) | Startup, registration, validation, concurrency, and provider failures |
 | [Failure modes](docs/operations.md#failure-modes-you-should-handle) | Common plan errors and what to do next |
+| [Releasing](docs/releasing.md) | Publishing to NuGet, the MCP Registry, and GitHub |
 
 ## Contributing
 
@@ -319,6 +314,22 @@ depend on pagination, table-of-contents rendering, field recalculation, or
 page-fit checks are outside its scope. Preview reports structural changes, not
 a visual rendering of the final document. Test the workflow on representative
 documents and keep human review in the loop for consequential edits.
+
+Two more limits worth knowing before you build on it:
+
+- **Token savings depend on how you connect.** Addressing a document by id keeps
+  the package out of the conversation, and inspection can be narrowed with
+  `fidelity` and paging - that is where the saving comes from. The inline
+  `*_content` tools are the deliberate exception: they carry the whole file as
+  base64 in both directions, which costs tokens in proportion to file size. They
+  suit a single self-contained call, not a sequence of edits - a model asked to
+  pass a document of a few kilobytes back for a second edit reproduces it
+  imperfectly and the follow-up fails. Use a connection, or a session connection,
+  when more than one edit is coming.
+- **A skill helps, and is not automatic.** Nothing here makes an agent read the
+  open comments before editing, or keep an edit as a redline. The
+  [word-document-review skill](skills/word-document-review/SKILL.md) teaches that;
+  without it, behaviour depends on the model and the prompt.
 
 ## Commercial support
 

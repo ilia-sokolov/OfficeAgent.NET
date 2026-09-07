@@ -28,8 +28,9 @@ $env:OfficeAgent__FileSystemConnections__0__RootPath = "C:\officeagent-documents
 officeagent-mcp --stdio
 ```
 
-The server deliberately refuses to start with zero connections. Create the root
-directory first and use an absolute path.
+With no configuration at all the server starts on an in-memory session connection and
+says so on stderr - useful for a first look, but its documents last only while the process
+runs. To edit documents on disk, create the root directory first and use an absolute path.
 
 Or from source:
 
@@ -208,6 +209,33 @@ filesystem root or configured SharePoint folder and never overwrites a name;
 
 ## Documents with no storage
 
+### The zero-configuration default
+
+Started with nothing configured, the server does not exit. It mints a session connection
+called `session` with document creation enabled — equivalent to setting
+`EphemeralConnectionId=session` and `AllowCreation=true` — and prints a line to stderr
+saying so:
+
+```
+No storage is configured, so OfficeAgent started with an in-memory session connection
+called 'session' and document creation enabled. Documents created there last only while
+this server runs and are written nowhere. ...
+```
+
+That notice matters more than the fallback does. A typo in a connection variable produces
+exactly the same state as configuring nothing, and a server that quietly ran on a session
+connection while the operator believed it was pointed at their documents would be the worst
+outcome — so it is always said out loud, and `list_connections` returns `session` alone.
+
+The registration tools (`register_document`, `open_document`, `edit_document`) are not
+offered in this mode: they take a path or a URL, and a session connection has neither.
+Documents arrive through `import_document_content` or are made with `create_document`.
+
+Anything the host *did* configure is left alone — the fallback applies only when nothing at
+all was set, and a session connection you configured yourself still respects `AllowCreation`.
+
+### Choosing between the two
+
 There are two ways to run without configuring storage, and they are not interchangeable.
 
 **A session connection holds the documents here.** `EphemeralConnectionId` adds a
@@ -265,9 +293,10 @@ result was not saved.
 
 ### Inline content in detail
 
-The server normally refuses to start without a connection, because every tool it could
-expose would fail on its first call. `AllowInlineContent` is one of the two ways to satisfy
-that requirement: it adds three tools that carry the document itself rather than an id.
+`AllowInlineContent` adds three tools that carry the document itself rather than an id. It
+is one of the ways to run without storage; the other, and the better one for more than a
+single call, is the session connection above - which is also what the server falls back to
+when nothing at all is configured.
 
 It is an ordinary setting, so it can be given either way — as an environment variable:
 

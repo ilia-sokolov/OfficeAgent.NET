@@ -8,7 +8,7 @@
   </PropertyGroup>
 
   <PropertyGroup>
-    <Version>0.6.0</Version>
+    <Version>0.7.0</Version>
     <Authors>Ilia Sokolov</Authors>
     <Company>Ilia Sokolov</Company>
     <Product>OfficeAgent.NET</Product>
@@ -19,7 +19,7 @@
     <RepositoryType>git</RepositoryType>
     <PackageReadmeFile>README.md</PackageReadmeFile>
     <PackageIcon>icon.png</PackageIcon>
-    <PackageTags>openxml;docx;word;office;ai;agents;llm;document-automation</PackageTags>
+    <PackageTags>openxml;docx;pptx;word;powerpoint;office;mcp;model-context-protocol;ai;agents;llm;tracked-changes;document-automation</PackageTags>
     <PackageRequireLicenseAcceptance>false</PackageRequireLicenseAcceptance>
 
     <Deterministic>true</Deterministic>
