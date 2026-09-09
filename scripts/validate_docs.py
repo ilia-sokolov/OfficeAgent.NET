@@ -15,7 +15,10 @@ MARKDOWN = [
     ROOT / "README.md",
     ROOT / "CONTRIBUTING.md",
     ROOT / "CHANGELOG.md",
+    ROOT / "SECURITY.md",
+    ROOT / "SUPPORT.md",
     *sorted((ROOT / "docs").glob("*.md")),
+    *sorted((ROOT / "security").glob("*.md")),
     *sorted((ROOT / "samples").glob("**/README.md")),
     *sorted((ROOT / "skills").glob("**/SKILL.md")),
 ]

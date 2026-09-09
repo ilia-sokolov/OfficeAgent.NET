@@ -13,10 +13,6 @@ namespace OfficeAgent.Word;
 /// </summary>
 internal sealed class InsertHandler : IOperationHandler
 {
-    private readonly TimeProvider _clock;
-
-    public InsertHandler(TimeProvider clock) => _clock = clock;
-
     public bool CanHandle(PlanOperation operation) =>
         operation is InsertOp { Target: TextSpanAnchor };
 
@@ -67,7 +63,7 @@ internal sealed class InsertHandler : IOperationHandler
             paragraph.InsertAfterSelf(element);
 
         if (WordRevisionMarker.IsTracked(op.Mode))
-            new WordRevisionMarker(context.Package, _clock).MarkParagraphInserted(element);
+            new WordRevisionMarker(context.Package, context.Revision).MarkParagraphInserted(element);
     }
 
     private static Paragraph BuildParagraph(InsertOp op)

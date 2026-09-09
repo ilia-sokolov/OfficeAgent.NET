@@ -18,10 +18,6 @@ namespace OfficeAgent.Word;
 /// </summary>
 internal sealed class RemoveImageHandler : IOperationHandler
 {
-    private readonly TimeProvider _clock;
-
-    public RemoveImageHandler(TimeProvider clock) => _clock = clock;
-
     private readonly ImageNodeProvider _images = new();
 
     public bool CanHandle(PlanOperation operation) =>
@@ -66,7 +62,7 @@ internal sealed class RemoveImageHandler : IOperationHandler
             var imageRun = drawing.Parent as Run
                 ?? throw new InvalidOperationException(
                     $"Image '{anchor.Path}' is not inside a run, so its removal cannot be tracked.");
-            new WordRevisionMarker(context.Package, _clock).MarkRunDeleted(imageRun);
+            new WordRevisionMarker(context.Package, context.Revision).MarkRunDeleted(imageRun);
             return;
         }
 

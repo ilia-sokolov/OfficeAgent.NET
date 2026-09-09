@@ -12,10 +12,6 @@ namespace OfficeAgent.Word;
 /// </summary>
 internal sealed class ChangeTextHandler : IOperationHandler
 {
-    private readonly TimeProvider _clock;
-
-    public ChangeTextHandler(TimeProvider clock) => _clock = clock;
-
     public bool CanHandle(PlanOperation operation) =>
         operation is ChangeTextOp { Target: TextSpanAnchor };
 
@@ -90,7 +86,7 @@ internal sealed class ChangeTextHandler : IOperationHandler
 
         if (anchor.Expect.Length == 0)
         {
-            Fill(context.Package, paragraph, op);
+            Fill(context, paragraph, op);
             return;
         }
 
@@ -107,7 +103,7 @@ internal sealed class ChangeTextHandler : IOperationHandler
         if (op.Mode == ChangeMode.Direct)
             ApplyDirect(covered, op.With);
         else
-            ApplyTracked(context.Package, covered, op.With);
+            ApplyTracked(context, covered, op.With);
     }
 
     /// <summary>
@@ -115,7 +111,7 @@ internal sealed class ChangeTextHandler : IOperationHandler
     /// adds a run rather than isolating a span - and under tracked changes it is recorded
     /// as an insertion, since that is what it is.
     /// </summary>
-    private void Fill(IOpenXmlPackage package, OpenXmlElement paragraph, ChangeTextOp op)
+    private static void Fill(ApplyContext context, OpenXmlElement paragraph, ChangeTextOp op)
     {
         if (op.With.Length == 0) return;
 
@@ -132,12 +128,12 @@ internal sealed class ChangeTextHandler : IOperationHandler
             return;
         }
 
-        var inserted = new InsertedRun
-        {
-            Author = "OfficeAgent",
-            Date = _clock.GetUtcNow().UtcDateTime,
-            Id = new WordRevisionIdAllocator(package).Next().ToString()
-        };
+        var revision = context.Revision;
+        var inserted = WordRevisions.Stamp(
+            new InsertedRun(),
+            new WordRevisionIdAllocator(context.Package).Next().ToString(),
+            revision.Author,
+            revision.TimestampUtc!.Value.UtcDateTime);
         inserted.AppendChild(run);
 
         if (properties is null) paragraph.InsertAt(inserted, 0);
@@ -151,22 +147,18 @@ internal sealed class ChangeTextHandler : IOperationHandler
             covered[i].Remove();
     }
 
-    private void ApplyTracked(IOpenXmlPackage package, IReadOnlyList<OpenXmlElement> covered, string replacement)
+    private static void ApplyTracked(ApplyContext context, IReadOnlyList<OpenXmlElement> covered, string replacement)
     {
         var first = (Run)covered[0];
         var parent = first.Parent
             ?? throw new InvalidOperationException("Run has no parent paragraph.");
 
-        var allocator = new WordRevisionIdAllocator(package);
-        var author = "OfficeAgent";
-        var stamp = _clock.GetUtcNow().UtcDateTime;
+        var allocator = new WordRevisionIdAllocator(context.Package);
+        var author = context.Revision.Author;
+        var stamp = context.Revision.TimestampUtc!.Value.UtcDateTime;
 
-        var deleted = new DeletedRun
-        {
-            Author = author,
-            Date = stamp,
-            Id = allocator.Next().ToString()
-        };
+        var deleted = WordRevisions.Stamp(
+            new DeletedRun(), allocator.Next().ToString(), author, stamp);
         foreach (var element in covered)
         {
             var clone = (Run)element.CloneNode(deep: true);
@@ -181,12 +173,8 @@ internal sealed class ChangeTextHandler : IOperationHandler
 
         var insertRun = (Run)first.CloneNode(deep: true);
         WordModel.Dialect.SetRunText(insertRun, replacement);
-        var inserted = new InsertedRun
-        {
-            Author = author,
-            Date = stamp,
-            Id = allocator.Next().ToString()
-        };
+        var inserted = WordRevisions.Stamp(
+            new InsertedRun(), allocator.Next().ToString(), author, stamp);
         inserted.AppendChild(insertRun);
 
         parent.InsertBefore(deleted, first);

@@ -11,7 +11,7 @@ namespace OfficeAgent.PowerPoint;
 /// Provides PowerPoint inspection, search, and supported plan operation handling over
 /// PresentationML across slides, their tables, and their notes.
 /// </summary>
-public sealed class PowerPointModule : IFormatModule, IBlankDocumentFactory, IPlanValidatingModule
+public sealed class PowerPointModule : IFormatModule, IBlankDocumentFactory, IPlanValidatingModule, IApplyTimeProvider
 {
     /// <summary>
     /// Refuses a plan that inserts a paragraph and then addresses the same text body by
@@ -99,6 +99,9 @@ public sealed class PowerPointModule : IFormatModule, IBlankDocumentFactory, IPl
     /// <inheritdoc />
     public IReadOnlyList<IOperationHandler> Handlers { get; }
 
+    /// <inheritdoc />
+    public TimeProvider Clock { get; }
+
     private readonly IReadOnlyList<IPowerPointNodeProvider> _providers;
 
     /// <summary>Initializes the module with its built-in handlers.</summary>
@@ -114,6 +117,7 @@ public sealed class PowerPointModule : IFormatModule, IBlankDocumentFactory, IPl
         IEnumerable<IOperationHandler>? extraHandlers = null,
         IEnumerable<IPowerPointNodeProvider>? extraProviders = null)
     {
+        Clock = clock ?? throw new ArgumentNullException(nameof(clock));
         Handlers = new IOperationHandler[]
         {
             new SlideChangeTextHandler(),

@@ -14,10 +14,6 @@ namespace OfficeAgent.Word;
 internal sealed class InsertTableColumnsHandler : IOperationHandler
 {
     private readonly TableNodeProvider _tables = new();
-    private readonly TimeProvider _clock;
-
-    public InsertTableColumnsHandler(TimeProvider clock) => _clock = clock;
-
     public bool CanHandle(PlanOperation operation) =>
         operation is InsertTableColumnsOp { Target: NodeAnchor { Kind: "table" } };
 
@@ -72,7 +68,7 @@ internal sealed class InsertTableColumnsHandler : IOperationHandler
         static int Clamp(int value, int min, int max) => Math.Min(Math.Max(value, min), max);
 
         var marker = WordRevisionMarker.IsTracked(op.Mode)
-            ? new WordRevisionMarker(context.Package, _clock)
+            ? new WordRevisionMarker(context.Package, context.Revision)
             : null;
 
         for (int r = 0; r < rows.Count; r++)

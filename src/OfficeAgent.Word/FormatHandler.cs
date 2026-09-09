@@ -20,10 +20,6 @@ internal sealed class FormatHandler : IOperationHandler
     // 9525 EMU per pixel at 96 DPI.
     private const long EmuPerPixel = 9525;
 
-    private readonly TimeProvider _clock;
-
-    public FormatHandler(TimeProvider clock) => _clock = clock;
-
     public bool CanHandle(PlanOperation operation) =>
         operation is FormatOp { Target: TextSpanAnchor }
         || operation is FormatOp { Target: NodeAnchor { Kind: "table" or "tableRow" or "tableCell" or "image" } };
@@ -121,7 +117,7 @@ internal sealed class FormatHandler : IOperationHandler
         // One marker for the whole operation: a format that touches a dozen runs is one
         // edit by one author at one moment, and Word groups the revisions accordingly.
         var marker = WordRevisionMarker.IsTracked(op.Mode)
-            ? new WordRevisionMarker(context.Package, _clock)
+            ? new WordRevisionMarker(context.Package, context.Revision)
             : null;
 
         switch (op.Target)

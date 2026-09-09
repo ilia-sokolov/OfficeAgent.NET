@@ -12,13 +12,16 @@ namespace OfficeAgent.Word;
 /// Provides Word inspection, search, and supported plan operation handling over
 /// WordprocessingML across the body, headers, footers, footnotes, and endnotes.
 /// </summary>
-public sealed class WordModule : IFormatModule, IBlankDocumentFactory, IPlanValidatingModule
+public sealed class WordModule : IFormatModule, IBlankDocumentFactory, IPlanValidatingModule, IApplyTimeProvider
 {
     public DocFormat Format => DocFormat.Word;
 
     private readonly IReadOnlyList<IWordNodeProvider> _providers;
 
     public IReadOnlyList<IOperationHandler> Handlers { get; }
+
+    /// <inheritdoc />
+    public TimeProvider Clock { get; }
 
     public WordModule() : this(TimeProvider.System) { }
 
@@ -33,31 +36,32 @@ public sealed class WordModule : IFormatModule, IBlankDocumentFactory, IPlanVali
         IEnumerable<IOperationHandler>? extraHandlers = null,
         IEnumerable<IWordNodeProvider>? extraProviders = null)
     {
+        Clock = clock ?? throw new ArgumentNullException(nameof(clock));
         Handlers = new IOperationHandler[]
         {
-            new ChangeTextHandler(clock),
-            new FillHandler(clock),
+            new ChangeTextHandler(),
+            new FillHandler(),
             new CommentHandler(clock),
-            new InsertHandler(clock),
-            new FormatHandler(clock),
+            new InsertHandler(),
+            new FormatHandler(),
             new SetPropertyHandler(),
             new RevisionHandler(),
-            new InsertTableHandler(clock),
-            new RemoveTableHandler(clock),
-            new InsertTableRowsHandler(clock),
-            new RemoveTableRowsHandler(clock),
-            new InsertTableColumnsHandler(clock),
-            new RemoveTableColumnsHandler(clock),
+            new InsertTableHandler(),
+            new RemoveTableHandler(),
+            new InsertTableRowsHandler(),
+            new RemoveTableRowsHandler(),
+            new InsertTableColumnsHandler(),
+            new RemoveTableColumnsHandler(),
             new CopyStylesHandler(),
             new ClearStylesHandler(),
             new DefineStyleHandler(),
-            new InsertImageHandler(clock),
-            new RemoveImageHandler(clock),
+            new InsertImageHandler(),
+            new RemoveImageHandler(),
             new WordHeaderFooterHandler(),
             new WordBackgroundImageHandler(),
             new WordPageSetupHandler(),
-            new WordInsertBreakHandler(clock),
-            new WordNoteHandler(clock)
+            new WordInsertBreakHandler(),
+            new WordNoteHandler()
         }
         .Concat(extraHandlers ?? Enumerable.Empty<IOperationHandler>())
         .ToList();

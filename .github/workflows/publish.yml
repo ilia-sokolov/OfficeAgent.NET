@@ -42,6 +42,9 @@ jobs:
       - name: Restore
         run: dotnet restore OfficeAgent.NET.sln
 
+      - name: Audit NuGet dependencies
+        run: python scripts/check_vulnerable_packages.py
+
       - name: Build (Release)
         run: dotnet build OfficeAgent.NET.sln -c Release --no-restore
 

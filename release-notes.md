@@ -1,20 +1,3 @@
-# Changelog
-
-Notable changes per release. The body of each version section is also the text used for the
-corresponding GitHub release.
-
-## Unreleased
-
-- Aligned the public MCP Registry entry with the current release and added a scheduled
-  distribution check across GitHub, NuGet, and the registry.
-- Made `QuickEdit` runnable against the bundled fictional contract, with a non-zero failure
-  when its exact source text is absent.
-- Added security, support, compatibility, and release-assurance policies plus a fail-closed
-  NuGet vulnerability gate with expiring documented exceptions.
-- Added plan-level Word revision author/timestamp metadata and structured apply receipts
-  containing plan/input/output SHA-256 hashes, outcomes, provider output references, and a
-  host-supplied authenticated actor kept separate from the displayed revision author.
-
 ## 0.7.0 — 2026-09-09
 
 Word review became a first-class workflow, and the server no longer needs storage to run.
@@ -106,7 +89,4 @@ altered the base64; the run did not retain enough metadata to serve as a benchma
   only when a filesystem or SharePoint connection exists. They take a path or URL, which a
   session connection does not have, so on a session-only server they could only fail.
 
-## 0.6.0
 
-Backgrounds, Word headers and footers, list numbering. See the
-[release history](https://github.com/ilia-sokolov/OfficeAgent.NET/releases).

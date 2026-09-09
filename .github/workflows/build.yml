@@ -40,6 +40,10 @@ jobs:
       - name: Restore
         run: dotnet restore OfficeAgent.NET.sln
 
+      - name: Audit NuGet dependencies
+        if: matrix.os == 'ubuntu-latest'
+        run: python scripts/check_vulnerable_packages.py
+
       - name: Build (both TFM legs)
         run: dotnet build OfficeAgent.NET.sln --no-restore --configuration Release
 

@@ -216,12 +216,17 @@ wire, including fields that have semantic defaults. Send `fidelity: "content"`,
 empty `planJson` is valid only for `create_document`; preview, apply, and edit
 require an operations array or plan object.
 
-Plan reports always contain `isValid`, `committed`, `sourceDocumentId`,
+Plan reports always contain `isValid`, `committed`, `receipt`, `sourceDocumentId`,
 `outputConnectionId`, `outputDocumentId`, `outputVersion`, `outputName`,
 `outputContentType`, `changes`, and `errors`. Values that do not apply are
 `null`; `changes` and `errors` are arrays. Clients must decide success from
 `isValid`, `committed`, and `errors`, not merely from the presence of an output
 id.
+
+On apply and inline preview, `receipt` contains the outcome, one apply timestamp, resolved
+revision identity, SHA-256 hashes for the effective plan and exact document bytes, and the
+saved document reference when applicable. Its `actor` is null unless the host registers an
+`IAuditActorProvider`; it can never be supplied through plan JSON.
 
 Inspection returns `snapshot` as a scalar etag. To detect drift in Word text-host
 XML or PowerPoint slide/notes XML, copy it into the submitted plan as

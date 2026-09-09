@@ -39,6 +39,7 @@ Then run the release build and repository checks:
 ```bash
 dotnet build OfficeAgent.NET.sln --configuration Release
 dotnet test OfficeAgent.NET.sln --no-build --configuration Release
+python scripts/check_vulnerable_packages.py
 python scripts/validate_docs.py
 python scripts/validate_server_manifest.py
 ```
@@ -154,6 +155,20 @@ description, configuration requirements, and repository URL match
 ```text
 https://registry.modelcontextprotocol.io/v0.1/servers/io.github.ilia-sokolov%2Fofficeagent/versions/latest
 ```
+
+Run the post-release alignment check. It fails unless the latest GitHub release, NuGet package,
+and MCP Registry entry all expose the requested version:
+
+```bash
+python scripts/check_distribution.py --version "$VERSION"
+```
+
+```powershell
+python scripts/check_distribution.py --version $officeAgentVersion
+```
+
+The scheduled `distribution` workflow repeats this check weekly against the latest GitHub
+release so later registry drift remains visible.
 
 Do not announce the release while the registry still resolves to an older version.
 

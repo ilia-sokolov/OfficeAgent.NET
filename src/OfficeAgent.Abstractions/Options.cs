@@ -35,6 +35,12 @@ public sealed class ApplyOptions
     /// <summary>Gets a value indicating whether the plan should be previewed without writing.</summary>
     public bool DryRun { get; init; } = true;
 
+    /// <summary>
+    /// Gets the authenticated actor supplied by the host for the audit receipt. Callers
+    /// must derive it from trusted authentication state, not from plan content.
+    /// </summary>
+    public AuditActor? Actor { get; init; }
+
     /// <summary>Gets options for previewing a plan.</summary>
     public static ApplyOptions Preview { get; } = new() { DryRun = true };
 
@@ -57,6 +63,9 @@ public sealed class ApplyResult : IDisposable
 
     /// <summary>Gets a value indicating whether the plan was committed.</summary>
     public bool Committed { get; init; }
+
+    /// <summary>Gets the audit receipt for this apply attempt.</summary>
+    public ApplyReceipt? Receipt { get; init; }
 
     /// <summary>
     /// Returns the committed document bytes.

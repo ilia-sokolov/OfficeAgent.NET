@@ -12,8 +12,8 @@ namespace OfficeAgent.Word;
 /// </summary>
 /// <remarks>
 /// <para>
-/// One marker per apply, so every revision a plan writes shares an author and a timestamp
-/// and Word groups them as one round of edits rather than as a scatter of unrelated ones.
+/// One resolved identity per apply, so every marker a plan writes shares an author and a
+/// timestamp and Word groups them as one round of edits rather than as unrelated changes.
 /// </para>
 /// <para>
 /// A redline is not decoration. An inserted paragraph whose <em>mark</em> is not marked
@@ -34,11 +34,12 @@ internal sealed class WordRevisionMarker
     public string Author { get; }
 
     /// <summary>Initializes a marker over an open package.</summary>
-    public WordRevisionMarker(IOpenXmlPackage package, TimeProvider clock, string author = DefaultAuthor)
+    public WordRevisionMarker(IOpenXmlPackage package, RevisionMetadata revision)
     {
         _ids = new WordRevisionIdAllocator(package);
-        _stamp = clock.GetUtcNow().UtcDateTime;
-        Author = author;
+        _stamp = (revision.TimestampUtc
+            ?? throw new ArgumentException("Revision timestamp must be resolved before apply.", nameof(revision))).UtcDateTime;
+        Author = revision.Author;
     }
 
     /// <summary>

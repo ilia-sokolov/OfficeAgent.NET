@@ -26,10 +26,6 @@ namespace OfficeAgent.Word;
 /// </remarks>
 internal sealed class WordNoteHandler : IOperationHandler
 {
-    private readonly TimeProvider _clock;
-
-    public WordNoteHandler(TimeProvider clock) => _clock = clock;
-
     public bool CanHandle(PlanOperation operation) => operation switch
     {
         NoteOp { Target: TextSpanAnchor, Action: NoteAction.Add } => true,
@@ -126,7 +122,7 @@ internal sealed class WordNoteHandler : IOperationHandler
         // The reference is the revision Word keys on - accepting or rejecting it is what
         // makes the note appear or vanish - and the note's own text is marked with it so a
         // rejected note does not leave its wording at the foot of the page.
-        var marker = new WordRevisionMarker(context.Package, _clock);
+        var marker = new WordRevisionMarker(context.Package, context.Revision);
         marker.WrapInserted(reference);
         foreach (var noteParagraph in body.Elements<Paragraph>())
             marker.MarkContentInserted(noteParagraph);
@@ -192,7 +188,7 @@ internal sealed class WordNoteHandler : IOperationHandler
             ?? note.AppendChild(new Paragraph());
 
         var marker = WordRevisionMarker.IsTracked(op.Mode)
-            ? new WordRevisionMarker(context.Package, _clock)
+            ? new WordRevisionMarker(context.Package, context.Revision)
             : null;
 
         // The reference mark run is the note's number; it survives a rewrite of the text.
@@ -220,7 +216,7 @@ internal sealed class WordNoteHandler : IOperationHandler
         {
             // The note and its reference both stay until a reviewer accepts: a rejected
             // deletion has to put the note back, numbering and all.
-            var marker = new WordRevisionMarker(context.Package, _clock);
+            var marker = new WordRevisionMarker(context.Package, context.Revision);
             foreach (var reference in references)
                 if (reference.Parent is Run run) marker.MarkRunDeleted(run);
             foreach (var paragraph in note.Elements<Paragraph>())

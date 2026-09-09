@@ -38,6 +38,16 @@ internal sealed class PlanValidator
                 $"Plan was authored against snapshot '{planSnap.ETag}' but the live document is at '{context.Inspection.Snapshot.ETag}'. Re-inspect and rebuild the plan."));
         }
 
+        if (plan.Revision is { } revision &&
+            (string.IsNullOrWhiteSpace(revision.Author) ||
+             revision.Author.Length > 255 ||
+             revision.Author.Any(char.IsControl)))
+        {
+            errors.Add(new ValidationError(
+                ValidationErrorCodes.InvalidOperation,
+                "Revision author must contain 1 to 255 visible characters and no control characters."));
+        }
+
         DetectConflicts(plan, errors);
 
         // Format-specific plan-wide rules, which no single handler can see.

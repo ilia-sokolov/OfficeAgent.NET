@@ -8,10 +8,6 @@ namespace OfficeAgent.Word;
 internal sealed class InsertTableHandler : IOperationHandler
 {
     private readonly TableBinder _tables = new();
-    private readonly TimeProvider _clock;
-
-    public InsertTableHandler(TimeProvider clock) => _clock = clock;
-
     public bool CanHandle(PlanOperation operation) =>
         operation is InsertTableOp { Target: TextSpanAnchor };
 
@@ -65,7 +61,7 @@ internal sealed class InsertTableHandler : IOperationHandler
         EnsureParagraphFollows(table);
 
         if (WordRevisionMarker.IsTracked(op.Mode))
-            new WordRevisionMarker(context.Package, _clock).MarkTableInserted(table);
+            new WordRevisionMarker(context.Package, context.Revision).MarkTableInserted(table);
     }
     
     private static void EnsureParagraphFollows(Table table)

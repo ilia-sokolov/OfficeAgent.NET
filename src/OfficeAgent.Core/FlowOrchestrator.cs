@@ -1,4 +1,6 @@
 using System.Diagnostics;
+using System.Security.Cryptography;
+using System.Text.Json;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using OfficeAgent.Abstractions;
@@ -100,7 +102,9 @@ internal sealed class FlowOrchestrator
         activity?.SetTag("officeagent.dryrun", options.DryRun);
 
         var sw = Stopwatch.StartNew();
-        var (report, _) = ValidateBytes(bytes, plan);
+        var (report, _, attemptedAt, revision) = ValidateForApply(bytes, plan);
+        var planHash = Hash(JsonSerializer.SerializeToUtf8Bytes(plan));
+        var inputHash = Hash(bytes);
 
         if (options.DryRun || !report.IsValid)
         {
@@ -110,7 +114,16 @@ internal sealed class FlowOrchestrator
             else
                 _logger.LogDebug("Apply dry-run produced {ChangeCount} proposed change(s) in {Elapsed} ms",
                     report.Changes.Count, sw.ElapsedMilliseconds);
-            return new ApplyResult { Report = report, Committed = false, Output = null };
+            return new ApplyResult
+            {
+                Report = report,
+                Committed = false,
+                Output = null,
+                Receipt = Receipt(
+                    planHash, inputHash, outputHash: null, attemptedAt,
+                    report.IsValid ? ApplyOutcome.Previewed : ApplyOutcome.Rejected,
+                    revision, options.Actor)
+            };
         }
 
         using var commitPackage = _opc.Open(bytes, editable: true);
@@ -118,7 +131,7 @@ internal sealed class FlowOrchestrator
 
         var aliases = commitModule.Stabilize(commitPackage);
         var commitSnapshot = commitModule.Inspect(commitPackage, InspectOptions.Default);
-        var context = new ApplyContext(commitPackage, commitSnapshot, aliases);
+        var context = new ApplyContext(commitPackage, commitSnapshot, aliases, revision);
 
         var outcome = _transaction.ApplyAtomic(context, plan, commitModule, cancellationToken);
         if (!outcome.Success)
@@ -135,7 +148,10 @@ internal sealed class FlowOrchestrator
                     Errors = new[] { outcome.Error! }
                 },
                 Committed = false,
-                Output = null
+                Output = null,
+                Receipt = Receipt(
+                    planHash, inputHash, outputHash: null, attemptedAt,
+                    ApplyOutcome.Rejected, revision, options.Actor)
             };
         }
 
@@ -153,7 +169,15 @@ internal sealed class FlowOrchestrator
 
         _logger.LogInformation("Apply committed {Operations} op(s), {InputBytes} B → {OutputBytes} B in {Elapsed} ms",
             plan.Operations.Count, bytes.Length, outputBytes.Length, sw.ElapsedMilliseconds);
-        return new ApplyResult { Report = report, Committed = true, Output = output };
+        return new ApplyResult
+        {
+            Report = report,
+            Committed = true,
+            Output = output,
+            Receipt = Receipt(
+                planHash, inputHash, Hash(outputBytes), attemptedAt,
+                ApplyOutcome.Committed, revision, options.Actor)
+        };
     }
 
     private (ChangeReport Report, IFormatModule Module) ValidateBytes(byte[] bytes, DocumentPlan plan)
@@ -164,6 +188,50 @@ internal sealed class FlowOrchestrator
         var context = new ApplyContext(package, snapshot);
         var report = _validator.Validate(context, plan, module);
         return (report, module);
+    }
+
+    private (ChangeReport Report, IFormatModule Module, DateTimeOffset AttemptedAt, RevisionMetadata Revision)
+        ValidateForApply(byte[] bytes, DocumentPlan plan)
+    {
+        using var package = _opc.Open(bytes, editable: false);
+        var module = _router.Route(package);
+        var clock = module is IApplyTimeProvider provider ? provider.Clock : TimeProvider.System;
+        var attemptedAt = clock.GetUtcNow().ToUniversalTime();
+        var revision = ResolveRevision(plan.Revision, attemptedAt);
+        var snapshot = module.Inspect(package, InspectOptions.Default);
+        var context = new ApplyContext(package, snapshot, revision: revision);
+        return (_validator.Validate(context, plan, module), module, attemptedAt, revision);
+    }
+
+    private static RevisionMetadata ResolveRevision(RevisionMetadata? requested, DateTimeOffset attemptedAt) =>
+        new()
+        {
+            Author = requested?.Author ?? "OfficeAgent",
+            TimestampUtc = (requested?.TimestampUtc ?? attemptedAt).ToUniversalTime()
+        };
+
+    private static ApplyReceipt Receipt(
+        string planHash,
+        string inputHash,
+        string? outputHash,
+        DateTimeOffset timestamp,
+        ApplyOutcome outcome,
+        RevisionMetadata revision,
+        AuditActor? actor) => new()
+        {
+            PlanSha256 = planHash,
+            InputSha256 = inputHash,
+            OutputSha256 = outputHash,
+            TimestampUtc = timestamp,
+            Outcome = outcome,
+            Revision = revision,
+            Actor = actor
+        };
+
+    private static string Hash(byte[] bytes)
+    {
+        using var sha = SHA256.Create();
+        return BitConverter.ToString(sha.ComputeHash(bytes)).Replace("-", string.Empty).ToLowerInvariant();
     }
 
     private Stream ResolveStream(DocumentHandle handle)

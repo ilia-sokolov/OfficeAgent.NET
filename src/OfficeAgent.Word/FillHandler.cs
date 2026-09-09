@@ -13,10 +13,6 @@ namespace OfficeAgent.Word;
 /// </summary>
 internal sealed class FillHandler : IOperationHandler
 {
-    private readonly TimeProvider _clock;
-
-    public FillHandler(TimeProvider clock) => _clock = clock;
-
     public bool CanHandle(PlanOperation operation) =>
         operation is FillOp { Target: StructuralAnchor };
 
@@ -65,7 +61,7 @@ internal sealed class FillHandler : IOperationHandler
         var content = ContentOf(sdt);
         if (content is null) return;
 
-        var marker = new WordRevisionMarker(context.Package, _clock);
+        var marker = new WordRevisionMarker(context.Package, context.Revision);
         marker.MarkContentDeleted(content);
 
         if (value.Length == 0) return;

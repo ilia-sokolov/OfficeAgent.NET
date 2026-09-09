@@ -24,10 +24,6 @@ namespace OfficeAgent.Word;
 /// </remarks>
 internal sealed class WordInsertBreakHandler : IOperationHandler
 {
-    private readonly TimeProvider _clock;
-
-    public WordInsertBreakHandler(TimeProvider clock) => _clock = clock;
-
     public bool CanHandle(PlanOperation operation) =>
         operation is InsertBreakOp { Target: TextSpanAnchor };
 
@@ -80,7 +76,7 @@ internal sealed class WordInsertBreakHandler : IOperationHandler
             paragraph.InsertAfterSelf(carrier);
 
         if (WordRevisionMarker.IsTracked(op.Mode))
-            new WordRevisionMarker(context.Package, _clock).MarkParagraphInserted(carrier);
+            new WordRevisionMarker(context.Package, context.Revision).MarkParagraphInserted(carrier);
     }
 
     private static Paragraph CharacterBreakParagraph(BreakKind kind) =>

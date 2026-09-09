@@ -13,10 +13,6 @@ namespace OfficeAgent.Word;
 internal sealed class RemoveTableColumnsHandler : IOperationHandler
 {
     private readonly TableNodeProvider _tables = new();
-    private readonly TimeProvider _clock;
-
-    public RemoveTableColumnsHandler(TimeProvider clock) => _clock = clock;
-
     public bool CanHandle(PlanOperation operation) =>
         operation is RemoveTableColumnsOp { Target: NodeAnchor { Kind: "table" } };
 
@@ -71,7 +67,7 @@ internal sealed class RemoveTableColumnsHandler : IOperationHandler
         {
             // A tracked column deletion keeps the cells and marks each one w:cellDel, so
             // the grid still lines up while the revision is pending.
-            var marker = new WordRevisionMarker(context.Package, _clock);
+            var marker = new WordRevisionMarker(context.Package, context.Revision);
             foreach (var row in rows)
             {
                 var cells = row.Elements<TableCell>().ToList();

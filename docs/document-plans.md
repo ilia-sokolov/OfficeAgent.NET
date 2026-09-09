@@ -6,6 +6,10 @@ A `DocumentPlan` is the wire contract between an agent and the engine. It is a J
 
 ```json
 {
+  "revision": {
+    "author": "Contract Review Agent",
+    "timestampUtc": "2026-09-09T10:00:00Z"
+  },
   "operations": [
     {
       "op": "changeText",
@@ -20,8 +24,23 @@ A `DocumentPlan` is the wire contract between an agent and the engine. It is a J
 - `operations` is required. Each entry is one operation.
 - `op` is the verb discriminator. It may appear anywhere in the object - property order does not matter - and an unknown verb comes back as `invalid-json` naming the ones that exist.
 - `target` is an anchor. The `$anchor` field is optional - the engine infers the anchor type from the property names (`paraId` → text span, `tag` → structural, `kind`/`path` → node).
-- `contractVersion` and `snapshot` are optional. Omit unless you need explicit drift detection.
+- `contractVersion`, `snapshot`, and `revision` are optional. Omit `contractVersion` unless a host needs to carry it, and use `snapshot` for explicit drift detection.
 - `format` is optional and *asserts* the document's format (`"Word"`, `"PowerPoint"`); a mismatch fails the plan with `contract-mismatch`. The verb vocabulary is shared, so a plan that does not care works against either.
+
+## Revision identity
+
+`revision.author` is the name Word displays on every tracked operation in the plan.
+It defaults to `OfficeAgent`. `revision.timestampUtc` is optional; when omitted, the
+engine reads the format module's clock once and uses that UTC value throughout the apply.
+Supplying a timestamp with an offset is allowed and is normalized to UTC.
+
+The revision author is document display metadata. It does not identify the authenticated
+caller. A host supplies that identity separately through `ApplyOptions.Actor`,
+`SaveDocumentOptions.Actor`, or an `IAuditActorProvider`; it appears only in the audit
+receipt. Plan JSON cannot set the audit actor.
+
+Authors must contain 1 to 255 visible characters and no control characters. An invalid
+author rejects the plan before mutation.
 
 The anchor shapes and node paths below are the Word ones. A deck addresses slides, shapes, and speaker notes instead - see [PowerPoint support](powerpoint.md#addressing).
 

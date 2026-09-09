@@ -38,6 +38,13 @@ public sealed class DocumentPlan
     public SnapshotToken? Snapshot { get; init; }
 
     /// <summary>
+    /// Gets the display identity for tracked revisions written by this plan. When omitted,
+    /// the engine uses author <c>OfficeAgent</c> and resolves one timestamp for the apply.
+    /// This is document metadata, not the authenticated audit actor.
+    /// </summary>
+    public RevisionMetadata? Revision { get; init; }
+
+    /// <summary>
     /// Gets the operations to validate and apply in order.
     /// </summary>
     public IReadOnlyList<PlanOperation> Operations { get; init; } = Array.Empty<PlanOperation>();

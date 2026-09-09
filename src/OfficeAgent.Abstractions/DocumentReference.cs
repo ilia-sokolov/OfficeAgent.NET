@@ -96,4 +96,10 @@ public sealed class SaveDocumentOptions
     /// outside their configured connection boundary.
     /// </summary>
     public string? DestinationItemId { get; init; }
+
+    /// <summary>
+    /// Gets the authenticated actor supplied by the host for the apply receipt. When
+    /// omitted, <c>OfficeAgentClient</c> asks its registered audit actor provider.
+    /// </summary>
+    public AuditActor? Actor { get; init; }
 }

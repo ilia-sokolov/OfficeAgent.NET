@@ -25,6 +25,28 @@ public interface IPlanValidatingModule
 }
 
 /// <summary>
+/// Optional format-module capability that supplies the trusted clock used to resolve one
+/// apply timestamp. Modules with time-dependent document metadata should expose the same
+/// clock so tests and receipts remain deterministic.
+/// </summary>
+public interface IApplyTimeProvider
+{
+    /// <summary>Gets the clock used for apply timestamps.</summary>
+    TimeProvider Clock { get; }
+}
+
+/// <summary>
+/// Optional host service that resolves the authenticated actor for an audit receipt.
+/// Implementations must read trusted authentication state; plan revision metadata is not
+/// an authentication source.
+/// </summary>
+public interface IAuditActorProvider
+{
+    /// <summary>Returns the current authenticated actor, or null for an anonymous call.</summary>
+    AuditActor? GetCurrentActor();
+}
+
+/// <summary>
 /// Defines the contract implemented by a document format module.
 /// </summary>
 public interface IFormatModule
@@ -140,18 +162,24 @@ public sealed class ApplyContext
     /// <summary>Gets the inspection captured when the context was created.</summary>
     public InspectResult Inspection { get; }
 
+    /// <summary>Gets the revision identity resolved once for this apply.</summary>
+    public RevisionMetadata Revision { get; }
+
     /// <summary>Initializes a new instance of the <see cref="ApplyContext"/> class.</summary>
     /// <param name="package">The open package.</param>
     /// <param name="inspection">The inspection captured for the package.</param>
     /// <param name="aliases">The positional-to-stable anchor id map, or <see langword="null"/> for none.</param>
+    /// <param name="revision">The revision identity resolved for this apply.</param>
     public ApplyContext(
         IOpenXmlPackage package,
         InspectResult inspection,
-        IReadOnlyDictionary<string, string>? aliases = null)
+        IReadOnlyDictionary<string, string>? aliases = null,
+        RevisionMetadata? revision = null)
     {
         Package = package;
         Inspection = inspection;
         _aliases = aliases ?? EmptyAliases;
+        Revision = revision ?? new RevisionMetadata();
     }
 
     /// <summary>

@@ -32,6 +32,7 @@ public sealed class OfficeAgentClient
     private readonly DocumentProviderRegistry _providers;
     private readonly IReadOnlyList<IBlankDocumentFactory> _blankDocumentFactories;
     private readonly ILogger _logger;
+    private readonly IAuditActorProvider? _auditActorProvider;
 
     public OfficeAgentClient(params IFormatModule[] modules)
         : this(
@@ -70,12 +71,14 @@ public sealed class OfficeAgentClient
         IDocumentService service,
         DocumentProviderRegistry providers,
         ILoggerFactory? loggerFactory,
-        IEnumerable<IBlankDocumentFactory> blankDocumentFactories)
+        IEnumerable<IBlankDocumentFactory> blankDocumentFactories,
+        IAuditActorProvider? auditActorProvider = null)
         : this(
             service,
             providers,
             (blankDocumentFactories ?? throw new ArgumentNullException(nameof(blankDocumentFactories))).ToArray(),
-            loggerFactory)
+            loggerFactory,
+            auditActorProvider)
     {
     }
 
@@ -83,12 +86,14 @@ public sealed class OfficeAgentClient
         IDocumentService service,
         DocumentProviderRegistry providers,
         IReadOnlyList<IBlankDocumentFactory> blankDocumentFactories,
-        ILoggerFactory? loggerFactory)
+        ILoggerFactory? loggerFactory,
+        IAuditActorProvider? auditActorProvider = null)
     {
         _service = service ?? throw new ArgumentNullException(nameof(service));
         _providers = providers ?? throw new ArgumentNullException(nameof(providers));
         _logger = (loggerFactory ?? NullLoggerFactory.Instance).CreateLogger(OfficeAgentTelemetry.LogCategory);
         _blankDocumentFactories = blankDocumentFactories;
+        _auditActorProvider = auditActorProvider;
     }
 
     // ---- Core surface (DocumentHandle) ----
@@ -209,6 +214,7 @@ public sealed class OfficeAgentClient
 
         var bytes = CreateBlankDocument(name, provider);
         var report = new ChangeReport { IsValid = true };
+        ApplyReceipt? receipt = null;
 
         if (plan is not null)
         {
@@ -216,19 +222,28 @@ public sealed class OfficeAgentClient
             // Snapshot are part of the contract, and a plan that disagrees with the
             // document should fail before anything is written rather than after.
             plan = await ResolveImageReferencesAsync(plan, cancellationToken).ConfigureAwait(false);
-            using var applied = await CommitAsync(
-                new StreamHandle(new MemoryStream(bytes, writable: false), name), plan, cancellationToken).ConfigureAwait(false);
+            using var applied = await ApplyAsync(
+                new StreamHandle(new MemoryStream(bytes, writable: false), name),
+                plan,
+                new ApplyOptions { DryRun = false, Actor = ResolveActor(explicitActor: null) },
+                cancellationToken).ConfigureAwait(false);
 
             if (!applied.Committed)
             {
                 _logger.LogInformation(
                     "Provider create rejected for {Provider}:{ConnectionId} '{Name}' - initial plan invalid",
                     provider.Provider, provider.ConnectionId, name);
-                return new ProviderApplyResult { Report = applied.Report, Committed = false };
+                return new ProviderApplyResult
+                {
+                    Report = applied.Report,
+                    Committed = false,
+                    Receipt = applied.Receipt
+                };
             }
 
             bytes = applied.ToBytes();
             report = applied.Report;
+            receipt = applied.Receipt;
         }
 
         using var output = new MemoryStream(bytes, writable: false);
@@ -245,7 +260,13 @@ public sealed class OfficeAgentClient
             provider.Provider, provider.ConnectionId, name, created.ItemId, bytes.Length,
             plan?.Operations.Count ?? 0, sw.ElapsedMilliseconds);
 
-        return new ProviderApplyResult { Report = report, Committed = true, Document = created };
+        return new ProviderApplyResult
+        {
+            Report = report,
+            Committed = true,
+            Document = created,
+            Receipt = receipt is null ? null : WithOutputDocument(receipt, created)
+        };
     }
 
     /// <summary>
@@ -383,10 +404,26 @@ public sealed class OfficeAgentClient
         DocumentPlan plan,
         CancellationToken cancellationToken = default)
     {
+        using var result = await PreviewWithReceiptAsync(reference, plan, cancellationToken).ConfigureAwait(false);
+        return result.Report;
+    }
+
+    /// <summary>
+    /// Previews a provider document and returns the audit receipt alongside the change
+    /// report. No provider write occurs and the receipt has no output hash or reference.
+    /// </summary>
+    public async Task<ApplyResult> PreviewWithReceiptAsync(
+        DocumentReference reference,
+        DocumentPlan plan,
+        CancellationToken cancellationToken = default)
+    {
         plan = await ResolveImageReferencesAsync(plan, cancellationToken).ConfigureAwait(false);
         using var content = await OpenWithTelemetryAsync(reference, cancellationToken).ConfigureAwait(false);
-        return await PreviewAsync(
-            new StreamHandle(content.Stream, content.Reference.Name), plan, cancellationToken).ConfigureAwait(false);
+        return await ApplyAsync(
+            new StreamHandle(content.Stream, content.Reference.Name),
+            plan,
+            new ApplyOptions { DryRun = true, Actor = ResolveActor(explicitActor: null) },
+            cancellationToken).ConfigureAwait(false);
     }
 
     /// <summary>Commits a plan and saves the result through the selected provider.</summary>
@@ -398,22 +435,29 @@ public sealed class OfficeAgentClient
     {
         plan = await ResolveImageReferencesAsync(plan, cancellationToken).ConfigureAwait(false);
         var provider = _providers.Resolve(reference);
+        var saveOpts = options ?? new SaveDocumentOptions();
         using var content = await OpenWithTelemetryAsync(provider, reference, cancellationToken).ConfigureAwait(false);
-        using var result = await CommitAsync(
-            new StreamHandle(content.Stream, content.Reference.Name), plan, cancellationToken).ConfigureAwait(false);
+        using var result = await ApplyAsync(
+            new StreamHandle(content.Stream, content.Reference.Name),
+            plan,
+            new ApplyOptions { DryRun = false, Actor = ResolveActor(saveOpts.Actor) },
+            cancellationToken).ConfigureAwait(false);
 
         if (!result.Committed)
         {
             _logger.LogInformation(
                 "Provider commit rejected for {Provider}:{ConnectionId}/{ItemId} - plan invalid",
                 provider.Provider, provider.ConnectionId, reference.ItemId);
-            return new ProviderApplyResult { Report = result.Report, Committed = false };
+            return new ProviderApplyResult
+            {
+                Report = result.Report,
+                Committed = false,
+                Receipt = result.Receipt
+            };
         }
 
         var bytes = result.ToBytes();
         using var output = new MemoryStream(bytes, writable: false);
-        var saveOpts = options ?? new SaveDocumentOptions();
-
         using var saveActivity = OfficeAgentTelemetry.ActivitySource.StartActivity("OfficeAgent.Provider.Save");
         saveActivity?.SetTag("officeagent.provider", provider.Provider);
         saveActivity?.SetTag("officeagent.connectionId", provider.ConnectionId);
@@ -432,7 +476,8 @@ public sealed class OfficeAgentClient
         {
             Report = result.Report,
             Committed = true,
-            Document = saved
+            Document = saved,
+            Receipt = result.Receipt is null ? null : WithOutputDocument(result.Receipt, saved)
         };
     }
 
@@ -449,6 +494,14 @@ public sealed class OfficeAgentClient
     /// <summary>Previews a plan against a provider document by <c>(connectionId, documentId)</c>.</summary>
     public Task<ChangeReport> PreviewAsync(string connectionId, string documentId, DocumentPlan plan, CancellationToken cancellationToken = default) =>
         PreviewAsync(ReferenceFor(connectionId, documentId), plan, cancellationToken);
+
+    /// <summary>Previews a provider document and returns its report plus audit receipt.</summary>
+    public Task<ApplyResult> PreviewWithReceiptAsync(
+        string connectionId,
+        string documentId,
+        DocumentPlan plan,
+        CancellationToken cancellationToken = default) =>
+        PreviewWithReceiptAsync(ReferenceFor(connectionId, documentId), plan, cancellationToken);
 
     /// <summary>Commits a plan against a provider document by <c>(connectionId, documentId)</c>.</summary>
     public Task<ProviderApplyResult> CommitAsync(string connectionId, string documentId, DocumentPlan plan, SaveDocumentOptions? options = null, CancellationToken cancellationToken = default) =>
@@ -586,9 +639,26 @@ public sealed class OfficeAgentClient
             ContractVersion = plan.ContractVersion,
             Format = plan.Format,
             Snapshot = plan.Snapshot,
+            Revision = plan.Revision,
             Operations = rewritten
         };
     }
+
+    private AuditActor? ResolveActor(AuditActor? explicitActor) =>
+        explicitActor ?? _auditActorProvider?.GetCurrentActor();
+
+    private static ApplyReceipt WithOutputDocument(ApplyReceipt receipt, DocumentReference document) => new()
+    {
+        ReceiptVersion = receipt.ReceiptVersion,
+        PlanSha256 = receipt.PlanSha256,
+        InputSha256 = receipt.InputSha256,
+        OutputSha256 = receipt.OutputSha256,
+        TimestampUtc = receipt.TimestampUtc,
+        Outcome = receipt.Outcome,
+        Revision = receipt.Revision,
+        Actor = receipt.Actor,
+        OutputDocument = document
+    };
 
     private async Task<byte[]> OpenImageBytesAsync(string connectionId, string documentId, CancellationToken cancellationToken)
     {

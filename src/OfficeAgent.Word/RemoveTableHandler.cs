@@ -12,10 +12,6 @@ namespace OfficeAgent.Word;
 internal sealed class RemoveTableHandler : IOperationHandler
 {
     private readonly TableNodeProvider _tables = new();
-    private readonly TimeProvider _clock;
-
-    public RemoveTableHandler(TimeProvider clock) => _clock = clock;
-
     public bool CanHandle(PlanOperation operation) =>
         operation is RemoveTableOp { Target: NodeAnchor { Kind: "table" } };
 
@@ -56,7 +52,7 @@ internal sealed class RemoveTableHandler : IOperationHandler
         {
             // A tracked removal strikes the table through and leaves it in place; the
             // reviewer accepting the revision is what actually deletes it.
-            new WordRevisionMarker(context.Package, _clock).MarkTableDeleted(table);
+            new WordRevisionMarker(context.Package, context.Revision).MarkTableDeleted(table);
             return;
         }
 

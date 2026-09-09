@@ -293,7 +293,7 @@ public sealed class OfficeAgentTools
                 "The extension picks the format: '.docx' makes a Word document, '.pptx' makes a PowerPoint deck. " +
                 "Pass planJson \"\" for a minimal document. The starting anchor differs by format: a Word document has one empty paragraph at { \"paraId\": \"auto-0000\", \"expect\": \"\" }; a deck has one empty title placeholder at { \"paraId\": \"slide256/shape2/p0\", \"expect\": \"\" }, and its slide-targeted verbs use { \"kind\": \"slide\", \"path\": \"slide#256\" }. " +
                 "Plan-validation errors guarantee no write. Provider and cancellation errors may occur after storage accepted the file, so do not retry the same name; report the possibly unregistered name to the host for recovery. " +
-                "Returns {isValid, committed, sourceDocumentId, outputConnectionId, outputDocumentId, outputVersion, outputName, outputContentType, changes, errors}; non-applicable values are null.")));
+                "Returns {isValid, committed, receipt, sourceDocumentId, outputConnectionId, outputDocumentId, outputVersion, outputName, outputContentType, changes, errors}; non-applicable values are null.")));
         }
         if (options.AllowInlineContent)
         {
@@ -303,7 +303,7 @@ public sealed class OfficeAgentTools
                 "name is a bare file name whose extension picks the format: '.docx' makes a Word document, '.pptx' makes a PowerPoint deck. " +
                 "planJson is optional and authors the document before it is returned; several operations in one call turn nothing into a finished document. " +
                 "Pass planJson \"\" for an empty document. The starting anchor differs by format: a Word document has one empty paragraph at { \"paraId\": \"auto-0000\", \"expect\": \"\" }; a deck has one empty title placeholder at { \"paraId\": \"slide256/shape2/p0\", \"expect\": \"\" }. " +
-                "Returns {isValid, committed, name, contentBase64, contentBytes, changes, errors}. contentBase64 is the finished document - hand it to the host to save, or pass it straight back to edit_document_content to keep working. It is null when the plan failed, and then nothing was created.\n\n" +
+                "Returns {isValid, committed, receipt, name, contentBase64, contentBytes, changes, errors}. contentBase64 is the finished document - hand it to the host to save, or pass it straight back to edit_document_content to keep working. It is null when the plan failed, and then nothing was created.\n\n" +
                 PlanOperations)));
             functions.Add(AIFunctionFactory.Create(InspectDocumentContent, Opts(
                 "inspect_document_content",
@@ -319,7 +319,7 @@ public sealed class OfficeAgentTools
                 "{ \"op\": \"changeText\", \"target\": { \"find\": \"Acme Corp\" }, \"with\": \"Globex Inc.\" }\n" +
                 "If that text matches more than once the call fails with 'ambiguous-anchor' and lists each candidate; re-issue with { \"find\": \"Acme Corp\", \"match\": 2 } (zero-based) or use more surrounding text. Anchors from inspect_document_content work here too, and can be mixed in the same plan. " +
                 "Set preview=true to validate without producing a document - the report comes back with contentBase64 null and nothing is applied. " +
-                "Returns {isValid, committed, name, contentBase64, contentBytes, changes, errors}. contentBase64 carries the edited document and is null on a preview or a failure. " +
+                "Returns {isValid, committed, receipt, name, contentBase64, contentBytes, changes, errors}. contentBase64 carries the edited document and is null on a preview or a failure. " +
                 "Nothing is stored anywhere: the returned document is the only copy, so pass it on or hand it to the host before dropping it. " +
                 "Pass back the contentBase64 you were given, complete and unchanged - content that arrives altered or truncated is refused as invalid-argument, because it is no longer a readable package.\n\n" +
                 PlanOperations)));
@@ -411,12 +411,12 @@ public sealed class OfficeAgentTools
             "Find text in a document by (connectionId, documentId) - a Word document or a PowerPoint deck, including slide notes and table cells. Returns content-verified anchors (paragraphId + expected + occurrence) usable as plan targets. Each hit also carries its source location for Word: 'body', 'header', 'footer', 'footnote', or 'endnote' (null in a deck), so identical text in different hosts can be told apart before a plan targets one.")),
         AIFunctionFactory.Create(PreviewPlan, Opts(
             "preview_plan",
-            "Dry-run a DocumentPlan JSON against (connectionId, documentId). Returns {isValid, committed, sourceDocumentId, outputConnectionId, outputDocumentId, outputVersion, outputName, outputContentType, changes, errors}; the output fields are null and committed is false. " +
-            "Plan shape: { \"snapshot\": { \"eTag\": \"<snapshot string from inspect_document>\" }, \"operations\": [ ... ] }. The snapshot detects drift in Word text-host XML or PowerPoint slide/notes XML; other parts rely on anchors and provider version checks. Omit it only intentionally. Do not set contractVersion. " +
+            "Dry-run a DocumentPlan JSON against (connectionId, documentId). Returns {isValid, committed, receipt, sourceDocumentId, outputConnectionId, outputDocumentId, outputVersion, outputName, outputContentType, changes, errors}; the output fields are null and committed is false. " +
+            "Plan shape: { \"snapshot\": { \"eTag\": \"<snapshot string from inspect_document>\" }, \"revision\": { \"author\": \"Review Bot\", \"timestampUtc\": \"2026-09-09T10:00:00Z\" }, \"operations\": [ ... ] }. revision controls Word's displayed revision identity; omit timestampUtc to use one engine timestamp for the whole apply. The snapshot detects drift in Word text-host XML or PowerPoint slide/notes XML; other parts rely on anchors and provider version checks. Omit it only intentionally. Do not set contractVersion. " +
             PlanOperations)),
         AIFunctionFactory.Create(ApplyPlan, Opts(
             "apply_plan",
-            "Apply a DocumentPlan JSON to (connectionId, documentId) and save through the provider. Returns {isValid, committed, sourceDocumentId, outputConnectionId, outputDocumentId, outputVersion, outputName, outputContentType, changes, errors}; non-applicable values are null. saveMode: 'Replace' (default, overwrites the source after an optimistic version check), 'NewVersion' (keeps the source and mints a new id under the same connection), 'NewDocument' (mints a fresh id with an optional newName for display). On any failure nothing is written."))
+            "Apply a DocumentPlan JSON to (connectionId, documentId) and save through the provider. Returns {isValid, committed, receipt, sourceDocumentId, outputConnectionId, outputDocumentId, outputVersion, outputName, outputContentType, changes, errors}; non-applicable values are null. The receipt hashes the effective plan and exact input/output bytes and keeps the host-authenticated actor separate from the plan's display revision author. saveMode: 'Replace' (default, overwrites the source after an optimistic version check), 'NewVersion' (keeps the source and mints a new id under the same connection), 'NewDocument' (mints a fresh id with an optional newName for display). On any failure nothing is written."))
     };
 
     /// <summary>Inspects a document and returns paginated JSON.</summary>
@@ -497,8 +497,10 @@ public sealed class OfficeAgentTools
         => SafeAsync(async () =>
         {
             var plan = DeserializePlan(planJson, connectionId);
-            var report = await _client.PreviewAsync(connectionId, documentId, plan, cancellationToken).ConfigureAwait(false);
-            return SerializeReport(report, committed: false, savedReference: null);
+            using var result = await _client.PreviewWithReceiptAsync(
+                connectionId, documentId, plan, cancellationToken).ConfigureAwait(false);
+            return SerializeReport(
+                result.Report, committed: false, savedReference: null, receipt: result.Receipt);
         });
 
     /// <summary>Applies a plan and saves through the provider.</summary>
@@ -518,7 +520,9 @@ public sealed class OfficeAgentTools
                 NewName = string.IsNullOrEmpty(newName) ? null : newName
             };
             var result = await _client.CommitAsync(connectionId, documentId, plan, options, cancellationToken).ConfigureAwait(false);
-            return SerializeReport(result.Report, result.Committed, result.Committed ? result.Document : null);
+            return SerializeReport(
+                result.Report, result.Committed, result.Committed ? result.Document : null,
+                receipt: result.Receipt);
         });
 
     /// <summary>Registers a document with a provider connection and returns its opaque id.</summary>
@@ -552,7 +556,9 @@ public sealed class OfficeAgentTools
         {
             var plan = string.IsNullOrWhiteSpace(planJson) ? null : DeserializePlan(planJson, connectionId);
             var result = await _client.CreateAsync(connectionId, name, plan, cancellationToken).ConfigureAwait(false);
-            return SerializeReport(result.Report, result.Committed, result.Committed ? result.Document : null);
+            return SerializeReport(
+                result.Report, result.Committed, result.Committed ? result.Document : null,
+                receipt: result.Receipt);
         });
 
     /// <summary>
@@ -624,7 +630,7 @@ public sealed class OfficeAgentTools
 
             return SerializeReport(
                 result.Report, result.Committed, result.Committed ? result.Document : null,
-                sourceDocumentId: reference.ItemId);
+                sourceDocumentId: reference.ItemId, receipt: result.Receipt);
         });
 
     // ── Inline content: no connection, no stored document ────────────────
@@ -702,13 +708,16 @@ public sealed class OfficeAgentTools
 
         if (preview)
         {
-            var report = await _client.PreviewAsync(handle, plan, cancellationToken).ConfigureAwait(false);
-            return SerializeContent(report, committed: false, content: null, name);
+            using var previewResult = await _client.ApplyAsync(
+                handle, plan, ApplyOptions.Preview, cancellationToken).ConfigureAwait(false);
+            return SerializeContent(
+                previewResult.Report, committed: false, content: null, name, previewResult.Receipt);
         }
 
         using var applied = await _client.CommitAsync(handle, plan, cancellationToken).ConfigureAwait(false);
         return SerializeContent(
-            applied.Report, applied.Committed, applied.Committed ? applied.ToBytes() : null, name);
+            applied.Report, applied.Committed, applied.Committed ? applied.ToBytes() : null,
+            name, applied.Receipt);
     }
 
     /// <summary>
@@ -1051,11 +1060,16 @@ public sealed class OfficeAgentTools
     /// so an agent that finds it null knows not to look for a document.
     /// </summary>
     private static string SerializeContent(
-        ChangeReport report, bool committed, byte[]? content, string? name) =>
+        ChangeReport report,
+        bool committed,
+        byte[]? content,
+        string? name,
+        ApplyReceipt? receipt = null) =>
         JsonSerializer.Serialize(new
         {
             isValid = report.IsValid,
             committed,
+            receipt = ReceiptPayload(receipt),
             name,
             contentBase64 = content is null ? null : Convert.ToBase64String(content),
             contentBytes = content?.Length,
@@ -1077,11 +1091,13 @@ public sealed class OfficeAgentTools
         ChangeReport report,
         bool committed,
         DocumentReference? savedReference,
-        string? sourceDocumentId = null) =>
+        string? sourceDocumentId = null,
+        ApplyReceipt? receipt = null) =>
         JsonSerializer.Serialize(new
         {
             isValid = report.IsValid,
             committed,
+            receipt = ReceiptPayload(receipt),
             // Present only for the composite tools, which mint the source id themselves:
             // it lets the agent keep working with the document it just named by path.
             sourceDocumentId,
@@ -1109,6 +1125,7 @@ public sealed class OfficeAgentTools
         {
             isValid = false,
             committed = false,
+            receipt = (ApplyReceipt?)null,
             sourceDocumentId = (string?)null,
             outputConnectionId = (string?)null,
             outputDocumentId = (string?)null,
@@ -1132,6 +1149,7 @@ public sealed class OfficeAgentTools
         {
             isValid = false,
             committed = false,
+            receipt = (ApplyReceipt?)null,
             sourceDocumentId,
             outputConnectionId = (string?)null,
             outputDocumentId = (string?)null,
@@ -1158,6 +1176,38 @@ public sealed class OfficeAgentTools
         StyleAnchor s => new { kind = "style", styleId = s.StyleId },
         _ => new { kind = anchor.GetType().Name, anchor.Id }
     };
+
+    private static object? ReceiptPayload(ApplyReceipt? receipt) => receipt is null
+        ? null
+        : new
+        {
+            receiptVersion = receipt.ReceiptVersion,
+            planSha256 = receipt.PlanSha256,
+            inputSha256 = receipt.InputSha256,
+            outputSha256 = receipt.OutputSha256,
+            timestampUtc = receipt.TimestampUtc,
+            outcome = receipt.Outcome.ToString(),
+            revision = new
+            {
+                author = receipt.Revision.Author,
+                timestampUtc = receipt.Revision.TimestampUtc
+            },
+            actor = receipt.Actor is null ? null : new
+            {
+                subject = receipt.Actor.Subject,
+                issuer = receipt.Actor.Issuer,
+                displayName = receipt.Actor.DisplayName
+            },
+            outputDocument = receipt.OutputDocument is null ? null : new
+            {
+                provider = receipt.OutputDocument.Provider,
+                connectionId = receipt.OutputDocument.ConnectionId,
+                itemId = receipt.OutputDocument.ItemId,
+                version = receipt.OutputDocument.Version,
+                name = receipt.OutputDocument.Name,
+                contentType = receipt.OutputDocument.ContentType
+            }
+        };
 
     private static object MapOutline(OutlineNode node) => new
     {

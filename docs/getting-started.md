@@ -150,10 +150,16 @@ using (var output = File.Create(outputPath))
     await saved.Stream.CopyToAsync(output);
 
 Console.WriteLine($"Edited document: {outputPath}");
+Console.WriteLine($"Receipt: {result.Receipt!.InputSha256} -> {result.Receipt.OutputSha256}");
 ```
 
 Open `contract-edited.docx` in Word. The replacement appears as a tracked
 deletion and insertion.
+
+`result.Receipt` also records the effective plan hash, apply outcome, resolved revision
+identity, and provider output reference. Hosts that authenticate callers can register an
+`IAuditActorProvider` so the receipt carries that trusted actor separately from the author
+displayed in Word.
 
 To preserve the staged source, pass
 `new SaveDocumentOptions { Mode = SaveMode.NewVersion }` to `CommitAsync`. The

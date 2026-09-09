@@ -15,10 +15,6 @@ namespace OfficeAgent.Word;
 internal sealed class InsertTableRowsHandler : IOperationHandler
 {
     private readonly TableNodeProvider _tables = new();
-    private readonly TimeProvider _clock;
-
-    public InsertTableRowsHandler(TimeProvider clock) => _clock = clock;
-
     public bool CanHandle(PlanOperation operation) =>
         operation is InsertTableRowsOp { Target: NodeAnchor { Kind: "table" } };
 
@@ -69,7 +65,7 @@ internal sealed class InsertTableRowsHandler : IOperationHandler
         // runs against.
         if (WordRevisionMarker.IsTracked(op.Mode))
         {
-            var marker = new WordRevisionMarker(context.Package, _clock);
+            var marker = new WordRevisionMarker(context.Package, context.Revision);
             foreach (var row in newRows)
                 marker.MarkRowInserted(row);
         }

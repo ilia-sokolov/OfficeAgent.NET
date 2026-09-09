@@ -120,6 +120,46 @@ await result.SaveAsync("contract.updated.docx", ct);   // async file write
 
 All three throw `InvalidOperationException` when the plan was a dry run or did not commit. Always check `result.Committed` and inspect `result.Report.Errors` first.
 
+## Revision identity and audit receipts
+
+Every result produced by the built-in engine's `Apply` or `PreviewWithReceiptAsync` carries
+an `ApplyReceipt`; provider-backed results carry the same receipt and add the saved
+`OutputDocument` reference after storage accepts the write. The receipt records:
+
+- `Outcome`: `Previewed`, `Rejected`, or `Committed`;
+- one trusted engine `TimestampUtc` for the attempt;
+- the resolved revision author and UTC timestamp;
+- lowercase SHA-256 hashes of the effective plan JSON and exact input bytes;
+- the output-byte SHA-256 only when the engine committed;
+- an optional authenticated `Actor` supplied by the host;
+- the provider output reference after a successful provider save.
+
+The hashes make accidental or later changes detectable; the receipt is not signed. Persist
+it in an append-only or otherwise protected host audit store if it must serve as durable
+evidence. A provider exception can happen after storage accepted a write, so the call may
+throw before a final provider receipt is returned; reconcile the destination before retrying.
+
+Keep the two identities separate. `DocumentPlan.Revision.Author` controls what a reviewer
+sees in Word and is untrusted plan content. `AuditActor` must come from authentication state:
+
+```csharp
+public sealed class RequestActorProvider : IAuditActorProvider
+{
+    public AuditActor? GetCurrentActor() => new()
+    {
+        Subject = CurrentPrincipal.Subject,
+        Issuer = CurrentPrincipal.Issuer,
+        DisplayName = CurrentPrincipal.DisplayName
+    };
+}
+
+services.AddSingleton<IAuditActorProvider, RequestActorProvider>();
+```
+
+For a direct in-memory call, pass the actor with
+`new ApplyOptions { DryRun = false, Actor = actor }`. For one provider save, an actor on
+`SaveDocumentOptions` takes precedence over the registered provider.
+
 ## Failure modes you should handle
 
 | Symptom | Likely cause | What to do |

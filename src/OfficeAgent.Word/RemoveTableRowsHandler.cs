@@ -15,10 +15,6 @@ namespace OfficeAgent.Word;
 internal sealed class RemoveTableRowsHandler : IOperationHandler
 {
     private readonly TableNodeProvider _tables = new();
-    private readonly TimeProvider _clock;
-
-    public RemoveTableRowsHandler(TimeProvider clock) => _clock = clock;
-
     public bool CanHandle(PlanOperation operation) =>
         operation is RemoveTableRowsOp { Target: NodeAnchor { Kind: "table" } };
 
@@ -69,7 +65,7 @@ internal sealed class RemoveTableRowsHandler : IOperationHandler
         {
             // A tracked deletion leaves the row in place, struck through, until a reviewer
             // accepts it - so index shifting cannot arise and the rows are marked in order.
-            var marker = new WordRevisionMarker(context.Package, _clock);
+            var marker = new WordRevisionMarker(context.Package, context.Revision);
             foreach (var index in toRemove.OrderBy(i => i))
                 marker.MarkRowDeleted(rows[index]);
             return;

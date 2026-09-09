@@ -44,9 +44,9 @@ it for a workflow that depends on Office's layout or calculation engine.
 | Area | Supported workflows |
 | --- | --- |
 | Word creation and editing | Create `.docx` files; inspect and change text, paragraphs, tables, images, styles, content controls, headers, footers, notes, page setup, and document properties |
-| Word review | Read and manage comments, preserve or resolve review state, and record supported edits as tracked revisions |
+| Word review | Read and manage comments, preserve or resolve review state, set one revision identity per plan, and record supported edits as tracked revisions |
 | PowerPoint creation and editing | Build or update decks with slides, layouts, text, tables, images, media, notes, comments, sections, transitions, and animations |
-| Agent and application integration | Use MCP over stdio or HTTP, Microsoft Agent Framework tools, or the direct .NET API |
+| Agent and application integration | Use MCP over stdio or HTTP, Microsoft Agent Framework tools, or the direct .NET API, with SHA-256 apply receipts and host-supplied audit actors |
 | Document access | Work with bounded filesystem roots, SharePoint, in-memory sessions, or self-contained inline content |
 
 ## Choose a starting point
@@ -63,6 +63,7 @@ it for a workflow that depends on Office's layout or calculation engine.
 | Edit documents with no storage configured | [Documents with no storage](docs/mcp-server.md#documents-with-no-storage) |
 | Run a tracked-review workflow | [Optional word-document-review skill](skills/word-document-review/SKILL.md) |
 | Build a contract-review agent | [ContractReview sample](samples/ContractReview/) |
+| Check support, compatibility, or security policy | [Support](SUPPORT.md) and [security](SECURITY.md) |
 | Contribute | [Contributing](#contributing) |
 
 ## Try a Word edit
@@ -252,14 +253,19 @@ if (preview.IsValid)
 ```
 
 The complete example, including service registration and reading the saved
-file, is in [Getting started](docs/getting-started.md).
-The minimal sample replaces the first `Acme Corp` with `Globex Inc.`. To run it,
-copy a Word document containing `Acme Corp` to `contract.docx` in the cloned
-repository root, then run:
+file, is in [Getting started](docs/getting-started.md). The minimal direct-.NET
+sample runs against the bundled fictional contract, so it needs no MCP client,
+language model, or document of your own:
 
 ```bash
-dotnet run --project samples/QuickEdit -- ./contract.docx ./contract-edited.docx
+dotnet run --project samples/QuickEdit -- \
+  samples/documents/services-agreement.docx quickedit-output.docx
 ```
+
+Open `quickedit-output.docx` in Word and verify that the payment term is a tracked
+change while the existing revision, comment, table, and headings remain intact.
+[QuickEdit](samples/QuickEdit/) also accepts an exact source and replacement text
+for your own document.
 
 The repository also contains a
 [direct `IChatClient` Word-editing sample](samples/IChatClientWordEdit/) and an

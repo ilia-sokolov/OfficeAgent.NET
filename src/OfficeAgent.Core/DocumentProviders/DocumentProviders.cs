@@ -250,4 +250,7 @@ public sealed class ProviderApplyResult
 
     /// <summary>Gets the saved provider reference when committed.</summary>
     public DocumentReference? Document { get; init; }
+
+    /// <summary>Gets the apply receipt, including the saved provider reference.</summary>
+    public ApplyReceipt? Receipt { get; init; }
 }

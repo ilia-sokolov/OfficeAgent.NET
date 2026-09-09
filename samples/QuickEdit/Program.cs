@@ -14,17 +14,21 @@ using OfficeAgent.Word;
 // preview → commit by that id. The result is read back out of storage and written
 // to the caller's chosen output path.
 //
-// Run:
-//   dotnet run --project samples/QuickEdit -- <input.docx> <output.docx>
+// Run the bundled example:
+//   dotnet run --project samples/QuickEdit -- samples/documents/services-agreement.docx quickedit-output.docx
+// Or choose the exact text replacement:
+//   dotnet run --project samples/QuickEdit -- <input.docx> <output.docx> <find> <replacement>
 
-if (args.Length != 2)
+if (args.Length is not (2 or 4))
 {
-    Console.Error.WriteLine("Usage: QuickEdit <input.docx> <output.docx>");
+    Console.Error.WriteLine("Usage: QuickEdit <input.docx> <output.docx> [<find> <replacement>]");
     return 1;
 }
 
 var input = args[0];
 var output = args[1];
+var findText = args.Length == 4 ? args[2] : "within thirty days of receipt";
+var replacementText = args.Length == 4 ? args[3] : "within forty-five days of receipt";
 
 // A dedicated storage root for this run. Registered paths must live under it; the
 // provider keeps only an id → path index inside .officeagent/, never the bytes.
@@ -62,11 +66,11 @@ try
         Console.WriteLine($"  {p.ParaId}: {Trim(p.Text)}");
 
     // ── 2. Find an anchor, preview a tracked edit, then commit ───────────────────
-    var hits = await client.FindAsync("local", document.ItemId, new FindQuery("Acme Corp"));
+    var hits = await client.FindAsync("local", document.ItemId, new FindQuery(findText));
     if (hits.Count == 0)
     {
-        log.LogWarning("No 'Acme Corp' to replace; nothing to do.");
-        return 0;
+        log.LogError("Could not find the exact text {FindText}; no output was written.", findText);
+        return 4;
     }
 
     var plan = new DocumentPlan
@@ -74,7 +78,7 @@ try
         Snapshot = inspect.Snapshot, // opt in to drift detection
         Operations = new PlanOperation[]
         {
-            new ChangeTextOp { Target = hits[0].Anchor, With = "Globex Inc.", Mode = ChangeMode.Tracked }
+            new ChangeTextOp { Target = hits[0].Anchor, With = replacementText, Mode = ChangeMode.Tracked }
         }
     };
 
