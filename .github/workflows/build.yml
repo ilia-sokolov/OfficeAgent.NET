@@ -27,6 +27,16 @@ jobs:
         with:
           dotnet-version: 8.0.x
 
+      - name: Validate documentation
+        if: matrix.os == 'ubuntu-latest'
+        run: python scripts/validate_docs.py
+
+      - name: Validate MCP Registry manifest
+        if: matrix.os == 'ubuntu-latest'
+        run: |
+          python -m pip install --disable-pip-version-check jsonschema==4.25.1
+          python scripts/validate_server_manifest.py
+
       - name: Restore
         run: dotnet restore OfficeAgent.NET.sln
 

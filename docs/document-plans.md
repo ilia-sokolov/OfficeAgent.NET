@@ -49,10 +49,17 @@ as revision markup a reviewer accepts or rejects, `Direct` writes it into the co
 applies to `changeText`, `insert`, `fill`, `format`, `insertTable`, `removeTable`, the table
 row and column verbs, `insertImage`, `removeImage`, `insertBreak`, and `note`.
 
-An operation that does not state a mode takes the connection's `DefaultChangeMode`, which is
-`Tracked` unless the host configured otherwise — see
-[document providers](document-providers.md#default-change-mode). An operation that does state
-one is never overridden.
+The default depends on how the plan enters the engine:
+
+| Route | Omitted `mode` |
+| --- | --- |
+| MCP or agent tool using `(connectionId, documentId)` | Takes that connection's `DefaultChangeMode`, normally `Tracked`. |
+| Inline-content MCP or agent tool | `Tracked` for Word and `Direct` for PowerPoint, inferred from the document bytes. |
+| Direct .NET `DocumentPlan` | `changeText` defaults to `Tracked`; nullable modes are interpreted by the format module as `Tracked` for Word and `Direct` for PowerPoint. |
+
+An explicit mode is never overridden. For review workflows, state `"mode": "Tracked"` on
+Word operations rather than depending on connection policy. See
+[document providers](document-providers.md#default-change-mode).
 
 Tracking is not decoration on the text edit alone. Under `Tracked`:
 
@@ -69,8 +76,9 @@ Resizing an image is the one exception: WordprocessingML has no revision for the
 drawing, so a tracked resize is applied directly.
 
 PresentationML has no revision vocabulary. A deck **refuses** an explicit `"mode": "Tracked"`
-on any verb rather than writing an untracked edit the caller did not ask for; omitting the
-mode there means `Direct`.
+on any verb rather than writing an untracked edit the caller did not ask for. For an omitted
+mode, use the route-specific table above: a connection configured as `Tracked` still causes
+a connection-addressed deck edit to be refused.
 
 ## Supported verbs
 
@@ -690,5 +698,6 @@ Returned by `preview_plan` and `apply_plan` in the `errors` array. Stable wire c
 | `contract-mismatch` | The plan's contract version does not match the engine, or the plan asserted a `format` the document is not. (The version check is informational pre-1.0; the format assertion is not.) |
 | `invalid-json` | The plan is not valid JSON, or an operation names no known verb. The message lists the verbs that exist. |
 | `invalid-argument` | A tool argument outside the plan is wrong - an unrecognised `saveMode`, for example. |
+| `regex-timeout` | A regular-expression search exceeded its time limit. Simplify the pattern or use a literal search. |
 
 Provider boundary errors (`apply_plan` only) use a separate set of wire codes - see [document-providers.md](document-providers.md).

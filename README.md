@@ -6,8 +6,17 @@
 [![downloads](https://img.shields.io/nuget/dt/OfficeAgent.Core.svg)](https://www.nuget.org/packages/OfficeAgent.Core)
 [![license](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
-OfficeAgent.NET translates an AI agent’s intent into controlled changes to Microsoft Word documents and PowerPoint decks. The agent proposes a typed edit plan; the library validates and applies it while preserving document features such as styles and comments. Word edits can be recorded as tracked changes for human review, while structured document operations can reduce token use compared with processing entire files.
+Give coding agents a structured way to create and edit real Word documents and
+PowerPoint decks. OfficeAgent.NET turns an agent's intent into typed, validated
+operations and applies them directly to OOXML packages while preserving document
+structure.
 
+Use it to generate documents and presentations, make targeted edits, update tables,
+styles, and images, or manage comments and review state. The engine ships as an MCP
+server, Microsoft Agent Framework tools, and a .NET API, with filesystem, SharePoint,
+session, and inline document workflows.
+
+One example is a targeted Word edit whose result remains reviewable:
 
 ![OfficeAgent.NET finds, previews, and applies a contract edit as a tracked change in Word.](https://raw.githubusercontent.com/ilia-sokolov/OfficeAgent.NET/main/media/demo.gif)
 
@@ -30,22 +39,39 @@ both, routing each document to the module that handles it. Excel is not
 implemented. See [Scope and limitations](#scope-and-limitations) before choosing
 it for a workflow that depends on Office's layout or calculation engine.
 
+### What you can build
+
+| Area | Supported workflows |
+| --- | --- |
+| Word creation and editing | Create `.docx` files; inspect and change text, paragraphs, tables, images, styles, content controls, headers, footers, notes, page setup, and document properties |
+| Word review | Read and manage comments, preserve or resolve review state, and record supported edits as tracked revisions |
+| PowerPoint creation and editing | Build or update decks with slides, layouts, text, tables, images, media, notes, comments, sections, transitions, and animations |
+| Agent and application integration | Use MCP over stdio or HTTP, Microsoft Agent Framework tools, or the direct .NET API |
+| Document access | Work with bounded filesystem roots, SharePoint, in-memory sessions, or self-contained inline content |
+
 ## Choose a starting point
 
 | I want to... | Start here |
 | --- | --- |
-| Edit my first Word document | [Your first edit](#your-first-edit) |
+| Try a targeted Word edit | [Try a Word edit](#try-a-word-edit) |
+| Create a Word document from scratch | [Create a document](docs/getting-started.md#create-a-document-instead) |
+| Create or edit a PowerPoint deck | [PowerPoint support](docs/powerpoint.md) |
 | Connect Codex, Claude Code, Copilot Studio, or Microsoft 365 Copilot | [Deployment and client setup](docs/deployment.md) |
 | Use OfficeAgent from C# | [Getting started](docs/getting-started.md) |
 | Add tools to a Microsoft Agent Framework agent | [Agent integration](docs/agent-integration.md) |
 | Host the MCP server or use SharePoint | [MCP server](docs/mcp-server.md) and [document providers](docs/document-providers.md) |
 | Edit documents with no storage configured | [Documents with no storage](docs/mcp-server.md#documents-with-no-storage) |
-| Teach an agent to review documents properly | [word-document-review skill](skills/word-document-review/SKILL.md) |
+| Run a tracked-review workflow | [Optional word-document-review skill](skills/word-document-review/SKILL.md) |
+| Build a contract-review agent | [ContractReview sample](samples/ContractReview/) |
 | Contribute | [Contributing](#contributing) |
 
-## Your first edit
+## Try a Word edit
 
-Install the server:
+This small workflow demonstrates that OfficeAgent can change an existing OOXML file
+without flattening its structure. It uses tracked changes because the result is easy to
+verify in Word; review is one part of the broader document operation set.
+
+Install the server. The published package command is:
 
 ```bash
 dotnet tool install --global OfficeAgent.Mcp
@@ -61,6 +87,16 @@ curl -Lo ~/officeagent-documents/services-agreement.docx \
   https://raw.githubusercontent.com/ilia-sokolov/OfficeAgent.NET/main/samples/documents/services-agreement.docx
 ```
 
+PowerShell:
+
+```powershell
+$officeAgentDocuments = Join-Path $env:USERPROFILE "officeagent-documents"
+New-Item -ItemType Directory -Force $officeAgentDocuments | Out-Null
+Invoke-WebRequest `
+  https://raw.githubusercontent.com/ilia-sokolov/OfficeAgent.NET/main/samples/documents/services-agreement.docx `
+  -OutFile (Join-Path $officeAgentDocuments "services-agreement.docx")
+```
+
 Any `.docx` of your own works too — the sample just gives you something with a comment and a
 pending revision already in it.
 
@@ -74,34 +110,51 @@ claude mcp add \
   officeagent -- officeagent-mcp --stdio
 ```
 
+PowerShell:
+
+```powershell
+claude mcp add `
+  --env OfficeAgent__FileSystemConnections__0__ConnectionId=documents `
+  --env "OfficeAgent__FileSystemConnections__0__RootPath=$officeAgentDocuments" `
+  --transport stdio `
+  officeagent -- officeagent-mcp --stdio
+```
+
+For this review-specific workflow, you can optionally install the
+[word-document-review skill](docs/skill-installation.md) before starting the client.
+
 Then ask:
 
 > In services-agreement.docx, change the payment terms from thirty days to forty-five days.
 
 Open the file in Word. Clause 3 now reads **forty-five days** as a tracked change you can
 accept or reject, and everything else — the table, the comment, the redline that was
-already there — is exactly as it was. That is the whole idea: the document that comes out
-is the one that went in, minus the edit you asked for.
+already there — is exactly as it was. This demonstrates a key engine property: apply the
+requested operation while preserving unrelated package content.
 
 [What else the sample is good for](samples/documents/README.md) — reviewing comments,
 accepting revisions, editing the table.
+
+Next, try [creating a Word document](docs/getting-started.md#create-a-document-instead),
+[generating a PowerPoint deck](docs/powerpoint.md#generating-a-deck), or using the
+[direct .NET workflow](docs/getting-started.md).
 
 ### If it does not work
 
 | | |
 | --- | --- |
 | `claude mcp list` shows officeagent as failed | Check `RootPath` is an absolute path to a directory that exists. |
-| The agent says it cannot find the document | The name must be relative to `RootPath`, not a full path. |
-| `io-error` on save | The document is open in Word. Close it. |
+| The agent says it cannot find the document | Use a relative name, or an absolute path that still resolves inside `RootPath`. |
+| `io-error` on save | Close the file in Word, then check filesystem permissions and the available disk space. |
 
-## Beyond the first edit
+## Configure broader workflows
 
 The quick start above is deliberately the smallest thing that works. Four settings extend it:
 
 | Setting | Adds |
 | --- | --- |
 | `OfficeAgent__AllowCreation=true` | `create_document`, so "draft a project brief in brief.docx" makes a new file instead of failing |
-| `OfficeAgent__FileSystemConnections__0__AllowedExtensions__1=.pptx` | PowerPoint decks. Add `__DefaultChangeMode=Direct` with it — a deck has no redline vocabulary and refuses tracked changes |
+| `OfficeAgent__FileSystemConnections__0__AllowedExtensions__0=.docx` plus `OfficeAgent__FileSystemConnections__0__AllowedExtensions__1=.pptx` | Word and PowerPoint on one connection. Declaring this list replaces the `.docx` default. Set `OfficeAgent__FileSystemConnections__0__DefaultChangeMode=Direct` for decks, and send `"mode": "Tracked"` explicitly for reviewable Word edits on that mixed connection. |
 | `OfficeAgent__EphemeralConnectionId=session` | Names the in-memory session connection explicitly. With no configuration at all the server already falls back to one - this is for running it alongside storage, or under a different id |
 | `OfficeAgent__AllowInlineContent=true` | Tools that carry the document as base64, for a single self-contained call |
 
@@ -124,6 +177,10 @@ is a list:
 }
 ```
 
+The same configuration is available as
+[`samples/config/word-and-powerpoint.json`](samples/config/word-and-powerpoint.json). Change
+`RootPath` before using it.
+
 ```bash
 claude mcp add --transport stdio officeagent -- officeagent-mcp --stdio --config ./officeagent.json
 ```
@@ -133,24 +190,23 @@ HTTP hosting and SharePoint are in
 [Deployment and client setup](docs/deployment.md); every setting is listed in
 [MCP server](docs/mcp-server.md).
 
-### Teaching the agent to review, not just replace
+### Optional guidance for Word review
 
-[`skills/word-document-review`](skills/word-document-review/SKILL.md) is an
-[Agent Skill](https://code.claude.com/docs/en/skills) that teaches the review loop: read the
-comments and pending revisions before editing, keep edits as redlines, address documents by
-id rather than passing bytes around, and recover from each error code rather than retrying.
-Copy it into `.claude/skills/` in your project, or `~/.claude/skills/` for every project:
-
-```bash
-cp -r skills/word-document-review ~/.claude/skills/
-```
+[`skills/word-document-review`](skills/word-document-review/SKILL.md) teaches the review
+loop: read comments and pending revisions before editing, keep reviewable Word edits as
+redlines, use document ids for multi-step work, and recover from stable error codes. The
+[installation guide](docs/skill-installation.md) gives complete Bash and PowerShell steps
+for Claude Code and Codex, including installation from a fresh machine and verification.
+The skill is only needed when the task requires that review discipline; document creation,
+ordinary direct edits, and PowerPoint workflows use the server without it.
 
 ### What reaches the model
 
 The inspect and find tools return document text and structure to the model — that is how it
-locates an edit. The `.docx` package itself does not travel that way *unless* you enable
-`AllowInlineContent`, whose tools carry the whole file as base64 in both directions by
-design. Connect folders and model providers appropriate for the data you are handling.
+locates an edit. Filesystem and SharePoint operations keep the package behind an opaque id.
+Inline tools carry the whole file as base64 on every call. Session import/export also carries
+the package as base64 if the agent performs those calls; a host integration can instead move
+the bytes outside model context. Connect storage and model providers appropriate for the data.
 
 The server ships no authentication layer for HTTP hosting; put it behind your own. A
 filesystem root is a trust boundary: its ACLs must stop untrusted principals creating,
@@ -208,7 +264,9 @@ dotnet run --project samples/QuickEdit -- ./contract.docx ./contract-edited.docx
 The repository also contains a
 [direct `IChatClient` Word-editing sample](samples/IChatClientWordEdit/) and an
 interactive
-[Agent Framework sample](samples/AgentEdit/).
+[Agent Framework sample](samples/AgentEdit/), plus a complete
+[contract-review agent](samples/ContractReview/) that separates model judgement from
+validated document writes.
 
 ## How it works
 
@@ -229,10 +287,11 @@ targeting a different location. Applying a plan is all-or-nothing.
 
 The Word module supports changes to text, paragraphs, tables, images, styles,
 content controls, comment threads, footnotes and endnotes, page geometry and
-breaks, document properties, and tracked revisions. Every verb that changes
-content records a redline when the connection asks for one - an inserted clause,
+breaks, document properties, and tracked revisions. Operations with a Word revision
+representation record a redline when the connection asks for one - an inserted clause,
 a deleted row and a restyled heading all come back as revisions a reviewer
-accepts or rejects, not only a replaced phrase. The
+accepts or rejects, not only a replaced phrase. Image resizing is applied directly because
+WordprocessingML has no revision representation for drawing dimensions. The
 PowerPoint module implements a broad, explicitly documented set of deck
 operations: text, bullets, run and paragraph formatting, template
 slots, style copying, tables, images, text boxes, embedded video and audio,
@@ -326,10 +385,10 @@ Two more limits worth knowing before you build on it:
   pass a document of a few kilobytes back for a second edit reproduces it
   imperfectly and the follow-up fails. Use a connection, or a session connection,
   when more than one edit is coming.
-- **A skill helps, and is not automatic.** Nothing here makes an agent read the
-  open comments before editing, or keep an edit as a redline. The
-  [word-document-review skill](skills/word-document-review/SKILL.md) teaches that;
-  without it, behaviour depends on the model and the prompt.
+- **Review guidance is optional.** For review tasks, the server alone does not make an
+  agent read open comments before editing or choose a redline. The
+  [word-document-review skill](skills/word-document-review/SKILL.md) teaches that workflow;
+  without it, review behaviour depends on the model and the prompt.
 
 ## Commercial support
 

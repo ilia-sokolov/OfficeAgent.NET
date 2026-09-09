@@ -6,8 +6,12 @@ occur after remote storage accepted a request, so their recovery is different.
 
 ## Server does not start
 
-The MCP server requires at least one configured filesystem or SharePoint
-connection. For a local smoke test:
+With no storage configuration, the MCP server starts with an in-memory connection named
+`session`, enables document creation there, and prints that choice to stderr. Its documents
+disappear when the process stops. If you expected persistent storage and see that notice,
+check the names of your `OfficeAgent__` variables.
+
+For a persistent local smoke test:
 
 ```powershell
 New-Item -ItemType Directory -Force C:\officeagent-documents | Out-Null

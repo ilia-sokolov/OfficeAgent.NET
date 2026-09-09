@@ -1,6 +1,7 @@
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using System.Text.Json.Serialization;
+using System.Text.RegularExpressions;
 using Microsoft.Extensions.AI;
 using OfficeAgent.Abstractions;
 using OfficeAgent.Core;
@@ -97,6 +98,9 @@ public sealed class OfficeAgentToolsOptions
 /// </summary>
 public sealed class OfficeAgentTools
 {
+    private const string RegexTimeoutMessage =
+        "The regular expression exceeded the search time limit. Use a simpler pattern or a literal search.";
+
     private static readonly JsonSerializerOptions Json = new() { WriteIndented = false };
 
     private static readonly JsonSerializerOptions PlanJson = new()
@@ -767,6 +771,7 @@ public sealed class OfficeAgentTools
     {
         try { return await work().ConfigureAwait(false); }
         catch (OperationCanceledException) { return ContentError(name, "cancelled", "Operation was cancelled."); }
+        catch (RegexMatchTimeoutException) { return ContentError(name, "regex-timeout", RegexTimeoutMessage); }
         catch (JsonException ex) { return ContentError(name, "invalid-json", ex.Message); }
         catch (ArgumentException ex) { return ContentError(name, "invalid-argument", ex.Message); }
         catch (Exception) { return ContentError(name, "internal-error", "An unexpected internal error occurred."); }
@@ -883,6 +888,7 @@ public sealed class OfficeAgentTools
     {
         try { return await work().ConfigureAwait(false); }
         catch (OperationCanceledException) { return SerializeError("cancelled", "Operation was cancelled."); }
+        catch (RegexMatchTimeoutException) { return SerializeError("regex-timeout", RegexTimeoutMessage); }
         catch (JsonException ex) { return SerializeError("invalid-json", ex.Message); }
         catch (ArgumentException ex) { return SerializeError("invalid-argument", ex.Message); }
         catch (DocumentProviderException ex)

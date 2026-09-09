@@ -37,8 +37,9 @@ does not survive contact with reality: a single wrong character makes the conten
 being a readable package, and every call after it fails on a copy you cannot repair,
 because your copy *is* the damaged one. Retrying sends the same damaged string again.
 
-Measured on the same three-step edit: by handle, 6 calls and 40 seconds, none failed. Inline,
-722 seconds and failure at step 2.
+In an exploratory multi-step run, the session route completed while the inline route failed
+after the model altered the base64. Treat this as a routing lesson, not a performance
+benchmark: use a stable document id when the task needs more than one edit.
 
 So: `import_document_content` once, edit by id as many times as you need,
 `export_document_content` once at the end. Reach for `edit_document_content` only when the
@@ -122,6 +123,8 @@ default may be `Direct`, especially when one connection handles both Word docume
 PowerPoint decks. For a reviewable Word edit, pass `"mode": "Tracked"` on every
 operation that supports `mode`; do not rely on the connection default. This applies to
 text changes, insertions, deletions, formatting, table and image edits, breaks, and notes.
+Image resizing is the exception: WordprocessingML cannot represent a drawing-extent revision,
+so a resize requested in tracked mode is applied directly and must be called out to the user.
 Pass `"mode": "Direct"` only when the user has asked to change the document outright.
 
 A deck (`.pptx`) has no revision vocabulary at all and refuses `"mode": "Tracked"`. Use

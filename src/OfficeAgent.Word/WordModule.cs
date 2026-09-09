@@ -362,6 +362,9 @@ public sealed class WordModule : IFormatModule, IBlankDocumentFactory, IPlanVali
         });
     }
 
+    /// <summary>Upper bound on a single regular-expression match.</summary>
+    private static readonly TimeSpan SearchTimeout = TimeSpan.FromSeconds(2);
+
     private static Regex? BuildRegex(FindQuery query)
     {
         var opts = query.Options;
@@ -376,7 +379,10 @@ public sealed class WordModule : IFormatModule, IBlankDocumentFactory, IPlanVali
         if (!opts.CaseSensitive)
             regexOptions |= RegexOptions.IgnoreCase;
 
-        return new Regex(pattern, regexOptions);
+        // A caller-supplied pattern is untrusted input. Catastrophic
+        // backtracking on a syntactically valid expression would otherwise
+        // occupy the thread indefinitely, so matching is bounded.
+        return new Regex(pattern, regexOptions, SearchTimeout);
     }
 
     private static IEnumerable<StructuralAnchor> StructuralAnchors(IOpenXmlPackage package)

@@ -17,6 +17,11 @@
   <ItemGroup>
     <PackageReference Include="Microsoft.Extensions.Hosting" Version="8.0.0" />
     <PackageReference Include="Microsoft.Extensions.Logging.Console" Version="8.0.0" />
+
+    <!-- Microsoft.Extensions.Hosting 8.0.0 pulls System.Text.Json 8.0.0, which
+         carries GHSA-hh2w-p6rv-4g7w and GHSA-8g4q-xg66-9fp4. Pin the patched
+         version explicitly. -->
+    <PackageReference Include="System.Text.Json" Version="8.0.5" />
   </ItemGroup>
 
 </Project>

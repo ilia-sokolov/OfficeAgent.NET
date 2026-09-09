@@ -132,7 +132,7 @@ All three throw `InvalidOperationException` when the plan was a dry run or did n
 | `DocumentVersionConflictException` from a `Replace` save | Another writer changed the document between this commit's open and its save | Re-inspect and re-author the plan against the current bytes; nothing was overwritten |
 | `Errors` contains `unsupported-operation` on a deck | The verb is Word-only - the PowerPoint module implements a subset | Use a verb the deck supports, or record the intent as a comment. See [PowerPoint support](powerpoint.md) |
 | `Errors` contains `invalid-operation` naming mode `Tracked` on a deck | PresentationML has no redline vocabulary | Send `"mode": "Direct"`, or set the connection's `DefaultChangeMode` so deck plans need not restate it |
-| MCP server exits during startup | No document connection, an invalid `AuthMode`, or incomplete provider configuration | Read the configuration error, correct the named connection, and restart; invalid authentication modes never fall back to app-only |
+| MCP server exits during startup | An invalid `AuthMode`, unreadable config file, or incomplete provider configuration | Read the named configuration error and restart. No storage configuration by itself starts the `session` connection; invalid authentication modes never fall back to app-only. |
 | Graph returns 429 or a transient 5xx | Throttling or a service interruption | Respect `Retry-After` in the host; reconcile an attempted write before retrying |
 | A create call reports an I/O error but the name is now occupied | Storage accepted the file before registration or the response failed | Inspect the destination and register the surviving item; do not overwrite or blindly retry the name |
 

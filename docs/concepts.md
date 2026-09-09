@@ -11,8 +11,9 @@ Documents live behind `IDocumentProvider` connections. Filesystem and SharePoint
 providers ship with the project; another store can implement the same
 `RegisterAsync`, `OpenReadAsync`, `SaveAsync`, and `RemoveAsync` contract.
 
-A provider stores references, not document bytes. Registering an existing
-document mints an opaque `documentId`; later calls address it by
+A filesystem or SharePoint provider stores references rather than copying document bytes.
+The session provider is the deliberate exception: it holds imported or created documents in
+process memory until the server stops. Registering an existing persistent document mints an opaque `documentId`; later calls address it by
 `(connectionId, documentId)`. The default in-process tools expose only those ids
 and never credentials. Opt-in registration and composite tools also accept a
 path, SharePoint URL, or `driveId/itemId` from the model. The MCP server enables

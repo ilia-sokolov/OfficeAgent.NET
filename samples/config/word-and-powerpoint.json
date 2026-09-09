@@ -1,0 +1,13 @@
+{
+  "OfficeAgent": {
+    "AllowCreation": true,
+    "FileSystemConnections": [
+      {
+        "ConnectionId": "documents",
+        "RootPath": "/absolute/path/to/documents",
+        "AllowedExtensions": [ ".docx", ".pptx" ],
+        "DefaultChangeMode": "Direct"
+      }
+    ]
+  }
+}

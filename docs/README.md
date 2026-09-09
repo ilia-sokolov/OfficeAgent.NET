@@ -1,8 +1,9 @@
 # OfficeAgent.NET documentation
 
-OfficeAgent.NET gives agents a structured, validated way to inspect and edit
-Word documents and PowerPoint decks. Use this page to choose the shortest path
-for your scenario.
+OfficeAgent.NET gives agents a structured, validated way to create, inspect, and edit
+Word documents and PowerPoint decks. It supports document generation, targeted changes,
+rich content operations, review workflows, and several hosting and storage models. Use
+this page to choose the shortest path for your scenario.
 
 > [!IMPORTANT]
 > OfficeAgent.NET is pre-1.0. Pin package and container versions in production,
@@ -13,12 +14,14 @@ for your scenario.
 | Goal | Start here | Then read |
 | --- | --- | --- |
 | Edit a Word document from C# | [Getting started](getting-started.md) | [Concepts](concepts.md), [document plans](document-plans.md) |
+| Create a Word document from scratch | [Create a document](getting-started.md#create-a-document-instead) | [Document plans](document-plans.md) |
+| Create or update a PowerPoint deck | [PowerPoint support](powerpoint.md#creating-a-deck) | [Generating a deck](powerpoint.md#generating-a-deck) |
 | Add document tools to an agent | [Agent integration](agent-integration.md) | [Document providers](document-providers.md) |
 | Connect an MCP client locally | [MCP server](mcp-server.md#local-hosting-stdio) | [Deployment](deployment.md#option-a---local-stdio-for-claude-code-and-codex) |
 | Host OfficeAgent for a team | [Deployment](deployment.md#option-b---hosted-http-for-all-four-clients) | [Operations](operations.md), [troubleshooting](troubleshooting.md) |
 | Read or write SharePoint files | [SharePoint provider](document-providers.md#the-sharepoint-provider) | [Authentication and identity](deployment.md#authentication--identity) |
-| Work with PowerPoint | [PowerPoint support](powerpoint.md) | [Document plans](document-plans.md) |
 | Look up an operation's JSON | [Document plans](document-plans.md) | [Validation errors](document-plans.md#validation-errors) |
+| Run a tracked Word review | [Sample review workflows](../samples/documents/README.md#reproducible-review-workflows) | [Optional review skill](skill-installation.md) |
 
 ## Packages
 
@@ -55,6 +58,7 @@ and optimistic-concurrency conflicts instead of guessing.
 
 - [Getting started](getting-started.md) — first successful Word edit from C#.
 - [Deployment and client setup](deployment.md) — local and hosted MCP recipes.
+- [Skill installation](skill-installation.md) — optionally teach Claude Code or Codex a repeatable Word review workflow.
 
 ### Concepts
 
@@ -68,6 +72,7 @@ and optimistic-concurrency conflicts instead of guessing.
 - [Operations](operations.md) — concurrency, memory, telemetry, and production operation.
 - [Troubleshooting](troubleshooting.md) — diagnose setup, identity, and edit failures.
 - [Releasing](releasing.md) — the maintainer steps for NuGet, the MCP Registry, GitHub releases, and repository metadata.
+- [Adoption validation](adoption-validation.md) — fresh-user trials across the main Word, PowerPoint, and review paths before broad promotion.
 
 ### Reference
 

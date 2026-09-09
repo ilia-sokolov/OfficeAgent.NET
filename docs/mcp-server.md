@@ -42,7 +42,7 @@ During initialization the server advertises its tools and the OfficeAgent prompt
 
 ## Local hosting (stdio)
 
-A typical MCP client entry (Claude Desktop, VS Code, and most agent SDKs use this shape):
+Claude Desktop and many agent SDKs use an `mcpServers` object:
 
 ```json
 {
@@ -54,12 +54,36 @@ A typical MCP client entry (Claude Desktop, VS Code, and most agent SDKs use thi
         "OfficeAgent__FileSystemConnections__0__ConnectionId": "documents",
         "OfficeAgent__FileSystemConnections__0__RootPath": "/Users/me/Documents/agent-workspace",
         "OfficeAgent__FileSystemConnections__0__AllowedExtensions__0": ".docx",
-        "OfficeAgent__FileSystemConnections__0__AllowedExtensions__1": ".pptx"
+        "OfficeAgent__FileSystemConnections__0__AllowedExtensions__1": ".pptx",
+        "OfficeAgent__FileSystemConnections__0__DefaultChangeMode": "Direct"
       }
     }
   }
 }
 ```
+
+That mixed connection defaults omitted modes to `Direct` so deck edits work. Send
+`"mode": "Tracked"` explicitly for Word edits that must remain reviewable.
+
+VS Code uses `servers` in `.vscode/mcp.json`:
+
+```json
+{
+  "servers": {
+    "officeagent": {
+      "type": "stdio",
+      "command": "officeagent-mcp",
+      "args": ["--stdio"],
+      "env": {
+        "OfficeAgent__FileSystemConnections__0__ConnectionId": "documents",
+        "OfficeAgent__FileSystemConnections__0__RootPath": "${userHome}/Documents/agent-workspace"
+      }
+    }
+  }
+}
+```
+
+See [deployment and client setup](deployment.md) for exact Claude Code and Codex locations.
 
 In stdio mode logs go to stderr; stdout carries only JSON-RPC frames.
 
@@ -108,7 +132,16 @@ officeagent-mcp --stdio --config ./officeagent.json
 }
 ```
 
-With no `--config`, the server reads `OFFICEAGENT_CONFIG`, then `%APPDATA%\OfficeAgent\config.json` (`~/.config/officeagent/config.json` elsewhere). The working directory is never searched: a connection root is a trust boundary, and a stdio server starts in whatever directory its client happened to be in. A file named explicitly and not found is an error rather than a silent fallback.
+A copy tested through the production configuration binder lives at
+[`samples/config/word-and-powerpoint.json`](../samples/config/word-and-powerpoint.json).
+Change its `RootPath` before use.
+
+With no `--config`, the server reads `OFFICEAGENT_CONFIG`, then
+`%APPDATA%\OfficeAgent\config.json` (`~/.config/OfficeAgent/config.json` elsewhere).
+`OfficeAgentConfiguration.ResolvePath` never discovers its additional config file from the
+working directory: a stdio server starts in whatever directory its client chose. Standard
+.NET configuration still loads `appsettings.json` when the host is started from a directory
+that contains one. A file named explicitly and not found is an error rather than a fallback.
 
 The file sits *below* the environment, so `OfficeAgent__` variables and the command line still override it and existing deployments are unaffected. The two merge per key rather than per connection: `OfficeAgent__FileSystemConnections__0__RootPath` re-roots the file's first connection instead of adding a second one.
 
@@ -122,9 +155,9 @@ A connection whose value cannot be read - a `MaximumBytes` that is not a number,
 | --- | --- | --- |
 | `Transport` | `http` | `http` or `stdio` (the `--stdio` flag also forces stdio). |
 | `AllowRegistration` | `true` | Expose `register_document` / `remove_document` / `open_document` / `edit_document` / `list_connections` - every tool that takes a connection-relative source. Unlike the in-process tools (opt-in), the MCP server defaults to on: an MCP client has no other channel to stage document ids. Set to `false` to pin agents to ids the host distributes itself. |
-| `AllowCreation` | `false` | Expose `create_document` when at least one connection allows a creatable extension (`.docx` or `.pptx`); SharePoint must also have a configured creation destination. Independent of `AllowRegistration`, so a host can permit creation without permitting arbitrary registration/removal. |
+| `AllowCreation` | `false` | Expose `create_document` when at least one connection allows a creatable extension (`.docx` or `.pptx`); SharePoint must also have a configured creation destination. Independent of `AllowRegistration`, so a host can permit creation without permitting arbitrary registration/removal. The zero-configuration fallback enables it for its session connection. |
 | `AllowInlineContent` | `false` | Expose `create_document_content` / `inspect_document_content` / `edit_document_content`, which carry the document as base64 in both directions. Needs no connection. Best for a single self-contained call; see [Documents with no storage](#documents-with-no-storage) before using it for multi-step editing. |
-| `EphemeralConnectionId` | empty | Id of a session connection whose documents the server holds in memory for the life of the process - `"session"` by convention. Adds `import_document_content` / `export_document_content` and makes the ordinary connection-addressed tools usable with no storage. This is the one to reach for when several edits are coming. |
+| `EphemeralConnectionId` | empty | Id of a session connection whose documents the server holds in memory for the life of the process - `"session"` by convention. Adds `import_document_content` / `export_document_content` and makes the ordinary connection-addressed tools usable with no storage. With no configuration of any kind, the effective value is `session`. |
 | `EphemeralMaximumTotalBytes` | 100 MB | Total the session connection may hold at once. The store is process memory, so this bound is what keeps a long session from growing without limit. |
 | `FileSystemConnections[n]:ConnectionId` | - | Connection id agents address documents under. |
 | `FileSystemConnections[n]:RootPath` | - | Root directory; registrations must stay under it, and new documents are created in it. |
@@ -174,7 +207,7 @@ The MCP toolset is the projection of [the agent-integration surface](agent-integ
 
 Every tool named above addresses a document by `(connectionId, documentId)` and is offered
 only when a connection exists to name. `AllowInlineContent` adds a separate set that
-carries the document instead of an id - see [Documents with no connection](#documents-with-no-connection).
+carries the document instead of an id - see [Documents with no storage](#documents-with-no-storage).
 
 The schemas are strict. Every field shown in a tool signature is required on the
 wire, including fields that have semantic defaults. Send `fidelity: "content"`,
@@ -270,7 +303,7 @@ Both can be on at once. Which to use is not a matter of taste:
 
 **Prefer the session connection whenever more than one edit is coming.** Chaining inline
 edits requires the model to reproduce the document exactly to make the second call, and
-models do not do that reliably. Measured on the same three-step task with the same model:
+models do not do that reliably. One exploratory run produced the following result:
 
 | | Session connection | Inline content |
 | --- | --- | --- |
@@ -279,7 +312,9 @@ models do not do that reliably. Measured on the same three-step task with the sa
 | Largest tool input | 444 bytes | 3,076 bytes |
 | Failed calls | 0 | 3 |
 
-The inline run failed because the model reproduced 2,928 characters of base64 with one
+This is an observation rather than a general benchmark: the original run did not preserve
+the model version and raw traces needed for reproduction. The inline run failed because the
+model reproduced 2,928 characters of base64 with one
 character wrong, then retried the same string twice. A document that arrives altered is
 refused as `invalid-argument` saying so, rather than as an unexplained error — but it
 cannot be repaired from the agent's side, because the agent's copy is the damaged one.
@@ -339,10 +374,9 @@ work:
 The loop is: create or receive base64 → optionally inspect → edit → hand the returned
 `contentBase64` back to the host. Nothing is stored, so the returned document is the only
 copy; the next edit takes the newest base64, and passing an older one silently discards the
-work in between. `contentBase64` is `null` whenever there is nothing to hand back - a
-preview, or a plan that failed - which is how a caller tells the two apart from the payload
-alone. Targets may name text directly (`{ "find": "Acme Corp" }`), so inspecting first is
-optional.
+work in between. `contentBase64` is `null` for a preview and for a failed plan; determine
+which occurred from `isValid`, `committed`, and `errors`. Targets may name text directly
+(`{ "find": "Acme Corp" }`), so inspecting first is optional.
 
 Both modes can be on at once. A host that configures connections *and* sets
 `AllowInlineContent` gets both toolsets, and the agent picks by whether it holds an id or

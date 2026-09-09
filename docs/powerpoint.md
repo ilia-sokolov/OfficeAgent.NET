@@ -395,6 +395,6 @@ already resized.
 - Animations are limited to the effects PresentationML expresses as a filtered `p:animEffect`. Fly-in, zoom, grow and the motion paths are refused rather than approximated — see [available effects](#available-effects).
 - A slide has no header. `p:hf` carries one, but it governs notes and handout pages, which is why PowerPoint greys the box out on the Slide tab.
 - `defineStyle`, `setProperty`, `revision`, `pageSetup`, `insertBreak` and `note` are not implemented; a deck has no style catalogue to define into - its look lives in the layout and master - no document-property vocabulary of its own, no redline model, no page geometry to set per slide, and no footnotes.
-- A deck refuses an explicit `"mode": "Tracked"` on any verb that carries one, rather than writing an untracked edit the caller did not ask for. Omitting the mode there means `Direct`.
+- A deck refuses an explicit `"mode": "Tracked"` on any verb that carries one. An omitted mode is route-specific: inline and direct .NET operations resolve to `Direct`, while connection-addressed agent tools inherit `DefaultChangeMode`. Configure a deck connection as `Direct`; see [change mode](document-plans.md#change-mode).
 - Legacy `p:cm` comments are neither read nor written.
 - Charts and SmartArt are not addressable.

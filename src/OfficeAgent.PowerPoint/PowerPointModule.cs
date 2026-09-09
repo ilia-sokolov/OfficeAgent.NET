@@ -360,6 +360,9 @@ public sealed class PowerPointModule : IFormatModule, IBlankDocumentFactory, IPl
         });
     }
 
+    /// <summary>Upper bound on a single regular-expression match.</summary>
+    private static readonly TimeSpan SearchTimeout = TimeSpan.FromSeconds(2);
+
     private static Regex? BuildRegex(FindQuery query)
     {
         var options = query.Options;
@@ -371,6 +374,9 @@ public sealed class PowerPointModule : IFormatModule, IBlankDocumentFactory, IPl
         var regexOptions = RegexOptions.CultureInvariant;
         if (!options.CaseSensitive) regexOptions |= RegexOptions.IgnoreCase;
 
-        return new Regex(pattern, regexOptions);
+        // A caller-supplied pattern is untrusted input. Catastrophic
+        // backtracking on a syntactically valid expression would otherwise
+        // occupy the thread indefinitely, so matching is bounded.
+        return new Regex(pattern, regexOptions, SearchTimeout);
     }
 }

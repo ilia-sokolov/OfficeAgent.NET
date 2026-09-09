@@ -12,6 +12,20 @@ namespace OfficeAgent.Tests;
 public class McpConfigurationTests
 {
     [Fact]
+    public void Published_mixed_document_configuration_binds_through_the_real_loader()
+    {
+        var path = RepositoryFile("samples", "config", "word-and-powerpoint.json");
+
+        var options = OfficeAgentConfiguration.Bind(Configuration(path));
+
+        Assert.True(options.AllowCreation);
+        var connection = Assert.Single(options.FileSystemConnections);
+        Assert.Equal("documents", connection.ConnectionId);
+        Assert.Equal(new[] { ".docx", ".pptx" }, connection.AllowedExtensions);
+        Assert.Equal("Direct", connection.DefaultChangeMode);
+    }
+
+    [Fact]
     public void A_configuration_file_supplies_connections_as_a_list()
     {
         using var root = new TemporaryFile("""
@@ -181,6 +195,16 @@ public class McpConfigurationTests
         var configuration = new ConfigurationBuilder();
         OfficeAgentConfiguration.AddFile(configuration, path);
         return configuration.Build();
+    }
+
+    private static string RepositoryFile(params string[] parts)
+    {
+        var directory = new DirectoryInfo(AppContext.BaseDirectory);
+        while (directory is not null && !File.Exists(Path.Combine(directory.FullName, "OfficeAgent.NET.sln")))
+            directory = directory.Parent;
+
+        Assert.NotNull(directory);
+        return Path.Combine(new[] { directory!.FullName }.Concat(parts).ToArray());
     }
 
     private sealed class TemporaryFile : IDisposable

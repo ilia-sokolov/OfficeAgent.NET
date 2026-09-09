@@ -3,16 +3,18 @@
 Notable changes per release. The body of each version section is also the text used for the
 corresponding GitHub release.
 
-## 0.7.0 — unreleased
+## 0.7.0 — 2026-09-09
 
 Word review became a first-class workflow, and the server no longer needs storage to run.
 
-### Word: every edit can be a redline
+### Word: broad tracked-change coverage
 
 Tracked changes previously reached only `changeText`. Every other verb wrote straight into
 the document, so under the default review policy a reviewer saw the text replacement marked
-up and the new clause silently present. Now `insert`, `fill`, `format`, the table and image
-verbs, `insertBreak` and `note` all honour `mode`, and Word tracks them when it is omitted.
+up and the new clause silently present. Now `insert`, `fill`, `format`, supported table and
+image operations, `insertBreak` and `note` honour `mode`, and Word tracks them when it is
+omitted. Image resizing remains direct because WordprocessingML has no revision for drawing
+extent changes.
 
 The markup is the real thing rather than a decoration: an inserted paragraph marks its
 paragraph mark as well as its runs, so rejecting removes the paragraph instead of emptying
@@ -44,9 +46,9 @@ Two ways, and they are not interchangeable:
   in both directions and hold nothing.
 
 Prefer the session connection for anything beyond a single call. Chaining inline edits
-requires the model to reproduce the document exactly to make the second call, and it does
-not: measured on the same three-step edit, by handle 40 seconds with nothing failing, inline
-722 seconds and failure at step 2.
+requires the model to reproduce the document exactly to make the second call. In an
+exploratory run, the session route completed and the inline route failed after the model
+altered the base64; the run did not retain enough metadata to serve as a benchmark.
 
 ### Fixed
 
@@ -59,16 +61,24 @@ not: measured on the same three-step edit, by handle 40 seconds with nothing fai
   bytes were resolved, so it could arrive as a redline the caller had not asked for.
 - Content that is not a readable package is now reported as such, with the likely cause,
   instead of an unexplained internal error.
+- Regular-expression searches now have a two-second match bound. A pattern that exceeds it
+  returns the stable `regex-timeout` tool error instead of occupying the server indefinitely.
 
 ### Added for adoption
 
 - A [`word-document-review` Agent Skill](skills/word-document-review/SKILL.md) teaching the
-  review loop, storage choice and error recovery.
+  review loop, storage choice and error recovery, packaged as a GitHub release asset with
+  complete Claude Code and Codex installation instructions.
 - A [fictional sample contract](samples/documents/services-agreement.docx) with a clause to
-  edit, a table, an open comment and a pending redline.
+  edit, a table, an open comment and a pending redline, plus three reproducible review
+  workflows covered by engine tests.
+- A complete [ContractReview agent](samples/ContractReview/) that screens deterministically,
+  delegates judgement to Microsoft Agent Framework, and applies one snapshot-bound plan.
 - A `--config` / `OFFICEAGENT_CONFIG` JSON configuration file, so connections need not be
   written as indexed environment variables.
 - A `defineStyle` verb.
+- Documentation CI for internal links, release-version alignment, skill metadata, the MCP
+  Registry schema, and a published configuration example loaded by the production binder.
 
 ### Behaviour changes to be aware of
 

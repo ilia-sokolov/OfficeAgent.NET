@@ -1,0 +1,52 @@
+{
+  "name": "Standard supplier terms",
+  "rules": [
+    {
+      "id": "PAY-01",
+      "title": "Payment terms no longer than 30 days",
+      "severity": "high",
+      "patterns": ["\\b(?:net\\s+)?(\\d{2,3})\\s+days\\b"],
+      "regex": true,
+      "rationale": "House position is payment within 30 days of invoice. Anything longer needs finance approval.",
+      "preferredWording": "30 days",
+      "action": "redline"
+    },
+    {
+      "id": "LIA-01",
+      "title": "Liability must be capped",
+      "severity": "high",
+      "patterns": ["unlimited liability", "without limitation of liability", "no limitation on liability"],
+      "regex": false,
+      "rationale": "Liability must be capped at the fees paid in the preceding twelve months. Uncapped liability is not acceptable.",
+      "preferredWording": "liability capped at the fees paid in the preceding twelve months",
+      "action": "redline"
+    },
+    {
+      "id": "REN-01",
+      "title": "No automatic renewal without notice",
+      "severity": "medium",
+      "patterns": ["automatically renew", "auto-renew", "shall renew automatically"],
+      "regex": false,
+      "rationale": "Automatic renewal is acceptable only with at least 60 days' notice of non-renewal.",
+      "action": "commentOnly"
+    },
+    {
+      "id": "LAW-01",
+      "title": "Governing law within the EU",
+      "severity": "medium",
+      "patterns": ["governed by the laws of", "governing law"],
+      "regex": false,
+      "rationale": "Governing law must be an EU member state. Flag any other jurisdiction for legal review.",
+      "action": "commentOnly"
+    },
+    {
+      "id": "IPR-01",
+      "title": "Customer retains its background IP",
+      "severity": "low",
+      "patterns": ["assigns all intellectual property", "all intellectual property shall vest"],
+      "regex": false,
+      "rationale": "Background intellectual property stays with its owner; only foreground deliverables may be assigned.",
+      "action": "commentOnly"
+    }
+  ]
+}

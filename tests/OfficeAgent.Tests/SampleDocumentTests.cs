@@ -107,4 +107,90 @@ public class SampleDocumentTests
         Assert.True(problems.Count == 0,
             string.Join("; ", problems.Take(3).Select(p => $"{p.Path?.XPath}: {p.Description}")));
     }
+
+    [Fact]
+    public void The_documented_comment_workflow_keeps_the_thread_and_resolves_it()
+    {
+        var client = new OfficeAgentClient(new WordModule());
+        var original = Sample();
+        var comment = client.Inspect(original).Nodes.Single(node =>
+            node.Kind == "comment" && node.Summary.Contains("Priya Raman", StringComparison.Ordinal));
+
+        var withReply = Apply(client, original, new DocumentPlan
+        {
+            Operations = new PlanOperation[]
+            {
+                new CommentOp
+                {
+                    Target = comment.Anchor!,
+                    Action = CommentAction.Reply,
+                    Text = "The twelve-month cap is approved.",
+                    Author = "Reviewer",
+                    Initials = "RV"
+                }
+            }
+        });
+
+        var resolved = Apply(client, withReply, new DocumentPlan
+        {
+            Operations = new PlanOperation[]
+            {
+                new CommentOp { Target = comment.Anchor!, Action = CommentAction.Resolve }
+            }
+        });
+
+        var inspection = client.Inspect(resolved);
+        var comments = inspection.Nodes.Where(node => node.Kind == "comment").ToList();
+        Assert.Equal(2, comments.Count);
+        Assert.Contains(comments, node => node.Path == comment.Path && node.Summary.Contains("(resolved)"));
+        Assert.Contains(comments, node => node.Summary.Contains($"reply to {comment.Path}"));
+        Assert.Contains(inspection.Nodes, node => node.Kind == "revision");
+
+        using var stream = new MemoryStream(resolved);
+        using var package = WordprocessingDocument.Open(stream, isEditable: false);
+        Assert.Single(package.MainDocumentPart!.Document.Body!.Descendants<Table>());
+    }
+
+    [Fact]
+    public void The_documented_table_workflow_adds_one_tracked_row_and_preserves_review_state()
+    {
+        var client = new OfficeAgentClient(new WordModule());
+        var original = Sample();
+        var table = client.Inspect(original).Nodes.Single(node => node.Kind == "table");
+
+        var edited = Apply(client, original, new DocumentPlan
+        {
+            Operations = new PlanOperation[]
+            {
+                new InsertTableRowsOp
+                {
+                    Target = table.Anchor!,
+                    Rows = new[] { new[] { "September review", "2026-09-15", "4,000" } },
+                    Position = TablePosition.End,
+                    Mode = ChangeMode.Tracked
+                }
+            }
+        });
+
+        using var stream = new MemoryStream(edited);
+        using var package = WordprocessingDocument.Open(stream, isEditable: false);
+        var main = package.MainDocumentPart!;
+        var rows = main.Document.Body!.Descendants<Table>().Single().Elements<TableRow>().ToList();
+        var added = rows.Single(row => row.InnerText.Contains("September review", StringComparison.Ordinal));
+
+        Assert.Equal(5, rows.Count);
+        Assert.NotNull(added.TableRowProperties?.GetFirstChild<Inserted>());
+        Assert.Contains(added.Descendants<InsertedRun>(), run => run.InnerText == "September review");
+        Assert.Single(main.WordprocessingCommentsPart!.Comments!.Elements<Comment>());
+        Assert.Contains("within thirty days of receipt", main.Document.Body.InnerText);
+        Assert.Contains("3% above base rate", main.Document.Body.Descendants<InsertedRun>().Select(run => run.InnerText));
+    }
+
+    private static byte[] Apply(OfficeAgentClient client, byte[] input, DocumentPlan plan)
+    {
+        using var result = client.Commit(new StreamHandle(new MemoryStream(input)), plan);
+        Assert.True(result.Committed,
+            string.Join("; ", result.Report.Errors.Select(error => $"{error.Code}: {error.Message}")));
+        return result.ToBytes();
+    }
 }

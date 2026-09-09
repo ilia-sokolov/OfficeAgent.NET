@@ -37,8 +37,7 @@
   <ItemGroup Condition="'$(IsPackable)' != 'false' AND Exists('$(MSBuildThisFileDirectory)icon.png')">
     <None Include="$(MSBuildThisFileDirectory)icon.png" Pack="true" PackagePath="\" Visible="false" />
   </ItemGroup>
-
-  <ItemGroup Condition="'$(IsPackable)' != 'false'">
-    <PackageReference Include="Microsoft.SourceLink.GitHub" Version="8.0.0" PrivateAssets="All" />
-  </ItemGroup>
+  <!-- Source Link is built into the .NET 8+ SDK. The standalone
+       Microsoft.SourceLink.GitHub 8.0.0 package pulls Microsoft.Build.Tasks.Git
+       8.0.0, which carries GHSA-23fw-v26w-5fgq with no patched 8.x release. -->
 </Project>

@@ -4,9 +4,13 @@ on:
   release:
     types: [published]
   workflow_dispatch:
+    inputs:
+      version:
+        description: 'Existing release tag version without v, for example 0.7.0'
+        required: true
 
 permissions:
-  contents: read
+  contents: write         # attach the version-matched Agent Skill to the release
   id-token: write          # required: OIDC token exchange with nuget.org
 
 jobs:
@@ -17,13 +21,46 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0   # Source Link / deterministic builds
+          ref: ${{ github.event.release.tag_name || format('v{0}', inputs.version) }}
 
       - uses: actions/setup-dotnet@v4
         with:
           dotnet-version: 8.0.x
 
+      - name: Validate release metadata and documentation
+        env:
+          RELEASE_TAG: ${{ github.event.release.tag_name || format('v{0}', inputs.version) }}
+        run: python scripts/validate_release.py "$RELEASE_TAG"
+
+      - name: Validate MCP Registry manifest
+        run: |
+          python -m pip install --disable-pip-version-check jsonschema==4.25.1
+          python scripts/validate_server_manifest.py
+
+      # Test the exact tag being published. workflow_dispatch can target a tag
+      # that never went through the main build, so the gate has to live here.
+      - name: Restore
+        run: dotnet restore OfficeAgent.NET.sln
+
+      - name: Build (Release)
+        run: dotnet build OfficeAgent.NET.sln -c Release --no-restore
+
+      - name: Test (Release)
+        run: dotnet test OfficeAgent.NET.sln -c Release --no-build
+
       - name: Pack
-        run: dotnet pack OfficeAgent.NET.sln -c Release -o ./artifacts
+        run: dotnet pack OfficeAgent.NET.sln -c Release -o ./artifacts --no-build
+
+      - name: Package Word review skill
+        run: |
+          cd skills
+          zip -r ../artifacts/word-document-review.zip word-document-review
+
+      - name: Attach Word review skill to release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ github.event.release.tag_name || format('v{0}', inputs.version) }}
+        run: gh release upload "$RELEASE_TAG" artifacts/word-document-review.zip --clobber
 
       - name: Login to NuGet.org (Trusted Publishing → short-lived key)
         id: nuget-login
