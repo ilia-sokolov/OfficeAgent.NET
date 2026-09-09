@@ -14,6 +14,11 @@ corresponding GitHub release.
 - Added plan-level Word revision author/timestamp metadata and structured apply receipts
   containing plan/input/output SHA-256 hashes, outcomes, provider output references, and a
   host-supplied authenticated actor kept separate from the displayed revision author.
+- Added native editable PowerPoint charts with embedded workbooks for clustered-column, bar,
+  line, and pie charts, including OfficeAgent-owned chart updates.
+- Added the `OfficeAgent.Excel` module for bounded workbook inspection, raw or displayed-value
+  search, typed cell and formula writes, table row appends, and cell-note management. Formula
+  writes request recalculation on open; OfficeAgent does not evaluate formulas.
 
 ## 0.7.0 — 2026-09-09
 

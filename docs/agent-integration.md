@@ -23,6 +23,7 @@ Install the integration, format modules, and dependency-injection container:
 dotnet add package OfficeAgent.AgentFramework
 dotnet add package OfficeAgent.Word
 dotnet add package OfficeAgent.PowerPoint
+dotnet add package OfficeAgent.Excel
 dotnet add package Microsoft.Extensions.DependencyInjection
 ```
 
@@ -32,13 +33,15 @@ using OfficeAgent.AgentFramework;
 using OfficeAgent.Core;
 using OfficeAgent.Core.DocumentProviders;
 using OfficeAgent.PowerPoint;
+using OfficeAgent.Excel;
 using OfficeAgent.Word;
 
 var services = new ServiceCollection()
     .AddWordFormat()
     .AddPowerPointFormat()          // drop if the agent only handles .docx
+    .AddExcelFormat()               // drop if the agent only handles .docx/.pptx
     .AddFileSystemDocumentProvider("workspace", "/srv/officeagent/workspace", o =>
-        o.AllowedExtensions = new[] { ".docx", ".pptx" })
+        o.AllowedExtensions = new[] { ".docx", ".pptx", ".xlsx" })
     .AddOfficeAgent()
     .BuildServiceProvider();
 

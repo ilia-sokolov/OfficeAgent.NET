@@ -25,7 +25,7 @@ A `DocumentPlan` is the wire contract between an agent and the engine. It is a J
 - `op` is the verb discriminator. It may appear anywhere in the object - property order does not matter - and an unknown verb comes back as `invalid-json` naming the ones that exist.
 - `target` is an anchor. The `$anchor` field is optional - the engine infers the anchor type from the property names (`paraId` → text span, `tag` → structural, `kind`/`path` → node).
 - `contractVersion`, `snapshot`, and `revision` are optional. Omit `contractVersion` unless a host needs to carry it, and use `snapshot` for explicit drift detection.
-- `format` is optional and *asserts* the document's format (`"Word"`, `"PowerPoint"`); a mismatch fails the plan with `contract-mismatch`. The verb vocabulary is shared, so a plan that does not care works against either.
+- `format` is optional and *asserts* the document's format (`"Word"`, `"PowerPoint"`, `"Excel"`); a mismatch fails the plan with `contract-mismatch`.
 
 ## Revision identity
 

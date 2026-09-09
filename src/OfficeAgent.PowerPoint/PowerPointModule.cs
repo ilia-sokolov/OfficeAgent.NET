@@ -146,7 +146,9 @@ public sealed class PowerPointModule : IFormatModule, IBlankDocumentFactory, IPl
             new SlideBackgroundImageHandler(),
             new SlideRemoveHandler(),
             new SlideMoveHandler(),
-            new SlideDuplicateHandler()
+            new SlideDuplicateHandler(),
+            new SlideInsertChartHandler(),
+            new SlideUpdateChartHandler()
         }
         .Concat(extraHandlers ?? Enumerable.Empty<IOperationHandler>())
         .ToList();
@@ -159,7 +161,8 @@ public sealed class PowerPointModule : IFormatModule, IBlankDocumentFactory, IPl
             new SlideMediaNodeProvider(),
             new SlideTableNodeProvider(),
             new SlideImageNodeProvider(),
-            new SlideCommentNodeProvider()
+            new SlideCommentNodeProvider(),
+            new SlideChartNodeProvider()
         }
         .Concat(extraProviders ?? Enumerable.Empty<IPowerPointNodeProvider>())
         .ToList();

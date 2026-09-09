@@ -991,6 +991,101 @@ public sealed class RemoveShapeOp : PlanOperation
 {
 }
 
+/// <summary>Specifies how a PowerPoint chart presents its series.</summary>
+public enum ChartKind
+{
+    /// <summary>Vertical clustered columns.</summary>
+    ClusteredColumn,
+    /// <summary>Horizontal clustered bars.</summary>
+    Bar,
+    /// <summary>Lines over a category axis.</summary>
+    Line,
+    /// <summary>A pie chart.</summary>
+    Pie
+}
+
+/// <summary>One named numeric series in a chart.</summary>
+public sealed class ChartSeries
+{
+    /// <summary>Gets the series name.</summary>
+    public string Name { get; init; } = string.Empty;
+    /// <summary>Gets one numeric value per category. Null creates a blank point.</summary>
+    public IReadOnlyList<double?> Values { get; init; } = Array.Empty<double?>();
+}
+
+/// <summary>Adds an editable native chart and embedded workbook to a slide.</summary>
+public sealed class InsertChartOp : PlanOperation
+{
+    /// <summary>Gets the chart type.</summary>
+    public ChartKind Kind { get; init; } = ChartKind.ClusteredColumn;
+    /// <summary>Gets category labels.</summary>
+    public IReadOnlyList<string> Categories { get; init; } = Array.Empty<string>();
+    /// <summary>Gets numeric series.</summary>
+    public IReadOnlyList<ChartSeries> Series { get; init; } = Array.Empty<ChartSeries>();
+    /// <summary>Gets the optional chart title.</summary>
+    public string? Title { get; init; }
+    /// <summary>Gets whether the legend is shown.</summary>
+    public bool ShowLegend { get; init; } = true;
+    /// <summary>Gets accessible alternative text.</summary>
+    public string Description { get; init; } = string.Empty;
+    /// <summary>Gets the left position in pixels at 96 DPI.</summary>
+    public int XPx { get; init; } = 80;
+    /// <summary>Gets the top position in pixels at 96 DPI.</summary>
+    public int YPx { get; init; } = 120;
+    /// <summary>Gets the width in pixels at 96 DPI.</summary>
+    public int WidthPx { get; init; } = 640;
+    /// <summary>Gets the height in pixels at 96 DPI.</summary>
+    public int HeightPx { get; init; } = 360;
+}
+
+/// <summary>Replaces data and presentation settings on a chart created by OfficeAgent.</summary>
+public sealed class UpdateChartOp : PlanOperation
+{
+    /// <summary>Gets the chart type.</summary>
+    public ChartKind Kind { get; init; } = ChartKind.ClusteredColumn;
+    /// <summary>Gets category labels.</summary>
+    public IReadOnlyList<string> Categories { get; init; } = Array.Empty<string>();
+    /// <summary>Gets numeric series.</summary>
+    public IReadOnlyList<ChartSeries> Series { get; init; } = Array.Empty<ChartSeries>();
+    /// <summary>Gets the optional chart title.</summary>
+    public string? Title { get; init; }
+    /// <summary>Gets whether the legend is shown.</summary>
+    public bool ShowLegend { get; init; } = true;
+    /// <summary>Gets accessible alternative text.</summary>
+    public string Description { get; init; } = string.Empty;
+}
+
+/// <summary>Writes a scalar or formula to an Excel cell.</summary>
+public sealed class SetCellOp : PlanOperation
+{
+    /// <summary>Gets the scalar value, or null to clear it.</summary>
+    public string? Value { get; init; }
+    /// <summary>Gets a formula without the leading equals sign.</summary>
+    public string? Formula { get; init; }
+    /// <summary>Gets how the scalar value is stored. Auto recognizes numbers and Booleans.</summary>
+    public SpreadsheetCellValueKind ValueKind { get; init; } = SpreadsheetCellValueKind.Auto;
+}
+
+/// <summary>Controls how a scalar Excel cell value is encoded.</summary>
+public enum SpreadsheetCellValueKind
+{
+    /// <summary>Recognize invariant numbers and Boolean values; otherwise write text.</summary>
+    Auto,
+    /// <summary>Always write text, preserving values such as leading-zero identifiers.</summary>
+    String,
+    /// <summary>Require and write an invariant numeric value.</summary>
+    Number,
+    /// <summary>Require and write true or false.</summary>
+    Boolean
+}
+
+/// <summary>Appends rows to an existing Excel table.</summary>
+public sealed class AppendTableRowsOp : PlanOperation
+{
+    /// <summary>Gets rows in table-column order.</summary>
+    public IReadOnlyList<IReadOnlyList<string>> Rows { get; init; } = Array.Empty<IReadOnlyList<string>>();
+}
+
 /// <summary>Specifies the lifecycle action for a <see cref="SectionOp"/>.</summary>
 public enum SectionAction
 {

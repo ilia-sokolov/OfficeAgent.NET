@@ -46,6 +46,49 @@ public sealed class InspectResult
 
     /// <summary>Gets format-specific nodes surfaced by node providers.</summary>
     public IReadOnlyList<NodeInfo> Nodes { get; init; } = Array.Empty<NodeInfo>();
+
+    /// <summary>Gets worksheets surfaced by Excel inspection.</summary>
+    public IReadOnlyList<WorksheetInfo> Worksheets { get; init; } = Array.Empty<WorksheetInfo>();
+
+    /// <summary>Gets populated cells from the bounded Excel inspection range.</summary>
+    public IReadOnlyList<CellInfo> Cells { get; init; } = Array.Empty<CellInfo>();
+}
+
+/// <summary>Describes one worksheet and its table catalog.</summary>
+public sealed class WorksheetInfo
+{
+    /// <summary>Gets the durable workbook sheet id.</summary>
+    public uint SheetId { get; init; }
+    /// <summary>Gets the worksheet display name.</summary>
+    public string Name { get; init; } = string.Empty;
+    /// <summary>Gets the used A1 dimension when present.</summary>
+    public string? Dimension { get; init; }
+    /// <summary>Gets tables defined on the sheet.</summary>
+    public IReadOnlyList<SpreadsheetTableInfo> Tables { get; init; } = Array.Empty<SpreadsheetTableInfo>();
+}
+
+/// <summary>Describes an Excel table.</summary>
+public sealed class SpreadsheetTableInfo
+{
+    /// <summary>Gets the table name.</summary>
+    public string Name { get; init; } = string.Empty;
+    /// <summary>Gets the table display name.</summary>
+    public string DisplayName { get; init; } = string.Empty;
+    /// <summary>Gets the A1 range occupied by the table.</summary>
+    public string Reference { get; init; } = string.Empty;
+}
+
+/// <summary>Describes one populated Excel cell without evaluating formulas.</summary>
+public sealed class CellInfo
+{
+    /// <summary>Gets the cell anchor.</summary>
+    public CellAnchor Anchor { get; init; } = new();
+    /// <summary>Gets the cell's stored XML value.</summary>
+    public string? RawValue { get; init; }
+    /// <summary>Gets text resolved from inline or shared strings and cached formula values.</summary>
+    public string? DisplayValue { get; init; }
+    /// <summary>Gets the formula text when the cell contains a formula.</summary>
+    public string? Formula { get; init; }
 }
 
 /// <summary>

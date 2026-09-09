@@ -142,8 +142,7 @@ public class PowerPointCreateTests
         var payload = OfficeAgentMcpServer.ConnectionsPayload(options);
 
         Assert.Contains("\"connectionId\":\"decks\",\"provider\":\"filesystem\",\"canCreateDocuments\":true", payload);
-        // No module mints .xlsx, so that connection must still report false.
-        Assert.Contains("\"connectionId\":\"sheets\",\"provider\":\"filesystem\",\"canCreateDocuments\":false", payload);
+        Assert.Contains("\"connectionId\":\"sheets\",\"provider\":\"filesystem\",\"canCreateDocuments\":true", payload);
     }
 
     private sealed class DeckWorkspace : IDisposable

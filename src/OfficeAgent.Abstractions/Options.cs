@@ -23,6 +23,15 @@ public sealed class InspectOptions
     /// <summary>Gets the requested inspection fidelity.</summary>
     public Fidelity Fidelity { get; init; } = Fidelity.Content;
 
+    /// <summary>Gets an optional worksheet id to inspect.</summary>
+    public uint? SheetId { get; init; }
+
+    /// <summary>Gets an optional A1 range to inspect. Excel only.</summary>
+    public string? Range { get; init; }
+
+    /// <summary>Gets the maximum number of populated cells returned by Excel inspection.</summary>
+    public int MaximumCells { get; init; } = 1000;
+
     /// <summary>Gets the default inspection options.</summary>
     public static InspectOptions Default { get; } = new();
 }

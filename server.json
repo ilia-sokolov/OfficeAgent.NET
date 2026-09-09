@@ -2,7 +2,7 @@
   "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
   "name": "io.github.ilia-sokolov/officeagent",
   "title": "OfficeAgent.NET",
-  "description": "Create and edit Word and PowerPoint files with typed plans, tracked changes, comments, and tables",
+  "description": "Create and edit Word, PowerPoint, and Excel files with typed plans and safe previews",
   "repository": {
     "url": "https://github.com/ilia-sokolov/OfficeAgent.NET",
     "source": "github"
@@ -26,7 +26,7 @@
         },
         {
           "name": "OfficeAgent__FileSystemConnections__0__RootPath",
-          "description": "Absolute path to the directory this filesystem connection may read and write documents under. Only .docx is allowed unless OfficeAgent__FileSystemConnections__0__AllowedExtensions__N adds more (.pptx for decks, which also want OfficeAgent__FileSystemConnections__0__DefaultChangeMode=Direct because a deck cannot record tracked changes)",
+          "description": "Absolute path to the directory this filesystem connection may read and write documents under. Only .docx is allowed unless OfficeAgent__FileSystemConnections__0__AllowedExtensions__N adds more (.pptx for decks or .xlsx for workbooks). Deck connections usually want OfficeAgent__FileSystemConnections__0__DefaultChangeMode=Direct because PowerPoint cannot record tracked changes",
           "format": "filepath",
           "isRequired": false,
           "placeholder": "/path/to/documents"

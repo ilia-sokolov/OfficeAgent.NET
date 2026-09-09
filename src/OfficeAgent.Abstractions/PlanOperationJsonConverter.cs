@@ -59,7 +59,11 @@ public sealed class PlanOperationJsonConverter : JsonConverter<PlanOperation>
             ["backgroundImage"] = typeof(BackgroundImageOp),
             ["pageSetup"] = typeof(PageSetupOp),
             ["insertBreak"] = typeof(InsertBreakOp),
-            ["note"] = typeof(NoteOp)
+            ["note"] = typeof(NoteOp),
+            ["setCell"] = typeof(SetCellOp),
+            ["appendTableRows"] = typeof(AppendTableRowsOp),
+            ["insertChart"] = typeof(InsertChartOp),
+            ["updateChart"] = typeof(UpdateChartOp)
         };
 
     private static string KnownVerbs => string.Join(", ", ByVerb.Keys.OrderBy(v => v, StringComparer.Ordinal));

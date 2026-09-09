@@ -185,7 +185,7 @@ gh api repos/ilia-sokolov/OfficeAgent.NET --jq '{description, homepage, topics}'
 The description should state the broad outcome and the distinctive reliability property.
 Topics should stay aligned with the package tags in
 [`Directory.Build.props`](../Directory.Build.props). Suitable topics include `mcp`,
-`model-context-protocol`, `openxml`, `docx`, `pptx`, `word`, `powerpoint`, `dotnet`, `csharp`,
+`model-context-protocol`, `openxml`, `docx`, `pptx`, `xlsx`, `word`, `powerpoint`, `excel`, `dotnet`, `csharp`,
 `ai-agents`, `tracked-changes`, and `document-automation`.
 
 Update settings when necessary:
@@ -193,7 +193,7 @@ Update settings when necessary:
 ```bash
 gh repo edit ilia-sokolov/OfficeAgent.NET \
   --homepage "https://www.nuget.org/packages/OfficeAgent.Mcp" \
-  --description "Structured Word and PowerPoint automation for .NET and coding agents"
+  --description "Structured Word, PowerPoint, and Excel automation for .NET and coding agents"
 ```
 
 Add or remove topics deliberately rather than appending the full list on every release.

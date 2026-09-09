@@ -19,7 +19,7 @@
     <RepositoryType>git</RepositoryType>
     <PackageReadmeFile>README.md</PackageReadmeFile>
     <PackageIcon>icon.png</PackageIcon>
-    <PackageTags>openxml;docx;pptx;word;powerpoint;office;mcp;model-context-protocol;ai;agents;llm;tracked-changes;document-automation</PackageTags>
+    <PackageTags>openxml;docx;pptx;xlsx;word;powerpoint;excel;office;mcp;model-context-protocol;ai;agents;llm;tracked-changes;document-automation</PackageTags>
     <PackageRequireLicenseAcceptance>false</PackageRequireLicenseAcceptance>
 
     <Deterministic>true</Deterministic>

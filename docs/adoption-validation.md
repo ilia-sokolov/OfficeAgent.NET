@@ -8,11 +8,11 @@ and package downloads measure attention, not successful use.
 
 A trial succeeds when a participant, without maintainer intervention:
 
-1. understands that OfficeAgent creates and edits Word documents and PowerPoint decks;
+1. understands that OfficeAgent creates and edits Word documents, PowerPoint decks, and Excel workbooks;
 2. chooses the shortest setup path for the assigned task;
 3. installs or starts the MCP server, or adds the required .NET packages;
 4. completes the assigned document outcome; and
-5. opens the saved file in Word or PowerPoint and verifies the requested result and preserved
+5. opens the saved file in Word, PowerPoint, or Excel and verifies the requested result and preserved
    unrelated content.
 
 The Word review skill is required only for the review trial. Record setup failures separately

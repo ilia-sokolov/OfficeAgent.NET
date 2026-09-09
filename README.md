@@ -6,8 +6,8 @@
 [![downloads](https://img.shields.io/nuget/dt/OfficeAgent.Core.svg)](https://www.nuget.org/packages/OfficeAgent.Core)
 [![license](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
-Give coding agents a structured way to create and edit real Word documents and
-PowerPoint decks. OfficeAgent.NET turns an agent's intent into typed, validated
+Give coding agents a structured way to create and edit real Word documents,
+PowerPoint decks, and Excel workbooks. OfficeAgent.NET turns an agent's intent into typed, validated
 operations and applies them directly to OOXML packages while preserving document
 structure.
 
@@ -22,7 +22,7 @@ One example is a targeted Word edit whose result remains reviewable:
 
 ## What this project does
 
-A `.docx` or `.pptx` file is a package of related XML parts. A small text change
+An Office Open XML file is a package of related XML parts. A small change
 can affect runs, styles, numbering, comments, content controls, or revision
 markup. OfficeAgent.NET handles that document-specific work. The model works
 with structured document data and JSON-serialisable operations such as "replace
@@ -34,9 +34,8 @@ The same engine is available in three forms:
 - tools for Microsoft Agent Framework and `Microsoft.Extensions.AI`;
 - a .NET API for applications that want to control the workflow directly.
 
-It supports Word `.docx` files and PowerPoint `.pptx` decks; one client serves
-both, routing each document to the module that handles it. Excel is not
-implemented. See [Scope and limitations](#scope-and-limitations) before choosing
+It supports Word `.docx`, PowerPoint `.pptx`, and Excel `.xlsx`; one client routes
+each document to the module that handles it. See [Scope and limitations](#scope-and-limitations) before choosing
 it for a workflow that depends on Office's layout or calculation engine.
 
 ### What you can build
@@ -45,7 +44,8 @@ it for a workflow that depends on Office's layout or calculation engine.
 | --- | --- |
 | Word creation and editing | Create `.docx` files; inspect and change text, paragraphs, tables, images, styles, content controls, headers, footers, notes, page setup, and document properties |
 | Word review | Read and manage comments, preserve or resolve review state, set one revision identity per plan, and record supported edits as tracked revisions |
-| PowerPoint creation and editing | Build or update decks with slides, layouts, text, tables, images, media, notes, comments, sections, transitions, and animations |
+| PowerPoint creation and editing | Build or update decks with slides, layouts, text, tables, native editable charts, images, media, notes, comments, sections, transitions, and animations |
+| Excel inspection and editing | Inspect worksheets, tables, and bounded ranges; find raw or displayed values; set cells and formulas; append table rows; manage cell notes |
 | Agent and application integration | Use MCP over stdio or HTTP, Microsoft Agent Framework tools, or the direct .NET API, with SHA-256 apply receipts and host-supplied audit actors |
 | Document access | Work with bounded filesystem roots, SharePoint, in-memory sessions, or self-contained inline content |
 
@@ -56,6 +56,7 @@ it for a workflow that depends on Office's layout or calculation engine.
 | Try a targeted Word edit | [Try a Word edit](#try-a-word-edit) |
 | Create a Word document from scratch | [Create a document](docs/getting-started.md#create-a-document-instead) |
 | Create or edit a PowerPoint deck | [PowerPoint support](docs/powerpoint.md) |
+| Inspect or edit an Excel workbook | [Excel support](docs/excel.md) |
 | Connect Codex, Claude Code, Copilot Studio, or Microsoft 365 Copilot | [Deployment and client setup](docs/deployment.md) |
 | Use OfficeAgent from C# | [Getting started](docs/getting-started.md) |
 | Add tools to a Microsoft Agent Framework agent | [Agent integration](docs/agent-integration.md) |
@@ -360,9 +361,8 @@ for code style, tests, and pull-request expectations.
 
 ## Scope and limitations
 
-OfficeAgent.NET edits Word `.docx` files and PowerPoint `.pptx` decks; it does
-not automate the Office desktop applications. An Excel module can be added
-through `IFormatModule`, but it does not ship today.
+OfficeAgent.NET edits Word `.docx`, PowerPoint `.pptx`, and Excel `.xlsx` files;
+it does not automate the Office desktop applications.
 
 The deck module refuses the verbs a presentation has no vocabulary for -
 `setProperty`, `revision`, `pageSetup`, `insertBreak` and `note` - per
@@ -374,7 +374,8 @@ paths are refused rather than approximated. See
 [PowerPoint support](docs/powerpoint.md) for what a deck does and does not
 accept.
 
-The engine does not render pages or calculate Word fields. Operations that
+The engine does not render pages, calculate Word fields, or evaluate Excel formulas. Formula
+edits set the workbook to recalculate when Excel opens it. Operations that
 depend on pagination, table-of-contents rendering, field recalculation, or
 page-fit checks are outside its scope. Preview reports structural changes, not
 a visual rendering of the final document. Test the workflow on representative

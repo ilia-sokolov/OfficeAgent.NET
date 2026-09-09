@@ -32,6 +32,7 @@
     <ProjectReference Include="..\..\src\OfficeAgent.SharePoint\OfficeAgent.SharePoint.csproj" />
     <ProjectReference Include="..\..\src\OfficeAgent.Mcp\OfficeAgent.Mcp.csproj" />
     <ProjectReference Include="..\..\src\OfficeAgent.PowerPoint\OfficeAgent.PowerPoint.csproj" />
+    <ProjectReference Include="..\..\src\OfficeAgent.Excel\OfficeAgent.Excel.csproj" />
   </ItemGroup>
 
 </Project>

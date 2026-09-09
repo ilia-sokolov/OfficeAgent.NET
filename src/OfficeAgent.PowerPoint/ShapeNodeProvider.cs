@@ -3,6 +3,7 @@ using DocumentFormat.OpenXml.Presentation;
 using OfficeAgent.Abstractions;
 using OfficeAgent.Core;
 using A = DocumentFormat.OpenXml.Drawing;
+using C = DocumentFormat.OpenXml.Drawing.Charts;
 
 namespace OfficeAgent.PowerPoint;
 
@@ -108,6 +109,7 @@ internal sealed class ShapeNodeProvider : IPowerPointNodeProvider
         {
             Shape when IsPlaceholder(element) => "placeholder",
             Shape => "text box",
+            GraphicFrame frame when frame.Descendants<C.ChartReference>().Any() => "chart",
             GraphicFrame => "table",
             Picture => "picture",
             _ => element.LocalName

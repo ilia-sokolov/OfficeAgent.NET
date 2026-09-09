@@ -34,6 +34,20 @@ public sealed class MatchOptions
 
     /// <summary>Gets a value indicating whether <see cref="FindQuery.Pattern"/> is interpreted as a regular expression.</summary>
     public bool Regex { get; init; }
+
+    /// <summary>Gets which Excel cell representation is searched.</summary>
+    public SpreadsheetValueView SpreadsheetValueView { get; init; } = SpreadsheetValueView.Both;
+}
+
+/// <summary>Chooses the Excel cell representation used by find.</summary>
+public enum SpreadsheetValueView
+{
+    /// <summary>Search resolved display text and stored raw values.</summary>
+    Both,
+    /// <summary>Search resolved display text.</summary>
+    Displayed,
+    /// <summary>Search the value stored in the cell XML.</summary>
+    Raw
 }
 
 /// <summary>

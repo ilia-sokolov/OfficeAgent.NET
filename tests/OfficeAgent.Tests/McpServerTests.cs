@@ -352,7 +352,7 @@ public class McpServerTests
     }
 
     [Fact]
-    public void Creation_requires_a_connection_that_allows_docx()
+    public void Creation_accepts_an_excel_only_connection()
     {
         using var root = new TemporaryRoot();
         var options = OptionsFor(root);
@@ -362,8 +362,8 @@ public class McpServerTests
 
         var names = OfficeAgentMcpServer.BuildToolset(options).Select(t => t.ProtocolTool.Name).ToArray();
 
-        Assert.DoesNotContain("create_document", names);
-        Assert.DoesNotContain("list_connections", names);
+        Assert.Contains("create_document", names);
+        Assert.Contains("list_connections", names);
     }
 
     [Fact]
@@ -395,7 +395,7 @@ public class McpServerTests
             item => item.GetProperty("canCreateDocuments").GetBoolean());
 
         Assert.True(capabilities["documents"]);
-        Assert.False(capabilities["spreadsheets"]);
+        Assert.True(capabilities["spreadsheets"]);
         Assert.True(capabilities["legal"]);
         Assert.False(capabilities["archive"]);
     }

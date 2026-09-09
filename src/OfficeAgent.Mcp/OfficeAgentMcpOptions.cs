@@ -33,7 +33,7 @@ public sealed class OfficeAgentMcpOptions
     /// <summary>
     /// Gets or sets whether <c>create_document</c> is exposed when at least one
     /// connection allows a format for which a blank-document factory is registered
-    /// (currently <c>.docx</c> or <c>.pptx</c>); SharePoint connections additionally
+    /// (currently <c>.docx</c>, <c>.pptx</c>, or <c>.xlsx</c>); SharePoint connections additionally
     /// require an explicit creation destination. Defaults to <see langword="false"/>: letting
     /// an agent author new files under a connection root is a capability a host should
     /// choose, and an upgrade must not hand it to deployments that never asked for it.

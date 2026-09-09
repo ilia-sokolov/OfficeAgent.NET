@@ -1,7 +1,7 @@
 # OfficeAgent.NET documentation
 
 OfficeAgent.NET gives agents a structured, validated way to create, inspect, and edit
-Word documents and PowerPoint decks. It supports document generation, targeted changes,
+Word documents, PowerPoint decks, and Excel workbooks. It supports document generation, targeted changes,
 rich content operations, review workflows, and several hosting and storage models. Use
 this page to choose the shortest path for your scenario.
 
@@ -16,6 +16,7 @@ this page to choose the shortest path for your scenario.
 | Edit a Word document from C# | [Getting started](getting-started.md) | [Concepts](concepts.md), [document plans](document-plans.md) |
 | Create a Word document from scratch | [Create a document](getting-started.md#create-a-document-instead) | [Document plans](document-plans.md) |
 | Create or update a PowerPoint deck | [PowerPoint support](powerpoint.md#creating-a-deck) | [Generating a deck](powerpoint.md#generating-a-deck) |
+| Inspect or update an Excel workbook | [Excel support](excel.md) | [Document plans](document-plans.md) |
 | Add document tools to an agent | [Agent integration](agent-integration.md) | [Document providers](document-providers.md) |
 | Connect an MCP client locally | [MCP server](mcp-server.md#local-hosting-stdio) | [Deployment](deployment.md#option-a---local-stdio-for-claude-code-and-codex) |
 | Host OfficeAgent for a team | [Deployment](deployment.md#option-b---hosted-http-for-all-four-clients) | [Operations](operations.md), [troubleshooting](troubleshooting.md) |
@@ -30,13 +31,14 @@ this page to choose the shortest path for your scenario.
 | `OfficeAgent.Core` | Engine, direct .NET API, filesystem provider | `netstandard2.0`, `net8.0` |
 | `OfficeAgent.Word` | Word `.docx` inspection, creation, and editing | `netstandard2.0`, `net8.0` |
 | `OfficeAgent.PowerPoint` | PowerPoint `.pptx` inspection, creation, and editing | `netstandard2.0`, `net8.0` |
+| `OfficeAgent.Excel` | Excel `.xlsx` inspection, creation, and editing | `netstandard2.0`, `net8.0` |
 | `OfficeAgent.AgentFramework` | `Microsoft.Extensions.AI` / Microsoft Agent Framework tools | `netstandard2.0`, `net8.0` |
 | `OfficeAgent.SharePoint` | Microsoft Graph document provider | `netstandard2.0`, `net8.0` |
 | `OfficeAgent.Mcp` | Standalone MCP server and .NET global tool | `net8.0` |
 
 Applications add `OfficeAgent.Core` plus at least one format module. Add a
 provider or agent adapter only when that hosting model needs it. The standalone
-MCP tool already includes both format modules and both built-in providers.
+MCP tool already includes all three format modules and both built-in providers.
 
 ## Core workflow
 
@@ -64,6 +66,7 @@ and optimistic-concurrency conflicts instead of guessing.
 
 - [Concepts](concepts.md) — providers, anchors, snapshots, plans, and transactions.
 - [PowerPoint support](powerpoint.md) — slide-specific addressing and behavior.
+- [Excel support](excel.md) — worksheet, range, table, formula, and cell-note behavior.
 
 ### How-to guides
 
@@ -84,7 +87,7 @@ and optimistic-concurrency conflicts instead of guessing.
 ## Scope
 
 OfficeAgent edits OOXML packages; it does not automate desktop Office or render
-pages and slides. Excel, Word pagination, field calculation, and visual page-fit
+pages and slides. Word pagination, field calculation, Excel formula evaluation, and visual page-fit
 validation are outside the current scope. See the
 [project limitations](../README.md#scope-and-limitations) before production use.
 

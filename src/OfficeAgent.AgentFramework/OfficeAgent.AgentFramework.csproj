@@ -2,7 +2,7 @@
 
   <PropertyGroup>
     <TargetFrameworks>netstandard2.0;net8.0</TargetFrameworks>
-    <Description>Microsoft.Extensions.AI tool adapter for OfficeAgent.NET: projects Word and PowerPoint inspect, find, preview, and apply workflows as AIFunctions with structured JSON results, plus opt-in document registration, composite open/edit, and creation tools for filesystem or SharePoint connections.</Description>
+    <Description>Microsoft.Extensions.AI tool adapter for OfficeAgent.NET: projects Word, PowerPoint, and Excel inspect, find, preview, and apply workflows as AIFunctions with structured JSON results.</Description>
   </PropertyGroup>
 
   <ItemGroup>

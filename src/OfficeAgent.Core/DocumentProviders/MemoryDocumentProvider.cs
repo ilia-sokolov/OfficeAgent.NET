@@ -316,7 +316,7 @@ public sealed class MemoryDocumentProviderOptions
     public long MaximumTotalBytes { get; set; } = 100L * 1024 * 1024;
 
     /// <summary>Gets or sets the extensions the connection accepts. Empty means any.</summary>
-    public IList<string> AllowedExtensions { get; set; } = new List<string> { ".docx", ".pptx" };
+    public IList<string> AllowedExtensions { get; set; } = new List<string> { ".docx", ".pptx", ".xlsx" };
 
     /// <summary>
     /// Gets or sets the change mode for an operation that does not state one. Defaults to

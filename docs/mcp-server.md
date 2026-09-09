@@ -1,6 +1,6 @@
 # MCP server
 
-`OfficeAgent.Mcp` exposes the OfficeAgent workflow as [Model Context Protocol](https://modelcontextprotocol.io) tools, so any MCP-capable agent can inspect and edit real Word documents and PowerPoint decks without taking a .NET dependency. It is the same engine and tool contract as `OfficeAgent.AgentFramework`: typed plans, preview-before-apply, tracked changes by default in Word, and all-or-nothing commits.
+`OfficeAgent.Mcp` exposes the OfficeAgent workflow as [Model Context Protocol](https://modelcontextprotocol.io) tools, so any MCP-capable agent can inspect and edit Word documents, PowerPoint decks, and Excel workbooks without taking a .NET dependency. It is the same engine and tool contract as `OfficeAgent.AgentFramework`: typed plans, preview-before-apply, tracked changes by default in Word, and all-or-nothing commits.
 
 > This page is the configuration reference. For step-by-step wiring of specific clients - Claude Code, Codex, Copilot Studio, Microsoft 365 Copilot - and the identity checklist, see [Deployment & client setup](deployment.md).
 
@@ -155,7 +155,7 @@ A connection whose value cannot be read - a `MaximumBytes` that is not a number,
 | --- | --- | --- |
 | `Transport` | `http` | `http` or `stdio` (the `--stdio` flag also forces stdio). |
 | `AllowRegistration` | `true` | Expose `register_document` / `remove_document` / `open_document` / `edit_document` / `list_connections` - every tool that takes a connection-relative source. Unlike the in-process tools (opt-in), the MCP server defaults to on: an MCP client has no other channel to stage document ids. Set to `false` to pin agents to ids the host distributes itself. |
-| `AllowCreation` | `false` | Expose `create_document` when at least one connection allows a creatable extension (`.docx` or `.pptx`); SharePoint must also have a configured creation destination. Independent of `AllowRegistration`, so a host can permit creation without permitting arbitrary registration/removal. The zero-configuration fallback enables it for its session connection. |
+| `AllowCreation` | `false` | Expose `create_document` when at least one connection allows a creatable extension (`.docx`, `.pptx`, or `.xlsx`); SharePoint must also have a configured creation destination. Independent of `AllowRegistration`, so a host can permit creation without permitting arbitrary registration/removal. The zero-configuration fallback enables it for its session connection. |
 | `AllowInlineContent` | `false` | Expose `create_document_content` / `inspect_document_content` / `edit_document_content`, which carry the document as base64 in both directions. Needs no connection. Best for a single self-contained call; see [Documents with no storage](#documents-with-no-storage) before using it for multi-step editing. |
 | `EphemeralConnectionId` | empty | Id of a session connection whose documents the server holds in memory for the life of the process - `"session"` by convention. Adds `import_document_content` / `export_document_content` and makes the ordinary connection-addressed tools usable with no storage. With no configuration of any kind, the effective value is `session`. |
 | `EphemeralMaximumTotalBytes` | 100 MB | Total the session connection may hold at once. The store is process memory, so this bound is what keeps a long session from growing without limit. |
@@ -203,7 +203,7 @@ with `OfficeAgent__SharePointConnections__0__ClientSecret` supplied from the env
 
 ## Tools
 
-The MCP toolset is the projection of [the agent-integration surface](agent-integration.md): `inspect_document`, `find_in_document`, `preview_plan`, and `apply_plan`; `AllowRegistration` independently adds `register_document` / `remove_document` plus the composites `open_document` / `edit_document`, while `AllowCreation` adds `create_document` when at least one connection allows a creatable extension - `.docx` or `.pptx` (SharePoint also requires its creation destination). Either opt-in adds `list_connections`, which returns `{connectionId, provider, canCreateDocuments}` entries. That boolean means the connection is configured for at least one creatable format; it is not a format list, a permission check, or a readiness probe.
+The MCP toolset is the projection of [the agent-integration surface](agent-integration.md): `inspect_document`, `find_in_document`, `preview_plan`, and `apply_plan`; `AllowRegistration` independently adds `register_document` / `remove_document` plus the composites `open_document` / `edit_document`, while `AllowCreation` adds `create_document` when at least one connection allows a creatable extension - `.docx`, `.pptx`, or `.xlsx` (SharePoint also requires its creation destination). Either opt-in adds `list_connections`, which returns `{connectionId, provider, canCreateDocuments}` entries. That boolean means the connection is configured for at least one creatable format; it is not a format list, a permission check, or a readiness probe.
 
 Every tool named above addresses a document by `(connectionId, documentId)` and is offered
 only when a connection exists to name. `AllowInlineContent` adds a separate set that

@@ -129,7 +129,7 @@ public sealed class OfficeAgentTools
     /// and the structured-error vocabulary the tools surface.
     /// </summary>
     public const string SystemPromptGuidance = """
-        You are editing Microsoft Office documents through the OfficeAgent tools - a Word document (.docx) or a PowerPoint deck (.pptx). inspect_document reports which: format "Word" or "PowerPoint". A few rules below differ by format, and each says so.
+        You are editing Microsoft Office documents through the OfficeAgent tools - a Word document (.docx), PowerPoint deck (.pptx), or Excel workbook (.xlsx). inspect_document reports which format it found.
 
         Document addressing
         - Storage connections are host-configured and so is each document's registration. The host gives you an OPAQUE, provider-assigned documentId for every document you are allowed to work with; the connection-addressed document tools address it as (connectionId, documentId). Never invent a documentId, and never pass a filename or path as one. Do not ask the user to paste file bytes into the conversation; if a tool whose name ends in _content is available, that tool - and only that tool - takes the document as base64, and its own section below says how.
@@ -139,7 +139,7 @@ public sealed class OfficeAgentTools
 
         Plan shape, anchors, safety loop
         - Plan body is { "snapshot": { "eTag": "<snapshot from inspect_document>" }, "operations": [ ... ] }. Copy the scalar snapshot string returned by inspect_document into snapshot.eTag to detect drift in Word body/header/footer/footnote/endnote XML or PowerPoint slide/notes XML. It does not cover properties, comments, sections, media/image bytes, masters, or layouts; their anchors and provider version checks still apply. Omit snapshot only deliberately. Do not set contractVersion.
-        - Available operations (the JSON shape of each is in the preview_plan description): changeText, insert (a paragraph), insertTable, removeTable, format, fill, comment, headerFooter, insertTableRows, removeTableRows, insertTableColumns, removeTableColumns, insertImage, removeImage, backgroundImage, copyStyles, clearStyles; Word also supports defineStyle, setProperty, revision, pageSetup, insertBreak and note; decks also support insertSlide, removeSlide, moveSlide, duplicateSlide, insertShape, removeShape, section, insertMedia, transition, and animate. headerFooter has format-specific fields described below. Create a table with insertTable; delete one with removeTable. These are plan operations inside preview_plan/apply_plan, not separate tools.
+        - Available operations (the JSON shape of each is in the preview_plan description): Word and PowerPoint use the document operations below; decks additionally support insertChart/updateChart; workbooks support setCell, appendTableRows, and comment Add/Remove on a cell. These are plan operations inside preview_plan/apply_plan, not separate tools.
         - Call inspect_document or find_in_document before building a plan to obtain anchor ids; never invent paragraph ids, occurrence numbers, content-control tags, or node paths.
         - Tables and images only appear in inspect_document.nodes, never in the paragraphs list. Copy the path from there rather than composing one: Word uses "table#N"/"image#N", a deck uses "table#{slideId}/{shapeId}"/"image#{slideId}/{shapeId}". To recognise table content, look for paragraphs whose `in` field matches a table path.
         - Preview before you apply. If preview reports stale-snapshot, re-inspect and rebuild. If preview reports expect-mismatch, the document drifted - re-inspect/find that operation.
@@ -157,7 +157,8 @@ public sealed class OfficeAgentTools
         Working with a PowerPoint deck
         - Each slide is one outline entry. Paragraph ids read "slide{slideId}/shape{shapeId}/p{n}", with "notes/..." for speaker notes and ".../r{row}c{col}/..." inside a table cell.
         - A slide has no text flow, so insertTable, insertImage, and an added comment target the SLIDE - { "kind": "slide", "path": "slide#256" } - not a paragraph. Resolve a comment with { "op": "comment", "action": "Resolve", "target": { "kind": "comment", "path": "comment#256/{id}" } }.
-        - Only these verbs work on a deck: changeText, insert, format, fill, copyStyles, clearStyles, insertTable, removeTable, insertTableRows, removeTableRows, insertTableColumns, removeTableColumns, insertImage, removeImage, backgroundImage, insertShape, removeShape, insertMedia, comment, section, headerFooter, transition, animate, insertSlide, removeSlide, moveSlide, duplicateSlide. Only defineStyle, setProperty, revision, pageSetup, insertBreak, note and the Word-only anchors return "unsupported-operation".
+        - Only these verbs work on a deck: changeText, insert, format, fill, copyStyles, clearStyles, insertTable, removeTable, insertTableRows, removeTableRows, insertTableColumns, removeTableColumns, insertImage, removeImage, backgroundImage, insertShape, removeShape, insertMedia, insertChart, updateChart, comment, section, headerFooter, transition, animate, insertSlide, removeSlide, moveSlide, duplicateSlide.
+        - Native charts: insertChart targets a slide and takes kind ClusteredColumn, Bar, Line, or Pie, categories, numeric series, title, showLegend, description, and pixel placement. It creates an editable chart with an embedded workbook. updateChart targets a chart node and only edits charts OfficeAgent created.
         - Slide transitions: { "op": "transition", "effect": "push", "direction": "up", "durationMs": 700 }. No target applies it to every slide, which is PowerPoint's "Apply To All"; a slide target sets just that one. effect "none" removes it. Set advanceAfterMs for a self-running deck and advanceOnClick:false to stop clicks skipping ahead.
         - Shape animations target a SHAPE node: { "op": "animate", "target": { "kind": "shape", "path": "shape#257/2" }, "effect": "fade", "kind": "Entrance", "trigger": "OnClick", "durationMs": 600 }. trigger is OnClick, WithPrevious or AfterPrevious and decides where the effect lands in the slide's sequence - a new click step, alongside the previous effect, or straight after it. Effects play in the order you send the operations. effect "none" removes that shape's animations.
         - Available animations: appear, fade, wipe, blinds, checkerboard, circle, diamond, dissolve, plus, randomBar, split, wedge, wheel, box. Fly-in, zoom, grow and motion paths are NOT available - they need interpolated properties rather than a filter - and are refused rather than approximated. Say so plainly if the user asks for one.
@@ -175,6 +176,12 @@ public sealed class OfficeAgentTools
         - IMPORTANT: a slide paragraph id is positional, so inserting renumbers every later paragraph in the SAME shape. A plan that inserts and then addresses that shape at the same or a higher p-index is refused with operation-conflict. Apply the insert, re-inspect, then send the rest as a second plan. Earlier paragraphs, other shapes and other slides are unaffected.
         - Shapes: insertShape adds a free-standing text box to a slide - { "op": "insertShape", "target": { "kind": "slide", "path": "slide#257" }, "text": ["Draft"], "xPx": 40, "yPx": 620, "widthPx": 420, "heightPx": 50 }. Text belonging in the title or body should go through the placeholders instead. removeShape deletes any shape by its { "kind": "shape", "path": "shape#{slideId}/{shapeId}" } node; removing a placeholder is refused because the layout would re-offer it empty and the slide would look unchanged.
         - Move, resize or paint ANY shape - text box, table, picture - with format on its shape node: { "op": "format", "target": { "kind": "shape", "path": "shape#257/4" }, "xPx": 120, "yPx": 560, "widthPx": 700, "heightPx": 44, "fillColor": "FFF2CC", "lineColor": "7F6000" }. Shape formatting does not style the text inside it; target a paragraph for that.
+
+        Working with an Excel workbook
+        - inspect_document returns worksheets and up to maximumCells populated cells. Each cell anchor carries a durable sheetId plus an A1 address. Pass sheetId and range to inspect only the needed rectangle.
+        - setCell writes a scalar or a formula: { "op": "setCell", "target": { "sheetId": 7, "address": "B2" }, "value": "42" } or use "formula": "SUM(B2:B8)". OfficeAgent clears the cached result and asks Excel to recalculate on open; it does not calculate formulas.
+        - appendTableRows targets a spreadsheetTable node from inspection and requires one value per table column. It refuses to overwrite populated cells below the table and preserves other worksheet content.
+        - Excel comments are legacy cell notes. Add one with a cell target and action Add; remove one with the cellComment node returned by inspection and action Remove.
         """;
 
     /// <summary>
@@ -201,7 +208,7 @@ public sealed class OfficeAgentTools
     public const string CreationPromptGuidance = """
 
         Creating a document
-        - create_document(connectionId, name, planJson) creates and registers a new document and returns outputDocumentId. name is a bare file name, never a path; an existing name is not overwritten. The extension picks the format: .docx makes a Word document, .pptx makes a PowerPoint deck.
+        - create_document(connectionId, name, planJson) creates and registers a new document and returns outputDocumentId. name is a bare file name, never a path; an existing name is not overwritten. The extension picks the format: .docx makes Word, .pptx PowerPoint, and .xlsx Excel.
         - Pass "" for an empty document. An initial plan is applied in memory before storage. The empty starting anchor differs by format: a Word document has one empty paragraph at { "paraId": "auto-0000", "expect": "" }; a deck has one empty title placeholder at { "paraId": "slide256/shape2/p0", "expect": "" }. When unsure, create with planJson "" and then inspect_document.
         - planJson accepts a bare operations array [ … ] as well as { "operations": [ … ] }.
         - Plan-validation errors mean nothing was written. A provider or cancellation error can occur after storage accepted the file, so do not retry the same name; report the possibly unregistered file name to the host/operator for recovery.
@@ -290,7 +297,7 @@ public sealed class OfficeAgentTools
                 "create_document",
                 "Create and register a new document in a host-configured connection, optionally applying an initial plan before writing. " +
                 "name is a bare file name such as 'quarterly-report.docx'; an existing name is never overwritten. " +
-                "The extension picks the format: '.docx' makes a Word document, '.pptx' makes a PowerPoint deck. " +
+                "The extension picks the format: '.docx' makes Word, '.pptx' PowerPoint, and '.xlsx' Excel. " +
                 "Pass planJson \"\" for a minimal document. The starting anchor differs by format: a Word document has one empty paragraph at { \"paraId\": \"auto-0000\", \"expect\": \"\" }; a deck has one empty title placeholder at { \"paraId\": \"slide256/shape2/p0\", \"expect\": \"\" }, and its slide-targeted verbs use { \"kind\": \"slide\", \"path\": \"slide#256\" }. " +
                 "Plan-validation errors guarantee no write. Provider and cancellation errors may occur after storage accepted the file, so do not retry the same name; report the possibly unregistered name to the host for recovery. " +
                 "Returns {isValid, committed, receipt, sourceDocumentId, outputConnectionId, outputDocumentId, outputVersion, outputName, outputContentType, changes, errors}; non-applicable values are null.")));
@@ -300,7 +307,7 @@ public sealed class OfficeAgentTools
             functions.Add(AIFunctionFactory.Create(CreateDocumentContent, Opts(
                 "create_document_content",
                 "Create a new document from nothing and get its bytes back, with no storage connection involved. " +
-                "name is a bare file name whose extension picks the format: '.docx' makes a Word document, '.pptx' makes a PowerPoint deck. " +
+                "name is a bare file name whose extension picks the format: '.docx' makes Word, '.pptx' PowerPoint, and '.xlsx' Excel. " +
                 "planJson is optional and authors the document before it is returned; several operations in one call turn nothing into a finished document. " +
                 "Pass planJson \"\" for an empty document. The starting anchor differs by format: a Word document has one empty paragraph at { \"paraId\": \"auto-0000\", \"expect\": \"\" }; a deck has one empty title placeholder at { \"paraId\": \"slide256/shape2/p0\", \"expect\": \"\" }. " +
                 "Returns {isValid, committed, receipt, name, contentBase64, contentBytes, changes, errors}. contentBase64 is the finished document - hand it to the host to save, or pass it straight back to edit_document_content to keep working. It is null when the plan failed, and then nothing was created.\n\n" +
@@ -399,16 +406,21 @@ public sealed class OfficeAgentTools
             "{ \"op\": \"removeImage\", \"target\": { \"kind\": \"image\", \"path\": \"image#0\" } }\n" +
             "{ \"op\": \"backgroundImage\", \"base64Bytes\": \"iVBORw0KGgo...\", \"imageType\": \"png\", \"opacity\": 0.2 }\n" +
             "{ \"op\": \"backgroundImage\", \"target\": { \"kind\": \"slide\", \"path\": \"slide#256\" }, \"base64Bytes\": \"iVBORw0KGgo...\", \"opacity\": 0.15 }\n" +
-            "{ \"op\": \"headerFooter\", \"header\": \"Northwind Traders\", \"footer\": \"Confidential\", \"showPageNumber\": true, \"alignment\": \"edges\", \"differentFirstPage\": true }";
+            "{ \"op\": \"headerFooter\", \"header\": \"Northwind Traders\", \"footer\": \"Confidential\", \"showPageNumber\": true, \"alignment\": \"edges\", \"differentFirstPage\": true }\n\n" +
+            "// Native PowerPoint chart with an editable embedded workbook:\n" +
+            "{ \"op\": \"insertChart\", \"target\": { \"kind\": \"slide\", \"path\": \"slide#256\" }, \"kind\": \"ClusteredColumn\", \"categories\": [\"Q1\",\"Q2\"], \"series\": [{ \"name\": \"Revenue\", \"values\": [10,12] }], \"title\": \"Revenue\", \"description\": \"Quarterly revenue\" }\n\n" +
+            "// Excel cells and table rows; sheet ids and table paths come from inspection:\n" +
+            "{ \"op\": \"setCell\", \"target\": { \"sheetId\": 7, \"address\": \"B2\" }, \"formula\": \"SUM(B3:B8)\" }\n" +
+            "{ \"op\": \"appendTableRows\", \"target\": { \"kind\": \"spreadsheetTable\", \"path\": \"table#7/Sales\" }, \"rows\": [[\"APAC\",\"15\"]] }";
 
     private AIFunction[] CoreFunctions() => new[]
     {
         AIFunctionFactory.Create(InspectDocument, Opts(
             "inspect_document",
-            "Inspect a document by (connectionId, documentId) - a Word document or a PowerPoint deck. Returns outline (headings, or one entry per slide), paragraphs (with their `in` containment - a table path in Word, a slide's shape or table cell in a deck), content controls, format-specific nodes (including tables/images/properties/revisions/comments/notes in Word and slides/shapes/tables/images/comments/media/sections in a deck), styles, and a snapshot etag for drift detection. Copy node paths from this result. Use paragraphOffset/paragraphLimit to page; fidelity='outline'|'structure'|'content' to control payload size.")),
+            "Inspect a Word, PowerPoint, or Excel document. Excel returns worksheets, tables, and a bounded cell list; use sheetId, range, and maximumCells to narrow it. Other formats return their outline, paragraphs, content controls, nodes, and styles. Copy anchors and node paths from this result.")),
         AIFunctionFactory.Create(FindInDocument, Opts(
             "find_in_document",
-            "Find text in a document by (connectionId, documentId) - a Word document or a PowerPoint deck, including slide notes and table cells. Returns content-verified anchors (paragraphId + expected + occurrence) usable as plan targets. Each hit also carries its source location for Word: 'body', 'header', 'footer', 'footnote', or 'endnote' (null in a deck), so identical text in different hosts can be told apart before a plan targets one.")),
+            "Find content in Word, PowerPoint, or Excel. Excel can search displayed, raw, or both cell representations and returns sheetId plus A1 address anchors.")),
         AIFunctionFactory.Create(PreviewPlan, Opts(
             "preview_plan",
             "Dry-run a DocumentPlan JSON against (connectionId, documentId). Returns {isValid, committed, receipt, sourceDocumentId, outputConnectionId, outputDocumentId, outputVersion, outputName, outputContentType, changes, errors}; the output fields are null and committed is false. " +
@@ -426,10 +438,19 @@ public sealed class OfficeAgentTools
         string fidelity = "content",
         int paragraphOffset = 0,
         int paragraphLimit = 200,
+        uint sheetId = 0,
+        string range = "",
+        int maximumCells = 1000,
         CancellationToken cancellationToken = default)
         => SafeAsync(async () =>
         {
-            var options = new InspectOptions { Fidelity = ParseFidelity(fidelity) };
+            var options = new InspectOptions
+            {
+                Fidelity = ParseFidelity(fidelity),
+                SheetId = sheetId == 0 ? null : sheetId,
+                Range = string.IsNullOrWhiteSpace(range) ? null : range,
+                MaximumCells = maximumCells
+            };
             var result = await _client.InspectAsync(connectionId, documentId, options, cancellationToken).ConfigureAwait(false);
             return JsonSerializer.Serialize(
                 InspectPayload(result, paragraphOffset, paragraphLimit), Json);
@@ -458,7 +479,9 @@ public sealed class OfficeAgentTools
             .Select(p => new { p.ParaId, style = p.StyleId, p.Text, @in = p.In, location = p.Location }),
         ["contentControls"] = result.StructuralAnchors.Select(s => new { s.Tag, s.Kind }),
         ["nodes"] = result.Nodes.Select(n => new { n.Kind, n.Path, n.Summary }),
-        ["styles"] = result.Styles.Styles.Select(s => new { s.Id, s.Name, s.InUseCount })
+        ["styles"] = result.Styles.Styles.Select(s => new { s.Id, s.Name, s.InUseCount }),
+        ["worksheets"] = result.Worksheets,
+        ["cells"] = result.Cells
     };
 
     /// <summary>Finds text in a document and returns content-verified anchors.</summary>
@@ -469,13 +492,20 @@ public sealed class OfficeAgentTools
         bool regex = false,
         bool wholeWord = false,
         bool caseSensitive = false,
+        string spreadsheetValueView = "both",
         CancellationToken cancellationToken = default)
         => SafeAsync(async () =>
         {
             var query = new FindQuery
             {
                 Pattern = pattern,
-                Options = new MatchOptions { Regex = regex, WholeWord = wholeWord, CaseSensitive = caseSensitive }
+                Options = new MatchOptions
+                {
+                    Regex = regex,
+                    WholeWord = wholeWord,
+                    CaseSensitive = caseSensitive,
+                    SpreadsheetValueView = ParseSpreadsheetValueView(spreadsheetValueView)
+                }
             };
             var hits = await _client.FindAsync(connectionId, documentId, query, cancellationToken).ConfigureAwait(false);
             return JsonSerializer.Serialize(hits.Select(h => new
@@ -484,7 +514,9 @@ public sealed class OfficeAgentTools
                 expect = h.Text,
                 occurrence = (h.Anchor as TextSpanAnchor)?.Occurrence ?? 0,
                 context = h.Context,
-                location = h.Location
+                location = h.Location,
+                sheetId = (h.Anchor as CellAnchor)?.SheetId,
+                address = (h.Anchor as CellAnchor)?.Address
             }), Json);
         });
 
@@ -571,11 +603,18 @@ public sealed class OfficeAgentTools
         string fidelity = "content",
         int paragraphOffset = 0,
         int paragraphLimit = 200,
+        uint sheetId = 0,
+        string range = "",
+        int maximumCells = 1000,
         CancellationToken cancellationToken = default)
         => SafeAsync(async () =>
         {
             var reference = await _client.RegisterAsync(connectionId, source, cancellationToken).ConfigureAwait(false);
-            var options = new InspectOptions { Fidelity = ParseFidelity(fidelity) };
+            var options = new InspectOptions
+            {
+                Fidelity = ParseFidelity(fidelity), SheetId = sheetId == 0 ? null : sheetId,
+                Range = string.IsNullOrWhiteSpace(range) ? null : range, MaximumCells = maximumCells
+            };
             var result = await _client.InspectAsync(
                 connectionId, reference.ItemId, options, cancellationToken).ConfigureAwait(false);
 
@@ -658,6 +697,9 @@ public sealed class OfficeAgentTools
         string fidelity = "content",
         int paragraphOffset = 0,
         int paragraphLimit = 200,
+        uint sheetId = 0,
+        string range = "",
+        int maximumCells = 1000,
         CancellationToken cancellationToken = default)
         => SafeContentAsync(name: null, () =>
         {
@@ -665,7 +707,11 @@ public sealed class OfficeAgentTools
             var handle = new StreamHandle(new MemoryStream(bytes, writable: false));
 
             var result = ReadingDocument(() =>
-                _client.Inspect(handle, new InspectOptions { Fidelity = ParseFidelity(fidelity) }));
+                _client.Inspect(handle, new InspectOptions
+                {
+                    Fidelity = ParseFidelity(fidelity), SheetId = sheetId == 0 ? null : sheetId,
+                    Range = string.IsNullOrWhiteSpace(range) ? null : range, MaximumCells = maximumCells
+                }));
             return Task.FromResult(JsonSerializer.Serialize(
                 InspectPayload(result, paragraphOffset, paragraphLimit), Json));
         });
@@ -758,7 +804,7 @@ public sealed class OfficeAgentTools
         catch (Exception ex) when (ex is not OperationCanceledException and not OutOfMemoryException)
         {
             throw new ArgumentException(
-                "contentBase64 decoded, but the bytes are not a readable .docx or .pptx package. " +
+                "contentBase64 decoded, but the bytes are not a readable .docx, .pptx, or .xlsx package. " +
                 "The usual cause is a copy of the content that differs from the original by a " +
                 "character or two - it does not survive being reproduced by hand. Do NOT re-send " +
                 "the same string: a second attempt reproduces the same copy and fails identically. " +
@@ -877,7 +923,7 @@ public sealed class OfficeAgentTools
         catch (FormatException)
         {
             throw new ArgumentException(
-                "contentBase64 is not valid base64. Pass the raw base64 of the .docx or .pptx package, " +
+                "contentBase64 is not valid base64. Pass the raw base64 of the .docx, .pptx, or .xlsx package, " +
                 "with no data: prefix, quotes, or line wrapping.", nameof(contentBase64));
         }
     }
@@ -923,6 +969,16 @@ public sealed class OfficeAgentTools
         "structure" => Fidelity.Structure,
         _ => Fidelity.Content
     };
+
+    private static SpreadsheetValueView ParseSpreadsheetValueView(string value) =>
+        value?.Trim().ToLowerInvariant() switch
+        {
+            "displayed" => SpreadsheetValueView.Displayed,
+            "raw" => SpreadsheetValueView.Raw,
+            "both" or "" or null => SpreadsheetValueView.Both,
+            _ => throw new ArgumentException(
+                $"Unknown spreadsheetValueView '{value}'. Expected both, displayed, or raw.", nameof(value))
+        };
 
     /// <summary>
     /// Omitted means the default, <see cref="SaveMode.Replace"/>. A value that is present

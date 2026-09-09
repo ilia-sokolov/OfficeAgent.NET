@@ -67,7 +67,7 @@ public sealed class AnchorJsonConverter : JsonConverter<Anchor>
         if (names.Contains("styleId"))
             return root.Deserialize<StyleAnchor>(options);
 
-        if (names.Contains("sheet") || names.Contains("ref"))
+        if (names.Contains("sheetId") || names.Contains("address"))
             return root.Deserialize<CellAnchor>(options);
 
         if (names.Contains("slideId") || names.Contains("shapeId"))

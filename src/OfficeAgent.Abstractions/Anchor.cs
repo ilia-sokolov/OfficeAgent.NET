@@ -72,19 +72,20 @@ public sealed class StyleAnchor : Anchor
 }
 
 /// <summary>
-/// Identifies an Excel cell or range for future spreadsheet modules.
+/// Identifies an Excel cell or range by durable worksheet id and A1 reference.
 /// </summary>
 public sealed class CellAnchor : Anchor
 {
     /// <summary>
-    /// Gets the worksheet name.
+    /// Gets the worksheet id stored in the workbook sheet catalog. A rename does not
+    /// change this value.
     /// </summary>
-    public string Sheet { get; init; } = string.Empty;
+    public uint SheetId { get; init; }
 
     /// <summary>
     /// Gets the A1-style cell or range reference.
     /// </summary>
-    public string Ref { get; init; } = string.Empty;
+    public string Address { get; init; } = string.Empty;
 }
 
 /// <summary>

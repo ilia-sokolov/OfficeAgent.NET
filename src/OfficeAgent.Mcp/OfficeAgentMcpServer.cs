@@ -8,6 +8,7 @@ using OfficeAgent.Core;
 using OfficeAgent.Core.DocumentProviders;
 using OfficeAgent.SharePoint;
 using OfficeAgent.PowerPoint;
+using OfficeAgent.Excel;
 using OfficeAgent.Word;
 
 namespace OfficeAgent.Mcp;
@@ -337,6 +338,7 @@ public static class OfficeAgentMcpServer
     {
         services.AddWordFormat();
         services.AddPowerPointFormat();
+        services.AddExcelFormat();
     }
 
     /// <summary>

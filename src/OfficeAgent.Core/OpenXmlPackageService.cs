@@ -1,4 +1,5 @@
 using System.IO.Compression;
+using System.Xml.Linq;
 using DocumentFormat.OpenXml.Packaging;
 using DocFormat = OfficeAgent.Abstractions.DocumentFormat;
 
@@ -63,12 +64,16 @@ internal sealed class OpenXmlPackageService
         var contentTypes = zip.GetEntry("[Content_Types].xml")
             ?? throw new NotSupportedException("Not an OOXML package: missing [Content_Types].xml.");
 
-        using var reader = new StreamReader(contentTypes.Open());
-        var xml = reader.ReadToEnd();
+        using var reader = contentTypes.Open();
+        var manifest = XDocument.Load(reader);
+        var mainTypes = manifest.Root?.Elements()
+            .Select(element => (string?)element.Attribute("ContentType"))
+            .Where(contentType => contentType?.EndsWith(".main+xml", StringComparison.OrdinalIgnoreCase) == true)
+            .ToList() ?? new List<string?>();
 
-        if (xml.Contains("wordprocessingml")) return DocFormat.Word;
-        if (xml.Contains("spreadsheetml")) return DocFormat.Excel;
-        if (xml.Contains("presentationml")) return DocFormat.PowerPoint;
+        if (mainTypes.Any(type => type!.Contains("wordprocessingml"))) return DocFormat.Word;
+        if (mainTypes.Any(type => type!.Contains("spreadsheetml"))) return DocFormat.Excel;
+        if (mainTypes.Any(type => type!.Contains("presentationml"))) return DocFormat.PowerPoint;
 
         throw new NotSupportedException("Unrecognised OOXML content types.");
     }
