@@ -1,6 +1,7 @@
 using System.Text.Json;
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using ModelContextProtocol.Server;
 using OfficeAgent.Abstractions;
 using OfficeAgent.AgentFramework;
@@ -29,7 +30,7 @@ public static class OfficeAgentMcpServer
     /// an inventory of the configured connections when registration or creation is
     /// enabled, so the agent knows which connectionIds exist.
     /// </summary>
-    public static string InstructionsFor(OfficeAgentMcpOptions options)
+    public static string InstructionsFor(OfficeAgentMcpOptions options, bool includeConnectionInventory = true)
     {
         var creationEnabled = CreationEnabled(options);
         var hasConnections = HasConnections(options);
@@ -40,7 +41,9 @@ public static class OfficeAgentMcpServer
             + (creationEnabled ? OfficeAgentTools.CreationPromptGuidance : string.Empty)
             + (HasEphemeral(options) ? OfficeAgentTools.EphemeralPromptGuidance : string.Empty)
             + (options.AllowInlineContent ? OfficeAgentTools.InlineContentPromptGuidance : string.Empty)
-            + ConnectionInventory(options, registrationEnabled, creationEnabled);
+            + (includeConnectionInventory
+                ? ConnectionInventory(options, registrationEnabled, creationEnabled)
+                : string.Empty);
     }
 
     /// <summary>
@@ -106,6 +109,8 @@ public static class OfficeAgentMcpServer
         // the operator that is what happened.
         AddFormats(services);
         services.AddOfficeAgent();
+        services.TryAddSingleton<IConnectionAccessPolicy, AllowAllConnectionAccessPolicy>();
+        services.TryAddSingleton<ITrustedPrincipalAccessor, AnonymousPrincipalAccessor>();
 
         // Parsed before anything is registered so a bad value names itself at startup
         // rather than silently leaving the connection on the global default.
@@ -139,7 +144,10 @@ public static class OfficeAgentMcpServer
             services.AddSingleton<IDocumentProvider>(sp => CreateSharePointProvider(sp, captured));
         }
 
-        services.AddSingleton(sp => new OfficeAgentTools(sp.GetRequiredService<OfficeAgentClient>()));
+        services.AddSingleton(sp => new OfficeAgentTools(
+            sp.GetRequiredService<OfficeAgentClient>(),
+            sp.GetRequiredService<IConnectionAccessPolicy>(),
+            sp.GetRequiredService<ITrustedPrincipalAccessor>()));
         return services;
     }
 
@@ -169,7 +177,7 @@ public static class OfficeAgentMcpServer
         // A tool is the reliable discovery channel for either staging capability; unlike
         // server instructions, clients consistently surface it.
         if (hasConnections && (options.AllowRegistration || creationEnabled))
-            toolList.Add(ConnectionsTool(options, creationEnabled));
+            toolList.Add(ConnectionsTool(tools, options, creationEnabled));
 
         return toolList;
     }
@@ -250,9 +258,11 @@ public static class OfficeAgentMcpServer
     /// Builds the <c>list_connections</c> tool from the configured connections, so an
     /// agent can enumerate the connectionIds it may address documents under.
     /// </summary>
-    private static McpServerTool ConnectionsTool(OfficeAgentMcpOptions options, bool creationEnabled)
+    private static McpServerTool ConnectionsTool(
+        OfficeAgentTools tools,
+        OfficeAgentMcpOptions options,
+        bool creationEnabled)
     {
-        var payload = ConnectionsPayload(options);
         var addressedTools = options.AllowRegistration && creationEnabled
             ? "register_document, the document tools, and create_document (connections where canCreateDocuments is true)"
             : creationEnabled
@@ -260,7 +270,8 @@ public static class OfficeAgentMcpServer
                 : "register_document and the document tools";
 
         var function = AIFunctionFactory.Create(
-            () => payload,
+            (CancellationToken cancellationToken) =>
+                ConnectionsPayloadAsync(tools, options, cancellationToken),
             new AIFunctionFactoryOptions
             {
                 Name = "list_connections",
@@ -271,6 +282,48 @@ public static class OfficeAgentMcpServer
             });
 
         return McpServerTool.Create(function);
+    }
+
+    internal static async Task<string> ConnectionsPayloadAsync(
+        OfficeAgentTools tools,
+        OfficeAgentMcpOptions options,
+        CancellationToken cancellationToken = default)
+    {
+        var descriptors = new List<(string Id, string Provider, bool Creatable)>();
+        if (HasEphemeral(options))
+            descriptors.Add((EphemeralId(options), "session", CreationEnabled(options)));
+        descriptors.AddRange(options.FileSystemConnections.Select(connection =>
+            (connection.ConnectionId, "filesystem", CreationEnabled(options) &&
+                AllowsCreatableExtension(connection.AllowedExtensions))));
+        descriptors.AddRange(options.SharePointConnections.Select(connection =>
+            (connection.ConnectionId, "sharepoint", CreationEnabled(options) &&
+                HasSharePointCreationTarget(connection) &&
+                AllowsCreatableExtension(connection.AllowedExtensions))));
+
+        var visible = new List<object>();
+        foreach (var descriptor in descriptors)
+        {
+            var read = await tools.CanAccessConnectionAsync(
+                descriptor.Id, ConnectionCapability.Read, cancellationToken).ConfigureAwait(false);
+            var register = await tools.CanAccessConnectionAsync(
+                descriptor.Id, ConnectionCapability.Register, cancellationToken).ConfigureAwait(false);
+            var create = descriptor.Creatable && await tools.CanAccessConnectionAsync(
+                descriptor.Id, ConnectionCapability.Create, cancellationToken).ConfigureAwait(false);
+            var edit = await tools.CanAccessConnectionAsync(
+                descriptor.Id, ConnectionCapability.Edit, cancellationToken).ConfigureAwait(false);
+            var delete = await tools.CanAccessConnectionAsync(
+                descriptor.Id, ConnectionCapability.Delete, cancellationToken).ConfigureAwait(false);
+            if (!read && !register && !create && !edit && !delete) continue;
+
+            visible.Add(new
+            {
+                connectionId = descriptor.Id,
+                provider = descriptor.Provider,
+                canCreateDocuments = create
+            });
+        }
+
+        return JsonSerializer.Serialize(visible);
     }
 
     internal static string ConnectionsPayload(OfficeAgentMcpOptions options)
@@ -374,10 +427,15 @@ public static class OfficeAgentMcpServer
     /// providers in a dedicated container (kept alive for the process lifetime,
     /// since the tools close over it) and projects them as MCP tools.
     /// </summary>
-    public static IList<McpServerTool> BuildToolset(OfficeAgentMcpOptions options)
+    public static IList<McpServerTool> BuildToolset(
+        OfficeAgentMcpOptions options,
+        IConnectionAccessPolicy? connectionAccess = null,
+        ITrustedPrincipalAccessor? principalAccessor = null)
     {
         var services = new ServiceCollection();
         services.AddSingleton(new HttpClient());
+        if (connectionAccess is not null) services.AddSingleton(connectionAccess);
+        if (principalAccessor is not null) services.AddSingleton(principalAccessor);
         services.AddOfficeAgentMcp(options);
         var provider = services.BuildServiceProvider();
         return CreateTools(provider.GetRequiredService<OfficeAgentTools>(), options);

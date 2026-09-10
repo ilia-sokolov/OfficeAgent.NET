@@ -19,6 +19,12 @@ corresponding GitHub release.
 - Added the `OfficeAgent.Excel` module for bounded workbook inspection, raw or displayed-value
   search, typed cell and formula writes, table row appends, and cell-note management. Formula
   writes request recalculation on open; OfficeAgent does not evaluate formulas.
+- Added an injectable, principal-aware connection access policy across MCP registration, read,
+  create, edit, and removal operations, plus an authenticated two-user hosted gateway reference
+  whose connection discovery and document access are isolated per caller.
+- Added an optional renderer boundary and out-of-process LibreOffice/Poppler implementation with
+  input, time, working-set, page-count, and output-size limits. Structural preview remains usable
+  without a renderer.
 
 ## 0.7.0 — 2026-09-09
 

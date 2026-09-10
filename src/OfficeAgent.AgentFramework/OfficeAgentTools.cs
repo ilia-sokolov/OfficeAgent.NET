@@ -119,9 +119,27 @@ public sealed class OfficeAgentTools
     };
 
     private readonly OfficeAgentClient _client;
+    private readonly IConnectionAccessPolicy _connectionAccess;
+    private readonly ITrustedPrincipalAccessor _principalAccessor;
 
     /// <summary>Initializes the tool projection over an <see cref="OfficeAgentClient"/>.</summary>
-    public OfficeAgentTools(OfficeAgentClient client) => _client = client;
+    public OfficeAgentTools(
+        OfficeAgentClient client,
+        IConnectionAccessPolicy? connectionAccess = null,
+        ITrustedPrincipalAccessor? principalAccessor = null)
+    {
+        _client = client ?? throw new ArgumentNullException(nameof(client));
+        _connectionAccess = connectionAccess ?? new AllowAllConnectionAccessPolicy();
+        _principalAccessor = principalAccessor ?? new AnonymousPrincipalAccessor();
+    }
+
+    /// <summary>Tests a capability for connection discovery without disclosing a denial.</summary>
+    public ValueTask<bool> CanAccessConnectionAsync(
+        string connectionId,
+        ConnectionCapability capability,
+        CancellationToken cancellationToken = default) =>
+        _connectionAccess.IsAllowedAsync(
+            _principalAccessor.Principal, connectionId, capability, cancellationToken);
 
     /// <summary>
     /// System-prompt guidance to concatenate into the agent's instructions. Teaches
@@ -444,6 +462,7 @@ public sealed class OfficeAgentTools
         CancellationToken cancellationToken = default)
         => SafeAsync(async () =>
         {
+            await DemandAccessAsync(connectionId, ConnectionCapability.Read, cancellationToken).ConfigureAwait(false);
             var options = new InspectOptions
             {
                 Fidelity = ParseFidelity(fidelity),
@@ -496,6 +515,7 @@ public sealed class OfficeAgentTools
         CancellationToken cancellationToken = default)
         => SafeAsync(async () =>
         {
+            await DemandAccessAsync(connectionId, ConnectionCapability.Read, cancellationToken).ConfigureAwait(false);
             var query = new FindQuery
             {
                 Pattern = pattern,
@@ -528,7 +548,9 @@ public sealed class OfficeAgentTools
         CancellationToken cancellationToken = default)
         => SafeAsync(async () =>
         {
+            await DemandAccessAsync(connectionId, ConnectionCapability.Read, cancellationToken).ConfigureAwait(false);
             var plan = DeserializePlan(planJson, connectionId);
+            await DemandReferencedContentAccessAsync(plan, cancellationToken).ConfigureAwait(false);
             using var result = await _client.PreviewWithReceiptAsync(
                 connectionId, documentId, plan, cancellationToken).ConfigureAwait(false);
             return SerializeReport(
@@ -545,10 +567,17 @@ public sealed class OfficeAgentTools
         CancellationToken cancellationToken = default)
         => SafeAsync(async () =>
         {
+            var parsedSaveMode = ParseSaveMode(saveMode);
+            await DemandAccessAsync(connectionId, ConnectionCapability.Read, cancellationToken).ConfigureAwait(false);
+            await DemandAccessAsync(
+                connectionId,
+                parsedSaveMode == SaveMode.Replace ? ConnectionCapability.Edit : ConnectionCapability.Create,
+                cancellationToken).ConfigureAwait(false);
             var plan = DeserializePlan(planJson, connectionId);
+            await DemandReferencedContentAccessAsync(plan, cancellationToken).ConfigureAwait(false);
             var options = new SaveDocumentOptions
             {
-                Mode = ParseSaveMode(saveMode),
+                Mode = parsedSaveMode,
                 NewName = string.IsNullOrEmpty(newName) ? null : newName
             };
             var result = await _client.CommitAsync(connectionId, documentId, plan, options, cancellationToken).ConfigureAwait(false);
@@ -564,6 +593,7 @@ public sealed class OfficeAgentTools
         CancellationToken cancellationToken = default)
         => SafeAsync(async () =>
         {
+            await DemandAccessAsync(connectionId, ConnectionCapability.Register, cancellationToken).ConfigureAwait(false);
             var reference = await _client.RegisterAsync(connectionId, source, cancellationToken).ConfigureAwait(false);
             return JsonSerializer.Serialize(new
             {
@@ -586,7 +616,10 @@ public sealed class OfficeAgentTools
         CancellationToken cancellationToken = default)
         => SafeAsync(async () =>
         {
+            await DemandAccessAsync(connectionId, ConnectionCapability.Create, cancellationToken).ConfigureAwait(false);
             var plan = string.IsNullOrWhiteSpace(planJson) ? null : DeserializePlan(planJson, connectionId);
+            if (plan is not null)
+                await DemandReferencedContentAccessAsync(plan, cancellationToken).ConfigureAwait(false);
             var result = await _client.CreateAsync(connectionId, name, plan, cancellationToken).ConfigureAwait(false);
             return SerializeReport(
                 result.Report, result.Committed, result.Committed ? result.Document : null,
@@ -609,6 +642,8 @@ public sealed class OfficeAgentTools
         CancellationToken cancellationToken = default)
         => SafeAsync(async () =>
         {
+            await DemandAccessAsync(connectionId, ConnectionCapability.Register, cancellationToken).ConfigureAwait(false);
+            await DemandAccessAsync(connectionId, ConnectionCapability.Read, cancellationToken).ConfigureAwait(false);
             var reference = await _client.RegisterAsync(connectionId, source, cancellationToken).ConfigureAwait(false);
             var options = new InspectOptions
             {
@@ -647,6 +682,13 @@ public sealed class OfficeAgentTools
         CancellationToken cancellationToken = default)
         => SafeAsync(async () =>
         {
+            var parsedSaveMode = ParseSaveMode(saveMode);
+            await DemandAccessAsync(connectionId, ConnectionCapability.Register, cancellationToken).ConfigureAwait(false);
+            await DemandAccessAsync(connectionId, ConnectionCapability.Read, cancellationToken).ConfigureAwait(false);
+            await DemandAccessAsync(
+                connectionId,
+                parsedSaveMode == SaveMode.Replace ? ConnectionCapability.Edit : ConnectionCapability.Create,
+                cancellationToken).ConfigureAwait(false);
             var reference = await _client.RegisterAsync(connectionId, source, cancellationToken).ConfigureAwait(false);
             var planObject = ParsePlanObject(planJson);
 
@@ -661,11 +703,13 @@ public sealed class OfficeAgentTools
 
             var options = new SaveDocumentOptions
             {
-                Mode = ParseSaveMode(saveMode),
+                Mode = parsedSaveMode,
                 NewName = string.IsNullOrEmpty(newName) ? null : newName
             };
+            var plan = DeserializePlan(planObject, connectionId);
+            await DemandReferencedContentAccessAsync(plan, cancellationToken).ConfigureAwait(false);
             var result = await _client.CommitAsync(
-                connectionId, reference.ItemId, DeserializePlan(planObject, connectionId), options, cancellationToken).ConfigureAwait(false);
+                connectionId, reference.ItemId, plan, options, cancellationToken).ConfigureAwait(false);
 
             return SerializeReport(
                 result.Report, result.Committed, result.Committed ? result.Document : null,
@@ -750,6 +794,7 @@ public sealed class OfficeAgentTools
             return SerializeContent(ReportOf(failures), committed: false, content: null, name);
 
         var plan = DeserializePlan(ApplyInlineChangeMode(planObject, format));
+        await DemandReferencedContentAccessAsync(plan, cancellationToken).ConfigureAwait(false);
         var handle = new StreamHandle(new MemoryStream(bytes, writable: false), name);
 
         if (preview)
@@ -826,6 +871,7 @@ public sealed class OfficeAgentTools
     {
         try { return await work().ConfigureAwait(false); }
         catch (OperationCanceledException) { return ContentError(name, "cancelled", "Operation was cancelled."); }
+        catch (ConnectionForbiddenException ex) { return ContentError(name, "connection-forbidden", ex.Message); }
         catch (RegexMatchTimeoutException) { return ContentError(name, "regex-timeout", RegexTimeoutMessage); }
         catch (JsonException ex) { return ContentError(name, "invalid-json", ex.Message); }
         catch (ArgumentException ex) { return ContentError(name, "invalid-argument", ex.Message); }
@@ -852,19 +898,20 @@ public sealed class OfficeAgentTools
         string name,
         string contentBase64,
         CancellationToken cancellationToken = default)
-        => SafeAsync(() =>
+        => SafeAsync(async () =>
         {
+            await DemandAccessAsync(connectionId, ConnectionCapability.Create, cancellationToken).ConfigureAwait(false);
             var store = Ephemeral(connectionId);
             var reference = store.Add(name, DecodeContent(contentBase64));
 
-            return Task.FromResult(JsonSerializer.Serialize(new
+            return JsonSerializer.Serialize(new
             {
                 connectionId = reference.ConnectionId,
                 documentId = reference.ItemId,
                 name = reference.Name,
                 contentType = reference.ContentType,
                 version = reference.Version
-            }, Json));
+            }, Json);
         });
 
     /// <summary>Returns the bytes of a document held in an ephemeral connection.</summary>
@@ -872,8 +919,9 @@ public sealed class OfficeAgentTools
         string connectionId,
         string documentId,
         CancellationToken cancellationToken = default)
-        => SafeAsync(() =>
+        => SafeAsync(async () =>
         {
+            await DemandAccessAsync(connectionId, ConnectionCapability.Read, cancellationToken).ConfigureAwait(false);
             // Restricted to ephemeral connections on purpose. Exporting from a filesystem
             // or SharePoint connection would turn every readable document into base64 an
             // agent can quote, which is a different capability than editing one in place.
@@ -881,7 +929,7 @@ public sealed class OfficeAgentTools
             var reference = store.Describe(documentId);
             var bytes = store.Read(documentId);
 
-            return Task.FromResult(JsonSerializer.Serialize(new
+            return JsonSerializer.Serialize(new
             {
                 connectionId,
                 documentId,
@@ -889,7 +937,7 @@ public sealed class OfficeAgentTools
                 contentType = reference.ContentType,
                 contentBytes = bytes.Length,
                 contentBase64 = Convert.ToBase64String(bytes)
-            }, Json));
+            }, Json);
         });
 
     /// <summary>
@@ -935,6 +983,7 @@ public sealed class OfficeAgentTools
         CancellationToken cancellationToken = default)
         => SafeAsync(async () =>
         {
+            await DemandAccessAsync(connectionId, ConnectionCapability.Delete, cancellationToken).ConfigureAwait(false);
             await _client.RemoveAsync(connectionId, documentId, cancellationToken).ConfigureAwait(false);
             return JsonSerializer.Serialize(new { removed = true, connectionId, documentId }, Json);
         });
@@ -943,6 +992,7 @@ public sealed class OfficeAgentTools
     {
         try { return await work().ConfigureAwait(false); }
         catch (OperationCanceledException) { return SerializeError("cancelled", "Operation was cancelled."); }
+        catch (ConnectionForbiddenException ex) { return SerializeError("connection-forbidden", ex.Message); }
         catch (RegexMatchTimeoutException) { return SerializeError("regex-timeout", RegexTimeoutMessage); }
         catch (JsonException ex) { return SerializeError("invalid-json", ex.Message); }
         catch (ArgumentException ex) { return SerializeError("invalid-argument", ex.Message); }
@@ -954,6 +1004,34 @@ public sealed class OfficeAgentTools
                 ex.Provider, ex.ConnectionId, ex.ItemId);
         }
         catch (Exception) { return SerializeError("internal-error", "An unexpected internal error occurred."); }
+    }
+
+    private async ValueTask DemandAccessAsync(
+        string connectionId,
+        ConnectionCapability capability,
+        CancellationToken cancellationToken)
+    {
+        if (string.IsNullOrWhiteSpace(connectionId) ||
+            !await CanAccessConnectionAsync(connectionId, capability, cancellationToken).ConfigureAwait(false))
+            throw new ConnectionForbiddenException();
+    }
+
+    private async ValueTask DemandReferencedContentAccessAsync(
+        DocumentPlan plan,
+        CancellationToken cancellationToken)
+    {
+        var connections = plan.Operations.Select(operation => operation switch
+            {
+                InsertImageOp image when !string.IsNullOrWhiteSpace(image.ImageDocumentId) => image.ImageConnectionId,
+                BackgroundImageOp background when !string.IsNullOrWhiteSpace(background.ImageDocumentId) => background.ImageConnectionId,
+                InsertMediaOp media when !string.IsNullOrWhiteSpace(media.MediaDocumentId) => media.MediaConnectionId,
+                _ => null
+            })
+            .Where(connectionId => !string.IsNullOrWhiteSpace(connectionId))
+            .Distinct(StringComparer.Ordinal);
+
+        foreach (var connectionId in connections)
+            await DemandAccessAsync(connectionId!, ConnectionCapability.Read, cancellationToken).ConfigureAwait(false);
     }
 
     private static AIFunctionFactoryOptions Opts(string name, string description) => new()

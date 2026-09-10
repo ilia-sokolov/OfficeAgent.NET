@@ -61,6 +61,8 @@ it for a workflow that depends on Office's layout or calculation engine.
 | Use OfficeAgent from C# | [Getting started](docs/getting-started.md) |
 | Add tools to a Microsoft Agent Framework agent | [Agent integration](docs/agent-integration.md) |
 | Host the MCP server or use SharePoint | [MCP server](docs/mcp-server.md) and [document providers](docs/document-providers.md) |
+| Add per-user hosted connection authorization | [Hosted gateway reference](samples/HostedGateway/) |
+| Add optional PDF/page-image rendering | [Visual rendering](docs/rendering.md) |
 | Edit documents with no storage configured | [Documents with no storage](docs/mcp-server.md#documents-with-no-storage) |
 | Run a tracked-review workflow | [Optional word-document-review skill](skills/word-document-review/SKILL.md) |
 | Build a contract-review agent | [ContractReview sample](samples/ContractReview/) |
@@ -210,7 +212,8 @@ Inline tools carry the whole file as base64 on every call. Session import/export
 the package as base64 if the agent performs those calls; a host integration can instead move
 the bytes outside model context. Connect storage and model providers appropriate for the data.
 
-The server ships no authentication layer for HTTP hosting; put it behind your own. A
+The standalone server ships no authentication layer for HTTP hosting; put it behind your own,
+or start from the authenticated [HostedGateway reference](samples/HostedGateway/). A
 filesystem root is a trust boundary: its ACLs must stop untrusted principals creating,
 renaming or replacing entries while the server runs.
 
@@ -374,12 +377,13 @@ paths are refused rather than approximated. See
 [PowerPoint support](docs/powerpoint.md) for what a deck does and does not
 accept.
 
-The engine does not render pages, calculate Word fields, or evaluate Excel formulas. Formula
-edits set the workbook to recalculate when Excel opens it. Operations that
-depend on pagination, table-of-contents rendering, field recalculation, or
-page-fit checks are outside its scope. Preview reports structural changes, not
-a visual rendering of the final document. Test the workflow on representative
-documents and keep human review in the loop for consequential edits.
+The core engine does not render pages, calculate Word fields, or evaluate Excel formulas.
+Formula edits set the workbook to recalculate when Excel opens it. Operations that depend on
+pagination, table-of-contents rendering, or field recalculation are outside the core scope.
+Preview reports structural changes. The optional [rendering package](docs/rendering.md) can
+produce PDF-derived page images through external processes, but it does not yet detect overflow
+or page-fit problems. Test the workflow on representative documents and keep human review in the
+loop for consequential edits.
 
 Two more limits worth knowing before you build on it:
 
@@ -399,8 +403,8 @@ Two more limits worth knowing before you build on it:
 
 ## Commercial support
 
-OfficeAgent.NET is MIT-licensed and can be self-hosted. Managed hosting and
-commercial support are available from dotaction:
+OfficeAgent.NET is MIT-licensed and can be self-hosted. Commercial support and
+deployment assistance are available from dotaction:
 [contact dotaction](mailto:contact@dotaction.io?subject=OfficeAgent.NET%20commercial%20support).
 
 ## License
