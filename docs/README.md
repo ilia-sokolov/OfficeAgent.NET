@@ -17,6 +17,9 @@ this page to choose the shortest path for your scenario.
 | Create a Word document from scratch | [Create a document](getting-started.md#create-a-document-instead) | [Document plans](document-plans.md) |
 | Create or update a PowerPoint deck | [PowerPoint support](powerpoint.md#creating-a-deck) | [Generating a deck](powerpoint.md#generating-a-deck) |
 | Inspect or update an Excel workbook | [Excel support](excel.md) | [Document plans](document-plans.md) |
+| Generate many documents from a template | [Template population](document-workflows.md#populate-a-template-batch) | [TemplateBatch sample](../samples/TemplateBatch/) |
+| Compare two Word documents and create a redline | [Document comparison](document-workflows.md#compare-two-word-documents) | [DocumentComparison sample](../samples/DocumentComparison/) |
+| Assemble a proposal and appendices | [Word document assembly](document-assembly.md) | [DocumentAssembly sample](../samples/DocumentAssembly/) |
 | Add document tools to an agent | [Agent integration](agent-integration.md) | [Document providers](document-providers.md) |
 | Connect an MCP client locally | [MCP server](mcp-server.md#local-hosting-stdio) | [Deployment](deployment.md#option-a---local-stdio-for-claude-code-and-codex) |
 | Host OfficeAgent for a team | [Deployment](deployment.md#option-b---hosted-http-for-all-four-clients) | [Operations](operations.md), [troubleshooting](troubleshooting.md) |
@@ -77,6 +80,7 @@ and optimistic-concurrency conflicts instead of guessing.
 - [Document providers](document-providers.md) — filesystem and SharePoint storage.
 - [Operations](operations.md) — concurrency, memory, telemetry, and production operation.
 - [Visual rendering](rendering.md) — optional out-of-process PDF and page-image conversion.
+- [Template population and comparison](document-workflows.md) — batch binding, repeating Word rows, comparison coverage, and redline generation.
 - [Troubleshooting](troubleshooting.md) — diagnose setup, identity, and edit failures.
 - [Releasing](releasing.md) — the maintainer steps for NuGet, the MCP Registry, GitHub releases, and repository metadata.
 - [Adoption validation](adoption-validation.md) — fresh-user trials across the main Word, PowerPoint, and review paths before broad promotion.

@@ -266,6 +266,8 @@ public class CompositeToolsTests
         var tools = new OfficeAgentTools(workspace.Client);
 
         var defaults = tools.AsAIFunctions().Select(f => f.Name).ToArray();
+        Assert.DoesNotContain("populate_template_batch", defaults);
+        Assert.Contains("compare_documents", defaults);
         Assert.DoesNotContain("open_document", defaults);
         Assert.DoesNotContain("edit_document", defaults);
 

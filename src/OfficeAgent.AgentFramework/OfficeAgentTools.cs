@@ -105,6 +105,7 @@ public sealed class OfficeAgentTools
 
     private static readonly JsonSerializerOptions PlanJson = new()
     {
+        PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
         PropertyNameCaseInsensitive = true,
         Converters = { new JsonStringEnumConverter() }
     };
@@ -158,10 +159,12 @@ public sealed class OfficeAgentTools
         Plan shape, anchors, safety loop
         - Plan body is { "snapshot": { "eTag": "<snapshot from inspect_document>" }, "operations": [ ... ] }. Copy the scalar snapshot string returned by inspect_document into snapshot.eTag to detect drift in Word body/header/footer/footnote/endnote XML or PowerPoint slide/notes XML. It does not cover properties, comments, sections, media/image bytes, masters, or layouts; their anchors and provider version checks still apply. Omit snapshot only deliberately. Do not set contractVersion.
         - Available operations (the JSON shape of each is in the preview_plan description): Word and PowerPoint use the document operations below; decks additionally support insertChart/updateChart; workbooks support setCell, appendTableRows, and comment Add/Remove on a cell. These are plan operations inside preview_plan/apply_plan, not separate tools.
+        - populate_template_batch resolves named slots and repeating Word rows into plans and saves one independent output per item. compare_documents reads two Word documents and returns a snapshot-bound redline plan only when every detected change is covered; preview that plan before applying it to the original.
+        - preview_document_merge assembles ordered whole Word documents in memory and returns a separate merge plan plus compatibility diagnostics. Pass that complete plan to merge_documents when available. A merge creates a new document and never edits its sources. It does not reconcile independently edited versions. Respect unsupported-content diagnostics and do not substitute a text-only copy.
         - Call inspect_document or find_in_document before building a plan to obtain anchor ids; never invent paragraph ids, occurrence numbers, content-control tags, or node paths.
         - Tables and images only appear in inspect_document.nodes, never in the paragraphs list. Copy the path from there rather than composing one: Word uses "table#N"/"image#N", a deck uses "table#{slideId}/{shapeId}"/"image#{slideId}/{shapeId}". To recognise table content, look for paragraphs whose `in` field matches a table path.
         - Preview before you apply. If preview reports stale-snapshot, re-inspect and rebuild. If preview reports expect-mismatch, the document drifted - re-inspect/find that operation.
-        - Change mode: in a Word document default to "Tracked" unless the user explicitly approves direct edits. "mode" is not only for changeText - it belongs on every verb that changes content (insert, insertTable, removeTable, the table row/column verbs, insertImage, removeImage, format, fill, insertBreak, note), and Word tracks all of them when it is omitted. A tracked structural edit is a real redline: an added paragraph and its paragraph mark come back as insertions, a removed row stays in place struck through until someone accepts it, and a format records what it replaced. A PowerPoint deck has no tracked-changes representation and REFUSES mode "Tracked" on any of these, so use "Direct" there and say that edits to a deck cannot be redlined; add a comment if the change needs to be flagged for review.
+        - Change mode: in a Word document default to "Tracked" unless the user explicitly approves direct edits. "mode" is not only for changeText - it belongs on every verb that changes content (insert, insertParagraphs, removeParagraph, insertTable, removeTable, the table row/column verbs including repeatTableRow, insertImage, removeImage, format, fill, insertBreak, note), and Word tracks all of them when it is omitted. A tracked structural edit is a real redline: an added paragraph and its paragraph mark come back as insertions, a removed row stays in place struck through until someone accepts it, and a format records what it replaced. A PowerPoint deck has no tracked-changes representation and REFUSES mode "Tracked" on any of these, so use "Direct" there and say that edits to a deck cannot be redlined; add a comment if the change needs to be flagged for review.
         - Reviewing an existing Word redline: inspect_document.nodes lists every revision (kind "revision") with its author and date, under paths like "ins#7", "del#7", "markIns#7" (a paragraph split), "rowIns#7"/"rowDel#7", "cellIns#7"/"cellDel#7", and "runFormat#7"/"paraFormat#7" (formatting changes). Resolve them with { "op": "revision", "target": { "kind": "revision", "path": "…" }, "action": "Accept" | "Reject" } - "all" takes every revision in the document and "author:<name>" takes one person's.
         - Word comments are a conversation, not a write-only log: inspect_document.nodes lists each one (kind "comment") with its author, its text, whether it is resolved, and which comment it replies to. Answer one with action "Reply", close it with "Resolve", delete it with "Remove". Read the open comments before editing a document under review - they usually say what the edit should be.
         - Reject operations that need a renderer (pagination, field recalculation); explain the limitation instead.
@@ -221,12 +224,13 @@ public sealed class OfficeAgentTools
         """;
 
     /// <summary>
-    /// System-prompt guidance to append when <c>create_document</c> is exposed.
+    /// System-prompt guidance to append when document-creation tools are exposed.
     /// </summary>
     public const string CreationPromptGuidance = """
 
         Creating a document
         - create_document(connectionId, name, planJson) creates and registers a new document and returns outputDocumentId. name is a bare file name, never a path; an existing name is not overwritten. The extension picks the format: .docx makes Word, .pptx PowerPoint, and .xlsx Excel.
+        - populate_template_batch(connectionId, documentId, requestJson) creates bounded, independent outputs from one registered template. Use unique content-control tags or PowerPoint shape names for scalar values; repeating {{Field}} rows are Word-only. Each item returns its own receipt and diagnostics.
         - Pass "" for an empty document. An initial plan is applied in memory before storage. The empty starting anchor differs by format: a Word document has one empty paragraph at { "paraId": "auto-0000", "expect": "" }; a deck has one empty title placeholder at { "paraId": "slide256/shape2/p0", "expect": "" }. When unsure, create with planJson "" and then inspect_document.
         - planJson accepts a bare operations array [ … ] as well as { "operations": [ … ] }.
         - Plan-validation errors mean nothing was written. A provider or cancellation error can occur after storage accepted the file, so do not retry the same name; report the possibly unregistered file name to the host/operator for recovery.
@@ -267,8 +271,8 @@ public sealed class OfficeAgentTools
     public AIFunction[] AsAIFunctions() => AsAIFunctions(new OfficeAgentToolsOptions());
 
     /// <summary>
-    /// Returns the AIFunctions selected by <paramref name="options"/>: the four core
-    /// inspect/find/preview/apply tools, plus the source-addressed tools
+    /// Returns the AIFunctions selected by <paramref name="options"/>: the five core
+    /// inspect/find/preview/apply/comparison tools, plus the source-addressed tools
     /// (<c>register_document</c>, <c>remove_document</c>, <c>open_document</c>,
     /// <c>edit_document</c>) when registration is allowed, and independently
     /// <c>create_document</c> when creation is allowed. The composites are gated with
@@ -319,6 +323,12 @@ public sealed class OfficeAgentTools
                 "Pass planJson \"\" for a minimal document. The starting anchor differs by format: a Word document has one empty paragraph at { \"paraId\": \"auto-0000\", \"expect\": \"\" }; a deck has one empty title placeholder at { \"paraId\": \"slide256/shape2/p0\", \"expect\": \"\" }, and its slide-targeted verbs use { \"kind\": \"slide\", \"path\": \"slide#256\" }. " +
                 "Plan-validation errors guarantee no write. Provider and cancellation errors may occur after storage accepted the file, so do not retry the same name; report the possibly unregistered name to the host for recovery. " +
                 "Returns {isValid, committed, receipt, sourceDocumentId, outputConnectionId, outputDocumentId, outputVersion, outputName, outputContentType, changes, errors}; non-applicable values are null.")));
+            functions.Add(AIFunctionFactory.Create(PopulateTemplateBatch, Opts(
+                "populate_template_batch",
+                "Populate one Word or PowerPoint template into separate new documents. requestJson contains items with outputName and binding. Scalar values address content-control tags or PowerPoint shape names. Repeating rows are Word-only and replace {{Field}} placeholders in an explicitly selected row. Every output validates and saves atomically and returns its own receipt.")));
+            functions.Add(AIFunctionFactory.Create(MergeDocuments, Opts(
+                "merge_documents",
+                "Commit a Word assembly plan from preview_document_merge. planJson is the complete returned plan, including all source hashes. Revalidates every input and creates one new .docx in destinationConnectionId. Requires read access to every source and create access to the destination. Provider errors can indicate an uncertain write; do not retry blindly.")));
         }
         if (options.AllowInlineContent)
         {
@@ -388,6 +398,8 @@ public sealed class OfficeAgentTools
             "{ \"op\": \"fill\", \"target\": { \"tag\": \"ClientName\" }, \"value\": \"Globex\" }\n" +
             "{ \"op\": \"comment\", \"target\": { \"paraId\": \"w14:...\", \"expect\": \"...\" }, \"text\": \"Confirm this.\" }\n" +
             "{ \"op\": \"insert\", \"target\": { \"paraId\": \"w14:...\", \"expect\": \"...\" }, \"position\": \"After\", \"text\": \"New paragraph.\" }\n" +
+            "{ \"op\": \"insertParagraphs\", \"target\": { \"paraId\": \"w14:...\", \"expect\": \"...\" }, \"position\": \"After\", \"paragraphs\": [{ \"text\": \"First\" }, { \"text\": \"Second\" }] }\n" +
+            "{ \"op\": \"removeParagraph\", \"target\": { \"paraId\": \"w14:...\", \"expect\": \"Complete paragraph text\" } }\n" +
             "{ \"op\": \"setProperty\", \"target\": { \"kind\": \"docProperty\", \"path\": \"core/title\" }, \"value\": \"My Title\" }\n\n" +
             "// Every verb above that changes Word content also takes \"mode\": \"Tracked\" (the default - the edit lands as a redline a reviewer accepts or rejects) or \"Direct\". A deck refuses \"Tracked\": PresentationML has no revision markup.\n\n" +
             "// Review an existing redline. Revision paths come from inspect_document.nodes (kind \"revision\"): 'ins#7', 'del#7', 'markIns#7', 'rowIns#7', 'cellDel#7', 'runFormat#7', 'paraFormat#7'. 'all' takes every one; 'author:<name>' takes one person's:\n" +
@@ -418,6 +430,7 @@ public sealed class OfficeAgentTools
             "{ \"op\": \"removeTable\",  \"target\": { \"kind\": \"table\", \"path\": \"table#0\" } }\n\n" +
             "// Add or remove table rows / columns; insert or remove image; copy or clear styles. Paths come from inspect_document.nodes:\n" +
             "{ \"op\": \"insertTableRows\", \"target\": { \"kind\": \"table\", \"path\": \"table#0\" }, \"rows\": [[\"NL\",\"17\",\"41850\"]], \"position\": \"End\" }\n" +
+            "{ \"op\": \"repeatTableRow\", \"target\": { \"kind\": \"table\", \"path\": \"table#0\" }, \"templateRowIndex\": 1, \"records\": [{ \"Description\": \"Consulting\", \"Amount\": \"1200.00\" }] }\n" +
             "{ \"op\": \"removeTableRows\", \"target\": { \"kind\": \"table\", \"path\": \"table#0\" }, \"onlyIfEmpty\": true }\n" +
             "{ \"op\": \"insertImage\", \"target\": { \"paraId\": \"w14:...\", \"expect\": \"...\" }, \"base64Bytes\": \"iVBORw0KGgo...\", \"imageType\": \"png\", \"widthPx\": 200, \"heightPx\": 80 }\n" +
             "{ \"op\": \"insertImage\", \"target\": { \"paraId\": \"w14:...\", \"expect\": \"...\" }, \"imageConnectionId\": \"images\", \"imageDocumentId\": \"<opaque id from a prior add>\", \"imageType\": \"png\", \"widthPx\": 200, \"heightPx\": 80 }\n" +
@@ -446,8 +459,98 @@ public sealed class OfficeAgentTools
             PlanOperations)),
         AIFunctionFactory.Create(ApplyPlan, Opts(
             "apply_plan",
-            "Apply a DocumentPlan JSON to (connectionId, documentId) and save through the provider. Returns {isValid, committed, receipt, sourceDocumentId, outputConnectionId, outputDocumentId, outputVersion, outputName, outputContentType, changes, errors}; non-applicable values are null. The receipt hashes the effective plan and exact input/output bytes and keeps the host-authenticated actor separate from the plan's display revision author. saveMode: 'Replace' (default, overwrites the source after an optimistic version check), 'NewVersion' (keeps the source and mints a new id under the same connection), 'NewDocument' (mints a fresh id with an optional newName for display). On any failure nothing is written."))
+            "Apply a DocumentPlan JSON to (connectionId, documentId) and save through the provider. Returns {isValid, committed, receipt, sourceDocumentId, outputConnectionId, outputDocumentId, outputVersion, outputName, outputContentType, changes, errors}; non-applicable values are null. The receipt hashes the effective plan and exact input/output bytes and keeps the host-authenticated actor separate from the plan's display revision author. saveMode: 'Replace' (default, overwrites the source after an optimistic version check), 'NewVersion' (keeps the source and mints a new id under the same connection), 'NewDocument' (mints a fresh id with an optional newName for display). On any failure nothing is written.")),
+        AIFunctionFactory.Create(CompareDocuments, Opts(
+            "compare_documents",
+            "Read two Word documents and return paragraph differences, exact input SHA-256 hashes, coverage diagnostics, and a tracked-change plan bound to the original snapshot. The first version covers free body paragraphs. Unsupported changes make isComplete false and plan null. This tool writes nothing; preview and apply the returned plan against the original document.")),
+        AIFunctionFactory.Create(PreviewDocumentMerge, Opts(
+            "preview_document_merge",
+            "Preview ordered whole-document Word assembly without saving. requestJson contains sources [{connectionId, documentId}] in output order and optional options {title, author}. Returns a merge plan bound to exact input hashes, source counts, identifier remapping decisions, and blocking diagnostics. Source formatting is preserved within the documented compatibility scope; each document starts on a new page. This is assembly, not reconciliation of edited versions."))
     };
+
+    /// <summary>Previews assembly after authorizing every source before opening any source.</summary>
+    public Task<string> PreviewDocumentMerge(string requestJson, CancellationToken cancellationToken = default) => SafeAsync(async () =>
+    {
+        var wireRequest = JsonSerializer.Deserialize<MergeToolRequest>(requestJson, PlanJson)
+            ?? throw new JsonException("Merge request was null.");
+        var request = new DocumentMergeRequest
+        {
+            Sources = wireRequest.Sources.Select(source =>
+                DocumentReference.For(string.Empty, source.ConnectionId, source.DocumentId)).ToArray(),
+            Options = wireRequest.Options
+        };
+        foreach (var source in request.Sources)
+            await DemandAccessAsync(source.ConnectionId, ConnectionCapability.Read, cancellationToken).ConfigureAwait(false);
+        var result = await _client.PreviewMergeAsync(request, cancellationToken).ConfigureAwait(false);
+        return JsonSerializer.Serialize(result, PlanJson);
+    });
+
+    private sealed record MergeToolRequest
+    {
+        public IReadOnlyList<MergeToolSource> Sources { get; init; } = Array.Empty<MergeToolSource>();
+
+        public DocumentMergeOptions Options { get; init; } = new();
+    }
+
+    private sealed record MergeToolSource
+    {
+        public string ConnectionId { get; init; } = string.Empty;
+
+        public string DocumentId { get; init; } = string.Empty;
+    }
+
+    /// <summary>Creates an assembled document after authorizing all input and output connections.</summary>
+    public Task<string> MergeDocuments(string planJson, string destinationConnectionId, string outputName,
+        CancellationToken cancellationToken = default) => SafeAsync(async () =>
+    {
+        var plan = JsonSerializer.Deserialize<DocumentMergePlan>(planJson, PlanJson)
+            ?? throw new JsonException("Merge plan was null.");
+        foreach (var input in plan.Inputs)
+            await DemandAccessAsync(input.Document?.ConnectionId ?? "", ConnectionCapability.Read, cancellationToken).ConfigureAwait(false);
+        await DemandAccessAsync(destinationConnectionId, ConnectionCapability.Create, cancellationToken).ConfigureAwait(false);
+        var result = await _client.CommitMergeAsync(plan, destinationConnectionId, outputName, cancellationToken).ConfigureAwait(false);
+        return JsonSerializer.Serialize(result, PlanJson);
+    });
+
+    /// <summary>Populates one template into a bounded set of independent outputs.</summary>
+    public Task<string> PopulateTemplateBatch(
+        string connectionId,
+        string documentId,
+        string requestJson,
+        CancellationToken cancellationToken = default) => SafeAsync(async () =>
+        {
+            await DemandAccessAsync(connectionId, ConnectionCapability.Read, cancellationToken).ConfigureAwait(false);
+            await DemandAccessAsync(connectionId, ConnectionCapability.Create, cancellationToken).ConfigureAwait(false);
+            var request = JsonSerializer.Deserialize<TemplateBatchRequest>(requestJson, PlanJson)
+                ?? throw new JsonException("Template batch JSON was null.");
+            var result = await _client.PopulateTemplateBatchAsync(
+                connectionId, documentId, request, cancellationToken).ConfigureAwait(false);
+            return JsonSerializer.Serialize(result, PlanJson);
+        });
+
+    /// <summary>Compares two Word documents without writing either document.</summary>
+    public Task<string> CompareDocuments(
+        string originalConnectionId,
+        string originalDocumentId,
+        string revisedConnectionId,
+        string revisedDocumentId,
+        string revisionAuthor = "OfficeAgent Compare",
+        CancellationToken cancellationToken = default) => SafeAsync(async () =>
+        {
+            await DemandAccessAsync(originalConnectionId, ConnectionCapability.Read, cancellationToken).ConfigureAwait(false);
+            await DemandAccessAsync(revisedConnectionId, ConnectionCapability.Read, cancellationToken).ConfigureAwait(false);
+            var result = await _client.CompareDocumentsAsync(
+                originalConnectionId,
+                originalDocumentId,
+                revisedConnectionId,
+                revisedDocumentId,
+                new DocumentComparisonOptions
+                {
+                    Revision = new RevisionMetadata { Author = revisionAuthor }
+                },
+                cancellationToken).ConfigureAwait(false);
+            return JsonSerializer.Serialize(result, PlanJson);
+        });
 
     /// <summary>Inspects a document and returns paginated JSON.</summary>
     public Task<string> InspectDocument(

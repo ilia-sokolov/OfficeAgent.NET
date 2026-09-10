@@ -203,7 +203,11 @@ with `OfficeAgent__SharePointConnections__0__ClientSecret` supplied from the env
 
 ## Tools
 
-The MCP toolset is the projection of [the agent-integration surface](agent-integration.md): `inspect_document`, `find_in_document`, `preview_plan`, and `apply_plan`; `AllowRegistration` independently adds `register_document` / `remove_document` plus the composites `open_document` / `edit_document`, while `AllowCreation` adds `create_document` when at least one connection allows a creatable extension - `.docx`, `.pptx`, or `.xlsx` (SharePoint also requires its creation destination). Either opt-in adds `list_connections`, which returns `{connectionId, provider, canCreateDocuments}` entries. That boolean means the connection is configured for at least one creatable format; it is not a format list, a permission check, or a readiness probe.
+Word assembly adds the read-only `preview_document_merge` and, when `AllowCreation` is
+enabled, `merge_documents`. They authorize every input connection; commit also authorizes
+the destination. See [Word document assembly](document-assembly.md) for the JSON contracts.
+
+The MCP toolset is the projection of [the agent-integration surface](agent-integration.md): `inspect_document`, `find_in_document`, `preview_plan`, `apply_plan`, and the read-only `compare_documents`; `AllowRegistration` independently adds `register_document` / `remove_document` plus the composites `open_document` / `edit_document`, while `AllowCreation` adds `create_document` and `populate_template_batch` when at least one connection allows a creatable extension - `.docx`, `.pptx`, or `.xlsx` (SharePoint also requires its creation destination). Either opt-in adds `list_connections`, which returns `{connectionId, provider, canCreateDocuments}` entries. That boolean means the connection is configured for at least one creatable format; it is not a format list, a permission check, or a readiness probe. The higher-level workflow contracts and their limits are documented in [template population and comparison](document-workflows.md).
 
 Every tool named above addresses a document by `(connectionId, documentId)` and is offered
 only when a connection exists to name. `AllowInlineContent` adds a separate set that

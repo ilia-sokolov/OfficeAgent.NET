@@ -3,7 +3,11 @@
 Notable changes per release. The body of each version section is also the text used for the
 corresponding GitHub release.
 
-## Unreleased
+## 0.8.0 — 2026-09-10
+
+- Added ordered Word document assembly with source formatting compatibility checks, native
+  part/identifier import, isolated section headers, hash-bound preview/commit, multi-source
+  receipts, host resource limits, MCP/Agent Framework tools, and a proposal-packet sample.
 
 - Aligned the public MCP Registry entry with the current release and added a scheduled
   distribution check across GitHub, NuGet, and the registry.
@@ -25,6 +29,12 @@ corresponding GitHub release.
 - Added an optional renderer boundary and out-of-process LibreOffice/Poppler implementation with
   input, time, working-set, page-count, and output-size limits. Structural preview remains usable
   without a renderer.
+- Added bounded template-batch population for tagged Word and PowerPoint values, including
+  repeating Word table rows, independent outputs, per-item diagnostics, and audit receipts.
+- Added read-only Word body-paragraph comparison with exact input hashes, explicit coverage
+  diagnostics, and a snapshot-bound plan that produces native tracked insertions and deletions.
+- Exposed both workflows through the direct .NET API, Agent Framework, and MCP, with runnable
+  quote-generation and document-comparison samples.
 
 ## 0.7.0 — 2026-09-09
 

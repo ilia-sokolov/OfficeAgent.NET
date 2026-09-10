@@ -21,11 +21,16 @@ internal sealed class FillHandler : IOperationHandler
         var op = (FillOp)operation;
         var anchor = (StructuralAnchor)op.Target;
 
-        var sdt = FindContentControl(context, anchor.Tag);
-        if (sdt is null)
+        var matches = FindContentControls(context, anchor.Tag);
+        if (matches.Count == 0)
             return OperationPreview.Fail(new ValidationError(
                 ValidationErrorCodes.AnchorNotFound,
                 $"No content control with tag '{anchor.Tag}'.", anchor));
+        if (matches.Count > 1)
+            return OperationPreview.Fail(new ValidationError(
+                ValidationErrorCodes.AmbiguousAnchor,
+                $"Content-control tag '{anchor.Tag}' occurs {matches.Count} times; use unique template tags.", anchor));
+        var sdt = matches[0];
 
         return OperationPreview.Ok(new ProposedChange
         {
@@ -43,7 +48,7 @@ internal sealed class FillHandler : IOperationHandler
         var op = (FillOp)operation;
         var anchor = (StructuralAnchor)op.Target;
 
-        var sdt = FindContentControl(context, anchor.Tag)
+        var sdt = FindContentControls(context, anchor.Tag).SingleOrDefault()
             ?? throw new InvalidOperationException($"Content control '{anchor.Tag}' not found at apply time.");
 
         if (WordRevisionMarker.IsTracked(op.Mode))
@@ -76,18 +81,18 @@ internal sealed class FillHandler : IOperationHandler
         marker.WrapInserted(run);
     }
 
-    private static SdtElement? FindContentControl(ApplyContext context, string tag)
+    private static IReadOnlyList<SdtElement> FindContentControls(ApplyContext context, string tag)
     {
+        var matches = new List<SdtElement>();
         foreach (var (root, _) in WordModel.TextHosts(context.Package))
         {
-            var match = root.Descendants<SdtElement>()
-                .FirstOrDefault(sdt => string.Equals(
+            matches.AddRange(root.Descendants<SdtElement>()
+                .Where(sdt => string.Equals(
                     sdt.SdtProperties?.GetFirstChild<Tag>()?.Val?.Value,
                     tag,
-                    StringComparison.Ordinal));
-            if (match is not null) return match;
+                    StringComparison.Ordinal)));
         }
-        return null;
+        return matches;
     }
 
     private static OpenXmlElement? ContentOf(SdtElement sdt) =>

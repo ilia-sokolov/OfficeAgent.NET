@@ -120,9 +120,11 @@ internal sealed class PlanValidator
         var slot = operation switch
         {
             InsertOp i => $":{i.Position}",
+            InsertParagraphsOp i => $":{i.Position}",
             InsertTableOp i => $":{i.Position}",
             InsertImageOp i => $":{i.Position}",
             InsertTableRowsOp i => $":{i.Position}:{i.RowIndex}",
+            RepeatTableRowOp i => $":{i.TemplateRowIndex}",
             InsertTableColumnsOp i => $":{i.Position}:{i.ColumnIndex}",
             // Slide verbs with Start/End carry no target at all, so they never reach here;
             // Before/After name a reference slide, and two of them at one reference are as

@@ -72,6 +72,10 @@ than omitting a property.
 | `find_in_document(connectionId, documentId, pattern, regex, wholeWord, caseSensitive)` | Returns content-verified anchors usable as plan targets. Send `false` for each default search flag. |
 | `preview_plan(connectionId, documentId, planJson)` | Validates a `DocumentPlan` JSON without writing. Returns the canonical plan-report envelope below, with `committed: false` and null output fields. |
 | `apply_plan(connectionId, documentId, planJson, saveMode, newName)` | Applies the plan atomically and saves through the provider. Send `"Replace"` and `""` for the defaults; other modes are `NewVersion` and `NewDocument`. `NewDocument` optionally accepts `newName`; when it is empty, the provider derives a versioned sibling name. An unrecognised mode is refused. |
+| `populate_template_batch(connectionId, documentId, requestJson)` | Resolves tagged scalar values and repeating Word rows and saves bounded, independent outputs with one receipt per item. Exposed only with `AllowCreation`; requires read and create access on the connection. |
+| `compare_documents(originalConnectionId, originalDocumentId, revisedConnectionId, revisedDocumentId, revisionAuthor)` | Reads two Word files and returns hashes, paragraph differences, coverage diagnostics, and a snapshot-bound tracked plan when coverage is complete. Requires read access to both connections and writes nothing. |
+| `preview_document_merge(requestJson)` | Previews ordered whole-document Word assembly, reports compatibility and remapping, and returns a hash-bound merge plan. Requires read access to every source. |
+| `merge_documents(planJson, destinationConnectionId, outputName)` | Revalidates every source and creates one new `.docx`. Exposed with `AllowCreation`; requires source read and destination create access. See [assembly](document-assembly.md). |
 
 Plan reports always contain `isValid`, `committed`, `sourceDocumentId`,
 `outputConnectionId`, `outputDocumentId`, `outputVersion`, `outputName`,

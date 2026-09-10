@@ -26,7 +26,7 @@ namespace OfficeAgent.Core;
 /// different documents do not interfere.
 /// </para>
 /// </remarks>
-public sealed class OfficeAgentClient
+public sealed partial class OfficeAgentClient
 {
     private readonly IDocumentService _service;
     private readonly DocumentProviderRegistry _providers;
