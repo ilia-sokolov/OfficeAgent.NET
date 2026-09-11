@@ -1,5 +1,6 @@
 using DocumentFormat.OpenXml;
 using DocumentFormat.OpenXml.Packaging;
+using DocumentFormat.OpenXml.Validation;
 using DocumentFormat.OpenXml.Wordprocessing;
 using Microsoft.Extensions.DependencyInjection;
 using System.Text.Json;
@@ -282,6 +283,116 @@ public sealed class DocumentWorkflowTests
     }
 
     [Fact]
+    public void Comparison_with_text_and_image_byte_changes_withholds_the_plan()
+    {
+        var original = WithImage(ParagraphDocument("Old text"));
+        var revised = EditDocument(original, document =>
+        {
+            document.MainDocumentPart!.Document.Descendants<Text>().First().Text = "New text";
+            using var output = document.MainDocumentPart.ImageParts.Single().GetStream(FileMode.Create, FileAccess.Write);
+            var replacement = Convert.FromBase64String(
+                "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAIAAACQd1PeAAAADElEQVR4nGP4z8AAAAMBAQDJ/pLvAAAAAElFTkSuQmCC");
+            output.Write(replacement);
+        });
+
+        var comparison = new OfficeAgentClient(new WordModule()).CompareDocuments(original, revised);
+
+        Assert.False(comparison.IsComplete);
+        Assert.Null(comparison.Plan);
+        Assert.Contains(comparison.Diagnostics, diagnostic => diagnostic.Code == "unsupported-package-change");
+    }
+
+    [Fact]
+    public void Comparison_with_text_and_table_geometry_changes_withholds_the_plan()
+    {
+        var original = QuoteTemplate();
+        var revised = EditDocument(original, document =>
+        {
+            document.MainDocumentPart!.Document.Descendants<Text>().First().Text = "Proposal for ";
+            document.MainDocumentPart.Document.Descendants<TableProperties>().Single()
+                .Append(new TableWidth { Type = TableWidthUnitValues.Dxa, Width = "9000" });
+        });
+
+        var comparison = new OfficeAgentClient(new WordModule()).CompareDocuments(original, revised);
+
+        Assert.False(comparison.IsComplete);
+        Assert.Null(comparison.Plan);
+        Assert.Contains(comparison.Diagnostics, diagnostic => diagnostic.Code == "unsupported-package-change");
+    }
+
+    [Theory]
+    [InlineData(ChangeMode.Direct)]
+    [InlineData(ChangeMode.Tracked)]
+    public void Repeating_rows_remap_drawing_bookmark_and_control_ids(ChangeMode mode)
+    {
+        var template = RepeatingTemplateWithIdentifiers();
+        var client = new OfficeAgentClient(new WordModule());
+        var output = Apply(client, template, new RepeatTableRowOp
+        {
+            Target = new NodeAnchor { Kind = "table", Path = "table#0" },
+            TemplateRowIndex = 1,
+            Mode = mode,
+            Records = new IReadOnlyDictionary<string, string?>[]
+            {
+                new Dictionary<string, string?> { ["Description"] = "One", ["Amount"] = "1" },
+                new Dictionary<string, string?> { ["Description"] = "Two", ["Amount"] = "2" }
+            }
+        });
+
+        using var document = WordprocessingDocument.Open(new MemoryStream(output), false);
+        var drawingIds = document.MainDocumentPart!.Document.Descendants<DocumentFormat.OpenXml.Drawing.Wordprocessing.DocProperties>()
+            .Select(properties => properties.Id?.Value).ToArray();
+        var bookmarkIds = document.MainDocumentPart.Document.Descendants<BookmarkStart>()
+            .Select(bookmark => bookmark.Id?.Value).ToArray();
+        var controlIds = document.MainDocumentPart.Document.Descendants<SdtId>()
+            .Select(control => control.Val?.Value).ToArray();
+        var pictureIds = document.MainDocumentPart.Document.Descendants<DocumentFormat.OpenXml.Drawing.Pictures.NonVisualDrawingProperties>()
+            .Select(properties => properties.Id?.Value).ToArray();
+        var bookmarkNames = document.MainDocumentPart.Document.Descendants<BookmarkStart>()
+            .Select(bookmark => bookmark.Name?.Value).ToArray();
+        Assert.Equal(drawingIds.Length, drawingIds.Distinct().Count());
+        Assert.Equal(pictureIds.Length, pictureIds.Distinct().Count());
+        Assert.Equal(bookmarkIds.Length, bookmarkIds.Distinct().Count());
+        Assert.Equal(bookmarkNames.Length, bookmarkNames.Distinct().Count());
+        Assert.Equal(controlIds.Length, controlIds.Distinct().Count());
+        Assert.All(document.MainDocumentPart.Document.Descendants<Hyperlink>()
+            .Where(hyperlink => hyperlink.Anchor?.Value is not null),
+            hyperlink => Assert.Contains(hyperlink.Anchor!.Value, bookmarkNames));
+        var errors = new OpenXmlValidator(FileFormatVersions.Office2019).Validate(document).ToList();
+        Assert.True(errors.Count == 0, string.Join("; ", errors.Select(error => error.Description)));
+    }
+
+    [Fact]
+    public void Repeating_rows_reject_comment_references_that_cannot_be_cloned_safely()
+    {
+        var template = EditDocument(QuoteTemplate(), document =>
+            document.MainDocumentPart!.Document.Descendants<TableRow>().ElementAt(1)
+                .Descendants<Paragraph>().First().AppendChild(
+                    new Run(new CommentReference { Id = "0" })));
+        var client = new OfficeAgentClient(new WordModule());
+        using var result = client.Commit(new StreamHandle(new MemoryStream(template)), new DocumentPlan
+        {
+            Format = OfficeAgent.Abstractions.DocumentFormat.Word,
+            Operations = new PlanOperation[]
+            {
+                new RepeatTableRowOp
+                {
+                    Target = new NodeAnchor { Kind = "table", Path = "table#0" },
+                    TemplateRowIndex = 1,
+                    Records = new IReadOnlyDictionary<string, string?>[]
+                    {
+                        new Dictionary<string, string?> { ["Description"] = "One", ["Amount"] = "1" }
+                    }
+                }
+            }
+        });
+
+        Assert.False(result.Committed);
+        Assert.Contains(result.Report.Errors,
+            error => error.Message.Contains("comment or note reference", StringComparison.Ordinal));
+    }
+
+    [Fact]
     public void Comparison_plan_is_rejected_after_original_drift()
     {
         var original = ParagraphDocument("One", "Two");
@@ -373,6 +484,38 @@ public sealed class DocumentWorkflowTests
         Assert.False(comparison.IsComplete);
         Assert.Null(comparison.Plan);
         Assert.Contains(comparison.Diagnostics, diagnostic => diagnostic.Code == "unsupported-style-change");
+    }
+
+    [Fact]
+    public void Comparison_with_changed_text_and_direct_formatting_withholds_the_plan()
+    {
+        var original = ParagraphDocument("Old");
+        var revised = EditDocument(ParagraphDocument("New"), document =>
+            document.MainDocumentPart!.Document.Body!.Elements<Paragraph>().Single()
+                .GetFirstChild<Run>()!.RunProperties = new RunProperties(new Bold()));
+
+        var comparison = new OfficeAgentClient(new WordModule()).CompareDocuments(original, revised);
+
+        Assert.False(comparison.IsComplete);
+        Assert.Null(comparison.Plan);
+        Assert.Contains(comparison.Diagnostics,
+            diagnostic => diagnostic.Code == "unsupported-paragraph-markup-change");
+    }
+
+    [Fact]
+    public void Comparison_with_direct_formatting_on_an_added_paragraph_withholds_the_plan()
+    {
+        var original = ParagraphDocument("Keep");
+        var revised = EditDocument(ParagraphDocument("Keep", "Added"), document =>
+            document.MainDocumentPart!.Document.Body!.Elements<Paragraph>().Last()
+                .GetFirstChild<Run>()!.RunProperties = new RunProperties(new Italic()));
+
+        var comparison = new OfficeAgentClient(new WordModule()).CompareDocuments(original, revised);
+
+        Assert.False(comparison.IsComplete);
+        Assert.Null(comparison.Plan);
+        Assert.Contains(comparison.Diagnostics,
+            diagnostic => diagnostic.Code == "unsupported-paragraph-markup-change");
     }
 
     [Fact]
@@ -495,6 +638,58 @@ public sealed class DocumentWorkflowTests
             run.InsertAfterSelf(new InsertedRun((Run)run.CloneNode(true)));
             run.Remove();
             document.MainDocumentPart.Document.Save();
+        }
+        return stream.ToArray();
+    }
+
+    private static byte[] RepeatingTemplateWithIdentifiers()
+    {
+        var bytes = EditDocument(QuoteTemplate(), document =>
+        {
+            var table = document.MainDocumentPart!.Document.Body!.Descendants<Table>().Single();
+            table.InsertAfter(new TableGrid(new GridColumn { Width = "2400" }, new GridColumn { Width = "2400" }),
+                table.GetFirstChild<TableProperties>());
+            var paragraph = table.Descendants<TableRow>().ElementAt(1)
+                .Descendants<Paragraph>().First();
+            paragraph.PrependChild(new BookmarkStart { Id = "4", Name = "rowmark" });
+            paragraph.AppendChild(new BookmarkEnd { Id = "4" });
+            paragraph.AppendChild(new Hyperlink(new Run(new Text("jump")))
+            {
+                Anchor = "rowmark",
+                History = true
+            });
+            paragraph.PrependChild(new SdtRun(
+                new SdtProperties(new Tag { Val = "RowControl" }, new SdtId { Val = 25 }),
+                new SdtContentRun(new Run(new Text(string.Empty)))));
+        });
+        return WithImage(bytes, "{{Description}}");
+    }
+
+    private static byte[] WithImage(byte[] bytes, string paragraphText = "Old text")
+    {
+        var client = new OfficeAgentClient(new WordModule());
+        var paragraph = client.Inspect(bytes).Paragraphs.Single(info => info.Text.Contains(paragraphText, StringComparison.Ordinal));
+        return Apply(client, bytes, new InsertImageOp
+        {
+            Target = new TextSpanAnchor { ParaId = paragraph.ParaId, Expect = paragraph.Text },
+            Base64Bytes = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=",
+            ImageType = "png",
+            WidthPx = 16,
+            HeightPx = 16,
+            Position = InsertPosition.After,
+            Mode = ChangeMode.Direct
+        });
+    }
+
+    private static byte[] EditDocument(byte[] bytes, Action<WordprocessingDocument> edit)
+    {
+        using var stream = new MemoryStream();
+        stream.Write(bytes);
+        stream.Position = 0;
+        using (var document = WordprocessingDocument.Open(stream, true))
+        {
+            edit(document);
+            document.MainDocumentPart!.Document.Save();
         }
         return stream.ToArray();
     }

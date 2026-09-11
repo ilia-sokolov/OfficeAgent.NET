@@ -64,8 +64,8 @@ default header/footer on even pages. Style IDs and imported style names are name
 Missing default styles are represented by explicit neutral styles to prevent formatting
 from the first document leaking into later content.
 
-The first section of each subsequent source uses `nextPage`. Internal section types are
-preserved. A source ending in non-paragraph content may require a minimal extra paragraph
+The boundary after each non-final source uses `nextPage`, so the next source starts on a new
+page. Internal section types are preserved. A source ending in non-paragraph content may require a minimal extra paragraph
 to carry the boundary; preview reports it. Pagination can change, including total page fields.
 Assembly does not promise pixel-identical rendering or calculate fields.
 

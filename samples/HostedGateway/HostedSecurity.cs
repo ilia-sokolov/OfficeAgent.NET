@@ -2,7 +2,9 @@ using System.Security.Claims;
 using System.Text.Encodings.Web;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.Extensions.Options;
+using OfficeAgent.Abstractions;
 using OfficeAgent.AgentFramework;
+using OfficeAgent.Core;
 
 namespace OfficeAgent.Samples.HostedGateway;
 
@@ -41,6 +43,31 @@ public sealed class HttpContextPrincipalAccessor : ITrustedPrincipalAccessor
     public ClaimsPrincipal Principal => _httpContext.HttpContext?.User ?? Anonymous;
 }
 
+/// <summary>Copies trusted ASP.NET Core authentication identity into apply receipts.</summary>
+public sealed class HttpContextAuditActorProvider : IAuditActorProvider
+{
+    private readonly IHttpContextAccessor _httpContext;
+
+    /// <summary>Creates the actor provider over the host's current HTTP request.</summary>
+    public HttpContextAuditActorProvider(IHttpContextAccessor httpContext) =>
+        _httpContext = httpContext ?? throw new ArgumentNullException(nameof(httpContext));
+
+    /// <inheritdoc />
+    public AuditActor? GetCurrentActor()
+    {
+        var principal = _httpContext.HttpContext?.User;
+        if (principal?.Identity?.IsAuthenticated != true) return null;
+        var subjectClaim = principal.FindFirst(ClaimTypes.NameIdentifier);
+        if (subjectClaim is null || string.IsNullOrWhiteSpace(subjectClaim.Value)) return null;
+        return new AuditActor
+        {
+            Subject = subjectClaim.Value,
+            Issuer = subjectClaim.Issuer,
+            DisplayName = principal.Identity.Name
+        };
+    }
+}
+
 /// <summary>
 /// Demonstration authentication only: bearer token <c>alice-token</c> or <c>bob-token</c> becomes the
 /// corresponding trusted principal. Replace this handler with validated JWT authentication
@@ -76,8 +103,8 @@ public sealed class DemoBearerHandler : AuthenticationHandler<AuthenticationSche
 
         var identity = new ClaimsIdentity(new[]
         {
-            new Claim(ClaimTypes.NameIdentifier, subject),
-            new Claim(ClaimTypes.Name, subject)
+            new Claim(ClaimTypes.NameIdentifier, subject, ClaimValueTypes.String, "demo"),
+            new Claim(ClaimTypes.Name, subject, ClaimValueTypes.String, "demo")
         }, Scheme);
         return Task.FromResult(AuthenticateResult.Success(
             new AuthenticationTicket(new ClaimsPrincipal(identity), Scheme)));

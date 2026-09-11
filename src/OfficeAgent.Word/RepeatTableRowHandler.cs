@@ -3,6 +3,8 @@ using DocumentFormat.OpenXml;
 using DocumentFormat.OpenXml.Wordprocessing;
 using OfficeAgent.Abstractions;
 using OfficeAgent.Core;
+using Pic = DocumentFormat.OpenXml.Drawing.Pictures;
+using Wp = DocumentFormat.OpenXml.Drawing.Wordprocessing;
 
 namespace OfficeAgent.Word;
 
@@ -28,6 +30,10 @@ internal sealed class RepeatTableRowHandler : IOperationHandler
             return OperationPreview.Fail(new ValidationError(
                 ValidationErrorCodes.InvalidOperation,
                 "The selected template row contains tracked revisions; resolve them before repeating the row.", anchor));
+        if (row.Descendants<OpenXmlElement>().Any(element => element is CommentRangeStart or CommentRangeEnd or CommentReference or FootnoteReference or EndnoteReference))
+            return OperationPreview.Fail(new ValidationError(
+                ValidationErrorCodes.InvalidOperation,
+                "The selected template row contains a comment or note reference that cannot be cloned safely.", anchor));
 
         var names = PlaceholderNames(row);
         if (names.Count == 0)
@@ -68,13 +74,14 @@ internal sealed class RepeatTableRowHandler : IOperationHandler
         var template = ResolveTemplate(context, anchor, op.TemplateRowIndex, out _)
             ?? throw new InvalidOperationException("The repeating template row vanished before apply.");
         var names = PlaceholderNames(template);
-        var rows = op.Records.Select(record => BuildRow(context, template, names, record, op.MissingValueBehavior)).ToList();
-
         OpenXmlElement cursor = template;
-        foreach (var row in rows)
+        var rows = new List<TableRow>();
+        foreach (var record in op.Records)
         {
+            var row = BuildRow(context, template, names, record, op.MissingValueBehavior);
             cursor.InsertAfterSelf(row);
             cursor = row;
+            rows.Add(row);
         }
 
         if (WordRevisionMarker.IsTracked(op.Mode))
@@ -141,7 +148,7 @@ internal sealed class RepeatTableRowHandler : IOperationHandler
                 Replace(paragraph, match.Index, match.Length, replacement);
             }
         }
-        RefreshDrawingIds(context, row);
+        RefreshIdentifiers(context, row);
         return row;
     }
 
@@ -162,13 +169,59 @@ internal sealed class RepeatTableRowHandler : IOperationHandler
         }
     }
 
-    private static void RefreshDrawingIds(ApplyContext context, OpenXmlElement row)
+    private static void RefreshIdentifiers(ApplyContext context, OpenXmlElement row)
     {
+        var document = WordModel.Main(context.Package).Document;
         var ids = ImageNodeProvider.EnumerateDrawings(context.Package)
-            .SelectMany(drawing => drawing.Descendants<DocumentFormat.OpenXml.Drawing.Wordprocessing.DocProperties>())
+            .SelectMany(drawing => drawing.Descendants<Wp.DocProperties>())
             .Select(p => p.Id?.Value ?? 0U).ToList();
         var next = ids.Count == 0 ? 1U : ids.Max() + 1U;
-        foreach (var properties in row.Descendants<DocumentFormat.OpenXml.Drawing.Wordprocessing.DocProperties>())
+        foreach (var properties in row.Descendants<Wp.DocProperties>())
             properties.Id = next++;
+
+        var pictureIds = new HashSet<uint>(document.Descendants<Pic.NonVisualDrawingProperties>()
+            .Select(properties => properties.Id?.Value ?? 0U));
+        var nextPictureId = pictureIds.Count == 0 ? 1U : pictureIds.Max() + 1U;
+        foreach (var properties in row.Descendants<Pic.NonVisualDrawingProperties>())
+        {
+            while (!pictureIds.Add(nextPictureId)) nextPictureId++;
+            properties.Id = nextPictureId++;
+        }
+
+        var bookmarkIds = new HashSet<int>(document.Descendants<BookmarkStart>()
+            .Select(bookmark => int.TryParse(bookmark.Id?.Value, out var id) ? id : 0));
+        var bookmarkNames = new HashSet<string>(document.Descendants<BookmarkStart>()
+            .Select(bookmark => bookmark.Name?.Value ?? string.Empty), StringComparer.Ordinal);
+        var nextBookmarkId = bookmarkIds.Count == 0 ? 1 : bookmarkIds.Max() + 1;
+        var idMap = new Dictionary<string, string>(StringComparer.Ordinal);
+        var nameMap = new Dictionary<string, string>(StringComparer.Ordinal);
+        foreach (var bookmark in row.Descendants<BookmarkStart>())
+        {
+            var oldId = bookmark.Id?.Value ?? string.Empty;
+            while (!bookmarkIds.Add(nextBookmarkId)) nextBookmarkId++;
+            var newId = (nextBookmarkId++).ToString(System.Globalization.CultureInfo.InvariantCulture);
+            idMap[oldId] = newId;
+            bookmark.Id = newId;
+
+            var oldName = bookmark.Name?.Value ?? string.Empty;
+            var newName = oldName;
+            var suffix = 2;
+            while (!bookmarkNames.Add(newName)) newName = oldName + "_" + suffix++;
+            nameMap[oldName] = newName;
+            bookmark.Name = newName;
+        }
+        foreach (var bookmark in row.Descendants<BookmarkEnd>())
+            if (bookmark.Id?.Value is { } oldId && idMap.TryGetValue(oldId, out var newId)) bookmark.Id = newId;
+        foreach (var hyperlink in row.Descendants<Hyperlink>())
+            if (hyperlink.Anchor?.Value is { } oldName && nameMap.TryGetValue(oldName, out var newName)) hyperlink.Anchor = newName;
+
+        var controlIds = new HashSet<int>(document.Descendants<SdtId>()
+            .Select(control => control.Val?.Value ?? 0));
+        var nextControlId = controlIds.Count == 0 ? 1 : controlIds.Max() + 1;
+        foreach (var control in row.Descendants<SdtId>())
+        {
+            while (!controlIds.Add(nextControlId)) nextControlId++;
+            control.Val = nextControlId++;
+        }
     }
 }

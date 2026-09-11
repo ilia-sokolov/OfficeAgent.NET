@@ -8,8 +8,8 @@ or reproducing an issue when possible.
 
 | Version | Security support |
 | --- | --- |
-| 0.7.x | Supported |
-| 0.6.x and earlier | Unsupported |
+| 0.8.x | Supported |
+| 0.7.x and earlier | Unsupported |
 
 This table is updated when a newer minor version is released.
 
@@ -35,10 +35,12 @@ OfficeAgent validates structured document operations and bounds access through h
 document connections. It does not make an untrusted document safe to disclose, provide malware
 scanning, or decide which user is allowed to use a hosted endpoint.
 
-The open-source HTTP server does not authenticate callers or implement a caller-to-connection
-authorization policy. A hosted deployment must put TLS, authentication, and a fail-closed
-connection allow-list in front of it. SharePoint credentials authorize storage access; they do
-not protect the public MCP endpoint. See the [hosted deployment boundary](docs/deployment.md#b2-put-authentication-in-front)
+The standalone open-source HTTP server does not authenticate callers. A hosted deployment must
+add TLS, authentication, and a fail-closed `IConnectionAccessPolicy`. The
+[HostedGateway reference](samples/HostedGateway/) demonstrates two authenticated principals,
+disjoint connections, and trusted receipt actors, but it is not a production identity system.
+SharePoint credentials authorize storage access; they do not protect the public MCP endpoint.
+See the [hosted deployment boundary](docs/deployment.md#b2-put-authentication-in-front)
 and [hosted deployment checklist](docs/deployment.md#pre-flight-checklist-for-a-hosted-deployment).
 
 Filesystem roots, SharePoint permissions, process identity, secrets, logs, and retention are

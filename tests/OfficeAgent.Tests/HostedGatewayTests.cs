@@ -49,12 +49,19 @@ public sealed class HostedGatewayTests
         Assert.Equal("connection-b", OnlyConnection(await CallAsync(bob, "list_connections")));
 
         const string sensitiveDocumentText = "HOSTED-DOCUMENT-CONTENT-MUST-NOT-BE-LOGGED";
-        var aliceId = CreatedId(await CallAsync(alice, "create_document", new Dictionary<string, object?>
+        var aliceCreate = await CallAsync(alice, "create_document", new Dictionary<string, object?>
         {
             ["connectionId"] = "connection-a",
             ["name"] = "alice.docx",
             ["planJson"] = Plan(sensitiveDocumentText)
-        }));
+        });
+        var aliceId = CreatedId(aliceCreate);
+        using (var creation = JsonDocument.Parse(aliceCreate))
+        {
+            var actor = creation.RootElement.GetProperty("receipt").GetProperty("actor");
+            Assert.Equal("alice", actor.GetProperty("subject").GetString());
+            Assert.Equal("demo", actor.GetProperty("issuer").GetString());
+        }
         var bobId = CreatedId(await CallAsync(bob, "create_document", new Dictionary<string, object?>
         {
             ["connectionId"] = "connection-b",

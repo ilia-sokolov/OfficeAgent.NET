@@ -1,4 +1,8 @@
 using System.Security.Cryptography;
+using System.IO.Compression;
+using System.Text;
+using System.Xml;
+using System.Xml.Linq;
 using OfficeAgent.Abstractions;
 using OfficeAgent.Core.DocumentProviders;
 using DocFormat = OfficeAgent.Abstractions.DocumentFormat;
@@ -290,12 +294,13 @@ public sealed partial class OfficeAgentClient
         if (!SequenceEqual(UnsupportedNodeSignature(before), UnsupportedNodeSignature(after)))
             diagnostics.Add(Diagnostic("unsupported-node-change",
                 "Document nodes outside free body text changed, such as properties, fields, comments, sections, or table structure.", "nodes"));
-
         if (diagnostics.Count > 0)
             return ComparisonResult(original, revised, diagnostics: diagnostics);
 
         var operations = new List<PlanOperation>();
         var differences = new List<DocumentDifference>();
+        var beforeMarkup = FreeBodyParagraphMarkup(original);
+        var afterMarkup = FreeBodyParagraphMarkup(revised);
         var matches = LongestCommonSubsequence(beforeBody, afterBody, cancellationToken);
         var oldStart = 0;
         var newStart = 0;
@@ -303,10 +308,28 @@ public sealed partial class OfficeAgentClient
         foreach (var match in matches.Concat(new[] { (Old: beforeBody.Count, New: afterBody.Count) }))
         {
             totalDifferenceCount += Math.Max(match.Old - oldStart, match.New - newStart);
+            var paired = Math.Min(match.Old - oldStart, match.New - newStart);
+            for (var i = 0; i < paired; i++)
+                CompareParagraphMarkup(beforeMarkup, afterMarkup, oldStart + i, newStart + i,
+                    beforeBody[oldStart + i], diagnostics);
+            if (match.New - newStart > paired)
+            {
+                var targetIndex = match.Old < beforeBody.Count ? match.Old : Math.Max(0, match.Old - 1);
+                for (var i = newStart + paired; i < match.New; i++)
+                {
+                    var expected = AddedParagraphMarkup(beforeMarkup[targetIndex], afterBody[i].StyleId);
+                    if (!string.Equals(expected, afterMarkup[i], StringComparison.Ordinal))
+                        diagnostics.Add(Diagnostic("unsupported-paragraph-markup-change",
+                            $"An added body paragraph at revised index {i} contains run structure or direct formatting the comparison plan cannot reproduce.",
+                            afterBody[i].ParaId));
+                }
+            }
             ProcessHunk(beforeBody, afterBody, oldStart, match.Old, newStart, match.New,
                 operations, differences, diagnostics, options.MaximumDifferences);
             if (match.Old < beforeBody.Count)
             {
+                CompareParagraphMarkup(beforeMarkup, afterMarkup, match.Old, match.New,
+                    beforeBody[match.Old], diagnostics);
                 if (!string.Equals(beforeBody[match.Old].StyleId, afterBody[match.New].StyleId, StringComparison.Ordinal))
                     diagnostics.Add(Diagnostic("unsupported-style-change",
                         $"Paragraph style changed at original body paragraph {match.Old}.", beforeBody[match.Old].ParaId));
@@ -318,10 +341,9 @@ public sealed partial class OfficeAgentClient
         if (totalDifferenceCount > options.MaximumDifferences)
             diagnostics.Add(Diagnostic("comparison-difference-limit-exceeded",
                 $"The comparison reached the {options.MaximumDifferences}-difference limit.", "body"));
-        if (differences.Count == 0 && !original.AsSpan().SequenceEqual(revised))
+        if (!string.Equals(UnsupportedWordPackageSignature(original), UnsupportedWordPackageSignature(revised), StringComparison.Ordinal))
             diagnostics.Add(Diagnostic("unsupported-package-change",
-                "The package bytes changed without a covered body-text change, such as formatting, fields, properties, or package metadata.", "package"));
-
+                "Content outside free body paragraphs changed, such as tables, images, relationships, properties, or package metadata.", "package"));
         return ComparisonResult(
             original,
             revised,
@@ -466,6 +488,135 @@ public sealed partial class OfficeAgentClient
     private static IEnumerable<string> UnsupportedNodeSignature(InspectResult result) =>
         result.Nodes.Where(node => node.Kind is not "revision" and not "image" and not "table")
             .Select(node => $"{node.Kind}|{node.Path}|{node.Summary}");
+
+    private static IReadOnlyList<string> FreeBodyParagraphMarkup(byte[] bytes)
+    {
+        XNamespace word = "http://schemas.openxmlformats.org/wordprocessingml/2006/main";
+        using var package = new ZipArchive(new MemoryStream(bytes, writable: false), ZipArchiveMode.Read);
+        var entry = package.GetEntry("word/document.xml")
+            ?? throw new InvalidDataException("The Word package has no main document part.");
+        using var input = entry.Open();
+        using var reader = XmlReader.Create(input, new XmlReaderSettings
+        {
+            DtdProcessing = DtdProcessing.Prohibit,
+            XmlResolver = null,
+            MaxCharactersInDocument = entry.Length + 1
+        });
+        var document = XDocument.Load(reader);
+        var body = document.Root?.Element(word + "body");
+        if (body is null) return Array.Empty<string>();
+        return body.Elements(word + "p").Select(paragraph =>
+        {
+            var normalized = new XElement(paragraph);
+            foreach (var text in normalized.Descendants().Where(element =>
+                         element.Name == word + "t" || element.Name == word + "delText" ||
+                         element.Name == word + "instrText"))
+                text.RemoveNodes();
+            foreach (var attribute in normalized.DescendantsAndSelf().Attributes().Where(attribute =>
+                         attribute.Name.LocalName is "paraId" or "textId" ||
+                         attribute.Name == XNamespace.Xml + "space" ||
+                         (attribute.IsNamespaceDeclaration && attribute.Value != word.NamespaceName) ||
+                         attribute.Name.LocalName.StartsWith("rsid", StringComparison.OrdinalIgnoreCase)).ToArray())
+                attribute.Remove();
+            return normalized.ToString(SaveOptions.DisableFormatting);
+        }).ToArray();
+    }
+
+    private static void CompareParagraphMarkup(
+        IReadOnlyList<string> before,
+        IReadOnlyList<string> after,
+        int oldIndex,
+        int newIndex,
+        ParagraphInfo original,
+        List<WorkflowDiagnostic> diagnostics)
+    {
+        if (oldIndex >= before.Count || newIndex >= after.Count ||
+            string.Equals(before[oldIndex], after[newIndex], StringComparison.Ordinal)) return;
+        diagnostics.Add(Diagnostic("unsupported-paragraph-markup-change",
+            $"Run structure or direct formatting changed at original body paragraph {oldIndex}.", original.ParaId));
+    }
+
+    private static string AddedParagraphMarkup(string neighborMarkup, string? styleId)
+    {
+        XNamespace word = "http://schemas.openxmlformats.org/wordprocessingml/2006/main";
+        var neighbor = XElement.Parse(neighborMarkup);
+        var paragraph = new XElement(word + "p");
+        var properties = neighbor.Element(word + "pPr");
+        if (properties is not null)
+        {
+            properties = new XElement(properties);
+            properties.Elements(word + "pStyle").Remove();
+        }
+        if (styleId is not null)
+        {
+            properties ??= new XElement(word + "pPr");
+            properties.AddFirst(new XElement(word + "pStyle", new XAttribute(word + "val", styleId)));
+        }
+        if (properties is not null) paragraph.Add(properties);
+        paragraph.Add(new XElement(word + "r", new XElement(word + "t")));
+        return paragraph.ToString(SaveOptions.DisableFormatting);
+    }
+
+    private static string UnsupportedWordPackageSignature(byte[] bytes)
+    {
+        const string documentPart = "word/document.xml";
+        XNamespace word = "http://schemas.openxmlformats.org/wordprocessingml/2006/main";
+        using var package = new ZipArchive(new MemoryStream(bytes, writable: false), ZipArchiveMode.Read);
+        using var hash = IncrementalHash.CreateHash(HashAlgorithmName.SHA256);
+        foreach (var entry in package.Entries.OrderBy(entry => entry.FullName, StringComparer.Ordinal))
+        {
+            byte[] content;
+            using (var input = entry.Open())
+            using (var copy = new MemoryStream())
+            {
+                input.CopyTo(copy);
+                content = copy.ToArray();
+            }
+            if (string.Equals(entry.FullName, documentPart, StringComparison.Ordinal))
+            {
+                using var input = new MemoryStream(content, writable: false);
+                using var reader = XmlReader.Create(input, new XmlReaderSettings
+                {
+                    DtdProcessing = DtdProcessing.Prohibit,
+                    XmlResolver = null,
+                    MaxCharactersInDocument = content.LongLength + 1
+                });
+                var xml = XDocument.Load(reader);
+                var body = xml.Root?.Element(word + "body");
+                if (body is not null)
+                {
+                    foreach (var paragraph in body.Descendants(word + "p")
+                                 .Where(paragraph => !paragraph.Ancestors(word + "tbl").Any()).ToArray())
+                    {
+                        var section = paragraph.Element(word + "pPr")?.Element(word + "sectPr");
+                        if (section is null) paragraph.Remove();
+                        else paragraph.ReplaceWith(new XElement(word + "p", new XElement(word + "pPr", new XElement(section))));
+                    }
+                }
+                using var normalized = new MemoryStream();
+                xml.Save(normalized, SaveOptions.DisableFormatting);
+                content = normalized.ToArray();
+            }
+            else if (string.Equals(entry.FullName, "_rels/.rels", StringComparison.Ordinal))
+            {
+                using var input = new MemoryStream(content, writable: false);
+                var xml = XDocument.Load(input);
+                foreach (var relationship in xml.Root?.Elements() ?? Enumerable.Empty<XElement>())
+                    relationship.Attribute("Id")?.Remove();
+                xml.Root?.ReplaceNodes(xml.Root.Elements().OrderBy(element =>
+                    (string?)element.Attribute("Type") + "|" + (string?)element.Attribute("Target") + "|" + (string?)element.Attribute("TargetMode"), StringComparer.Ordinal));
+                using var normalized = new MemoryStream();
+                xml.Save(normalized, SaveOptions.DisableFormatting);
+                content = normalized.ToArray();
+            }
+            var name = Encoding.UTF8.GetBytes(entry.FullName);
+            hash.AppendData(BitConverter.GetBytes(name.Length));
+            hash.AppendData(name);
+            hash.AppendData(BitConverter.GetBytes(content.Length));
+            hash.AppendData(content);
+        }
+        return BitConverter.ToString(hash.GetHashAndReset()).Replace("-", string.Empty).ToLowerInvariant();
+    }
 
     private static bool SequenceEqual(IEnumerable<string> left, IEnumerable<string> right) =>
         left.SequenceEqual(right, StringComparer.Ordinal);

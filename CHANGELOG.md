@@ -22,7 +22,7 @@ corresponding GitHub release.
   line, and pie charts, including OfficeAgent-owned chart updates.
 - Added the `OfficeAgent.Excel` module for bounded workbook inspection, raw or displayed-value
   search, typed cell and formula writes, table row appends, and cell-note management. Formula
-  writes request recalculation on open; OfficeAgent does not evaluate formulas.
+  and value writes request recalculation on open; OfficeAgent does not evaluate formulas.
 - Added an injectable, principal-aware connection access policy across MCP registration, read,
   create, edit, and removal operations, plus an authenticated two-user hosted gateway reference
   whose connection discovery and document access are isolated per caller.
@@ -35,6 +35,22 @@ corresponding GitHub release.
   diagnostics, and a snapshot-bound plan that produces native tracked insertions and deletions.
 - Exposed both workflows through the direct .NET API, Agent Framework, and MCP, with runnable
   quote-generation and document-comparison samples.
+
+### Fixed before release
+
+- Made Word comparison fail closed when image bytes, table geometry, direct paragraph formatting,
+  or other unsupported package content changes alongside supported paragraph text.
+- Remapped drawing, picture, bookmark, hyperlink-anchor, and content-control identifiers when
+  repeating Word rows, and rejected rows containing comment or note references that cannot be
+  cloned safely.
+- Distinguished Excel cell targets by sheet and normalized A1 address, included shared strings in
+  snapshot drift detection, rejected single-cell edits inside shared-formula groups and legacy
+  array-formula ranges, kept legacy note shape IDs unique after deletion, and requested
+  recalculation after constant writes.
+- Bounded redirected-output draining by the renderer timeout, including when a descendant keeps an
+  inherited pipe open after the tracked launcher exits.
+- Propagated the hosted gateway's authenticated principal into audit receipts and aligned the
+  package, tool-schema, workflow, snapshot, rendering, support, and security documentation.
 
 ## 0.7.0 — 2026-09-09
 

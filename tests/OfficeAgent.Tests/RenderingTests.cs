@@ -1,6 +1,7 @@
 using OfficeAgent.Abstractions;
 using OfficeAgent.Rendering;
 using OfficeAgent.RenderWorker;
+using System.Diagnostics;
 
 namespace OfficeAgent.Tests;
 
@@ -43,6 +44,20 @@ public sealed class RenderingTests
         Assert.False(result.Succeeded);
         Assert.Equal("render-timeout", result.FailureCode);
         Assert.Empty(result.Pages);
+    }
+
+    [Fact]
+    public async Task Renderer_timeout_includes_output_pipe_draining()
+    {
+        var renderer = Renderer(libreOfficeArguments: new[] { "--spawn-child-holding-pipe" });
+        var stopwatch = Stopwatch.StartNew();
+
+        var result = await renderer.RenderAsync(
+            new MemoryStream(new byte[] { 1 }), Options(timeout: TimeSpan.FromMilliseconds(250)));
+
+        Assert.False(result.Succeeded);
+        Assert.Equal("render-timeout", result.FailureCode);
+        Assert.InRange(stopwatch.Elapsed, TimeSpan.Zero, TimeSpan.FromSeconds(4));
     }
 
     [Fact]

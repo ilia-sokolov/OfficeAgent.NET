@@ -195,12 +195,16 @@ public sealed class ExcelModule : IFormatModule, IBlankDocumentFactory, IApplyTi
         using var hash = SHA256.Create();
         var parts = new List<string> { document.WorkbookPart?.Workbook.OuterXml ?? string.Empty };
         if (document.WorkbookPart is { } workbook)
+        {
+            if (workbook.SharedStringTablePart?.SharedStringTable is { } sharedStrings)
+                parts.Add(sharedStrings.OuterXml);
             foreach (var sheet in workbook.WorksheetParts)
             {
                 parts.Add(sheet.Worksheet.OuterXml);
                 parts.AddRange(sheet.TableDefinitionParts.Select(p => p.Table?.OuterXml ?? string.Empty));
                 if (sheet.WorksheetCommentsPart?.Comments is { } comments) parts.Add(comments.OuterXml);
             }
+        }
         var bytes = Encoding.UTF8.GetBytes(string.Join("\n", parts));
         return Convert.ToBase64String(hash.ComputeHash(bytes));
     }

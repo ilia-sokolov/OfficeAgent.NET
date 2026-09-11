@@ -144,9 +144,17 @@ internal sealed class PlanValidator
     {
         TextSpanAnchor t => $"text:{t.ParaId}:{t.Expect}:{t.Occurrence}",
         NodeAnchor n => $"node:{n.Kind}:{n.Path}:{n.Occurrence}",
+        CellAnchor c => CellKey(c),
         StructuralAnchor s => $"struct:{s.Tag}",
         StyleAnchor st => $"style:{st.StyleId}",
         null => null,
         _ => $"id:{anchor.Id}"
     };
+
+    private static string CellKey(CellAnchor anchor)
+    {
+        if (SpreadsheetPartUtility.TryParseCell(anchor.Address, out var column, out var row))
+            return $"cell:{anchor.SheetId}:{SpreadsheetPartUtility.ColumnName(column)}{row}";
+        return $"cell:{anchor.SheetId}:{anchor.Address.ToUpperInvariant()}";
+    }
 }

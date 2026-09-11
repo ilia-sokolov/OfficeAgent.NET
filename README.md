@@ -47,7 +47,7 @@ it for a workflow that depends on Office's layout or calculation engine.
 | PowerPoint creation and editing | Build or update decks with slides, layouts, text, tables, native editable charts, images, media, notes, comments, sections, transitions, and animations |
 | Excel inspection and editing | Inspect worksheets, tables, and bounded ranges; find raw or displayed values; set cells and formulas; append table rows; manage cell notes |
 | Template generation | Bind unique Word content-control tags or PowerPoint shape names, expand repeating Word table rows, and create bounded batches with one receipt per output |
-| Word comparison | Compare two documents read-only and, when every change is covered, produce a snapshot-bound native redline plan for free body paragraphs |
+| Word comparison | Compare supported free-body paragraph text read-only and produce a snapshot-bound native redline plan only when all other package content is unchanged |
 | Agent and application integration | Use MCP over stdio or HTTP, Microsoft Agent Framework tools, or the direct .NET API, with SHA-256 apply receipts and host-supplied audit actors |
 | Document access | Work with bounded filesystem roots, SharePoint, in-memory sessions, or self-contained inline content |
 

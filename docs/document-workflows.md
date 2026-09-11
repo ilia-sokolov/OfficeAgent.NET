@@ -6,7 +6,7 @@ OfficeAgent 0.8 adds two higher-level workflows built on the same inspect, plan,
 commit, provider, and receipt contracts as ordinary edits. Template population creates
 independent documents from tagged values and repeating Word rows. Comparison reads two Word
 documents and proposes a native tracked-change plan when it can account for every change in
-its supported scope.
+its supported scope and verify that unsupported package content is unchanged.
 
 ## Populate a template batch
 
@@ -52,6 +52,11 @@ The engine inspects and binds the source again for every item, creates a snapsho
 and saves with `NewDocument`. It never changes the template. Each attempted item returns its
 own provider reference, report, receipt, and stable diagnostics. `ContinueOnError=false`
 stops after the first failed item; `MaximumDocuments` defaults to 100.
+
+The batch is a sequence of independent provider creates, not one storage transaction. Outputs
+saved before a later failure remain saved. With `ContinueOnError=false`, results cover only the
+items attempted through the first failure. A provider may also accept a create before its
+response is lost; use the provider's recovery process before retrying the same output name.
 
 `MissingValueBehavior` is `Fail`, `Ignore`, or `Empty`; it applies to scalar slots and row
 placeholders. `RejectUnknownValues` defaults to true. Population defaults to `Direct`, which
@@ -111,15 +116,17 @@ all revisions produces the revised body text and rejecting all revisions restore
 original body text. Preview the plan against the original immediately before commit so drift
 fails as `stale-snapshot`.
 
-The v0.8 comparison scope is deliberately bounded to free Word body paragraphs. Existing
-revisions and inspected changes in tables, images, headers, footers, footnotes, endnotes,
-paragraph styles, fields, properties, comments, or sections make the result incomplete and
-suppress the plan. A byte change with no covered body-text difference is also reported as an
-unsupported package change. Opaque package metadata changed alongside covered paragraph text
-cannot always be distinguished by structural inspection; compare the returned exact hashes
-when that distinction matters. Default limits are 64 MiB per input, 2,000 body paragraphs per
-document, and 1,000 reported differences. Cancellation is checked while reading and while
-computing alignment.
+The v0.8 comparison scope is deliberately bounded to free Word body-paragraph text. Existing
+revisions and changes in tables, images or image bytes, headers, footers, footnotes, endnotes,
+run structure, direct formatting, paragraph styles, fields, properties, comments, sections,
+relationships, or other package parts make the result incomplete and suppress the plan. The
+comparison uses structural checks plus an exact fingerprint of every package part after
+normalizing the supported free-paragraph text and volatile paragraph identifiers. This is a
+strict coverage gate: package metadata changes can suppress a plan even when they do not affect
+the visible document. Always require `IsComplete` and a non-null `Plan`; the exact input hashes
+identify the compared files but do not by themselves prove semantic coverage. Default limits
+are 64 MiB per input, 2,000 body paragraphs per document, and 1,000 reported differences.
+Cancellation is checked while reading and while computing alignment.
 
 The equivalent MCP or Agent Framework call is `compare_documents` with the original and
 revised `(connectionId, documentId)` pairs plus the displayed `revisionAuthor`. A hosted

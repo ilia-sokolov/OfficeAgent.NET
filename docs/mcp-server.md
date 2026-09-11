@@ -207,7 +207,7 @@ Word assembly adds the read-only `preview_document_merge` and, when `AllowCreati
 enabled, `merge_documents`. They authorize every input connection; commit also authorizes
 the destination. See [Word document assembly](document-assembly.md) for the JSON contracts.
 
-The MCP toolset is the projection of [the agent-integration surface](agent-integration.md): `inspect_document`, `find_in_document`, `preview_plan`, `apply_plan`, and the read-only `compare_documents`; `AllowRegistration` independently adds `register_document` / `remove_document` plus the composites `open_document` / `edit_document`, while `AllowCreation` adds `create_document` and `populate_template_batch` when at least one connection allows a creatable extension - `.docx`, `.pptx`, or `.xlsx` (SharePoint also requires its creation destination). Either opt-in adds `list_connections`, which returns `{connectionId, provider, canCreateDocuments}` entries. That boolean means the connection is configured for at least one creatable format; it is not a format list, a permission check, or a readiness probe. The higher-level workflow contracts and their limits are documented in [template population and comparison](document-workflows.md).
+The MCP toolset is the projection of [the agent-integration surface](agent-integration.md): `inspect_document`, `find_in_document`, `preview_plan`, `apply_plan`, `compare_documents`, and `preview_document_merge`; `AllowRegistration` independently adds `register_document` / `remove_document` plus the composites `open_document` / `edit_document`, while `AllowCreation` adds `create_document`, `populate_template_batch`, and `merge_documents` when at least one connection allows a creatable extension - `.docx`, `.pptx`, or `.xlsx` (SharePoint also requires its creation destination). Either opt-in adds `list_connections`, which returns `{connectionId, provider, canCreateDocuments}` entries. That boolean means the connection is configured for at least one creatable format; it is not a format list, a permission check, or a readiness probe. The higher-level workflow contracts and their limits are documented in [template population and comparison](document-workflows.md) and [Word document assembly](document-assembly.md).
 
 Every tool named above addresses a document by `(connectionId, documentId)` and is offered
 only when a connection exists to name. `AllowInlineContent` adds a separate set that
@@ -215,7 +215,8 @@ carries the document instead of an id - see [Documents with no storage](#documen
 
 The schemas are strict. Every field shown in a tool signature is required on the
 wire, including fields that have semantic defaults. Send `fidelity: "content"`,
-`paragraphOffset: 0`, `paragraphLimit: 200`, boolean search flags as `false`,
+`paragraphOffset: 0`, `paragraphLimit: 200`, `sheetId: 0`, `range: ""`,
+`maximumCells: 1000`, boolean search flags as `false`, `spreadsheetValueView: "both"`,
 `saveMode: "Replace"`, and `newName: ""` where those defaults are wanted. An
 empty `planJson` is valid only for `create_document`; preview, apply, and edit
 require an operations array or plan object.
@@ -232,12 +233,12 @@ revision identity, SHA-256 hashes for the effective plan and exact document byte
 saved document reference when applicable. Its `actor` is null unless the host registers an
 `IAuditActorProvider`; it can never be supplied through plan JSON.
 
-Inspection returns `snapshot` as a scalar etag. To detect drift in Word text-host
-XML or PowerPoint slide/notes XML, copy it into the submitted plan as
+Inspection returns `snapshot` as a scalar etag. To detect covered drift, copy it into the submitted plan as
 `"snapshot": { "eTag": "<inspect snapshot>" }`; the server does not add it
-automatically. The etag does not cover properties, comments, sections,
-media/image bytes, masters, or layouts; their own anchors and version checks
-still apply.
+automatically. Word covers body/header/footer/footnote/endnote XML; PowerPoint covers
+slide and notes XML; Excel covers workbook/shared-string/worksheet/table/note XML. The
+etag does not cover all package parts, including media bytes, so provider version checks
+and operation-specific validation still apply.
 
 The security model carries over: edit tools use opaque ids and never expose
 credentials. If registration or source-addressed composite tools are enabled,

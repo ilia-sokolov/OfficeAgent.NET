@@ -430,12 +430,14 @@ public static class OfficeAgentMcpServer
     public static IList<McpServerTool> BuildToolset(
         OfficeAgentMcpOptions options,
         IConnectionAccessPolicy? connectionAccess = null,
-        ITrustedPrincipalAccessor? principalAccessor = null)
+        ITrustedPrincipalAccessor? principalAccessor = null,
+        IAuditActorProvider? auditActorProvider = null)
     {
         var services = new ServiceCollection();
         services.AddSingleton(new HttpClient());
         if (connectionAccess is not null) services.AddSingleton(connectionAccess);
         if (principalAccessor is not null) services.AddSingleton(principalAccessor);
+        if (auditActorProvider is not null) services.AddSingleton(auditActorProvider);
         services.AddOfficeAgentMcp(options);
         var provider = services.BuildServiceProvider();
         return CreateTools(provider.GetRequiredService<OfficeAgentTools>(), options);

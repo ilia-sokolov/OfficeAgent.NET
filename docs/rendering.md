@@ -26,16 +26,19 @@ images. Configure `LibreOfficeExecutable` and `PdfToPpmExecutable` when those co
 `PATH`.
 
 The implementation copies a bounded input into a unique temporary directory, redirects and
-discards process output, samples each renderer process's working set, and watches elapsed time,
-page count, and output bytes. A limit violation kills the launched process tree and returns a
-stable failure code with no partial pages. Cancellation also kills the process tree. Temporary
-input and output are deleted after every result.
+drains process output through fixed-size buffers without retaining it, samples each renderer
+process's working set, and watches elapsed time, page count, and output bytes. The single timeout
+covers conversion, rasterization, and redirected-output draining. A limit violation stops the
+tracked renderer process tree and returns a stable failure code with no partial pages.
+Cancellation also stops the tracked process tree. Temporary input and output are deleted after
+the result when the operating system releases them.
 
 The working-set check is a process-level guard. For documents from untrusted callers, run the
 host in an OS container or job boundary that applies hard aggregate CPU, memory, filesystem, and
-process limits to LibreOffice and its descendants. Keep renderer workers away from service
-credentials and network access. Do not log renderer stdout, stderr, input bytes, or rendered
-pages; they may contain document content or sensitive paths.
+process limits to LibreOffice and all descendants. The in-process monitor cannot guarantee that
+an already-detached descendant is terminated or included in the working-set sample. Keep renderer
+workers away from service credentials and network access. Do not log renderer stdout, stderr,
+input bytes, or rendered pages; they may contain document content or sensitive paths.
 
 The renderer reports `renderer-unavailable`, `renderer-failed`, `renderer-output-missing`,
 `input-limit-exceeded`, `render-timeout`, `memory-limit-exceeded`, `page-limit-exceeded`,

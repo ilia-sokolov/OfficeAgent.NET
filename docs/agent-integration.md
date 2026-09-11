@@ -68,8 +68,8 @@ than omitting a property.
 
 | Tool | Purpose |
 | --- | --- |
-| `inspect_document(connectionId, documentId, fidelity, paragraphOffset, paragraphLimit)` | Returns format-specific structure and a snapshot etag. Send `"content"`, `0`, and `200` for the defaults. Pages large documents. |
-| `find_in_document(connectionId, documentId, pattern, regex, wholeWord, caseSensitive)` | Returns content-verified anchors usable as plan targets. Send `false` for each default search flag. |
+| `inspect_document(connectionId, documentId, fidelity, paragraphOffset, paragraphLimit, sheetId, range, maximumCells)` | Returns format-specific structure and a snapshot etag. Send `"content"`, `0`, `200`, `0`, `""`, and `1000` for the defaults. Paragraph paging applies to Word/PowerPoint; `sheetId`, `range`, and `maximumCells` bound Excel inspection. |
+| `find_in_document(connectionId, documentId, pattern, regex, wholeWord, caseSensitive, spreadsheetValueView)` | Returns content-verified anchors usable as plan targets. Send `false` for each search flag and `"both"` for the spreadsheet value default. |
 | `preview_plan(connectionId, documentId, planJson)` | Validates a `DocumentPlan` JSON without writing. Returns the canonical plan-report envelope below, with `committed: false` and null output fields. |
 | `apply_plan(connectionId, documentId, planJson, saveMode, newName)` | Applies the plan atomically and saves through the provider. Send `"Replace"` and `""` for the defaults; other modes are `NewVersion` and `NewDocument`. `NewDocument` optionally accepts `newName`; when it is empty, the provider derives a versioned sibling name. An unrecognised mode is refused. |
 | `populate_template_batch(connectionId, documentId, requestJson)` | Resolves tagged scalar values and repeating Word rows and saves bounded, independent outputs with one receipt per item. Exposed only with `AllowCreation`; requires read and create access on the connection. |
@@ -92,9 +92,12 @@ format's covered text hosts, copy it into the plan token:
 ```
 
 For Word, the etag covers body/header/footer/footnote/endnote XML; for PowerPoint,
-slide and notes XML. It does not cover properties, comments, sections,
-media/image bytes, masters, or layouts. Omit `snapshot` only when per-anchor
-checks are sufficient. The engine does not insert it automatically.
+slide and notes XML. For Excel, it covers workbook XML, shared strings, worksheets,
+table definitions, and legacy notes. It does not cover every package part: properties and
+media bytes are excluded across formats, and PowerPoint masters/layouts and Excel styles,
+drawings, charts, external links, and pivot parts are also excluded. Omit `snapshot` only
+when per-anchor and provider-version checks are sufficient. The engine does not insert it
+automatically.
 
 ## Let the agent stage its own documents
 
@@ -107,7 +110,7 @@ offers separate least-privilege switches for existing documents and new ones:
 | --- | --- | --- |
 | `register_document(connectionId, source)` | `AllowRegistration` | Registers an existing document with a configured connection and returns its opaque `documentId`. `source` is connection-specific: a path under the filesystem connection's root, or - for a SharePoint connection - the document's SharePoint/OneDrive URL or a `driveId/itemId` pair. Filesystem traversal, disallowed extensions, and oversized files are rejected by the provider. |
 | `remove_document(connectionId, documentId)` | `AllowRegistration` | Removes the registration only - the underlying file is never deleted. |
-| `open_document(connectionId, source, fidelity, paragraphOffset, paragraphLimit)` | `AllowRegistration` | `register_document` + `inspect_document` in one call. Send the same explicit paging defaults as `inspect_document`. |
+| `open_document(connectionId, source, fidelity, paragraphOffset, paragraphLimit, sheetId, range, maximumCells)` | `AllowRegistration` | `register_document` + `inspect_document` in one call. Send the same explicit inspection defaults as `inspect_document`. |
 | `edit_document(connectionId, source, planJson, saveMode, newName)` | `AllowRegistration` | `register_document` + anchor resolution + `apply_plan` in one call. Send `"Replace"` and `""` for the defaults. Targets may name text directly instead of a paragraph id. |
 | `create_document(connectionId, name, planJson)` | `AllowCreation` | Creates a **new** document in the connection, registers it, and optionally applies an initial plan in the same call. Pass `""` for no initial plan. Returns the `apply_plan` shape, so the new id arrives as `outputDocumentId`. `name` is a bare file name with its extension; a name already in use is refused rather than overwritten, and an initial plan that fails validation creates nothing at all. |
 

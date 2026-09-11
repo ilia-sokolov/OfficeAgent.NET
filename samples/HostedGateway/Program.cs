@@ -2,6 +2,7 @@ using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authorization;
 using ModelContextProtocol.Server;
 using OfficeAgent.AgentFramework;
+using OfficeAgent.Core;
 using OfficeAgent.Mcp;
 using OfficeAgent.Samples.HostedGateway;
 
@@ -51,8 +52,11 @@ namespace OfficeAgent.Samples.HostedGateway
                 }
             };
             var accessPolicy = new HostedConnectionAccessPolicy();
+            var principalAccessor = new HttpContextPrincipalAccessor(httpContextAccessor);
+            var auditActorProvider = new HttpContextAuditActorProvider(httpContextAccessor);
             builder.Services.AddSingleton<IConnectionAccessPolicy>(accessPolicy);
-            builder.Services.AddSingleton<ITrustedPrincipalAccessor, HttpContextPrincipalAccessor>();
+            builder.Services.AddSingleton<ITrustedPrincipalAccessor>(principalAccessor);
+            builder.Services.AddSingleton<IAuditActorProvider>(auditActorProvider);
             builder.Services.AddSingleton(options);
 
             builder.Services
@@ -66,7 +70,7 @@ namespace OfficeAgent.Samples.HostedGateway
                 })
                 .WithHttpTransport()
                 .WithTools(OfficeAgentMcpServer.BuildToolset(
-                    options, accessPolicy, new HttpContextPrincipalAccessor(httpContextAccessor)));
+                    options, accessPolicy, principalAccessor, auditActorProvider));
 
             var app = builder.Build();
             app.UseAuthentication();

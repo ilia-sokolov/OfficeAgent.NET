@@ -4,6 +4,8 @@ This sample hosts OfficeAgent's MCP endpoint behind ASP.NET Core authentication 
 `IConnectionAccessPolicy`. Alice can use only `connection-a`; Bob can use only
 `connection-b`. The policy runs before provider lookup, registration, document reads, edits,
 creation, or registration removal. `list_connections` returns only the caller's connection.
+The same trusted ASP.NET Core identity is copied into apply and merge receipt `actor` fields;
+revision authors remain separate display metadata supplied by the plan.
 
 Run it with:
 

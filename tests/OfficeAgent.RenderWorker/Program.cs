@@ -7,6 +7,20 @@ internal static class Program
 {
     public static async Task<int> Main(string[] args)
     {
+        var holdPipe = Value(args, "--hold-pipe-ms=");
+        if (holdPipe > 0)
+        {
+            await Task.Delay(holdPipe).ConfigureAwait(false);
+            return 0;
+        }
+        if (args.Contains("--spawn-child-holding-pipe", StringComparer.Ordinal))
+        {
+            var child = new System.Diagnostics.ProcessStartInfo("dotnet") { UseShellExecute = false, CreateNoWindow = true };
+            child.ArgumentList.Add(typeof(RenderWorkerMarker).Assembly.Location);
+            child.ArgumentList.Add("--hold-pipe-ms=5000");
+            System.Diagnostics.Process.Start(child);
+        }
+
         var delay = Value(args, "--delay-ms=");
         if (delay > 0) await Task.Delay(delay).ConfigureAwait(false);
 

@@ -61,6 +61,109 @@ internal static class XlsxFactory
         return stream.ToArray();
     }
 
+    public static byte[] WorkbookWithSharedFormula()
+    {
+        using var stream = new MemoryStream();
+        using (var document = SpreadsheetDocument.Create(stream, SpreadsheetDocumentType.Workbook))
+        {
+            var workbook = document.AddWorkbookPart();
+            workbook.Workbook = new S.Workbook();
+            var worksheet = workbook.AddNewPart<WorksheetPart>();
+            worksheet.Worksheet = new S.Worksheet(new S.SheetData(
+                new S.Row(new S.Cell(
+                    new S.CellFormula("B1*2") { FormulaType = S.CellFormulaValues.Shared, SharedIndex = 0, Reference = "A1:A2" },
+                    new S.CellValue("2")) { CellReference = "A1" }) { RowIndex = 1 },
+                new S.Row(new S.Cell(
+                    new S.CellFormula { FormulaType = S.CellFormulaValues.Shared, SharedIndex = 0 },
+                    new S.CellValue("4")) { CellReference = "A2" }) { RowIndex = 2 }));
+            workbook.Workbook.AppendChild(new S.Sheets()).Append(new S.Sheet
+            {
+                Id = workbook.GetIdOfPart(worksheet), SheetId = 1U, Name = "Data"
+            });
+            worksheet.Worksheet.Save();
+            workbook.Workbook.Save();
+        }
+        return stream.ToArray();
+    }
+
+    public static byte[] WorkbookWithTwoSheets()
+    {
+        using var stream = new MemoryStream();
+        using (var document = SpreadsheetDocument.Create(stream, SpreadsheetDocumentType.Workbook))
+        {
+            var workbook = document.AddWorkbookPart();
+            workbook.Workbook = new S.Workbook();
+            var sheets = workbook.Workbook.AppendChild(new S.Sheets());
+            for (uint sheetId = 1; sheetId <= 2; sheetId++)
+            {
+                var worksheet = workbook.AddNewPart<WorksheetPart>();
+                worksheet.Worksheet = new S.Worksheet(new S.SheetData(
+                    new S.Row(Inline("A1", "initial")) { RowIndex = 1 }));
+                sheets.Append(new S.Sheet
+                {
+                    Id = workbook.GetIdOfPart(worksheet), SheetId = sheetId, Name = "Sheet" + sheetId
+                });
+                worksheet.Worksheet.Save();
+            }
+            workbook.Workbook.Save();
+        }
+        return stream.ToArray();
+    }
+
+    public static byte[] WorkbookWithArrayFormula()
+    {
+        using var stream = new MemoryStream();
+        using (var document = SpreadsheetDocument.Create(stream, SpreadsheetDocumentType.Workbook))
+        {
+            var workbook = document.AddWorkbookPart();
+            workbook.Workbook = new S.Workbook();
+            var worksheet = workbook.AddNewPart<WorksheetPart>();
+            worksheet.Worksheet = new S.Worksheet(new S.SheetData(
+                new S.Row(new S.Cell(
+                    new S.CellFormula("ROW(A1:A2)")
+                    {
+                        FormulaType = S.CellFormulaValues.Array,
+                        Reference = "A1:A2"
+                    },
+                    new S.CellValue("1")) { CellReference = "A1" }) { RowIndex = 1 },
+                new S.Row(new S.Cell(new S.CellValue("2")) { CellReference = "A2" }) { RowIndex = 2 }));
+            workbook.Workbook.AppendChild(new S.Sheets()).Append(new S.Sheet
+            {
+                Id = workbook.GetIdOfPart(worksheet), SheetId = 1U, Name = "Data"
+            });
+            worksheet.Worksheet.Save();
+            workbook.Workbook.Save();
+        }
+        return stream.ToArray();
+    }
+
+    public static byte[] WorkbookWithSharedString(string value)
+    {
+        using var stream = new MemoryStream();
+        using (var document = SpreadsheetDocument.Create(stream, SpreadsheetDocumentType.Workbook))
+        {
+            var workbook = document.AddWorkbookPart();
+            workbook.Workbook = new S.Workbook();
+            var sharedStrings = workbook.AddNewPart<SharedStringTablePart>();
+            sharedStrings.SharedStringTable =
+                new S.SharedStringTable(new S.SharedStringItem(new S.Text(value)));
+            var worksheet = workbook.AddNewPart<WorksheetPart>();
+            worksheet.Worksheet = new S.Worksheet(new S.SheetData(
+                new S.Row(new S.Cell(new S.CellValue("0"))
+                {
+                    CellReference = "A1", DataType = S.CellValues.SharedString
+                }) { RowIndex = 1 }));
+            workbook.Workbook.AppendChild(new S.Sheets()).Append(new S.Sheet
+            {
+                Id = workbook.GetIdOfPart(worksheet), SheetId = 1U, Name = "Data"
+            });
+            sharedStrings.SharedStringTable.Save();
+            worksheet.Worksheet.Save();
+            workbook.Workbook.Save();
+        }
+        return stream.ToArray();
+    }
+
     private static S.Cell Inline(string reference, string value) => new()
     {
         CellReference = reference,

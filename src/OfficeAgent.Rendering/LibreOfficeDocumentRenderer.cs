@@ -186,8 +186,11 @@ public sealed class LibreOfficeDocumentRenderer : IDocumentRenderer
             return Failure("renderer-unavailable", "A configured renderer executable was not found.");
         }
 
-        var stdout = process.StandardOutput.ReadToEndAsync(cancellationToken);
-        var stderr = process.StandardError.ReadToEndAsync(cancellationToken);
+        using var drainDeadline = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        var remaining = options.Timeout - clock.Elapsed;
+        if (remaining <= TimeSpan.Zero) drainDeadline.Cancel(); else drainDeadline.CancelAfter(remaining);
+        var stdout = DrainAsync(process.StandardOutput, drainDeadline.Token);
+        var stderr = DrainAsync(process.StandardError, drainDeadline.Token);
         try
         {
             while (!process.HasExited)
@@ -195,7 +198,7 @@ public sealed class LibreOfficeDocumentRenderer : IDocumentRenderer
                 cancellationToken.ThrowIfCancellationRequested();
                 if (clock.Elapsed > options.Timeout)
                     return await StopAndDrainAsync(
-                        process, stdout, stderr, "render-timeout",
+                        process, stdout, stderr, drainDeadline, "render-timeout",
                         "Rendering exceeded the configured time limit.").ConfigureAwait(false);
                 process.Refresh();
                 if (process.HasExited) break;
@@ -204,24 +207,30 @@ public sealed class LibreOfficeDocumentRenderer : IDocumentRenderer
                 catch (InvalidOperationException) { break; }
                 if (workingSet > options.MaximumWorkingSetBytes)
                     return await StopAndDrainAsync(
-                        process, stdout, stderr, "memory-limit-exceeded",
+                        process, stdout, stderr, drainDeadline, "memory-limit-exceeded",
                         "A renderer process exceeded the configured memory limit.").ConfigureAwait(false);
                 if (OutputBytes(outputDirectory) > options.MaximumOutputBytes)
                     return await StopAndDrainAsync(
-                        process, stdout, stderr, "output-limit-exceeded",
+                        process, stdout, stderr, drainDeadline, "output-limit-exceeded",
                         "Rendering exceeded the configured output-size limit.").ConfigureAwait(false);
                 if (countPages && PageFiles(outputDirectory).Take(options.MaximumPages + 1).Count() > options.MaximumPages)
                     return await StopAndDrainAsync(
-                        process, stdout, stderr, "page-limit-exceeded",
+                        process, stdout, stderr, drainDeadline, "page-limit-exceeded",
                         "Rendering exceeded the configured page-count limit.").ConfigureAwait(false);
                 await Task.Delay(50, cancellationToken).ConfigureAwait(false);
             }
             await process.WaitForExitAsync(cancellationToken).ConfigureAwait(false);
-            await Task.WhenAll(stdout, stderr).ConfigureAwait(false); // Drain, then discard: output may contain sensitive paths.
+            try { await Task.WhenAll(stdout, stderr).ConfigureAwait(false); }
+            catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
+            {
+                return Failure("render-timeout", "Rendering exceeded the configured time limit.");
+            }
         }
         catch (OperationCanceledException)
         {
             Kill(process);
+            drainDeadline.Cancel();
+            await ObserveDrainAsync(stdout, stderr).ConfigureAwait(false);
             throw;
         }
 
@@ -238,17 +247,35 @@ public sealed class LibreOfficeDocumentRenderer : IDocumentRenderer
 
     private static async Task<RenderResult> StopAndDrainAsync(
         Process process,
-        Task<string> stdout,
-        Task<string> stderr,
+        Task stdout,
+        Task stderr,
+        CancellationTokenSource drainDeadline,
         string code,
         string message)
     {
         Kill(process);
+        drainDeadline.Cancel();
         try { await process.WaitForExitAsync().ConfigureAwait(false); }
         catch (InvalidOperationException) { }
+        await ObserveDrainAsync(stdout, stderr).ConfigureAwait(false);
+        return Failure(code, message);
+    }
+
+    private static async Task DrainAsync(StreamReader reader, CancellationToken cancellationToken)
+    {
+        var buffer = new char[4096];
+        while (await reader.ReadAsync(buffer.AsMemory(), cancellationToken).ConfigureAwait(false) > 0)
+        {
+            // Drain without retaining process output; it can contain sensitive paths.
+        }
+    }
+
+    private static async Task ObserveDrainAsync(Task stdout, Task stderr)
+    {
         try { await Task.WhenAll(stdout, stderr).ConfigureAwait(false); }
         catch (OperationCanceledException) { }
-        return Failure(code, message);
+        catch (IOException) { }
+        catch (ObjectDisposedException) { }
     }
 
     private static void Kill(Process process)
