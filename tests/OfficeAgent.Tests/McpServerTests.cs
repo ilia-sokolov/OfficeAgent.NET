@@ -23,13 +23,15 @@ public class McpServerTests
         var tools = OfficeAgentMcpServer.BuildToolset(options);
 
         var names = tools.Select(t => t.ProtocolTool.Name).ToArray();
-        Assert.Equal(9, names.Length);
+        Assert.Equal(11, names.Length);
         Assert.Contains("open_document", names);
         Assert.Contains("edit_document", names);
         Assert.Contains("inspect_document", names);
         Assert.Contains("find_in_document", names);
         Assert.Contains("preview_plan", names);
         Assert.Contains("apply_plan", names);
+        Assert.DoesNotContain("populate_template_batch", names);
+        Assert.Contains("compare_documents", names);
         Assert.Contains("register_document", names);
         Assert.Contains("remove_document", names);
         Assert.Contains("list_connections", names);
@@ -49,8 +51,9 @@ public class McpServerTests
 
         options.AllowCreation = true;
         var names = OfficeAgentMcpServer.BuildToolset(options).Select(t => t.ProtocolTool.Name).ToArray();
-        Assert.Equal(10, names.Length);
+        Assert.Equal(14, names.Length);
         Assert.Contains("create_document", names);
+        Assert.Contains("populate_template_batch", names);
     }
 
     [Fact]
@@ -62,7 +65,9 @@ public class McpServerTests
 
         var names = OfficeAgentMcpServer.BuildToolset(options).Select(t => t.ProtocolTool.Name).ToArray();
 
-        Assert.Equal(4, names.Length);
+        Assert.Equal(6, names.Length);
+        Assert.DoesNotContain("populate_template_batch", names);
+        Assert.Contains("compare_documents", names);
         Assert.DoesNotContain("register_document", names);
         Assert.DoesNotContain("create_document", names);
         Assert.DoesNotContain("remove_document", names);
@@ -74,8 +79,9 @@ public class McpServerTests
 
         options.AllowCreation = true;
         names = OfficeAgentMcpServer.BuildToolset(options).Select(t => t.ProtocolTool.Name).ToArray();
-        Assert.Equal(6, names.Length);
+        Assert.Equal(10, names.Length);
         Assert.Contains("create_document", names);
+        Assert.Contains("populate_template_batch", names);
         Assert.Contains("list_connections", names);
         Assert.DoesNotContain("register_document", names);
         Assert.DoesNotContain("remove_document", names);

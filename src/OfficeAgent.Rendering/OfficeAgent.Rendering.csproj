@@ -1,0 +1,12 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <Description>Optional out-of-process visual rendering for OfficeAgent.NET with bounded LibreOffice and PDF-to-image workers.</Description>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\OfficeAgent.Abstractions\OfficeAgent.Abstractions.csproj" />
+  </ItemGroup>
+
+</Project>

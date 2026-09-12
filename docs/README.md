@@ -17,9 +17,14 @@ this page to choose the shortest path for your scenario.
 | Create a Word document from scratch | [Create a document](getting-started.md#create-a-document-instead) | [Document plans](document-plans.md) |
 | Create or update a PowerPoint deck | [PowerPoint support](powerpoint.md#creating-a-deck) | [Generating a deck](powerpoint.md#generating-a-deck) |
 | Inspect or update an Excel workbook | [Excel support](excel.md) | [Document plans](document-plans.md) |
+| Generate many documents from a template | [Template population](document-workflows.md#populate-a-template-batch) | [TemplateBatch sample](../samples/TemplateBatch/) |
+| Compare two Word documents and create a redline | [Document comparison](document-workflows.md#compare-two-word-documents) | [DocumentComparison sample](../samples/DocumentComparison/) |
+| Assemble a proposal and appendices | [Word document assembly](document-assembly.md) | [DocumentAssembly sample](../samples/DocumentAssembly/) |
 | Add document tools to an agent | [Agent integration](agent-integration.md) | [Document providers](document-providers.md) |
 | Connect an MCP client locally | [MCP server](mcp-server.md#local-hosting-stdio) | [Deployment](deployment.md#option-a---local-stdio-for-claude-code-and-codex) |
 | Host OfficeAgent for a team | [Deployment](deployment.md#option-b---hosted-http-for-all-four-clients) | [Operations](operations.md), [troubleshooting](troubleshooting.md) |
+| Enforce per-user connection access | [Hosted gateway reference](../samples/HostedGateway/) | [Deployment](deployment.md#authentication--identity) |
+| Render pages for visual verification | [Visual rendering](rendering.md) | [Operations](operations.md) |
 | Read or write SharePoint files | [SharePoint provider](document-providers.md#the-sharepoint-provider) | [Authentication and identity](deployment.md#authentication--identity) |
 | Look up an operation's JSON | [Document plans](document-plans.md) | [Validation errors](document-plans.md#validation-errors) |
 | Run a tracked Word review | [Sample review workflows](../samples/documents/README.md#reproducible-review-workflows) | [Optional review skill](skill-installation.md) |
@@ -35,6 +40,7 @@ this page to choose the shortest path for your scenario.
 | `OfficeAgent.AgentFramework` | `Microsoft.Extensions.AI` / Microsoft Agent Framework tools | `netstandard2.0`, `net8.0` |
 | `OfficeAgent.SharePoint` | Microsoft Graph document provider | `netstandard2.0`, `net8.0` |
 | `OfficeAgent.Mcp` | Standalone MCP server and .NET global tool | `net8.0` |
+| `OfficeAgent.Rendering` | Optional bounded LibreOffice and Poppler page-image rendering | `net8.0` |
 
 Applications add `OfficeAgent.Core` plus at least one format module. Add a
 provider or agent adapter only when that hosting model needs it. The standalone
@@ -73,6 +79,8 @@ and optimistic-concurrency conflicts instead of guessing.
 - [Agent integration](agent-integration.md) — expose bounded tools and deliver output.
 - [Document providers](document-providers.md) — filesystem and SharePoint storage.
 - [Operations](operations.md) — concurrency, memory, telemetry, and production operation.
+- [Visual rendering](rendering.md) — optional out-of-process PDF and page-image conversion.
+- [Template population and comparison](document-workflows.md) — batch binding, repeating Word rows, comparison coverage, and redline generation.
 - [Troubleshooting](troubleshooting.md) — diagnose setup, identity, and edit failures.
 - [Releasing](releasing.md) — the maintainer steps for NuGet, the MCP Registry, GitHub releases, and repository metadata.
 - [Adoption validation](adoption-validation.md) — fresh-user trials across the main Word, PowerPoint, and review paths before broad promotion.
@@ -86,9 +94,11 @@ and optimistic-concurrency conflicts instead of guessing.
 
 ## Scope
 
-OfficeAgent edits OOXML packages; it does not automate desktop Office or render
-pages and slides. Word pagination, field calculation, Excel formula evaluation, and visual page-fit
-validation are outside the current scope. See the
+OfficeAgent edits OOXML packages and does not automate desktop Office. Core structural preview
+does not render pages or slides. The optional rendering package can produce page images through
+external LibreOffice and Poppler processes, but it does not evaluate Excel formulas or make
+Office's own layout engine available. Automated page-fit and overflow analysis remain outside
+the current scope. See the
 [project limitations](../README.md#scope-and-limitations) before production use.
 
 ## Get help

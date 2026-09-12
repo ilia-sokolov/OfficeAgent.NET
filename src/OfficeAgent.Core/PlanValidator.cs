@@ -120,9 +120,11 @@ internal sealed class PlanValidator
         var slot = operation switch
         {
             InsertOp i => $":{i.Position}",
+            InsertParagraphsOp i => $":{i.Position}",
             InsertTableOp i => $":{i.Position}",
             InsertImageOp i => $":{i.Position}",
             InsertTableRowsOp i => $":{i.Position}:{i.RowIndex}",
+            RepeatTableRowOp i => $":{i.TemplateRowIndex}",
             InsertTableColumnsOp i => $":{i.Position}:{i.ColumnIndex}",
             // Slide verbs with Start/End carry no target at all, so they never reach here;
             // Before/After name a reference slide, and two of them at one reference are as
@@ -142,9 +144,17 @@ internal sealed class PlanValidator
     {
         TextSpanAnchor t => $"text:{t.ParaId}:{t.Expect}:{t.Occurrence}",
         NodeAnchor n => $"node:{n.Kind}:{n.Path}:{n.Occurrence}",
+        CellAnchor c => CellKey(c),
         StructuralAnchor s => $"struct:{s.Tag}",
         StyleAnchor st => $"style:{st.StyleId}",
         null => null,
         _ => $"id:{anchor.Id}"
     };
+
+    private static string CellKey(CellAnchor anchor)
+    {
+        if (SpreadsheetPartUtility.TryParseCell(anchor.Address, out var column, out var row))
+            return $"cell:{anchor.SheetId}:{SpreadsheetPartUtility.ColumnName(column)}{row}";
+        return $"cell:{anchor.SheetId}:{anchor.Address.ToUpperInvariant()}";
+    }
 }

@@ -28,16 +28,18 @@ latest published minor version as described in [SECURITY.md](SECURITY.md#support
 
 ## Runtime and platform compatibility
 
-The reusable libraries target `netstandard2.0` and `net8.0`; the standalone MCP tool targets
+The abstractions, core, format, SharePoint, and Agent Framework libraries target
+`netstandard2.0` and `net8.0`. `OfficeAgent.Rendering` and the standalone MCP tool target
 `net8.0`. The build workflow compiles and tests on current GitHub-hosted Ubuntu and Windows
 runners with the .NET 8 SDK. macOS is expected to work through .NET and is included in adoption
 trials, but it is not currently part of the automated CI matrix.
 
-OfficeAgent reads and writes OOXML `.docx` and `.pptx` packages through the documented
-operation set. Compatibility means the produced package opens in supported desktop Office
-applications for the tested workflow; the engine does not provide Word or PowerPoint's layout,
-pagination, field-calculation, or rendering behavior. Validate representative documents in the
-Office application used by your reviewers before production adoption.
+OfficeAgent reads and writes OOXML `.docx`, `.pptx`, and `.xlsx` packages through the
+documented operation set. Compatibility means the produced package opens in supported desktop
+Office applications for the tested workflow; the engine does not provide Word or PowerPoint's
+layout and pagination, calculate fields or Excel formulas, or render Office documents. Validate
+representative documents in the Office application used by your reviewers before production
+adoption.
 
 ## Release assurances
 

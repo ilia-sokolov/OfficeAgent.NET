@@ -12,8 +12,13 @@ namespace OfficeAgent.Word;
 /// Provides Word inspection, search, and supported plan operation handling over
 /// WordprocessingML across the body, headers, footers, footnotes, and endnotes.
 /// </summary>
-public sealed class WordModule : IFormatModule, IBlankDocumentFactory, IPlanValidatingModule, IApplyTimeProvider
+public sealed class WordModule : IFormatModule, IBlankDocumentFactory, IPlanValidatingModule, IApplyTimeProvider, IDocumentAssembler
 {
+    /// <inheritdoc />
+    public DocumentAssemblyCandidate Assemble(IReadOnlyList<byte[]> sources, DocumentMergeOptions options,
+        DocumentMergeLimits limits, CancellationToken cancellationToken) =>
+        WordDocumentAssembler.Assemble(sources, options, limits, cancellationToken);
+
     public DocFormat Format => DocFormat.Word;
 
     private readonly IReadOnlyList<IWordNodeProvider> _providers;
@@ -43,12 +48,15 @@ public sealed class WordModule : IFormatModule, IBlankDocumentFactory, IPlanVali
             new FillHandler(),
             new CommentHandler(clock),
             new InsertHandler(),
+            new InsertParagraphsHandler(),
+            new RemoveParagraphHandler(),
             new FormatHandler(),
             new SetPropertyHandler(),
             new RevisionHandler(),
             new InsertTableHandler(),
             new RemoveTableHandler(),
             new InsertTableRowsHandler(),
+            new RepeatTableRowHandler(),
             new RemoveTableRowsHandler(),
             new InsertTableColumnsHandler(),
             new RemoveTableColumnsHandler(),

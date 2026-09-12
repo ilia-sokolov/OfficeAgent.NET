@@ -21,14 +21,16 @@ public class RegistrationToolsTests
         var tools = new OfficeAgentTools(workspace.Client);
 
         var defaults = tools.AsAIFunctions().Select(f => f.Name).ToArray();
-        Assert.Equal(4, defaults.Length);
+        Assert.Equal(6, defaults.Length);
+        Assert.DoesNotContain("populate_template_batch", defaults);
+        Assert.Contains("compare_documents", defaults);
         Assert.DoesNotContain("register_document", defaults);
         Assert.DoesNotContain("create_document", defaults);
         Assert.DoesNotContain("remove_document", defaults);
 
         var opted = tools.AsAIFunctions(new OfficeAgentToolsOptions { AllowRegistration = true })
             .Select(f => f.Name).ToArray();
-        Assert.Equal(8, opted.Length);
+        Assert.Equal(10, opted.Length);
         Assert.Contains("open_document", opted);
         Assert.Contains("edit_document", opted);
         Assert.Contains("register_document", opted);

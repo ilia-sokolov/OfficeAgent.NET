@@ -46,6 +46,8 @@ it for a workflow that depends on Office's layout or calculation engine.
 | Word review | Read and manage comments, preserve or resolve review state, set one revision identity per plan, and record supported edits as tracked revisions |
 | PowerPoint creation and editing | Build or update decks with slides, layouts, text, tables, native editable charts, images, media, notes, comments, sections, transitions, and animations |
 | Excel inspection and editing | Inspect worksheets, tables, and bounded ranges; find raw or displayed values; set cells and formulas; append table rows; manage cell notes |
+| Template generation | Bind unique Word content-control tags or PowerPoint shape names, expand repeating Word table rows, and create bounded batches with one receipt per output |
+| Word comparison | Compare supported free-body paragraph text read-only and produce a snapshot-bound native redline plan only when all other package content is unchanged |
 | Agent and application integration | Use MCP over stdio or HTTP, Microsoft Agent Framework tools, or the direct .NET API, with SHA-256 apply receipts and host-supplied audit actors |
 | Document access | Work with bounded filesystem roots, SharePoint, in-memory sessions, or self-contained inline content |
 
@@ -61,9 +63,12 @@ it for a workflow that depends on Office's layout or calculation engine.
 | Use OfficeAgent from C# | [Getting started](docs/getting-started.md) |
 | Add tools to a Microsoft Agent Framework agent | [Agent integration](docs/agent-integration.md) |
 | Host the MCP server or use SharePoint | [MCP server](docs/mcp-server.md) and [document providers](docs/document-providers.md) |
+| Add per-user hosted connection authorization | [Hosted gateway reference](samples/HostedGateway/) |
+| Add optional PDF/page-image rendering | [Visual rendering](docs/rendering.md) |
 | Edit documents with no storage configured | [Documents with no storage](docs/mcp-server.md#documents-with-no-storage) |
 | Run a tracked-review workflow | [Optional word-document-review skill](skills/word-document-review/SKILL.md) |
 | Build a contract-review agent | [ContractReview sample](samples/ContractReview/) |
+| Populate quote templates or compare Word documents | [Template and comparison workflows](docs/document-workflows.md) |
 | Check support, compatibility, or security policy | [Support](SUPPORT.md) and [security](SECURITY.md) |
 | Contribute | [Contributing](#contributing) |
 
@@ -210,7 +215,8 @@ Inline tools carry the whole file as base64 on every call. Session import/export
 the package as base64 if the agent performs those calls; a host integration can instead move
 the bytes outside model context. Connect storage and model providers appropriate for the data.
 
-The server ships no authentication layer for HTTP hosting; put it behind your own. A
+The standalone server ships no authentication layer for HTTP hosting; put it behind your own,
+or start from the authenticated [HostedGateway reference](samples/HostedGateway/). A
 filesystem root is a trust boundary: its ACLs must stop untrusted principals creating,
 renaming or replacing entries while the server runs.
 
@@ -273,7 +279,12 @@ The repository also contains a
 interactive
 [Agent Framework sample](samples/AgentEdit/), plus a complete
 [contract-review agent](samples/ContractReview/) that separates model judgement from
-validated document writes.
+validated document writes. The [TemplateBatch](samples/TemplateBatch/) sample generates two
+quotes from one tagged template, while [DocumentComparison](samples/DocumentComparison/)
+turns covered body-paragraph differences into a reviewable Word redline.
+The [DocumentAssembly](samples/DocumentAssembly/) sample combines a proposal, statement of
+work, and appendix into one editable package with a multi-source audit receipt. See
+[Word document assembly](docs/document-assembly.md) for its formatting and compatibility scope.
 
 ## How it works
 
@@ -329,6 +340,7 @@ the provider to create and register it without overwriting an existing name.
 | [Document plans](docs/document-plans.md) | JSON shapes and validation rules for every operation |
 | [Document providers](docs/document-providers.md) | Filesystem, SharePoint, save modes, and custom providers |
 | [PowerPoint support](docs/powerpoint.md) | Slide addressing, the verbs the deck module implements, and what it preserves |
+| [Template population and comparison](docs/document-workflows.md) | Batch binding, repeating Word rows, comparison limits, and redline generation |
 | [Agent integration](docs/agent-integration.md) | Microsoft Agent Framework and `Microsoft.Extensions.AI` tools |
 | [MCP server](docs/mcp-server.md) | Server configuration, transports, security notes, and tool contracts |
 | [Deployment and client setup](docs/deployment.md) | Codex, Claude Code, Microsoft Copilot clients, containers, and Azure |
@@ -374,12 +386,13 @@ paths are refused rather than approximated. See
 [PowerPoint support](docs/powerpoint.md) for what a deck does and does not
 accept.
 
-The engine does not render pages, calculate Word fields, or evaluate Excel formulas. Formula
-edits set the workbook to recalculate when Excel opens it. Operations that
-depend on pagination, table-of-contents rendering, field recalculation, or
-page-fit checks are outside its scope. Preview reports structural changes, not
-a visual rendering of the final document. Test the workflow on representative
-documents and keep human review in the loop for consequential edits.
+The core engine does not render pages, calculate Word fields, or evaluate Excel formulas.
+Formula edits set the workbook to recalculate when Excel opens it. Operations that depend on
+pagination, table-of-contents rendering, or field recalculation are outside the core scope.
+Preview reports structural changes. The optional [rendering package](docs/rendering.md) can
+produce PDF-derived page images through external processes, but it does not yet detect overflow
+or page-fit problems. Test the workflow on representative documents and keep human review in the
+loop for consequential edits.
 
 Two more limits worth knowing before you build on it:
 
@@ -399,8 +412,8 @@ Two more limits worth knowing before you build on it:
 
 ## Commercial support
 
-OfficeAgent.NET is MIT-licensed and can be self-hosted. Managed hosting and
-commercial support are available from dotaction:
+OfficeAgent.NET is MIT-licensed and can be self-hosted. Commercial support and
+deployment assistance are available from dotaction:
 [contact dotaction](mailto:contact@dotaction.io?subject=OfficeAgent.NET%20commercial%20support).
 
 ## License

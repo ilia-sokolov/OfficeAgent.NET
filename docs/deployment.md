@@ -128,12 +128,18 @@ test document) when readiness matters.
 
 ### B2. Put authentication in front
 
-**The open-source server ships no authentication or per-caller authorization
-layer - do not expose it bare.** Front it with an API gateway (Azure API
-Management, a reverse proxy, Front Door) that terminates TLS, authenticates the
-caller, and authorizes that caller for the requested OfficeAgent connection.
-Authentication alone is insufficient: without a connection ACL, every accepted
-caller can address every configured connection and registered id.
+**The standalone `officeagent-mcp` executable ships no authentication layer - do not expose it
+bare.** Front it with an API gateway (Azure API Management, a reverse proxy, Front Door) that
+terminates TLS and authenticates the caller. Authentication alone is insufficient: the host must
+also register an `IConnectionAccessPolicy` that authorizes the trusted principal for each
+connection and `read`, `register`, `create`, `edit`, or `delete` capability. The policy runs
+before provider lookup, and `list_connections` omits connections the caller cannot use.
+
+The repository's [HostedGateway reference](../samples/HostedGateway/) shows that composition with
+ASP.NET Core authentication, two callers, and disjoint filesystem connections. Its bearer handler
+is intentionally a local demonstration; replace it with validated JWT authentication. A hosted
+product still needs tenant provisioning, quotas, encryption, secret rotation, retention controls,
+regional deployment, billing, abuse controls, and operational support.
 
 Use an API key only with `appOnly`. Use OAuth 2.0 for `onBehalfOf`, because the
 server needs an API-audience user access token to exchange for Graph access.
@@ -211,7 +217,7 @@ assignment before starting the server.
 
 ### Pre-flight checklist for a hosted deployment
 
-- [ ] TLS terminated and an auth gateway in front of the server (never exposed bare); its policy maps callers to permitted connection ids.
+- [ ] TLS terminated and authenticated requests reach a host with `IConnectionAccessPolicy`; its policy maps trusted principals to permitted connection capabilities.
 - [ ] `AuthMode` chosen deliberately; for `onBehalfOf`, the gateway forwards the caller's bearer token unchanged.
 - [ ] Hosted clients that use `onBehalfOf` are configured for interactive OAuth, not a shared API key or service token.
 - [ ] For `appOnly`, the app registration uses `Sites.Selected`, admin consent is complete, and the app has an explicit `write` assignment on every intended site.

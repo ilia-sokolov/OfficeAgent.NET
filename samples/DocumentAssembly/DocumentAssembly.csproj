@@ -1,0 +1,13 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net8.0</TargetFramework>
+    <IsPackable>false</IsPackable>
+    <GenerateDocumentationFile>false</GenerateDocumentationFile>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="../../src/OfficeAgent.Core/OfficeAgent.Core.csproj" />
+    <ProjectReference Include="../../src/OfficeAgent.Word/OfficeAgent.Word.csproj" />
+    <ProjectReference Include="../../src/OfficeAgent.Rendering/OfficeAgent.Rendering.csproj" />
+  </ItemGroup>
+</Project>

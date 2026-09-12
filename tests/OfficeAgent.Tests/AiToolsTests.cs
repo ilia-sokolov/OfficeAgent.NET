@@ -18,13 +18,15 @@ public class AiToolsTests
 
         // The agent never registers, deletes, or otherwise manages storage. The host
         // pre-registers documents and threads the id into the system prompt; the agent
-        // only inspects, searches, previews, and applies.
+        // only reads, compares, validates, and applies. Creation remains an opt-in.
         var names = functions.Select(f => f.Name).ToArray();
-        Assert.Equal(4, functions.Length);
+        Assert.Equal(6, functions.Length);
         Assert.Contains("inspect_document", names);
         Assert.Contains("find_in_document", names);
         Assert.Contains("preview_plan", names);
         Assert.Contains("apply_plan", names);
+        Assert.Contains("compare_documents", names);
+        Assert.DoesNotContain("populate_template_batch", names);
         Assert.DoesNotContain("add_document", names);
         Assert.DoesNotContain("remove_document", names);
     }

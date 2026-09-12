@@ -65,8 +65,9 @@ Table-row, table-cell, and image paths come from `inspect_document.nodes`:
 
 Every verb that changes Word content carries an optional `mode`: `Tracked` writes the edit
 as revision markup a reviewer accepts or rejects, `Direct` writes it into the content. It
-applies to `changeText`, `insert`, `fill`, `format`, `insertTable`, `removeTable`, the table
-row and column verbs, `insertImage`, `removeImage`, `insertBreak`, and `note`.
+applies to `changeText`, `insert`, `insertParagraphs`, `removeParagraph`, `fill`, `format`,
+`insertTable`, `removeTable`, the table row and column verbs (including `repeatTableRow`),
+`insertImage`, `removeImage`, `insertBreak`, and `note`.
 
 The default depends on how the plan enters the engine:
 
@@ -304,6 +305,32 @@ Insert a new paragraph near an anchor paragraph. Use `insertTable` to add a *new
 
 On a deck this adds a bullet or line beside an existing one, inheriting the neighbour's bullet and run styling. `level` (0-8) sets the bullet depth there and is refused in Word, where numbering comes from the paragraph style; `styleId` is the reverse. Because a slide paragraph id is positional, a plan that inserts and then addresses the same text body at an equal or higher index is refused — see [anchor stability](powerpoint.md#anchor-stability).
 
+### `insertParagraphs` / `removeParagraph`
+
+Word comparison uses these verbs to express a contiguous paragraph insertion or a complete
+paragraph removal as native tracked revisions. They are also available to direct plan callers.
+The target must be a free-flowing Word paragraph; `removeParagraph` requires its complete
+current text in `expect`.
+
+```json
+{ "op": "insertParagraphs",
+  "target": { "paraId": "w14:…", "expect": "Existing paragraph" },
+  "position": "After",
+  "paragraphs": [
+    { "text": "First inserted paragraph", "styleId": "BodyText" },
+    { "text": "Second inserted paragraph" }
+  ],
+  "mode": "Tracked" }
+
+{ "op": "removeParagraph",
+  "target": { "paraId": "w14:…", "expect": "Complete paragraph text" },
+  "mode": "Tracked" }
+```
+
+When `styleId` is omitted, an inserted paragraph copies the neighboring paragraph's
+properties. A direct removal cannot remove the last body paragraph. Use `removeTableRows`
+inside a table.
+
 ### `insertTable` / `removeTable`
 
 Insert a whole new table near an anchor paragraph, or remove an entire table addressed by its `table#N` path.
@@ -344,6 +371,30 @@ Remove rows by explicit `rowIndices` (negative counts from the end), or set `onl
   "target":      { "kind": "table", "path": "table#0" },
   "onlyIfEmpty": true }
 ```
+
+### `repeatTableRow`
+
+Clone one explicitly selected Word table row for each supplied record and replace
+`{{Field}}` placeholders, including placeholders split across runs. The selected template
+row is then removed. `templateRowIndex` is zero-based; copy the table path from inspection.
+
+```json
+{ "op": "repeatTableRow",
+  "target": { "kind": "table", "path": "table#0" },
+  "templateRowIndex": 1,
+  "records": [
+    { "Description": "Consulting", "Amount": "1200.00" },
+    { "Description": "Support", "Amount": "300.00" }
+  ],
+  "missingValueBehavior": "Fail",
+  "rejectUnknownValues": true,
+  "mode": "Direct" }
+```
+
+`missingValueBehavior` is `Fail`, `Ignore`, or `Empty`. Unknown record keys are rejected by
+default. An empty `records` array removes the template row. The higher-level
+[`PopulateTemplateBatchAsync`](document-workflows.md#populate-a-template-batch) workflow
+builds this operation and scalar `fill` operations from a binding.
 
 ### `insertTableColumns` / `removeTableColumns`
 

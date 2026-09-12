@@ -1,0 +1,16 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <IsPackable>false</IsPackable>
+    <WarnOnPackingNonPackableProject>false</WarnOnPackingNonPackableProject>
+    <GenerateDocumentationFile>false</GenerateDocumentationFile>
+    <RootNamespace>OfficeAgent.Samples.HostedGateway</RootNamespace>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\OfficeAgent.Mcp\OfficeAgent.Mcp.csproj" />
+    <ProjectReference Include="..\..\src\OfficeAgent.AgentFramework\OfficeAgent.AgentFramework.csproj" />
+  </ItemGroup>
+
+</Project>

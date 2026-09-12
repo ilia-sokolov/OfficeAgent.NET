@@ -53,7 +53,7 @@ internal sealed class SetCellHandler : IOperationHandler
     {
         var op = (SetCellOp)operation;
         var anchor = (CellAnchor)op.Target;
-        if (!SpreadsheetPartUtility.TryParseCell(anchor.Address, out _, out _))
+        if (!SpreadsheetPartUtility.TryParseCell(anchor.Address, out var column, out var row))
             return Fail("setCell needs one valid A1 cell address.", anchor);
         if (op.Value is { } typedValue)
         {
@@ -63,6 +63,19 @@ internal sealed class SetCellHandler : IOperationHandler
         var target = ExcelTargets.Cell(context, anchor, create: false);
         if (target is null)
             return Fail($"Worksheet id {anchor.SheetId} does not exist.", anchor, ValidationErrorCodes.AnchorNotFound);
+        if (target.Value.Cell?.CellFormula is { } formula &&
+            formula.FormulaType?.Value == S.CellFormulaValues.Shared &&
+            target.Value.Part.Worksheet.Descendants<S.CellFormula>().Count(candidate =>
+                candidate.FormulaType?.Value == S.CellFormulaValues.Shared &&
+                candidate.SharedIndex?.Value == formula.SharedIndex?.Value) > 1)
+            return Fail("setCell cannot replace one member of a shared-formula group; expand the group to independent formulas first.", anchor);
+        if (target.Value.Part.Worksheet.Descendants<S.CellFormula>().Any(candidate =>
+                candidate.FormulaType?.Value == S.CellFormulaValues.Array &&
+                SpreadsheetPartUtility.TryParseRange(candidate.Reference?.Value ?? string.Empty,
+                    out var left, out var top, out var right, out var bottom) &&
+                (left != right || top != bottom) &&
+                column >= left && column <= right && row >= top && row <= bottom))
+            return Fail("setCell cannot replace one member of a multi-cell array formula; expand the array to independent formulas first.", anchor);
         var before = target.Value.Cell is null ? string.Empty : SpreadsheetPartUtility.DisplayValue(target.Value.Document, target.Value.Cell);
         return OperationPreview.Ok(new ProposedChange
         {
@@ -90,10 +103,10 @@ internal sealed class SetCellHandler : IOperationHandler
         {
             cell.CellFormula = new S.CellFormula(formula.StartsWith("=", StringComparison.Ordinal) ? formula.Substring(1) : formula);
             if (op.Value is { } cached) cell.CellValue = new S.CellValue(cached);
-            SpreadsheetPartUtility.RecalculateOnOpen(target.Document);
         }
         else if (op.Value is { } value)
             SpreadsheetPartUtility.WriteValue(cell, value, op.ValueKind);
+        SpreadsheetPartUtility.RecalculateOnOpen(target.Document);
         target.Part.Worksheet.Save();
         target.Document.WorkbookPart!.Workbook.Save();
     }
@@ -283,7 +296,12 @@ internal sealed class CellCommentHandler : IOperationHandler
         foreach (var shape in matching) shape.Remove();
         if (add)
         {
-            var id = "_x0000_s" + (1025 + xml.Descendants(v + "shape").Count()).ToString(CultureInfo.InvariantCulture);
+            var usedIds = new HashSet<string>(xml.Descendants(v + "shape")
+                .Select(shape => (string?)shape.Attribute("id") ?? string.Empty)
+                .Where(id => id.Length > 0), StringComparer.Ordinal);
+            var nextId = 1025;
+            while (usedIds.Contains("_x0000_s" + nextId.ToString(CultureInfo.InvariantCulture))) nextId++;
+            var id = "_x0000_s" + nextId.ToString(CultureInfo.InvariantCulture);
             xml.Root!.Add(new XElement(v + "shape",
                 new XAttribute("id", id), new XAttribute("type", "#_x0000_t202"),
                 new XAttribute("style", "position:absolute;margin-left:80pt;margin-top:5pt;width:108pt;height:59.25pt;z-index:1;visibility:hidden"),

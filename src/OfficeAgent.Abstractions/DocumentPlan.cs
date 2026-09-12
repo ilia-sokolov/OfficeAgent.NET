@@ -188,6 +188,36 @@ public sealed class InsertOp : PlanOperation, ITrackedOperation
     public int? Level { get; init; }
 }
 
+/// <summary>Describes one paragraph inserted by a multi-paragraph operation.</summary>
+public sealed class ParagraphData
+{
+    /// <summary>Gets the paragraph text.</summary>
+    public string Text { get; init; } = string.Empty;
+
+    /// <summary>Gets the optional Word paragraph style id.</summary>
+    public string? StyleId { get; init; }
+}
+
+/// <summary>Inserts one or more paragraphs beside an existing paragraph.</summary>
+public sealed class InsertParagraphsOp : PlanOperation, ITrackedOperation
+{
+    /// <inheritdoc />
+    public ChangeMode? Mode { get; init; }
+
+    /// <summary>Gets where the paragraphs are inserted relative to the target.</summary>
+    public InsertPosition Position { get; init; } = InsertPosition.After;
+
+    /// <summary>Gets the paragraphs in output order.</summary>
+    public IReadOnlyList<ParagraphData> Paragraphs { get; init; } = Array.Empty<ParagraphData>();
+}
+
+/// <summary>Removes a complete paragraph, directly or as a tracked deletion.</summary>
+public sealed class RemoveParagraphOp : PlanOperation, ITrackedOperation
+{
+    /// <inheritdoc />
+    public ChangeMode? Mode { get; init; }
+}
+
 /// <summary>
 /// Contains tabular data for an inserted Word table.
 /// </summary>
@@ -684,6 +714,30 @@ public sealed class InsertTableRowsOp : PlanOperation, ITrackedOperation
     /// or <see cref="TablePosition.After"/>. Negative values count from the end (-1 = last row).
     /// </summary>
     public int RowIndex { get; init; }
+}
+
+/// <summary>
+/// Replaces one Word table template row with zero or more rows populated from named
+/// <c>{{Field}}</c> placeholders.
+/// </summary>
+public sealed class RepeatTableRowOp : PlanOperation, ITrackedOperation
+{
+    /// <inheritdoc />
+    public ChangeMode? Mode { get; init; }
+
+    /// <summary>Gets the zero-based row used as the formatting template.</summary>
+    public int TemplateRowIndex { get; init; }
+
+    /// <summary>Gets the records used to populate cloned rows.</summary>
+    public IReadOnlyList<IReadOnlyDictionary<string, string?>> Records { get; init; }
+        = Array.Empty<IReadOnlyDictionary<string, string?>>();
+
+    /// <summary>Gets how a placeholder absent from one record is handled.</summary>
+    public MissingTemplateValueBehavior MissingValueBehavior { get; init; }
+        = MissingTemplateValueBehavior.Fail;
+
+    /// <summary>Gets whether record fields absent from the template row are rejected.</summary>
+    public bool RejectUnknownValues { get; init; } = true;
 }
 
 /// <summary>
