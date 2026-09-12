@@ -3,7 +3,7 @@
 Notable changes per release. The body of each version section is also the text used for the
 corresponding GitHub release.
 
-## 0.8.0 — 2026-09-10
+## 0.8.0 — 2026-09-12
 
 - Added ordered Word document assembly with source formatting compatibility checks, native
   part/identifier import, isolated section headers, hash-bound preview/commit, multi-source
