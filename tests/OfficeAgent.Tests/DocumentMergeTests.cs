@@ -29,6 +29,15 @@ public sealed class DocumentMergeTests
         Assert.True(result.Committed, Errors(result.Diagnostics));
         Assert.Equal(Convert.ToHexString(SHA256.HashData(inputs[0])).ToLowerInvariant(), result.Receipt!.Inputs[0].Sha256);
         Assert.Equal(Convert.ToHexString(SHA256.HashData(result.Content!)).ToLowerInvariant(), result.Receipt.OutputSha256);
+        Assert.Equal(DocumentMergePlan.CurrentVersion, preview.Plan!.Version);
+        Assert.Equal(DocumentMergeReceipt.CurrentReceiptVersion, result.Receipt.ReceiptVersion);
+        var receiptRoundTrip = JsonSerializer.Deserialize<DocumentMergeReceipt>(
+            JsonSerializer.Serialize(result.Receipt))!;
+        Assert.Equal(result.Receipt.ReceiptVersion, receiptRoundTrip.ReceiptVersion);
+        Assert.Equal(result.Receipt.PlanSha256, receiptRoundTrip.PlanSha256);
+        Assert.Equal(result.Receipt.Inputs.Select(input => input.Sha256),
+            receiptRoundTrip.Inputs.Select(input => input.Sha256));
+        Assert.Equal(result.Receipt.OutputSha256, receiptRoundTrip.OutputSha256);
         using var doc = Open(result.Content!);
         Assert.Empty(new OpenXmlValidator(FileFormatVersions.Office2019).Validate(doc));
         var body = doc.MainDocumentPart!.Document.Body!;
@@ -180,6 +189,38 @@ public sealed class DocumentMergeTests
         Assert.Equal(result.Document!.ItemId, result.Receipt!.OutputDocument!.ItemId);
         Assert.Equal(new[] { left.ItemId, right.ItemId }, result.Receipt.Inputs.Select(i => i.Document!.ItemId));
         await Assert.ThrowsAsync<DocumentProviderException>(() => client.CommitMergeAsync(plan, "docs", "packet.docx"));
+    }
+
+    [Fact]
+    public async Task Merge_plan_version_is_separate_and_rejected_before_source_read_or_output()
+    {
+        var omitted = JsonSerializer.Deserialize<DocumentMergePlan>("""
+            {
+              "inputs": [],
+              "options": {},
+              "planSha256": ""
+            }
+            """)!;
+        Assert.Equal(DocumentMergePlan.CurrentVersion, omitted.Version);
+
+        var store = new MemoryDocumentProvider("docs");
+        var client = new OfficeAgentClient(new DocumentProviderRegistry(new[] { store }), new WordModule());
+        var invalid = new DocumentMergePlan
+        {
+            Version = "2",
+            Inputs = new[]
+            {
+                new DocumentMergeInput { Index = 0, Sha256 = new string('0', 64) },
+                new DocumentMergeInput { Index = 1, Sha256 = new string('1', 64) }
+            },
+            PlanSha256 = new string('2', 64)
+        };
+
+        var error = await Assert.ThrowsAsync<ArgumentException>(() =>
+            client.CommitMergeAsync(invalid, "docs", "packet.docx"));
+
+        Assert.Contains(DocumentMergePlan.CurrentVersion, error.Message);
+        Assert.Equal(0, store.Count);
     }
 
     [Fact]

@@ -263,7 +263,8 @@ work is two calls or one:
 | `already-exists` | A `create_document` name is taken. Nothing was overwritten; retry with a different name. |
 | `ambiguous-anchor` | An `edit_document` `find` target matched several times. The message lists each candidate; re-issue with `"match": <index>` or more surrounding text. Nothing was written. |
 | `anchor-not-found` | A `find` target matched nothing, or its `match` index was out of range. Check the wording with `inspect_document` rather than retrying the same text. |
-| `invalid-argument`, `invalid-json` | The plan or arguments were malformed. The error message says what to fix. |
+| `contract-mismatch` | The edit plan must omit `contractVersion` for legacy `0.2` behavior or set it to `"0.2"`. Null, empty, malformed, and unknown versions are refused before saving. |
+| `invalid-argument`, `invalid-json` | The plan or arguments were malformed. Unknown properties, operations, enum names, integer enum values, and non-string versions are refused. The error message says what to fix. |
 | `configuration-error` | The `connectionId` is not registered on this host, or - for `create_document` - that connection cannot create documents. Try another connection rather than retrying. |
 
 Every error also carries `connectionId` and `itemId` (when known) so the agent can correlate the failure to a specific call.

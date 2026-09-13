@@ -48,8 +48,11 @@ public enum ApplyOutcome
 /// </summary>
 public sealed class ApplyReceipt
 {
+    /// <summary>Gets the receipt schema version emitted by this build.</summary>
+    public const string CurrentReceiptVersion = "1";
+
     /// <summary>Gets the receipt schema version.</summary>
-    public string ReceiptVersion { get; init; } = "1";
+    public string ReceiptVersion { get; init; } = CurrentReceiptVersion;
 
     /// <summary>Gets the SHA-256 hash of the effective plan JSON.</summary>
     public string PlanSha256 { get; init; } = string.Empty;

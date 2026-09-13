@@ -131,14 +131,22 @@ public sealed partial class OfficeAgentClient
         if (plan.Inputs is null || plan.Options is null)
             throw new ArgumentException("Merge plan inputs and options are required.", nameof(plan));
         CheckMergeCount(plan.Inputs.Count);
-        if (plan.Version != "1" || plan.Inputs.Any(input => input is null || input.Sha256.Length != 64) ||
+        if (plan.Version != DocumentMergePlan.CurrentVersion ||
+            plan.Inputs.Any(input => input is null || input.Sha256.Length != 64) ||
             plan.Inputs.Where((input, index) => input.Index != index).Any() ||
             plan.PlanSha256 != MergePlanHash(plan.Inputs, plan.Options))
-            throw new ArgumentException("The merge plan is invalid or changed; preview again.", nameof(plan));
+            throw new ArgumentException(
+                $"The merge plan is invalid or changed. Version must be \"{DocumentMergePlan.CurrentVersion}\"; preview again.",
+                nameof(plan));
     }
 
     private static string MergePlanHash(IReadOnlyList<DocumentMergeInput> inputs, DocumentMergeOptions options) =>
-        Sha256(Encoding.UTF8.GetBytes(JsonSerializer.Serialize(new { Version = "1", Inputs = inputs, Options = options })));
+        Sha256(Encoding.UTF8.GetBytes(JsonSerializer.Serialize(new
+        {
+            Version = DocumentMergePlan.CurrentVersion,
+            Inputs = inputs,
+            Options = options
+        })));
 
     private void CheckMergeCount(int count)
     {

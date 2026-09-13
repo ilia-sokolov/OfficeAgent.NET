@@ -10,14 +10,11 @@ internal sealed class PlanValidator
 {
     public ChangeReport Validate(ApplyContext context, DocumentPlan plan, IFormatModule module)
     {
+        if (DocumentPlanCompatibility.InvalidReport(plan) is { } incompatible)
+            return incompatible;
+
         var changes = new List<ProposedChange>();
         var errors = new List<ValidationError>();
-
-        // contractVersion is informational while the wire schema is pre-1.0. LLMs
-        // routinely supply "1.0" or omit the field; failing the entire plan over a
-        // string mismatch is anti-ergonomic. The field is preserved on DocumentPlan
-        // for forward compatibility; once the schema has real breaking versions, this
-        // check can come back behind a stricter policy.
 
         // An unspecified format is the norm: the tools document a plan as a bare list of
         // operations, so only a caller that deliberately named a format is asserting one,

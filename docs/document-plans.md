@@ -27,6 +27,33 @@ A `DocumentPlan` is the wire contract between an agent and the engine. It is a J
 - `contractVersion`, `snapshot`, and `revision` are optional. Omit `contractVersion` unless a host needs to carry it, and use `snapshot` for explicit drift detection.
 - `format` is optional and *asserts* the document's format (`"Word"`, `"PowerPoint"`, `"Excel"`); a mismatch fails the plan with `contract-mismatch`.
 
+## Contract compatibility
+
+The package version and wire versions are separate. OfficeAgent.NET 0.9 uses edit-plan
+contract `0.2`, merge-plan schema `1`, and receipt schema `1`.
+
+| Input | Outcome |
+| --- | --- |
+| `contractVersion: "0.2"` | Accepted without migration. |
+| Omitted `contractVersion` | Accepted as legacy `0.2`. Its effective plan and receipt hash are the same as an explicit `0.2` plan. |
+| `contractVersion: null`, empty, or whitespace | Rejected with `contract-mismatch` before document processing or saving. |
+| Any other string, including a malformed or future version | Rejected with `contract-mismatch`. Re-inspect if necessary, rebuild the plan for `0.2`, and preview it again. |
+| A non-string `contractVersion` | Rejected by agent and MCP tools with `invalid-json`. |
+| Unknown operation name | Rejected by agent and MCP tools with `invalid-json`; use one of the verbs listed by the error. |
+| Unknown property at any level | Rejected by agent and MCP tools with `invalid-json`; remove the property or correct its spelling. |
+| Unknown enum name or an integer enum value | Rejected by agent and MCP tools with `invalid-json`; use the documented string value. |
+
+There is no edit-plan migration in 0.9. The supported `0.2` shape is already the v0.8
+shape, so the engine preserves it rather than rewriting it. Unknown versions are never
+silently upgraded or interpreted as `0.2`.
+
+Assembly uses the separate `DocumentMergePlan.Version` value `1`. Omitting that value
+defaults to `1`; a null, empty, or unknown value makes the merge plan invalid before any
+source is read or output is created. `ApplyReceipt.ReceiptVersion` and
+`DocumentMergeReceipt.ReceiptVersion` identify receipt schema `1`. Round trips preserve
+the receipt version and existing plan, input, and output hashes. Receipt version `1` does
+not mean edit-plan version `1`.
+
 ## Revision identity
 
 `revision.author` is the name Word displays on every tracked operation in the plan.
@@ -765,8 +792,8 @@ Returned by `preview_plan` and `apply_plan` in the `errors` array. Stable wire c
 | `invalid-operation` | The operation is structurally invalid (e.g. empty `expect` against a paragraph that has text, no formatting properties). |
 | `requires-renderer` | The requested change needs a layout / calculation engine. |
 | `operation-conflict` | Two operations target the same location in one plan. |
-| `contract-mismatch` | The plan's contract version does not match the engine, or the plan asserted a `format` the document is not. (The version check is informational pre-1.0; the format assertion is not.) |
-| `invalid-json` | The plan is not valid JSON, or an operation names no known verb. The message lists the verbs that exist. |
+| `contract-mismatch` | The edit-plan version is not exactly `0.2`, or the plan asserted a `format` the document is not. Omit the version for legacy `0.2` behavior or rebuild it for `0.2`, then preview again. |
+| `invalid-json` | The plan is not valid JSON, contains an unknown property, operation or enum value, uses an integer enum value, or supplies a non-string version. Correct the named member; unknown operation errors list the verbs that exist. |
 | `invalid-argument` | A tool argument outside the plan is wrong - an unrecognised `saveMode`, for example. |
 | `regex-timeout` | A regular-expression search exceeded its time limit. Simplify the pattern or use a literal search. |
 

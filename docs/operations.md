@@ -178,4 +178,8 @@ For a direct in-memory call, pass the actor with
 
 ## Versioning
 
-`DocumentPlan.CurrentContractVersion` advertises the plan-contract version the engine speaks. Pre-1.0 the field is informational; a mismatch does not fail the plan. Pin the package version in production and re-test on upgrade.
+`DocumentPlan.CurrentContractVersion` is the enforced edit-plan wire version. In OfficeAgent.NET
+0.9, omit `contractVersion` for legacy `0.2` behavior or set it explicitly to `"0.2"`.
+Null, empty, malformed, and unknown values fail with `contract-mismatch` before document
+processing or saving. Package version `0.9.0`, merge-plan version `1`, and receipt version
+`1` are separate contracts. Pin the package version in production and re-test on upgrade.

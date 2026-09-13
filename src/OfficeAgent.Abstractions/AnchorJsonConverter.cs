@@ -46,7 +46,10 @@ public sealed class AnchorJsonConverter : JsonConverter<Anchor>
                 _ => null
             };
             if (concrete is not null)
-                return (Anchor?)root.Deserialize(concrete, options);
+                return DeserializeConcrete(root, concrete, options);
+
+            throw new JsonException(
+                $"Unknown anchor discriminator \"{disc.GetString()}\". Expected textSpan, structural, node, style, cell, or shape.");
         }
 
         // 2. Infer from property shape. Order matters: NodeAnchor's kind/path is also
@@ -113,5 +116,25 @@ public sealed class AnchorJsonConverter : JsonConverter<Anchor>
         }
         value = default;
         return false;
+    }
+
+    private static Anchor? DeserializeConcrete(
+        JsonElement root,
+        Type concrete,
+        JsonSerializerOptions options)
+    {
+        using var buffer = new MemoryStream();
+        using (var writer = new Utf8JsonWriter(buffer))
+        {
+            writer.WriteStartObject();
+            foreach (var property in root.EnumerateObject())
+            {
+                if (!string.Equals(property.Name, "$anchor", StringComparison.OrdinalIgnoreCase))
+                    property.WriteTo(writer);
+            }
+            writer.WriteEndObject();
+        }
+
+        return (Anchor?)JsonSerializer.Deserialize(buffer.ToArray(), concrete, options);
     }
 }

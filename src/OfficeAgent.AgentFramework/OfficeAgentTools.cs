@@ -107,7 +107,8 @@ public sealed class OfficeAgentTools
     {
         PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
         PropertyNameCaseInsensitive = true,
-        Converters = { new JsonStringEnumConverter() }
+        UnmappedMemberHandling = JsonUnmappedMemberHandling.Disallow,
+        Converters = { new JsonStringEnumConverter(allowIntegerValues: false) }
     };
 
     internal static readonly AIJsonSchemaCreateOptions StrictSchemaOptions = new()
@@ -157,7 +158,7 @@ public sealed class OfficeAgentTools
         - Saving edits the document in place (saveMode "Replace", the default), so outputDocumentId is the same id you passed in. If the user wants the original kept, pass saveMode "NewVersion" to write a sibling revision instead, and tell them where the result landed.
 
         Plan shape, anchors, safety loop
-        - Plan body is { "snapshot": { "eTag": "<snapshot from inspect_document>" }, "operations": [ ... ] }. Copy the scalar snapshot string returned by inspect_document into snapshot.eTag to detect drift in Word body/header/footer/footnote/endnote XML or PowerPoint slide/notes XML. It does not cover properties, comments, sections, media/image bytes, masters, or layouts; their anchors and provider version checks still apply. Omit snapshot only deliberately. Do not set contractVersion.
+        - Plan body is { "snapshot": { "eTag": "<snapshot from inspect_document>" }, "operations": [ ... ] }. Copy the scalar snapshot string returned by inspect_document into snapshot.eTag to detect drift in Word body/header/footer/footnote/endnote XML or PowerPoint slide/notes XML. It does not cover properties, comments, sections, media/image bytes, masters, or layouts; their anchors and provider version checks still apply. Omit snapshot only deliberately. Omit contractVersion for legacy 0.2 behavior, or set it to exactly "0.2". Other values fail with contract-mismatch.
         - Available operations (the JSON shape of each is in the preview_plan description): Word and PowerPoint use the document operations below; decks additionally support insertChart/updateChart; workbooks support setCell, appendTableRows, and comment Add/Remove on a cell. These are plan operations inside preview_plan/apply_plan, not separate tools.
         - populate_template_batch resolves named slots and repeating Word rows into plans and saves one independent output per item. compare_documents reads two Word documents and returns a snapshot-bound redline plan only when every detected change is covered; preview that plan before applying it to the original.
         - preview_document_merge assembles ordered whole Word documents in memory and returns a separate merge plan plus compatibility diagnostics. Pass that complete plan to merge_documents when available. A merge creates a new document and never edits its sources. It does not reconcile independently edited versions. Respect unsupported-content diagnostics and do not substitute a text-only copy.
@@ -455,7 +456,7 @@ public sealed class OfficeAgentTools
         AIFunctionFactory.Create(PreviewPlan, Opts(
             "preview_plan",
             "Dry-run a DocumentPlan JSON against (connectionId, documentId). Returns {isValid, committed, receipt, sourceDocumentId, outputConnectionId, outputDocumentId, outputVersion, outputName, outputContentType, changes, errors}; the output fields are null and committed is false. " +
-            "Plan shape: { \"snapshot\": { \"eTag\": \"<snapshot string from inspect_document>\" }, \"revision\": { \"author\": \"Review Bot\", \"timestampUtc\": \"2026-09-09T10:00:00Z\" }, \"operations\": [ ... ] }. revision controls Word's displayed revision identity; omit timestampUtc to use one engine timestamp for the whole apply. The snapshot detects drift in Word text-host XML or PowerPoint slide/notes XML; other parts rely on anchors and provider version checks. Omit it only intentionally. Do not set contractVersion. " +
+            "Plan shape: { \"snapshot\": { \"eTag\": \"<snapshot string from inspect_document>\" }, \"revision\": { \"author\": \"Review Bot\", \"timestampUtc\": \"2026-09-09T10:00:00Z\" }, \"operations\": [ ... ] }. revision controls Word's displayed revision identity; omit timestampUtc to use one engine timestamp for the whole apply. The snapshot detects drift in Word text-host XML or PowerPoint slide/notes XML; other parts rely on anchors and provider version checks. Omit it only intentionally. Omit contractVersion for legacy 0.2 behavior, or set it to exactly \"0.2\". Other values fail with contract-mismatch. Unknown properties and enum values fail with invalid-json. " +
             PlanOperations)),
         AIFunctionFactory.Create(ApplyPlan, Opts(
             "apply_plan",

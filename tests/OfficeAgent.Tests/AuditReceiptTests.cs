@@ -85,6 +85,13 @@ public class AuditReceiptTests
         Assert.Equal(Hash(JsonSerializer.SerializeToUtf8Bytes(plan)), receipt.PlanSha256);
         Assert.Equal(Hash(result.ToBytes()), receipt.OutputSha256);
 
+        var roundTrip = JsonSerializer.Deserialize<ApplyReceipt>(JsonSerializer.Serialize(receipt))!;
+        Assert.Equal(ApplyReceipt.CurrentReceiptVersion, receipt.ReceiptVersion);
+        Assert.Equal(receipt.ReceiptVersion, roundTrip.ReceiptVersion);
+        Assert.Equal(receipt.PlanSha256, roundTrip.PlanSha256);
+        Assert.Equal(receipt.InputSha256, roundTrip.InputSha256);
+        Assert.Equal(receipt.OutputSha256, roundTrip.OutputSha256);
+
         using var document = WordprocessingDocument.Open(new MemoryStream(result.ToBytes()), false);
         var markers = document.MainDocumentPart!.Document
             .Descendants()

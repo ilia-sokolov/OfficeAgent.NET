@@ -80,6 +80,20 @@ public class PlanOperationJsonConverterTests
     }
 
     [Fact]
+    public void Unknown_operation_and_anchor_properties_are_rejected()
+    {
+        Assert.Throws<JsonException>(() => JsonSerializer.Deserialize<PlanOperation>(
+            """{ "op": "changeText", "target": { "paraId": "p", "expect": "x" }, "with": "y", "future": true }""",
+            Options));
+        Assert.Throws<JsonException>(() => JsonSerializer.Deserialize<PlanOperation>(
+            """{ "op": "changeText", "target": { "$anchor": "textSpan", "paraId": "p", "expect": "x", "future": true }, "with": "y" }""",
+            Options));
+        Assert.Throws<JsonException>(() => JsonSerializer.Deserialize<PlanOperation>(
+            """{ "op": "changeText", "target": { "$anchor": "future", "paraId": "p", "expect": "x" }, "with": "y" }""",
+            Options));
+    }
+
+    [Fact]
     public void Every_operation_type_in_the_contract_is_reachable_from_a_verb()
     {
         var declared = typeof(PlanOperation).Assembly.GetTypes()

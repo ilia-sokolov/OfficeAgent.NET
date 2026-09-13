@@ -6,7 +6,9 @@ using DocumentFormat.OpenXml.Packaging;
 using DocumentFormat.OpenXml.Validation;
 using DocumentFormat.OpenXml.Wordprocessing;
 using OfficeAgent.Abstractions;
+using OfficeAgent.AgentFramework;
 using OfficeAgent.Core;
+using OfficeAgent.Core.DocumentProviders;
 using OfficeAgent.Word;
 
 namespace OfficeAgent.Tests;
@@ -234,6 +236,42 @@ public sealed class V08CorpusTests
         Assert.Equal("stale-snapshot", error.RootElement.GetProperty("errors")[0].GetProperty("code").GetString());
         using var receipt = JsonDocument.Parse(File.ReadAllBytes(Path.Combine(CorpusRoot, "apply-receipt.json")));
         Assert.Equal("fixture-user", receipt.RootElement.GetProperty("actor").GetProperty("subject").GetString());
+    }
+
+    [Fact]
+    public async Task V08_edit_plan_retains_meaning_across_direct_provider_and_agent_tool_paths()
+    {
+        var options = new JsonSerializerOptions
+        {
+            PropertyNameCaseInsensitive = true,
+            Converters = { new JsonStringEnumConverter() }
+        };
+        var planJson = File.ReadAllText(Path.Combine(CorpusRoot, "word-edit-plan.json"));
+        var plan = JsonSerializer.Deserialize<DocumentPlan>(planJson, options)!;
+        var input = DocxFactory.Contract();
+        var direct = new OfficeAgentClient(new WordModule());
+
+        var directReport = direct.Preview(
+            new StreamHandle(new MemoryStream(input, writable: false), "contract.docx"),
+            plan);
+
+        Assert.True(directReport.IsValid,
+            string.Join("; ", directReport.Errors.Select(error => error.Message)));
+        Assert.Equal("Globex Inc.", Assert.Single(directReport.Changes).After);
+
+        var store = new MemoryDocumentProvider("corpus");
+        var reference = store.Add("contract.docx", input);
+        var providerClient = new OfficeAgentClient(
+            new DocumentProviderRegistry(new[] { store }), new WordModule());
+        var providerReport = await providerClient.PreviewAsync(reference, plan);
+        using var toolReport = JsonDocument.Parse(
+            await new OfficeAgentTools(providerClient).PreviewPlan("corpus", reference.ItemId, planJson));
+
+        Assert.True(providerReport.IsValid,
+            string.Join("; ", providerReport.Errors.Select(error => error.Message)));
+        Assert.True(toolReport.RootElement.GetProperty("isValid").GetBoolean(), toolReport.RootElement.ToString());
+        Assert.Equal(1, store.Count);
+        Assert.Equal(input, store.Read(reference.ItemId));
     }
 
     private static CorpusManifest ReadManifest()

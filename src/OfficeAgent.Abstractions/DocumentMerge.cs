@@ -49,8 +49,11 @@ public sealed class DocumentMergeInput
 /// <summary>Serializable assembly intent. Its hash detects accidental changes, not authorization.</summary>
 public sealed class DocumentMergePlan
 {
+    /// <summary>Gets the merge-plan schema version supported by this build.</summary>
+    public const string CurrentVersion = "1";
+
     /// <summary>Gets the merge-plan schema version.</summary>
-    public string Version { get; init; } = "1";
+    public string Version { get; init; } = CurrentVersion;
     /// <summary>Gets ordered, hash-bound inputs.</summary>
     public IReadOnlyList<DocumentMergeInput> Inputs { get; init; } = Array.Empty<DocumentMergeInput>();
     /// <summary>Gets output metadata options bound into the plan hash.</summary>
@@ -92,8 +95,11 @@ public sealed class DocumentMergePreview
 /// <summary>Audit record for successful production of assembled bytes or a provider document.</summary>
 public sealed class DocumentMergeReceipt
 {
+    /// <summary>Gets the merge-receipt schema version emitted by this build.</summary>
+    public const string CurrentReceiptVersion = "1";
+
     /// <summary>Gets the receipt schema version.</summary>
-    public string ReceiptVersion { get; init; } = "1";
+    public string ReceiptVersion { get; init; } = CurrentReceiptVersion;
     /// <summary>Gets the exact effective plan hash.</summary>
     public string PlanSha256 { get; init; } = string.Empty;
     /// <summary>Gets ordered input references and hashes.</summary>

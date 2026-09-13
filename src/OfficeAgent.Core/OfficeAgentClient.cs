@@ -105,12 +105,13 @@ public sealed partial class OfficeAgentClient
         _service.Find(handle, query);
 
     public ChangeReport Preview(DocumentHandle handle, DocumentPlan plan) =>
-        _service.Validate(handle, plan);
+        DocumentPlanCompatibility.InvalidReport(plan) ?? _service.Validate(handle, plan);
 
     public ApplyResult Commit(DocumentHandle handle, DocumentPlan plan) =>
-        _service.Apply(handle, plan, ApplyOptions.Commit);
+        Apply(handle, plan, ApplyOptions.Commit);
 
     public ApplyResult Apply(DocumentHandle handle, DocumentPlan plan, ApplyOptions? options = null) =>
+        DocumentPlanCompatibility.RejectedResult(plan) ??
         _service.Apply(handle, plan, options ?? ApplyOptions.Preview);
 
     public Task<InspectResult> InspectAsync(DocumentHandle handle, InspectOptions? options = null, CancellationToken cancellationToken = default) =>
@@ -120,13 +121,17 @@ public sealed partial class OfficeAgentClient
         _service.FindAsync(handle, query, cancellationToken);
 
     public Task<ChangeReport> PreviewAsync(DocumentHandle handle, DocumentPlan plan, CancellationToken cancellationToken = default) =>
-        _service.ValidateAsync(handle, plan, cancellationToken);
+        DocumentPlanCompatibility.InvalidReport(plan) is { } report
+            ? Task.FromResult(report)
+            : _service.ValidateAsync(handle, plan, cancellationToken);
 
     public Task<ApplyResult> CommitAsync(DocumentHandle handle, DocumentPlan plan, CancellationToken cancellationToken = default) =>
-        _service.ApplyAsync(handle, plan, ApplyOptions.Commit, cancellationToken);
+        ApplyAsync(handle, plan, ApplyOptions.Commit, cancellationToken);
 
     public Task<ApplyResult> ApplyAsync(DocumentHandle handle, DocumentPlan plan, ApplyOptions? options = null, CancellationToken cancellationToken = default) =>
-        _service.ApplyAsync(handle, plan, options ?? ApplyOptions.Preview, cancellationToken);
+        DocumentPlanCompatibility.RejectedResult(plan) is { } result
+            ? Task.FromResult(result)
+            : _service.ApplyAsync(handle, plan, options ?? ApplyOptions.Preview, cancellationToken);
 
     // ---- In-memory byte overload ----
 
@@ -204,6 +209,9 @@ public sealed partial class OfficeAgentClient
         DocumentPlan? plan = null,
         CancellationToken cancellationToken = default)
     {
+        if (plan is not null && DocumentPlanCompatibility.InvalidReport(plan) is { } incompatible)
+            return new ProviderApplyResult { Report = incompatible, Committed = false };
+
         var provider = _providers.ResolveConnection(connectionId);
         if (provider is not IDocumentCreatingProvider creator)
             throw new DocumentProviderException(
@@ -417,6 +425,9 @@ public sealed partial class OfficeAgentClient
         DocumentPlan plan,
         CancellationToken cancellationToken = default)
     {
+        if (DocumentPlanCompatibility.RejectedResult(plan) is { } rejected)
+            return rejected;
+
         plan = await ResolveImageReferencesAsync(plan, cancellationToken).ConfigureAwait(false);
         using var content = await OpenWithTelemetryAsync(reference, cancellationToken).ConfigureAwait(false);
         return await ApplyAsync(
@@ -433,6 +444,9 @@ public sealed partial class OfficeAgentClient
         SaveDocumentOptions? options = null,
         CancellationToken cancellationToken = default)
     {
+        if (DocumentPlanCompatibility.InvalidReport(plan) is { } incompatible)
+            return new ProviderApplyResult { Report = incompatible, Committed = false };
+
         plan = await ResolveImageReferencesAsync(plan, cancellationToken).ConfigureAwait(false);
         var provider = _providers.Resolve(reference);
         var saveOpts = options ?? new SaveDocumentOptions();

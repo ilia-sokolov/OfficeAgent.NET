@@ -4,7 +4,7 @@ using System.Text.Json.Serialization;
 namespace OfficeAgent.Abstractions;
 
 /// <summary>
-/// Tolerant <see cref="PlanOperation"/> converter wired up by
+/// Property-order-tolerant <see cref="PlanOperation"/> converter wired up by
 /// <see cref="JsonConverterAttribute"/> on <see cref="PlanOperation"/>.
 /// <para>
 /// System.Text.Json requires a polymorphic type discriminator to be the <em>first</em>
@@ -95,9 +95,26 @@ public sealed class PlanOperationJsonConverter : JsonConverter<PlanOperation>
                 $"Unknown plan operation \"{verb}\". Expected one of: {KnownVerbs}.");
         }
 
-        // Deserializing the concrete type does not re-enter this converter: a
-        // JsonConverter<PlanOperation> only converts PlanOperation itself.
-        return (PlanOperation?)root.Deserialize(concrete, options);
+        // The discriminator belongs to the abstract wire envelope rather than any
+        // concrete operation. Remove it before strict concrete deserialization so an
+        // actual unknown property is rejected without treating "op" itself as unknown.
+        using var buffer = new MemoryStream();
+        using (var writer = new Utf8JsonWriter(buffer))
+        {
+            writer.WriteStartObject();
+            foreach (var property in root.EnumerateObject())
+            {
+                if (!string.Equals(property.Name, "op", StringComparison.OrdinalIgnoreCase))
+                    property.WriteTo(writer);
+            }
+            writer.WriteEndObject();
+        }
+
+        var strict = new JsonSerializerOptions(options)
+        {
+            UnmappedMemberHandling = JsonUnmappedMemberHandling.Disallow
+        };
+        return (PlanOperation?)JsonSerializer.Deserialize(buffer.ToArray(), concrete, strict);
     }
 
     /// <inheritdoc/>

@@ -128,7 +128,7 @@ public class AnchorJsonInferenceTests
     {
         // Locks in the LLM-ergonomics fixes:
         //  - No more "polymorphic discriminator required" internal-error (AnchorJsonConverter).
-        //  - LLM-supplied contractVersion is tolerated (strict version check relaxed pre-1.0).
+        //  - An omitted contractVersion takes the supported legacy 0.2 path.
         //  - target.kind="table"+path="table#0" infers NodeAnchor with kind="table".
         using var workspace = new ToolsWorkspace();
         var tools = new OfficeAgentTools(workspace.Client);
@@ -136,7 +136,6 @@ public class AnchorJsonInferenceTests
 
         var planJson = """
             {
-              "contractVersion": "1.0",
               "operations": [
                 {
                   "op": "insertTableRows",
