@@ -1,0 +1,20 @@
+{
+  "contractVersion": "0.2",
+  "format": "Word",
+  "revision": {
+    "author": "Corpus Review",
+    "timestampUtc": "2026-09-12T10:00:00Z"
+  },
+  "operations": [
+    {
+      "op": "changeText",
+      "target": {
+        "paraId": "w14:00000002",
+        "expect": "Acme Corp",
+        "occurrence": 0
+      },
+      "with": "Globex Inc.",
+      "mode": "Tracked"
+    }
+  ]
+}

@@ -1,0 +1,16 @@
+{
+  "outcome": "Committed",
+  "timestampUtc": "2026-09-12T10:00:00Z",
+  "inputSha256": "0000000000000000000000000000000000000000000000000000000000000000",
+  "planSha256": "1111111111111111111111111111111111111111111111111111111111111111",
+  "outputSha256": "2222222222222222222222222222222222222222222222222222222222222222",
+  "revision": {
+    "author": "Corpus Review",
+    "timestampUtc": "2026-09-12T10:00:00Z"
+  },
+  "actor": {
+    "subject": "fixture-user",
+    "issuer": "fixture-host",
+    "displayName": "Fixture User"
+  }
+}

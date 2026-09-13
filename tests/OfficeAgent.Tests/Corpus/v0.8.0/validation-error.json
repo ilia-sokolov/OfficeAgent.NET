@@ -1,0 +1,9 @@
+{
+  "committed": false,
+  "errors": [
+    {
+      "code": "stale-snapshot",
+      "message": "The document changed after inspection."
+    }
+  ]
+}
