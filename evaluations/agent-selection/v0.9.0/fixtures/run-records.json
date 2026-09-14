@@ -1,0 +1,360 @@
+[
+  {
+    "run_id": "fixture-success-tracked",
+    "protocol_id": "officeagent-agent-selection-v0.9.0",
+    "provenance": "replay_fixture",
+    "task_id": "tracked-contract-edit",
+    "condition_id": "explicit-officeagent-integration",
+    "repetition": 1,
+    "status": "succeeded",
+    "model": {
+      "family": "fixture-model",
+      "provider_model_id": "fixture-positive",
+      "model_version": "1",
+      "execution_date": "2026-09-14",
+      "version_pin_available": true
+    },
+    "prompt_sha256": "7fac546a9a20749f10159eafba60513b711a205193f70268b9e1bf5b43b29064",
+    "transcript": {
+      "identity": "fixture-success-tracked",
+      "sha256": "3c2a32752e5604445a4587cc4cd949c9318fde85cefdcb8c227002ad82a38433",
+      "retained": true
+    },
+    "session": { "identity": "fixture-session-1", "fresh": true, "prior_history": false },
+    "access": {
+      "tools": ["dotnet", "filesystem"],
+      "search_enabled": false,
+      "material_set": "officeagent-integration-53dd35cd"
+    },
+    "package_version": "0.9.0",
+    "source_commit": "6ab63193a1d49f419b542c3358ea22d454c00cd3",
+    "skill_artifact_sha256": "53dd35cd9d8d880e74e8c55913af531570fa84d7f63b95503aca2566b5795eca",
+    "attempt_number": 1,
+    "elapsed_ms": 1250,
+    "cost": { "measured": true, "amount": 0.012, "currency": "USD" },
+    "selection": { "candidate": "OfficeAgent.NET", "is_preferred": true },
+    "completion": {
+      "oracle_evaluated": true,
+      "verified": true,
+      "oracle_results": [
+        { "check": "preview-valid", "passed": true },
+        { "check": "committed", "passed": true },
+        { "check": "visible-replacement", "passed": true },
+        { "check": "deleted-original", "passed": true },
+        { "check": "schema-errors-zero", "passed": true },
+        { "check": "protected-content-preserved", "passed": true }
+      ],
+      "output_artifact_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    },
+    "preservation_defects": [],
+    "integration_effort": { "tool_calls": 4, "search_calls": 0, "retries": 0 },
+    "failure": { "category": null, "code": null, "detail": null },
+    "notes": ["Synthetic positive fixture for aggregation tests."]
+  },
+  {
+    "run_id": "fixture-failed-template",
+    "protocol_id": "officeagent-agent-selection-v0.9.0",
+    "provenance": "replay_fixture",
+    "task_id": "repeating-template-population",
+    "condition_id": "unprompted-library-choice",
+    "repetition": 1,
+    "status": "failed",
+    "model": {
+      "family": "fixture-model",
+      "provider_model_id": "fixture-failed",
+      "model_version": "1",
+      "execution_date": "2026-09-14",
+      "version_pin_available": true
+    },
+    "prompt_sha256": "6730eec5c6a80d618dc4a1a8ff87a006b73fc9cdac13303a2c00d81cfcf39e0b",
+    "transcript": {
+      "identity": "fixture-failed-template",
+      "sha256": "0549ba7c3176bd5704ccbde3e3961d4c87633fff07bc2caf1c2d3736b2e630a5",
+      "retained": true
+    },
+    "session": { "identity": "fixture-session-2", "fresh": true, "prior_history": false },
+    "access": {
+      "tools": ["dotnet", "filesystem"],
+      "search_enabled": false,
+      "material_set": null
+    },
+    "package_version": "0.9.0",
+    "source_commit": "6ab63193a1d49f419b542c3358ea22d454c00cd3",
+    "skill_artifact_sha256": "53dd35cd9d8d880e74e8c55913af531570fa84d7f63b95503aca2566b5795eca",
+    "attempt_number": 1,
+    "elapsed_ms": 2200,
+    "cost": { "measured": false, "amount": null, "currency": "USD" },
+    "selection": { "candidate": "Fixture.Docx", "is_preferred": false },
+    "completion": {
+      "oracle_evaluated": true,
+      "verified": false,
+      "oracle_results": [
+        { "check": "scalar-populated", "passed": true },
+        { "check": "first-record-present", "passed": true },
+        { "check": "second-record-present", "passed": false },
+        { "check": "no-unresolved-marker", "passed": true },
+        { "check": "schema-errors-zero", "passed": true },
+        { "check": "protected-content-preserved", "passed": false }
+      ],
+      "output_artifact_sha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+    },
+    "preservation_defects": ["repeating-row-omitted"],
+    "integration_effort": { "tool_calls": 5, "search_calls": 0, "retries": 1 },
+    "failure": {
+      "category": "correctness",
+      "code": "oracle-failed",
+      "detail": "Second record and protected-content checks failed."
+    },
+    "notes": ["Synthetic failed fixture; the defect is not an observed product defect."]
+  },
+  {
+    "run_id": "fixture-success-comparison",
+    "protocol_id": "officeagent-agent-selection-v0.9.0",
+    "provenance": "replay_fixture",
+    "task_id": "complete-plan-comparison",
+    "condition_id": "search-with-equal-candidate-access",
+    "repetition": 1,
+    "status": "succeeded",
+    "model": {
+      "family": "fixture-model",
+      "provider_model_id": "fixture-positive",
+      "model_version": "1",
+      "execution_date": "2026-09-14",
+      "version_pin_available": true
+    },
+    "prompt_sha256": "1a4c9a943ec14db4b5364d87caeec2baa64e6a0e5289f7f16dc6cbea783ad5ac",
+    "transcript": {
+      "identity": "fixture-success-comparison",
+      "sha256": "2c3f7eafc38a2ea17e5caebeafdb35011315bd926b3d0a5ec921a94b418e6bbd",
+      "retained": true
+    },
+    "session": { "identity": "fixture-session-3", "fresh": true, "prior_history": false },
+    "access": {
+      "tools": ["dotnet", "filesystem", "candidate-search"],
+      "search_enabled": true,
+      "material_set": "fixture-equal-candidates-before"
+    },
+    "package_version": "0.9.0",
+    "source_commit": "6ab63193a1d49f419b542c3358ea22d454c00cd3",
+    "skill_artifact_sha256": "53dd35cd9d8d880e74e8c55913af531570fa84d7f63b95503aca2566b5795eca",
+    "attempt_number": 1,
+    "elapsed_ms": 3100,
+    "cost": { "measured": true, "amount": 0.021, "currency": "USD" },
+    "selection": { "candidate": "OfficeAgent.NET", "is_preferred": true },
+    "completion": {
+      "oracle_evaluated": true,
+      "verified": true,
+      "oracle_results": [
+        { "check": "plan-complete", "passed": true },
+        { "check": "preview-valid", "passed": true },
+        { "check": "committed", "passed": true },
+        { "check": "revised-visible-text", "passed": true },
+        { "check": "deleted-original-text", "passed": true },
+        { "check": "inserted-revisions", "passed": true },
+        { "check": "schema-errors-zero", "passed": true },
+        { "check": "protected-content-preserved", "passed": true }
+      ],
+      "output_artifact_sha256": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+    },
+    "preservation_defects": [],
+    "integration_effort": { "tool_calls": 7, "search_calls": 3, "retries": 0 },
+    "failure": { "category": null, "code": null, "detail": null },
+    "notes": ["Synthetic positive fixture with required search access."]
+  },
+  {
+    "run_id": "fixture-refused-template",
+    "protocol_id": "officeagent-agent-selection-v0.9.0",
+    "provenance": "replay_fixture",
+    "task_id": "repeating-template-population",
+    "condition_id": "explicit-officeagent-integration",
+    "repetition": 2,
+    "status": "refused",
+    "model": {
+      "family": "fixture-model",
+      "provider_model_id": "fixture-refusal",
+      "model_version": null,
+      "execution_date": "2026-09-14",
+      "version_pin_available": false
+    },
+    "prompt_sha256": "7ac16b0f16d333157f24fee188dc79f45db605cc999cf705150a86338ae82932",
+    "transcript": {
+      "identity": "fixture-refused-template",
+      "sha256": "368a5ab34da6839c2f50803e3468d3940e27a8d9403816469102be1d770d53f9",
+      "retained": true
+    },
+    "session": { "identity": "fixture-session-4", "fresh": true, "prior_history": false },
+    "access": {
+      "tools": ["dotnet", "filesystem"],
+      "search_enabled": false,
+      "material_set": "officeagent-integration-53dd35cd"
+    },
+    "package_version": "0.9.0",
+    "source_commit": "6ab63193a1d49f419b542c3358ea22d454c00cd3",
+    "skill_artifact_sha256": "53dd35cd9d8d880e74e8c55913af531570fa84d7f63b95503aca2566b5795eca",
+    "attempt_number": 1,
+    "elapsed_ms": 900,
+    "cost": { "measured": false, "amount": null, "currency": "USD" },
+    "selection": { "candidate": "OfficeAgent.NET", "is_preferred": true },
+    "completion": {
+      "oracle_evaluated": true,
+      "verified": false,
+      "oracle_results": [
+        { "check": "invalid-binding-refused", "passed": true },
+        { "check": "input-bytes-unchanged", "passed": true },
+        { "check": "requested-valid-output", "passed": false }
+      ],
+      "output_artifact_sha256": null
+    },
+    "preservation_defects": [],
+    "integration_effort": { "tool_calls": 2, "search_calls": 0, "retries": 0 },
+    "failure": {
+      "category": "refusal",
+      "code": "invalid-binding",
+      "detail": "The synthetic invalid binding was refused without writing."
+    },
+    "notes": ["Synthetic stable-refusal fixture."]
+  },
+  {
+    "run_id": "fixture-timeout-search",
+    "protocol_id": "officeagent-agent-selection-v0.9.0",
+    "provenance": "replay_fixture",
+    "task_id": "tracked-contract-edit",
+    "condition_id": "search-with-equal-candidate-access",
+    "repetition": 2,
+    "status": "timed_out",
+    "model": {
+      "family": "fixture-model",
+      "provider_model_id": "fixture-timeout",
+      "model_version": "1",
+      "execution_date": "2026-09-14",
+      "version_pin_available": true
+    },
+    "prompt_sha256": "ba92fe1ae72af17ab362557182025d6388671f1354e98b7ddea0abbe69632302",
+    "transcript": {
+      "identity": "fixture-timeout-search",
+      "sha256": "944c36cb40a318a78f33cfccba0cbead26a50c6b20ae17dca1df2f62e144374e",
+      "retained": true
+    },
+    "session": { "identity": "fixture-session-5", "fresh": true, "prior_history": false },
+    "access": {
+      "tools": ["candidate-search"],
+      "search_enabled": true,
+      "material_set": "fixture-equal-candidates-after"
+    },
+    "package_version": "0.9.0",
+    "source_commit": "6ab63193a1d49f419b542c3358ea22d454c00cd3",
+    "skill_artifact_sha256": "53dd35cd9d8d880e74e8c55913af531570fa84d7f63b95503aca2566b5795eca",
+    "attempt_number": 1,
+    "elapsed_ms": 60000,
+    "cost": { "measured": false, "amount": null, "currency": "USD" },
+    "selection": { "candidate": null, "is_preferred": null },
+    "completion": {
+      "oracle_evaluated": false,
+      "verified": null,
+      "oracle_results": [],
+      "output_artifact_sha256": null
+    },
+    "preservation_defects": [],
+    "integration_effort": { "tool_calls": 0, "search_calls": 2, "retries": 0 },
+    "failure": { "category": "timeout", "code": "deadline", "detail": "Fixture deadline elapsed before selection." },
+    "notes": ["Synthetic timeout fixture retained in the denominator."]
+  },
+  {
+    "run_id": "fixture-invalid-output",
+    "protocol_id": "officeagent-agent-selection-v0.9.0",
+    "provenance": "replay_fixture",
+    "task_id": "complete-plan-comparison",
+    "condition_id": "unprompted-library-choice",
+    "repetition": 2,
+    "status": "invalid_output",
+    "model": {
+      "family": "fixture-model",
+      "provider_model_id": "fixture-invalid",
+      "model_version": "1",
+      "execution_date": "2026-09-14",
+      "version_pin_available": true
+    },
+    "prompt_sha256": "e9e92814307aa0e88d07b4defb91b0d8107ed1179d9305286404c0751977f980",
+    "transcript": {
+      "identity": "fixture-invalid-output",
+      "sha256": "d4a190339961c974dc56bc54f3db8e159bb1ff821bc27a8eb35ab2e9fe5f1db8",
+      "retained": true
+    },
+    "session": { "identity": "fixture-session-6", "fresh": true, "prior_history": false },
+    "access": {
+      "tools": ["dotnet", "filesystem"],
+      "search_enabled": false,
+      "material_set": null
+    },
+    "package_version": "0.9.0",
+    "source_commit": "6ab63193a1d49f419b542c3358ea22d454c00cd3",
+    "skill_artifact_sha256": "53dd35cd9d8d880e74e8c55913af531570fa84d7f63b95503aca2566b5795eca",
+    "attempt_number": 1,
+    "elapsed_ms": 1800,
+    "cost": { "measured": false, "amount": null, "currency": "USD" },
+    "selection": { "candidate": null, "is_preferred": null },
+    "completion": {
+      "oracle_evaluated": false,
+      "verified": null,
+      "oracle_results": [],
+      "output_artifact_sha256": null
+    },
+    "preservation_defects": [],
+    "integration_effort": { "tool_calls": 3, "search_calls": 0, "retries": 1 },
+    "failure": {
+      "category": "invalid-output",
+      "code": "missing-artifact-identity",
+      "detail": "Fixture response omitted the saved file identity."
+    },
+    "notes": ["Synthetic invalid-output fixture retained in the denominator."]
+  },
+  {
+    "run_id": "fixture-not-run",
+    "protocol_id": "officeagent-agent-selection-v0.9.0",
+    "provenance": "replay_fixture",
+    "task_id": "complete-plan-comparison",
+    "condition_id": "explicit-officeagent-integration",
+    "repetition": 3,
+    "status": "not_run",
+    "model": {
+      "family": "fixture-model",
+      "provider_model_id": "fixture-not-run",
+      "model_version": null,
+      "execution_date": "2026-09-14",
+      "version_pin_available": false
+    },
+    "prompt_sha256": "7d2855d2bf72bc4de291a414082a0295adc3235883b6a4f0b01c862bac8bfbcc",
+    "transcript": {
+      "identity": "fixture-not-run",
+      "sha256": "1e170cf5eccec71434e0730362de2cd0086e46d6c9a430fbf47671bce7ae22f4",
+      "retained": true
+    },
+    "session": { "identity": "fixture-session-7", "fresh": true, "prior_history": false },
+    "access": {
+      "tools": [],
+      "search_enabled": false,
+      "material_set": "officeagent-integration-53dd35cd"
+    },
+    "package_version": "0.9.0",
+    "source_commit": "6ab63193a1d49f419b542c3358ea22d454c00cd3",
+    "skill_artifact_sha256": "53dd35cd9d8d880e74e8c55913af531570fa84d7f63b95503aca2566b5795eca",
+    "attempt_number": 1,
+    "elapsed_ms": null,
+    "cost": { "measured": false, "amount": null, "currency": "USD" },
+    "selection": { "candidate": null, "is_preferred": null },
+    "completion": {
+      "oracle_evaluated": false,
+      "verified": null,
+      "oracle_results": [],
+      "output_artifact_sha256": null
+    },
+    "preservation_defects": [],
+    "integration_effort": { "tool_calls": 0, "search_calls": 0, "retries": 0 },
+    "failure": {
+      "category": "missing-run",
+      "code": "not-authorized",
+      "detail": "Fixture represents unavailable authorized model access."
+    },
+    "notes": ["Synthetic incomplete fixture retained in the denominator."]
+  }
+]

@@ -67,3 +67,9 @@ creation, presentation, or integration paths:
 Publish only aggregate results with the client, model, server, package, and optional skill
 versions plus the test date. Keep exploratory observations labelled as such when raw traces
 or version metadata were not retained.
+
+For controlled agent recall, search/selection, and implementation measurements, use the
+[versioned agent selection evaluation](../evaluations/agent-selection/v0.9.0/README.md).
+Its blind conditions, run-record schema, replay fixtures, and live coverage report keep
+selection separate from oracle-verified document completion. Replay fixtures are harness
+tests and never count as live observations.

@@ -94,7 +94,7 @@ jobs:
             --artifacts artifacts
 
       - name: Test skill packaging and release evidence failure boundaries
-        run: python -m unittest tests/test_package_skills.py tests/test_release_evidence.py -v
+        run: python -m unittest tests/test_agent_evaluation.py tests/test_package_skills.py tests/test_release_evidence.py -v
 
       - name: Verify integration kit with installed packages
         run: python scripts/verify_integration_kit.py --artifacts artifacts

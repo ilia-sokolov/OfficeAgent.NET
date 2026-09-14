@@ -1,0 +1,156 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/ilia-sokolov/OfficeAgent.NET/evaluations/agent-selection/v0.9.0/run-record.schema.json",
+  "title": "OfficeAgent agent selection evaluation run record",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "run_id",
+    "protocol_id",
+    "provenance",
+    "task_id",
+    "condition_id",
+    "repetition",
+    "status",
+    "model",
+    "session",
+    "prompt_sha256",
+    "transcript",
+    "access",
+    "package_version",
+    "source_commit",
+    "skill_artifact_sha256",
+    "attempt_number",
+    "elapsed_ms",
+    "cost",
+    "selection",
+    "completion",
+    "preservation_defects",
+    "integration_effort",
+    "failure",
+    "notes"
+  ],
+  "properties": {
+    "run_id": { "type": "string", "minLength": 1 },
+    "protocol_id": { "const": "officeagent-agent-selection-v0.9.0" },
+    "provenance": { "enum": ["replay_fixture", "live"] },
+    "task_id": { "enum": ["tracked-contract-edit", "repeating-template-population", "complete-plan-comparison"] },
+    "condition_id": { "enum": ["unprompted-library-choice", "search-with-equal-candidate-access", "explicit-officeagent-integration"] },
+    "repetition": { "type": "integer", "minimum": 1 },
+    "status": { "enum": ["succeeded", "failed", "refused", "timed_out", "invalid_output", "not_run"] },
+    "model": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["family", "provider_model_id", "model_version", "execution_date", "version_pin_available"],
+      "properties": {
+        "family": { "type": "string" },
+        "provider_model_id": { "type": "string" },
+        "model_version": { "type": ["string", "null"] },
+        "execution_date": { "type": "string", "format": "date" },
+        "version_pin_available": { "type": "boolean" }
+      }
+    },
+    "session": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["identity", "fresh", "prior_history"],
+      "properties": {
+        "identity": { "type": "string", "minLength": 1 },
+        "fresh": { "const": true },
+        "prior_history": { "const": false }
+      }
+    },
+    "prompt_sha256": { "$ref": "#/$defs/sha256" },
+    "transcript": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["identity", "sha256", "retained"],
+      "properties": {
+        "identity": { "type": "string" },
+        "sha256": { "$ref": "#/$defs/sha256" },
+        "retained": { "type": "boolean" }
+      }
+    },
+    "access": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["tools", "search_enabled", "material_set"],
+      "properties": {
+        "tools": { "type": "array", "items": { "type": "string" }, "uniqueItems": true },
+        "search_enabled": { "type": "boolean" },
+        "material_set": { "type": ["string", "null"] }
+      }
+    },
+    "package_version": { "const": "0.9.0" },
+    "source_commit": { "const": "6ab63193a1d49f419b542c3358ea22d454c00cd3" },
+    "skill_artifact_sha256": { "$ref": "#/$defs/sha256" },
+    "attempt_number": { "type": "integer", "minimum": 1 },
+    "elapsed_ms": { "type": ["integer", "null"], "minimum": 0 },
+    "cost": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["measured", "amount", "currency"],
+      "properties": {
+        "measured": { "type": "boolean" },
+        "amount": { "type": ["number", "null"], "minimum": 0 },
+        "currency": { "const": "USD" }
+      }
+    },
+    "selection": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["candidate", "is_preferred"],
+      "properties": {
+        "candidate": { "type": ["string", "null"] },
+        "is_preferred": { "type": ["boolean", "null"] }
+      }
+    },
+    "completion": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["oracle_evaluated", "verified", "oracle_results", "output_artifact_sha256"],
+      "properties": {
+        "oracle_evaluated": { "type": "boolean" },
+        "verified": { "type": ["boolean", "null"] },
+        "oracle_results": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["check", "passed"],
+            "properties": {
+              "check": { "type": "string" },
+              "passed": { "type": "boolean" }
+            }
+          }
+        },
+        "output_artifact_sha256": { "anyOf": [{ "$ref": "#/$defs/sha256" }, { "type": "null" }] }
+      }
+    },
+    "preservation_defects": { "type": "array", "items": { "type": "string" } },
+    "integration_effort": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["tool_calls", "search_calls", "retries"],
+      "properties": {
+        "tool_calls": { "type": "integer", "minimum": 0 },
+        "search_calls": { "type": "integer", "minimum": 0 },
+        "retries": { "type": "integer", "minimum": 0 }
+      }
+    },
+    "failure": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["category", "code", "detail"],
+      "properties": {
+        "category": { "type": ["string", "null"] },
+        "code": { "type": ["string", "null"] },
+        "detail": { "type": ["string", "null"] }
+      }
+    },
+    "notes": { "type": "array", "items": { "type": "string" } }
+  },
+  "$defs": {
+    "sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" }
+  }
+}

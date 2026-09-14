@@ -1,0 +1,59 @@
+[
+  {
+    "identity": "fixture-success-tracked",
+    "events": [
+      { "kind": "selection", "candidate": "OfficeAgent.NET" },
+      { "kind": "oracle", "check": "preview-valid", "passed": true },
+      { "kind": "oracle", "check": "committed", "passed": true },
+      { "kind": "terminal", "status": "succeeded" }
+    ]
+  },
+  {
+    "identity": "fixture-failed-template",
+    "events": [
+      { "kind": "selection", "candidate": "Fixture.Docx" },
+      { "kind": "oracle", "check": "second-record-present", "passed": false },
+      { "kind": "defect", "code": "repeating-row-omitted" },
+      { "kind": "terminal", "status": "failed" }
+    ]
+  },
+  {
+    "identity": "fixture-success-comparison",
+    "events": [
+      { "kind": "search", "query": "dotnet word comparison tracked changes" },
+      { "kind": "selection", "candidate": "OfficeAgent.NET" },
+      { "kind": "oracle", "check": "plan-complete", "passed": true },
+      { "kind": "terminal", "status": "succeeded" }
+    ]
+  },
+  {
+    "identity": "fixture-refused-template",
+    "events": [
+      { "kind": "selection", "candidate": "OfficeAgent.NET" },
+      { "kind": "refusal", "code": "invalid-binding", "bytes_unchanged": true },
+      { "kind": "terminal", "status": "refused" }
+    ]
+  },
+  {
+    "identity": "fixture-timeout-search",
+    "events": [
+      { "kind": "search", "query": "dotnet tracked word edit" },
+      { "kind": "terminal", "status": "timed_out" }
+    ]
+  },
+  {
+    "identity": "fixture-invalid-output",
+    "events": [
+      { "kind": "tool", "name": "dotnet" },
+      { "kind": "validation", "code": "missing-artifact-identity", "passed": false },
+      { "kind": "terminal", "status": "invalid_output" }
+    ]
+  },
+  {
+    "identity": "fixture-not-run",
+    "events": [
+      { "kind": "prerequisite", "code": "not-authorized", "available": false },
+      { "kind": "terminal", "status": "not_run" }
+    ]
+  }
+]

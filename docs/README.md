@@ -88,6 +88,7 @@ and optimistic-concurrency conflicts instead of guessing.
 - [Troubleshooting](troubleshooting.md) — diagnose setup, identity, and edit failures.
 - [Releasing](releasing.md) — the maintainer steps for NuGet, the MCP Registry, GitHub releases, and repository metadata.
 - [Adoption validation](adoption-validation.md) — fresh-user trials across the main Word, PowerPoint, and review paths before broad promotion.
+- [Agent selection evaluation](../evaluations/agent-selection/v0.9.0/README.md) - controlled recall, search/selection, and implementation protocol with explicit live evidence limits.
 - [Support and compatibility](../SUPPORT.md) — supported runtimes, version policy, release assurances, and help routes.
 - [Security policy](../SECURITY.md) — supported versions, private reporting, and the hosted security boundary.
 

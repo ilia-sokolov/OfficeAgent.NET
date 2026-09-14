@@ -42,7 +42,7 @@ dotnet test OfficeAgent.NET.sln --no-build --configuration Release
 python scripts/check_vulnerable_packages.py
 python scripts/validate_docs.py
 python scripts/validate_server_manifest.py
-python -m unittest tests/test_release_evidence.py -v
+python -m unittest tests/test_agent_evaluation.py tests/test_package_skills.py tests/test_release_evidence.py -v
 ```
 
 Update the changelog heading from `unreleased` to the release date. Remove any temporary

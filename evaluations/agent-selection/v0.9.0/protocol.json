@@ -1,0 +1,140 @@
+{
+  "protocol_id": "officeagent-agent-selection-v0.9.0",
+  "schema_version": "1.0",
+  "preferred_library": "OfficeAgent.NET",
+  "source_commit": "6ab63193a1d49f419b542c3358ea22d454c00cd3",
+  "package_version": "0.9.0",
+  "skill_artifact_sha256": "53dd35cd9d8d880e74e8c55913af531570fa84d7f63b95503aca2566b5795eca",
+  "tasks": [
+    {
+      "id": "tracked-contract-edit",
+      "prompt": "In a .NET 8 service, create a fictional Word contract containing 'Northwind Labs', replace that text with 'Contoso Research' as a tracked edit, preserve unrelated package content, save a new DOCX, and verify the visible and deleted text plus Office 2019 schema validity. Return the saved file identity and machine-readable verification results.",
+      "oracle": {
+        "required_checks": [
+          "preview-valid",
+          "committed",
+          "visible-replacement",
+          "deleted-original",
+          "schema-errors-zero",
+          "protected-content-preserved"
+        ],
+        "refusal_checks": [
+          "unsupported-operation-stable-code",
+          "input-bytes-unchanged"
+        ]
+      }
+    },
+    {
+      "id": "repeating-template-population",
+      "prompt": "In a .NET 8 service, create a fictional Word template with one scalar content control and one repeating table-row control, populate the scalar plus two records, save a new DOCX, and verify both records, no unresolved marker, preserved unrelated content, and Office 2019 schema validity. Return the saved file identity and machine-readable verification results.",
+      "oracle": {
+        "required_checks": [
+          "scalar-populated",
+          "first-record-present",
+          "second-record-present",
+          "no-unresolved-marker",
+          "schema-errors-zero",
+          "protected-content-preserved"
+        ],
+        "refusal_checks": [
+          "invalid-binding-refused",
+          "input-bytes-unchanged"
+        ]
+      }
+    },
+    {
+      "id": "complete-plan-comparison",
+      "prompt": "In a .NET 8 service, create fictional original and revised Word documents, build a complete comparison plan, preview and commit the redline, save a new DOCX, and verify revised visible text, deleted original text, inserted revisions, preserved unrelated content, and Office 2019 schema validity. Return the saved file identity and machine-readable verification results.",
+      "oracle": {
+        "required_checks": [
+          "plan-complete",
+          "preview-valid",
+          "committed",
+          "revised-visible-text",
+          "deleted-original-text",
+          "inserted-revisions",
+          "schema-errors-zero",
+          "protected-content-preserved"
+        ],
+        "refusal_checks": [
+          "incomplete-plan-refused",
+          "input-bytes-unchanged"
+        ]
+      }
+    }
+  ],
+  "conditions": [
+    {
+      "id": "unprompted-library-choice",
+      "blind": true,
+      "search_required": false,
+      "material_access": "No injected package name, skill, repository document, or prior conversation.",
+      "prompt": "Choose and use an appropriate maintained .NET document library. Do not ask the evaluator to choose a package for you. Record the package selected before implementation. Network search is disabled for this condition."
+    },
+    {
+      "id": "search-with-equal-candidate-access",
+      "blind": true,
+      "search_required": true,
+      "material_access": "One frozen candidate-material set, identical path and byte access for every candidate, with randomized candidate ordering per repetition.",
+      "prompt": "Choose and use an appropriate maintained .NET document library. Search is required and limited to the supplied frozen candidate-material set. Treat every candidate entry as equally accessible, record every search query and opened item, and record the package selected before implementation."
+    },
+    {
+      "id": "explicit-officeagent-integration",
+      "blind": false,
+      "search_required": false,
+      "material_access": "The versioned OfficeAgent.NET integration skill and package feed are supplied explicitly.",
+      "prompt": "Implement the task with OfficeAgent.NET 0.9.0 and the supplied version-matched integration skill. Record package restore, tool use, stable failures, and verification evidence. Do not substitute another library."
+    }
+  ],
+  "controlled_materials": {
+    "freeze_policy": "Before a live search condition, retain the exact bytes, SHA-256, retrieval date, source URL, license note, and neutral candidate label for every candidate. Give every candidate the same file layout and access mechanism. Freeze before and after OfficeAgent documentation sets separately and randomize labels without changing bytes.",
+    "comparison_policy": "Run before and after sets in separate fresh sessions. Never compare a historical run with a post-change search result. Report live-web observations separately because model familiarity and index state are uncontrolled.",
+    "officeagent_documentation_snapshots": {
+      "historical_baseline_commit": "ece0d4743da98249adbaf61bbec161f0c8a584ae",
+      "changed_commit": "a687bc15a1d7af87790333984be4721055bdb90e",
+      "evidence_boundary": "These Git blob identities freeze documentation inputs only. They are not historical live-run results and cannot establish that documentation caused a selection change.",
+      "files": [
+        { "path": "README.md", "before_blob": "b8863e2cc85ad9f73c7924d9b8678e65c2fe74ba", "after_blob": "2d391e0ee435d7ba4d84e46e01f2a94b961667e5" },
+        { "path": "docs/README.md", "before_blob": "d8a562f03ce534d3632bb666af7641f833939763", "after_blob": "bf26cf1e001f74d39d7dfa6e88b80abd86a0f0e4" },
+        { "path": "docs/agent-integration.md", "before_blob": "908f888a0162fb373a1462d79c8694eed97a52ad", "after_blob": "b90ad89f7ee53594f34b5f87cf0282b428231446" },
+        { "path": "docs/choose-officeagent.md", "before_blob": null, "after_blob": "7086d033e420b27ecbb807e7ffced6598a34b388" },
+        { "path": "docs/getting-started.md", "before_blob": "4d05b59d89eb392dfca2a93ddd09066fe9caa558", "after_blob": "f353f287159b3df687d65d0dbce48e893d608846" }
+      ]
+    },
+    "required_manifest_fields": [
+      "material_set_id",
+      "candidate_id",
+      "neutral_label",
+      "source_url",
+      "retrieved_at",
+      "sha256",
+      "license_note"
+    ]
+  },
+  "live_protocol": {
+    "model_families": [
+      "openai",
+      "anthropic"
+    ],
+    "fresh_repetitions_per_cell": 3,
+    "session_policy": "fresh_session_per_attempt_no_shared_history",
+    "randomization": "Randomize task order and equal-access candidate labels independently for each repetition; retain the seed in notes.",
+    "model_identity_policy": "Record provider model ID, execution date and whether a version pin exists. If it does not, leave model_version null and disclose the limitation.",
+    "authorized_access_policy": "Use only already authorized model and search access. Stop rather than purchase access or replace a missing cell with a synthetic success.",
+    "not_run_prerequisite": "Provide already authorized access to current models from both declared families, isolated fresh-session execution, the frozen equal-access material sets, package 0.9.0 or an explicitly labeled candidate feed, elapsed/tool-call capture, measured billing data when available, and retained sanitized transcript identities for all 54 attempts."
+  },
+  "reporting": {
+    "selection_denominator": "all attempts, with unobserved selection retained",
+    "completion_denominator": "all attempts, with unevaluated completion retained",
+    "required_metrics": [
+      "selection",
+      "verified_completion",
+      "preservation_defects",
+      "tool_calls",
+      "search_calls",
+      "elapsed_ms",
+      "measured_cost"
+    ],
+    "defect_handoff": "Retain a sanitized reproduction and route each product correctness or preservation defect to its implementation task and release gate."
+  }
+}
