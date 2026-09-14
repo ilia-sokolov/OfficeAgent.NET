@@ -1,0 +1,157 @@
+{
+  "schemaVersion": "1.0",
+  "releaseCandidate": "v0.9.0",
+  "testedBaseCommit": "a687bc15a1d7af87790333984be4721055bdb90e",
+  "fixture": {
+    "path": "tests/OfficeAgent.Tests/Corpus/v0.9.0/word-preservation/rich-word-features.docx",
+    "sha256": "68b8217443aaf8bd381ec8164e2d0f2237a6db5aafdc6deb8f9568d9b4626c1c",
+    "origin": "deterministic generated fictional fixture",
+    "recipe": "WordPreservationFixtureBuilder.Build",
+    "license": "MIT repository fixture",
+    "authoringApplication": "DocumentFormat.OpenXml 3.5.1"
+  },
+  "artifacts": [
+    {
+      "path": "tests/OfficeAgent.Tests/Corpus/v0.9.0/word-preservation/tracked-mixed-run-replacement.docx",
+      "sha256": "3aef1911bd54b48f785da0c705c1f162f72e7a9ac8b5b403c2cdce33ded09466"
+    },
+    {
+      "path": "tests/OfficeAgent.Tests/Corpus/v0.9.0/word-preservation/resolved-comment.docx",
+      "sha256": "08b979422880324ee752fed62707e8f44b399265aca21ac56141e904a7c7c710"
+    },
+    {
+      "path": "tests/OfficeAgent.Tests/Corpus/v0.9.0/word-preservation/report.json",
+      "generatedBy": "WordPreservationEvidenceTests.GenerateReportJson"
+    }
+  ],
+  "cases": [
+    {
+      "id": "mixed-runs-tracked-edit",
+      "categories": ["mixed-runs"],
+      "disposition": "supported-edit",
+      "operation": "tracked changeText: target to objective",
+      "allowedChangedParts": ["word/document.xml"],
+      "protectedParts": ["[Content_Types].xml", "_rels/.rels", "word/_rels/document.xml.rels", "word/comments.xml", "word/commentsExtended.xml", "word/commentsIds.xml", "word/numbering.xml", "word/people.xml"],
+      "semanticAssertions": ["deletion contains target", "insertion contains objective", "mixed bold and italic source runs are addressed as one span"]
+    },
+    {
+      "id": "existing-revisions-preserved",
+      "categories": ["existing-insertions-deletions"],
+      "disposition": "preservation-only",
+      "operation": "tracked changeText in paragraph 10000001",
+      "allowedChangedParts": ["word/document.xml"],
+      "protectedParts": ["word/comments.xml", "word/commentsExtended.xml", "word/commentsIds.xml", "word/people.xml", "word/numbering.xml", "word/_rels/document.xml.rels"],
+      "semanticAssertions": ["revision 100 insertion and revision 101 deletion retain author, timestamp and text"]
+    },
+    {
+      "id": "classic-comment-preserved",
+      "categories": ["classic-comments"],
+      "disposition": "preservation-only",
+      "operation": "tracked changeText in paragraph 10000001",
+      "allowedChangedParts": ["word/document.xml"],
+      "protectedParts": ["word/comments.xml"],
+      "semanticAssertions": ["comment 1 author, text, paragraph identity and range markers remain"]
+    },
+    {
+      "id": "comments-extended-preserved",
+      "categories": ["commentsExtended"],
+      "disposition": "preservation-only",
+      "operation": "tracked changeText in paragraph 10000001",
+      "allowedChangedParts": ["word/document.xml"],
+      "protectedParts": ["word/commentsExtended.xml"],
+      "semanticAssertions": ["comment paragraph identity and unresolved state remain"]
+    },
+    {
+      "id": "comments-ids-preserved",
+      "categories": ["commentsIds"],
+      "disposition": "preservation-only",
+      "operation": "tracked changeText in paragraph 10000001",
+      "allowedChangedParts": ["word/document.xml"],
+      "protectedParts": ["word/commentsIds.xml"],
+      "semanticAssertions": ["paragraph identity 20000001 remains mapped to durable identity D0000001"]
+    },
+    {
+      "id": "people-preserved",
+      "categories": ["people"],
+      "disposition": "preservation-only",
+      "operation": "tracked changeText in paragraph 10000001",
+      "allowedChangedParts": ["word/document.xml"],
+      "protectedParts": ["word/people.xml"],
+      "semanticAssertions": ["Reviewer One remains associated with the comment author"]
+    },
+    {
+      "id": "paragraph-identifiers-preserved",
+      "categories": ["paragraph-identifiers"],
+      "disposition": "preservation-only",
+      "operation": "tracked changeText in paragraph 10000001",
+      "allowedChangedParts": ["word/document.xml"],
+      "protectedParts": ["word/_rels/document.xml.rels"],
+      "semanticAssertions": ["all seven body paragraph identifiers remain unchanged"]
+    },
+    {
+      "id": "nested-controls-preserved",
+      "categories": ["nested-controls"],
+      "disposition": "preservation-only",
+      "operation": "tracked changeText in paragraph 10000001",
+      "allowedChangedParts": ["word/document.xml"],
+      "protectedParts": ["word/_rels/document.xml.rels"],
+      "semanticAssertions": ["OuterClause block control and InnerParty run control remain byte-equivalent XML subtrees"]
+    },
+    {
+      "id": "numbering-preserved",
+      "categories": ["numbering"],
+      "disposition": "preservation-only",
+      "operation": "tracked changeText in paragraph 10000001",
+      "allowedChangedParts": ["word/document.xml"],
+      "protectedParts": ["word/numbering.xml", "word/_rels/document.xml.rels"],
+      "semanticAssertions": ["numbering instance 42 and paragraph reference remain"]
+    },
+    {
+      "id": "field-preserved",
+      "categories": ["fields"],
+      "disposition": "preservation-only",
+      "operation": "tracked changeText in paragraph 10000001",
+      "allowedChangedParts": ["word/document.xml"],
+      "protectedParts": ["word/_rels/document.xml.rels"],
+      "semanticAssertions": ["PAGE field instruction and cached result 7 remain"]
+    },
+    {
+      "id": "sections-preserved",
+      "categories": ["sections"],
+      "disposition": "preservation-only",
+      "operation": "tracked changeText in paragraph 10000001",
+      "allowedChangedParts": ["word/document.xml"],
+      "protectedParts": ["word/_rels/document.xml.rels"],
+      "semanticAssertions": ["landscape next-page section and final portrait section remain"]
+    },
+    {
+      "id": "resolve-classic-comment",
+      "categories": ["classic-comments", "commentsExtended", "commentsIds", "people"],
+      "disposition": "supported-edit",
+      "operation": "comment Resolve on comment#1",
+      "allowedChangedParts": ["word/commentsExtended.xml"],
+      "protectedParts": ["[Content_Types].xml", "_rels/.rels", "word/_rels/document.xml.rels", "word/comments.xml", "word/commentsIds.xml", "word/document.xml", "word/numbering.xml", "word/people.xml"],
+      "semanticAssertions": ["commentsExtended done flag becomes true", "classic and durable comment identities and people metadata remain"]
+    },
+    {
+      "id": "set-cell-on-word-refusal",
+      "categories": ["mixed-runs"],
+      "disposition": "refusal",
+      "operation": "setCell against Word input",
+      "allowedChangedParts": [],
+      "protectedParts": ["*"],
+      "protectedState": ["input bytes", "provider count", "provider version", "provider bytes"],
+      "expectedRefusalCode": "unsupported-operation"
+    },
+    {
+      "id": "insert-slide-on-word-refusal",
+      "categories": ["mixed-runs"],
+      "disposition": "refusal",
+      "operation": "insertSlide against Word input",
+      "allowedChangedParts": [],
+      "protectedParts": ["*"],
+      "protectedState": ["input bytes", "provider count", "provider version", "provider bytes"],
+      "expectedRefusalCode": "unsupported-operation"
+    }
+  ]
+}

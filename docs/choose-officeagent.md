@@ -29,7 +29,9 @@ recipe is the published-package evidence on this page.
 
 The complete operation shapes and format-specific behavior are in
 [Document plans](document-plans.md), [PowerPoint support](powerpoint.md), and
-[Excel support](excel.md).
+[Excel support](excel.md). The public
+[Word preservation matrix](word-preservation-evidence.md) shows exact
+operation-specific package evidence and its native Office limits.
 
 ## Do not use it as
 

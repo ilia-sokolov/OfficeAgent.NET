@@ -1,0 +1,134 @@
+{
+  "schemaVersion": "1.0",
+  "evidenceDate": "2026-09-14",
+  "testedBaseCommit": "a687bc15a1d7af87790333984be4721055bdb90e",
+  "candidate": "v0.9.0 working tree based on testedBaseCommit",
+  "fixture": {
+    "path": "tests/OfficeAgent.Tests/Corpus/v0.9.0/word-preservation/rich-word-features.docx",
+    "origin": "deterministic generated fictional fixture",
+    "license": "MIT repository fixture",
+    "sha256": "68b8217443aaf8bd381ec8164e2d0f2237a6db5aafdc6deb8f9568d9b4626c1c"
+  },
+  "structuralValidation": {
+    "status": "PASSED",
+    "validator": "DocumentFormat.OpenXml OpenXmlValidator",
+    "fileFormatVersion": "Office2019",
+    "packagesChecked": 3
+  },
+  "supportedOperations": [
+    {
+      "id": "tracked-mixed-run-replacement",
+      "status": "PASSED",
+      "changedParts": [
+        "word/document.xml"
+      ],
+      "protectedParts": [
+        "[Content_Types].xml",
+        "_rels/.rels",
+        "word/_rels/document.xml.rels",
+        "word/comments.xml",
+        "word/commentsExtended.xml",
+        "word/commentsIds.xml",
+        "word/numbering.xml",
+        "word/people.xml"
+      ],
+      "semanticAssertions": [
+        "replacement spans styled runs and is tracked",
+        "prior insertion and deletion identity remains",
+        "classic and extended comment identity remains",
+        "paragraph identifiers, nested controls, numbering, field and sections remain"
+      ]
+    },
+    {
+      "id": "resolve-classic-comment",
+      "status": "PASSED",
+      "changedParts": [
+        "word/commentsExtended.xml"
+      ],
+      "protectedParts": [
+        "[Content_Types].xml",
+        "_rels/.rels",
+        "word/_rels/document.xml.rels",
+        "word/comments.xml",
+        "word/commentsIds.xml",
+        "word/document.xml",
+        "word/numbering.xml",
+        "word/people.xml"
+      ],
+      "semanticAssertions": [
+        "commentsExtended done flag becomes true",
+        "classic comment, commentsIds durable identity and person remain"
+      ]
+    }
+  ],
+  "refusals": [
+    {
+      "id": "setCell-on-word",
+      "status": "PASSED",
+      "expectedCode": "unsupported-operation",
+      "observedCode": "unsupported-operation",
+      "inputSha256After": "68b8217443aaf8bd381ec8164e2d0f2237a6db5aafdc6deb8f9568d9b4626c1c",
+      "outputCreated": false
+    },
+    {
+      "id": "insertSlide-on-word",
+      "status": "PASSED",
+      "expectedCode": "unsupported-operation",
+      "observedCode": "unsupported-operation",
+      "inputSha256After": "68b8217443aaf8bd381ec8164e2d0f2237a6db5aafdc6deb8f9568d9b4626c1c",
+      "outputCreated": false
+    }
+  ],
+  "corruptionControls": [
+    {
+      "id": "protected-comment-part",
+      "status": "PASSED",
+      "expected": "verifier failure"
+    },
+    {
+      "id": "protected-relationship",
+      "status": "PASSED",
+      "expected": "verifier failure"
+    },
+    {
+      "id": "revision-identity",
+      "status": "PASSED",
+      "expected": "verifier failure"
+    },
+    {
+      "id": "comment-identity",
+      "status": "PASSED",
+      "expected": "verifier failure"
+    }
+  ],
+  "nativeOffice": {
+    "status": "PARTIAL",
+    "application": "Microsoft Word",
+    "version": "16.0.20326.20144",
+    "observationDate": "2026-09-14",
+    "source": "Manual native observation. The automated generator preserves this recorded result but does not rerun Word.",
+    "checks": [
+      {
+        "id": "open-tracked-mixed-run-result",
+        "status": "PASSED",
+        "observation": "Opened in Compatibility Mode with tracked replacement, prior revisions, comment, controls, numbering, field and two pages visible."
+      },
+      {
+        "id": "accept-revisions",
+        "status": "NOT_RUN",
+        "observation": "No accept operation was performed."
+      },
+      {
+        "id": "reject-revisions",
+        "status": "NOT_RUN",
+        "observation": "No reject operation was performed."
+      }
+    ],
+    "reason": "Opening was observed separately from automated validation. Accept and reject remain assigned to the V10-03 native matrix."
+  },
+  "limitations": [
+    "Generated fixtures are engineering evidence, not customer documents.",
+    "Passing schema, byte-preservation and semantic checks does not prove visual or universal fidelity.",
+    "The report covers only the declared operations and package features."
+  ]
+}
