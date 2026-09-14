@@ -2,6 +2,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using OfficeAgent.Core.DocumentProviders;
+using OfficeAgent.Abstractions;
 
 namespace OfficeAgent.Core;
 
@@ -30,7 +31,10 @@ public static class ServiceCollectionExtensions
             var resolvers = sp.GetServices<IHandleResolver>();
             var resolverList = resolvers.Any() ? resolvers : DefaultHandleResolver.All;
             var loggerFactory = sp.GetService<ILoggerFactory>() ?? NullLoggerFactory.Instance;
-            return new OfficeAgentEngine(modules, resolverList, loggerFactory);
+            // A host that registers its own ceilings owns them; nothing downstream can
+            // raise them, only ask for something stricter.
+            var limits = sp.GetService<OpenXmlIngestionLimits>() ?? OpenXmlIngestionLimits.Default;
+            return new OfficeAgentEngine(modules, resolverList, loggerFactory, limits);
         });
 
         services.AddSingleton<DocumentProviderRegistry>();

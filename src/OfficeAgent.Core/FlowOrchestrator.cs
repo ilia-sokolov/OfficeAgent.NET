@@ -17,7 +17,8 @@ namespace OfficeAgent.Core;
 /// </summary>
 internal sealed class FlowOrchestrator
 {
-    private readonly OpenXmlPackageService _opc = new();
+    private readonly OpenXmlPackageService _opc;
+    private readonly OpenXmlIngestionLimits _limits;
     private readonly FormatRouter _router;
     private readonly PlanValidator _validator = new();
     private readonly TransactionManager _transaction = new();
@@ -30,10 +31,22 @@ internal sealed class FlowOrchestrator
     }
 
     public FlowOrchestrator(IEnumerable<IFormatModule> modules, IEnumerable<IHandleResolver> resolvers, ILogger logger)
+        : this(modules, resolvers, logger, OpenXmlIngestionLimits.Default)
+    {
+    }
+
+    public FlowOrchestrator(
+        IEnumerable<IFormatModule> modules,
+        IEnumerable<IHandleResolver> resolvers,
+        ILogger logger,
+        OpenXmlIngestionLimits limits)
     {
         _router = new FormatRouter(modules);
         _resolvers = resolvers.ToList();
         _logger = logger;
+        _limits = limits ?? OpenXmlIngestionLimits.Default;
+        _limits.Validate();
+        _opc = new OpenXmlPackageService(_limits);
     }
 
     public InspectResult Inspect(DocumentHandle handle, InspectOptions options) =>
@@ -72,7 +85,7 @@ internal sealed class FlowOrchestrator
         var sw = Stopwatch.StartNew();
         using var package = _opc.Open(bytes, editable: false);
         var module = _router.Route(package);
-        var result = module.Inspect(package, options);
+        var result = OpenXmlPackageService.Guarded(() => module.Inspect(package, options));
 
         _logger.LogDebug("Inspect {Format} ({Bytes} B, fidelity={Fidelity}) → {Paragraphs} paragraphs, snapshot={Snapshot} in {Elapsed} ms",
             module.Format, bytes.Length, options.Fidelity, result.Paragraphs.Count, result.Snapshot.ETag, sw.ElapsedMilliseconds);
@@ -87,7 +100,7 @@ internal sealed class FlowOrchestrator
         var sw = Stopwatch.StartNew();
         using var package = _opc.Open(bytes, editable: false);
         var module = _router.Route(package);
-        var hits = module.Find(package, query);
+        var hits = OpenXmlPackageService.Guarded(() => module.Find(package, query));
 
         _logger.LogDebug("Find {Format} pattern='{Pattern}' → {Hits} hits in {Elapsed} ms",
             module.Format, query.Pattern, hits.Count, sw.ElapsedMilliseconds);
@@ -184,7 +197,7 @@ internal sealed class FlowOrchestrator
     {
         using var package = _opc.Open(bytes, editable: false);
         var module = _router.Route(package);
-        var snapshot = module.Inspect(package, InspectOptions.Default);
+        var snapshot = OpenXmlPackageService.Guarded(() => module.Inspect(package, InspectOptions.Default));
         var context = new ApplyContext(package, snapshot);
         var report = _validator.Validate(context, plan, module);
         return (report, module);
@@ -198,7 +211,7 @@ internal sealed class FlowOrchestrator
         var clock = module is IApplyTimeProvider provider ? provider.Clock : TimeProvider.System;
         var attemptedAt = clock.GetUtcNow().ToUniversalTime();
         var revision = ResolveRevision(plan.Revision, attemptedAt);
-        var snapshot = module.Inspect(package, InspectOptions.Default);
+        var snapshot = OpenXmlPackageService.Guarded(() => module.Inspect(package, InspectOptions.Default));
         var context = new ApplyContext(package, snapshot, revision: revision);
         return (_validator.Validate(context, plan, module), module, attemptedAt, revision);
     }
@@ -244,17 +257,19 @@ internal sealed class FlowOrchestrator
     private byte[] ReadAll(DocumentHandle handle)
     {
         using var source = ResolveStream(handle);
-        if (source is MemoryStream ms)
-            return ms.ToArray();
-        using var copy = new MemoryStream();
-        source.CopyTo(copy);
-        return copy.ToArray();
+        return OpenXmlPackageService.ReadBounded(source, _limits.MaximumCompressedBytes);
     }
 
     private async Task<byte[]> ReadAllAsync(DocumentHandle handle, CancellationToken cancellationToken)
     {
         if (handle is FileHandle file)
         {
+            // Checked before reading: a file's length is known, so an oversized one is
+            // refused without being loaded at all.
+            var length = new FileInfo(file.Path).Length;
+            if (length > _limits.MaximumCompressedBytes)
+                throw new OpenXmlIngestionLimitException(
+                    nameof(_limits.MaximumCompressedBytes), _limits.MaximumCompressedBytes, length);
 #if NET8_0_OR_GREATER
             return await File.ReadAllBytesAsync(file.Path, cancellationToken).ConfigureAwait(false);
 #else
@@ -264,11 +279,8 @@ internal sealed class FlowOrchestrator
         }
 
         using var source = ResolveStream(handle);
-        if (source is MemoryStream ms)
-            return ms.ToArray();
-        using var copy = new MemoryStream();
-        await source.CopyToAsync(copy, 81920, cancellationToken).ConfigureAwait(false);
-        return copy.ToArray();
+        return await OpenXmlPackageService.ReadBoundedAsync(
+            source, _limits.MaximumCompressedBytes, cancellationToken).ConfigureAwait(false);
     }
 
     private static string OutputName(DocumentHandle handle) => handle switch

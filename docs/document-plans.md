@@ -797,5 +797,7 @@ Returned by `preview_plan` and `apply_plan` in the `errors` array. Stable wire c
 | `invalid-json` | The plan is not valid JSON, contains an unknown property, operation or enum value, uses an integer enum value, or supplies a non-string version. Correct the named member; unknown operation errors list the verbs that exist. |
 | `invalid-argument` | A tool argument outside the plan is wrong - an unrecognised `saveMode`, for example. |
 | `regex-timeout` | A regular-expression search exceeded its time limit. Simplify the pattern or use a literal search. |
+| `input-too-large` | The document exceeds a host ingestion ceiling. The message names the limit and the observed value. See [ingestion limits](ingestion-limits.md). |
+| `malformed-package` | The document is not a package this engine will open: corrupt, truncated, carrying a duplicate or traversing part name, or declaring a document type definition. See [ingestion limits](ingestion-limits.md). |
 
 Provider boundary errors (`apply_plan` only) use a separate set of wire codes - see [document-providers.md](document-providers.md).

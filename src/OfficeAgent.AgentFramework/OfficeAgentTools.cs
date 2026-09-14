@@ -951,7 +951,12 @@ public sealed class OfficeAgentTools
         {
             return read();
         }
-        catch (Exception ex) when (ex is not OperationCanceledException and not OutOfMemoryException)
+        // A host ingestion ceiling is not a corrupted copy, and saying so would send the
+        // caller to re-fetch a document that would breach the same limit again. Those two
+        // keep their own stable codes; everything else is still reported as bad input.
+        catch (Exception ex) when (ex is not OperationCanceledException
+                                   and not OutOfMemoryException
+                                   and not OpenXmlIngestionLimitException)
         {
             throw new ArgumentException(
                 "contentBase64 decoded, but the bytes are not a readable .docx, .pptx, or .xlsx package. " +
@@ -978,6 +983,8 @@ public sealed class OfficeAgentTools
         catch (OperationCanceledException) { return ContentError(name, "cancelled", "Operation was cancelled."); }
         catch (ConnectionForbiddenException ex) { return ContentError(name, "connection-forbidden", ex.Message); }
         catch (RegexMatchTimeoutException) { return ContentError(name, "regex-timeout", RegexTimeoutMessage); }
+        catch (OpenXmlIngestionLimitException ex) { return ContentError(name, OpenXmlIngestionLimitException.Code, ex.Message); }
+        catch (OpenXmlPackageRejectedException ex) { return ContentError(name, OpenXmlPackageRejectedException.Code, ex.Message); }
         catch (JsonException ex) { return ContentError(name, "invalid-json", ex.Message); }
         catch (ArgumentException ex) { return ContentError(name, "invalid-argument", ex.Message); }
         catch (Exception) { return ContentError(name, "internal-error", "An unexpected internal error occurred."); }
@@ -1069,6 +1076,16 @@ public sealed class OfficeAgentTools
             throw new ArgumentException(
                 "contentBase64 is required: pass the document's bytes, base64-encoded.", nameof(contentBase64));
 
+        // 4 base64 characters carry 3 bytes. Refusing on the encoded length means an
+        // oversized payload never reaches Convert.FromBase64String, which would allocate
+        // the decoded array before anything could inspect it.
+        long decoded = (long)contentBase64.Length / 4 * 3;
+        long ceiling = OpenXmlIngestionLimits.Default.MaximumCompressedBytes;
+        if (decoded > ceiling)
+            throw new OpenXmlIngestionLimitException(
+                "MaximumCompressedBytes", ceiling, decoded,
+                detail: "The inline document was refused from its encoded length; it was not decoded.");
+
         try
         {
             return Convert.FromBase64String(contentBase64);
@@ -1099,6 +1116,8 @@ public sealed class OfficeAgentTools
         catch (OperationCanceledException) { return SerializeError("cancelled", "Operation was cancelled."); }
         catch (ConnectionForbiddenException ex) { return SerializeError("connection-forbidden", ex.Message); }
         catch (RegexMatchTimeoutException) { return SerializeError("regex-timeout", RegexTimeoutMessage); }
+        catch (OpenXmlIngestionLimitException ex) { return SerializeError(OpenXmlIngestionLimitException.Code, ex.Message); }
+        catch (OpenXmlPackageRejectedException ex) { return SerializeError(OpenXmlPackageRejectedException.Code, ex.Message); }
         catch (JsonException ex) { return SerializeError("invalid-json", ex.Message); }
         catch (ArgumentException ex) { return SerializeError("invalid-argument", ex.Message); }
         catch (DocumentProviderException ex)
