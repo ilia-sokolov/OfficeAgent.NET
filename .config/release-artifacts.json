@@ -56,12 +56,20 @@
       "frameworks": ["netstandard2.0", "net8.0"]
     }
   ],
-  "skill": {
-    "name": "word-document-review",
-    "archive": "word-document-review.zip",
-    "source": "skills/word-document-review",
-    "license": "MIT"
-  },
+  "skills": [
+    {
+      "name": "word-document-review",
+      "archive": "word-document-review.zip",
+      "source": "skills/word-document-review",
+      "license": "MIT"
+    },
+    {
+      "name": "officeagent-integration",
+      "archive": "officeagent-integration.zip",
+      "source": "skills/officeagent-integration",
+      "license": "MIT"
+    }
+  ],
   "container": {
     "name": "ghcr.io/ilia-sokolov/officeagent-mcp",
     "workflow": ".github/workflows/publish-image.yml"

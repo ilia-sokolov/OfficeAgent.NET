@@ -68,6 +68,7 @@ it for a workflow that depends on Office's layout or calculation engine.
 | Add optional PDF/page-image rendering | [Visual rendering](docs/rendering.md) |
 | Edit documents with no storage configured | [Documents with no storage](docs/mcp-server.md#documents-with-no-storage) |
 | Run a tracked-review workflow | [Optional word-document-review skill](skills/word-document-review/SKILL.md) |
+| Build a .NET, MCP, or Agent Framework integration | [Optional officeagent-integration skill](skills/officeagent-integration/SKILL.md) |
 | Build a contract-review agent | [ContractReview sample](samples/ContractReview/) |
 | Populate quote templates or compare Word documents | [Template and comparison workflows](docs/document-workflows.md) |
 | Check support, compatibility, or security policy | [Support](SUPPORT.md) and [security](SECURITY.md) |
@@ -207,6 +208,14 @@ redlines, use document ids for multi-step work, and recover from stable error co
 for Claude Code and Codex, including installation from a fresh machine and verification.
 The skill is only needed when the task requires that review discipline; document creation,
 ordinary direct edits, and PowerPoint workflows use the server without it.
+
+### Optional guidance for application integration
+
+[`skills/officeagent-integration`](skills/officeagent-integration/SKILL.md) helps an
+implementation agent choose the direct .NET API first, add MCP or Microsoft Agent Framework
+only when needed, and run installed-package recipes for tracked editing, template population,
+and complete-plan comparison. The [installation guide](docs/skill-installation.md) covers both
+skills and makes clear that a skill does not install the runtime, NuGet packages, or MCP server.
 
 ### What reaches the model
 

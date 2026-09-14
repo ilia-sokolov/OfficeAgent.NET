@@ -20,7 +20,7 @@ MARKDOWN = [
     *sorted((ROOT / "docs").glob("*.md")),
     *sorted((ROOT / "security").glob("*.md")),
     *sorted((ROOT / "samples").glob("**/README.md")),
-    *sorted((ROOT / "skills").glob("**/SKILL.md")),
+    *sorted((ROOT / "skills").glob("**/*.md")),
 ]
 
 
@@ -111,34 +111,45 @@ def validate_release_metadata() -> list[str]:
         errors.append("server.json description exceeds the registry's 100-character limit")
 
     changelog = (ROOT / "CHANGELOG.md").read_text(encoding="utf-8")
-    first_release = re.search(r"^##\s+([0-9]+\.[0-9]+\.[0-9]+)", changelog, re.MULTILINE)
-    if not first_release or first_release.group(1) != version:
-        errors.append(f"first CHANGELOG release does not match {version}")
+    headings = re.finditer(
+        r"^##\s+([0-9]+\.[0-9]+\.[0-9]+)\s+—\s+(.+)$", changelog, re.MULTILINE
+    )
+    first_released = next(
+        (match for match in headings if match.group(2).strip().lower() != "unreleased"),
+        None,
+    )
+    if not first_released or first_released.group(1) != version:
+        errors.append(f"first released CHANGELOG version does not match {version}")
     return errors
 
 
-def validate_skill() -> list[str]:
+def validate_skills() -> list[str]:
     errors: list[str] = []
-    path = ROOT / "skills" / "word-document-review" / "SKILL.md"
-    text = path.read_text(encoding="utf-8")
-    match = re.match(r"^---\n(.*?)\n---\n", text, re.DOTALL)
-    if not match:
-        return ["word-document-review SKILL.md has no YAML frontmatter"]
-    fields: dict[str, str] = {}
-    for line in match.group(1).splitlines():
-        key, separator, value = line.partition(":")
-        if separator:
-            fields[key.strip()] = value.strip()
-    if fields.get("name") != path.parent.name:
-        errors.append("word-document-review skill name does not match its directory")
-    description = fields.get("description", "")
-    if not description or len(description) > 1024:
-        errors.append("word-document-review skill description is empty or exceeds 1024 characters")
+    paths = sorted((ROOT / "skills").glob("*/SKILL.md"))
+    if not paths:
+        return ["repository has no skill definitions"]
+    for path in paths:
+        name = path.parent.name
+        text = path.read_text(encoding="utf-8")
+        match = re.match(r"^---\n(.*?)\n---\n", text, re.DOTALL)
+        if not match:
+            errors.append(f"{name} SKILL.md has no YAML frontmatter")
+            continue
+        fields: dict[str, str] = {}
+        for line in match.group(1).splitlines():
+            key, separator, value = line.partition(":")
+            if separator:
+                fields[key.strip()] = value.strip()
+        if fields.get("name") != name:
+            errors.append(f"{name} skill name does not match its directory")
+        description = fields.get("description", "")
+        if not description or len(description) > 1024:
+            errors.append(f"{name} skill description is empty or exceeds 1024 characters")
     return errors
 
 
 def main() -> int:
-    errors = validate_markdown() + validate_release_metadata() + validate_skill()
+    errors = validate_markdown() + validate_release_metadata() + validate_skills()
     if errors:
         for error in errors:
             print(f"ERROR: {error}")

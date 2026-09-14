@@ -18,7 +18,7 @@ def main() -> int:
     errors = (
         validate_docs.validate_markdown()
         + validate_docs.validate_release_metadata()
-        + validate_docs.validate_skill()
+        + validate_docs.validate_skills()
     )
 
     props = (validate_docs.ROOT / "Directory.Build.props").read_text(encoding="utf-8")

@@ -31,6 +31,10 @@ jobs:
         if: matrix.os == 'ubuntu-latest'
         run: python scripts/validate_docs.py
 
+      - name: Test skill packaging and release inventory
+        if: matrix.os == 'ubuntu-latest'
+        run: python -m unittest tests/test_package_skills.py tests/test_release_evidence.py -v
+
       - name: Validate MCP Registry manifest
         if: matrix.os == 'ubuntu-latest'
         run: |
@@ -61,9 +65,19 @@ jobs:
         if: matrix.os == 'ubuntu-latest'
         run: dotnet pack OfficeAgent.NET.sln --no-build --configuration Release --output ./artifacts
 
-      - name: Upload nupkgs
+      - name: Package agent skills
+        if: matrix.os == 'ubuntu-latest'
+        run: python scripts/package_skills.py --output ./artifacts
+
+      - name: Verify integration kit with installed packages
+        if: matrix.os == 'ubuntu-latest'
+        run: python scripts/verify_integration_kit.py --artifacts ./artifacts
+
+      - name: Upload packages and skills
         if: matrix.os == 'ubuntu-latest'
         uses: actions/upload-artifact@v4
         with:
           name: nupkgs
-          path: ./artifacts/*.nupkg
+          path: |
+            ./artifacts/*.nupkg
+            ./artifacts/*.zip

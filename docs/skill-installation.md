@@ -1,82 +1,85 @@
-# Install the Word review skill
+# Install OfficeAgent agent skills
 
-The `word-document-review` skill teaches an agent how to inspect an existing `.docx`,
-preserve review state, make explicit tracked edits, and recover from OfficeAgent error
-codes. It complements the MCP server; it does not install or start the server itself.
-The skill is optional and scoped to review tasks. Creating documents, making ordinary
-direct edits, and working with PowerPoint do not require it.
+The v0.9.0 release workflow packages two optional agent skills as GitHub release assets:
 
-## 1. Install the MCP server
+| Skill | Use it for |
+| --- | --- |
+| `officeagent-integration` | Choosing packages and building direct .NET, MCP, or Microsoft Agent Framework integrations |
+| `word-document-review` | Safely inspecting and editing an existing Word document after the integration is available |
 
-Install the released tool:
+A skill is guidance and bundled recipe material. Installing one does not install the .NET runtime, NuGet packages, `OfficeAgent.Mcp`, or an agent framework. Install only the skill that matches the work.
 
-```bash
-dotnet tool install --global OfficeAgent.Mcp
-```
+## Install a released skill
 
-The skill and expanded review workflow described on `main` require OfficeAgent 0.7.0. Until
-that version is published, clone the repository, pack all projects into one local package
-source, and install the tool from there:
-
-```bash
-git clone --depth 1 https://github.com/ilia-sokolov/OfficeAgent.NET.git officeagent-net
-cd officeagent-net
-dotnet pack OfficeAgent.NET.sln --configuration Release --output ./artifacts/local
-dotnet tool install --global OfficeAgent.Mcp --version 0.7.0 --add-source ./artifacts/local
-```
-
-## 2. Install the skill
-
-Starting with the 0.7.0 release, download `word-document-review.zip` from the latest GitHub
-release. The archive contains the correctly named skill directory.
+The examples pin release `v0.9.0`. Replace `$skillName` only with one of the names above, and keep the skill and OfficeAgent packages on the same release.
 
 Bash:
 
 ```bash
-mkdir -p ~/.claude/skills ~/.codex/skills
-curl -L https://github.com/ilia-sokolov/OfficeAgent.NET/releases/latest/download/word-document-review.zip \
-  -o /tmp/word-document-review.zip
-unzip -q /tmp/word-document-review.zip -d ~/.claude/skills
-unzip -q /tmp/word-document-review.zip -d ~/.codex/skills
+release=v0.9.0
+skillName=officeagent-integration
+destination="$HOME/.codex/skills"
+temporary="$(mktemp -d)"
+archive="$temporary/$skillName.zip"
+mkdir -p "$destination"
+curl -fL "https://github.com/ilia-sokolov/OfficeAgent.NET/releases/download/$release/$skillName.zip" -o "$archive"
+unzip -q "$archive" -d "$destination"
+test -f "$destination/$skillName/SKILL.md"
 ```
 
 PowerShell:
 
 ```powershell
-$claudeSkills = Join-Path $env:USERPROFILE ".claude\skills"
-$codexSkills = Join-Path $env:USERPROFILE ".codex\skills"
-$skillArchive = Join-Path $env:TEMP "word-document-review.zip"
-New-Item -ItemType Directory -Force $claudeSkills, $codexSkills | Out-Null
+$release = "v0.9.0"
+$skillName = "officeagent-integration"
+$destination = Join-Path $env:USERPROFILE ".codex\skills"
+$archive = Join-Path $env:TEMP "$skillName.zip"
+New-Item -ItemType Directory -Force $destination | Out-Null
 Invoke-WebRequest `
-  https://github.com/ilia-sokolov/OfficeAgent.NET/releases/latest/download/word-document-review.zip `
-  -OutFile $skillArchive
-Expand-Archive -Force $skillArchive $claudeSkills
-Expand-Archive -Force $skillArchive $codexSkills
+  "https://github.com/ilia-sokolov/OfficeAgent.NET/releases/download/$release/$skillName.zip" `
+  -OutFile $archive
+Expand-Archive -Force $archive $destination
+if (-not (Test-Path (Join-Path $destination "$skillName\SKILL.md"))) {
+  throw "Skill installation did not produce the expected layout."
+}
 ```
 
-Before 0.7.0 is released, copy `skills/word-document-review` from the clone made in step 1
-into either destination instead. Install into just one destination when you use only Claude
-Code or only Codex.
+Use `~/.claude/skills` instead of `~/.codex/skills` for Claude Code. Install into both only when both clients need the skill. Restart the client after installation so it can rediscover skills.
 
-## 3. Connect the server
+The `officeagent-integration` skill includes a disposable recipe project. Its [recipe instructions](../skills/officeagent-integration/references/recipes.md) cover a tracked Word edit, template population, complete-plan comparison, and an unsupported-operation refusal. Install the required OfficeAgent packages separately as those instructions describe.
 
-Use the Claude Code or Codex recipe in
-[deployment and client setup](deployment.md#option-a---local-stdio-for-claude-code-and-codex).
-Point the filesystem connection at a dedicated directory containing the documents the agent
-may edit.
+For MCP, install the tool separately and follow [deployment and client setup](deployment.md#option-a---local-stdio-for-claude-code-and-codex). Confirm OfficeAgent appears in the client's MCP tool list before relying on it.
 
-Restart the client after installing the skill, confirm OfficeAgent appears in its MCP tool
-list, then use a request that matches the skill:
+## Remove a skill
 
-> Review `services-agreement.docx`. Preserve its existing comments and revisions, and
-> change the payment term from thirty days to forty-five days as a tracked change.
+Bash:
 
-The agent should inspect the review state before editing and send `"mode": "Tracked"`
-explicitly. Follow the [three sample workflows](../samples/documents/README.md#reproducible-review-workflows)
-to verify clause editing, comment resolution, and table editing.
+```bash
+skillName=officeagent-integration
+rm -r "$HOME/.codex/skills/$skillName"
+test ! -e "$HOME/.codex/skills/$skillName"
+```
 
-## Updating
+PowerShell:
 
-Update the MCP tool and refresh the copied skill from the same release tag. Keeping them on
-the same version avoids teaching the agent operations that its installed server does not yet
-support.
+```powershell
+$skillName = "officeagent-integration"
+$installed = Join-Path $env:USERPROFILE ".codex\skills\$skillName"
+Remove-Item -LiteralPath $installed -Recurse
+if (Test-Path -LiteralPath $installed) {
+  throw "Skill removal was incomplete."
+}
+```
+
+Use the matching Claude Code directory when that is where the skill was installed. Removing a skill does not uninstall `OfficeAgent.Mcp` or remove application package references.
+
+## Maintainer verification before publication
+
+From the repository root, after a Release build and pack into `artifacts`:
+
+```bash
+python scripts/package_skills.py --output artifacts
+python scripts/verify_integration_kit.py --artifacts artifacts
+```
+
+The verification uses an isolated temporary agent home. It checks archive layout and relative references, reads the repository package version, restores a disposable consumer from locally packed packages with that exact version, runs all three recipes and the refusal assertion, removes the installed skill, and confirms removal. On the `v0.9.0` release tag that version must be `0.9.0`. The verifier does not install into the user's active agent directories, connect a live model, or perform native Office visual review.

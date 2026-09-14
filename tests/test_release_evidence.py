@@ -39,12 +39,20 @@ class ReleaseEvidenceTests(unittest.TestCase):
                     "frameworks": ["netstandard2.0", "net8.0"],
                 }
             ],
-            "skill": {
-                "name": "test-skill",
-                "archive": "test-skill.zip",
-                "source": "skills/test-skill",
-                "license": "MIT",
-            },
+            "skills": [
+                {
+                    "name": "test-skill",
+                    "archive": "test-skill.zip",
+                    "source": "skills/test-skill",
+                    "license": "MIT",
+                },
+                {
+                    "name": "integration-skill",
+                    "archive": "integration-skill.zip",
+                    "source": "skills/integration-skill",
+                    "license": "MIT",
+                },
+            ],
             "container": {
                 "name": "ghcr.io/owner/test",
                 "workflow": ".github/workflows/publish-image.yml",
@@ -53,11 +61,8 @@ class ReleaseEvidenceTests(unittest.TestCase):
         for product in release_evidence.expected_products(self.inventory, self.VERSION):
             (self.output / product["name"]).write_bytes(product["name"].encode())
         for name in release_evidence.expected_sboms(self.inventory, self.VERSION):
-            component = "test-skill" if name.startswith("test-skill.") else "OfficeAgent.Test"
-            framework = "not-applicable" if component == "test-skill" else (
-                name.removeprefix(f"{component}.{self.VERSION}.").removesuffix(".cdx.json")
-                if name != f"{component}.{self.VERSION}.cdx.json"
-                else "all"
+            component, framework = release_evidence.sbom_identity(
+                self.inventory, name, self.VERSION
             )
             bom = {
                 "bomFormat": "CycloneDX",
@@ -139,6 +144,18 @@ class ReleaseEvidenceTests(unittest.TestCase):
         with self.assertRaisesRegex(release_evidence.EvidenceError, "attachments differ"):
             self.verify(release_assets=assets)
 
+    def test_each_skill_has_its_own_product_and_sbom(self) -> None:
+        manifest = release_evidence.read_json(self.output / "release-manifest.json")
+        artifacts = {item["name"]: item for item in manifest["artifacts"]}
+        self.assertEqual(
+            artifacts["integration-skill.zip"]["dependencyInventory"],
+            [f"integration-skill.{self.VERSION}.cdx.json"],
+        )
+        self.assertIn(
+            f"integration-skill.{self.VERSION}.cdx.json",
+            {item["name"] for item in manifest["verificationMaterials"]},
+        )
+
 
 class RepositoryReleaseInventoryTests(unittest.TestCase):
     def test_inventory_covers_every_packable_source_project_and_framework(self) -> None:
@@ -159,6 +176,16 @@ class RepositoryReleaseInventoryTests(unittest.TestCase):
         tools = release_evidence.read_json(ROOT / ".config" / "dotnet-tools.json")["tools"]
         self.assertEqual(inventory["sbomTool"]["version"], tools["cyclonedx"]["version"])
         self.assertFalse(tools["cyclonedx"]["rollForward"])
+
+    def test_inventory_covers_every_packaged_skill(self) -> None:
+        inventory = release_evidence.load_inventory(release_evidence.DEFAULT_INVENTORY)
+        expected = {path.name for path in (ROOT / "skills").iterdir() if path.is_dir()}
+        actual = {skill["name"] for skill in inventory["skills"]}
+        self.assertEqual(expected, actual)
+        for skill in inventory["skills"]:
+            self.assertEqual(skill["archive"], f"{skill['name']}.zip")
+            self.assertEqual(skill["source"], f"skills/{skill['name']}")
+            self.assertTrue((ROOT / skill["source"] / "SKILL.md").is_file())
 
 
 if __name__ == "__main__":

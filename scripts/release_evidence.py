@@ -49,6 +49,15 @@ def load_inventory(path: Path) -> dict[str, Any]:
     ids = [package.get("id") for package in packages]
     if any(not isinstance(package_id, str) for package_id in ids) or len(ids) != len(set(ids)):
         raise EvidenceError("release artifact package IDs must be unique strings")
+    skills = value.get("skills")
+    if not isinstance(skills, list) or not skills:
+        raise EvidenceError("release artifact inventory has no skills")
+    for field in ("name", "archive", "source", "license"):
+        values = [skill.get(field) for skill in skills if isinstance(skill, dict)]
+        if len(values) != len(skills) or any(not isinstance(item, str) or not item for item in values):
+            raise EvidenceError(f"release artifact skill {field} values must be non-empty strings")
+        if field != "license" and len(values) != len(set(values)):
+            raise EvidenceError(f"release artifact skill {field} values must be unique")
     return value
 
 
@@ -73,22 +82,38 @@ def expected_products(inventory: dict[str, Any], version: str) -> list[dict[str,
             }
             for extension in ("nupkg", "snupkg")
         )
-    skill = inventory["skill"]
-    products.append(
-        {
-            "name": skill["archive"],
-            "kind": "agent-skill",
-            "distribution": "github-original",
-            "dependencyInventory": [f"{skill['name']}.{version}.cdx.json"],
-        }
-    )
+    for skill in inventory["skills"]:
+        products.append(
+            {
+                "name": skill["archive"],
+                "kind": "agent-skill",
+                "distribution": "github-original",
+                "dependencyInventory": [f"{skill['name']}.{version}.cdx.json"],
+            }
+        )
     return products
 
 
 def expected_sboms(inventory: dict[str, Any], version: str) -> list[str]:
     names = [name for package in inventory["packages"] for name in sbom_names(package, version)]
-    names.append(f"{inventory['skill']['name']}.{version}.cdx.json")
+    names.extend(f"{skill['name']}.{version}.cdx.json" for skill in inventory["skills"])
     return sorted(names)
+
+
+def sbom_identity(
+    inventory: dict[str, Any], filename: str, version: str,
+) -> tuple[str, str]:
+    for skill in inventory["skills"]:
+        if filename == f"{skill['name']}.{version}.cdx.json":
+            return skill["name"], "not-applicable"
+    for package in inventory["packages"]:
+        package_id = package["id"]
+        if filename == f"{package_id}.{version}.cdx.json":
+            return package_id, "all"
+        for framework in package["frameworks"]:
+            if filename == f"{package_id}.{version}.{framework}.cdx.json":
+                return package_id, framework
+    raise EvidenceError(f"unexpected SBOM name: {filename}")
 
 
 def run_cyclonedx(
@@ -171,41 +196,41 @@ def run_cyclonedx(
                 json.dumps(bom, indent=2, sort_keys=True) + "\n", encoding="utf-8"
             )
 
-    skill = inventory["skill"]
-    archive = output / skill["archive"]
-    if not archive.is_file():
-        raise EvidenceError(f"missing skill archive: {archive.name}")
-    skill_bom = {
-        "bomFormat": "CycloneDX",
-        "specVersion": inventory["sbomTool"]["specVersion"],
-        "version": 1,
-        "metadata": {
-            "tools": {
-                "components": [
-                    {
-                        "type": "application",
-                        "name": inventory["sbomTool"]["package"],
-                        "version": expected_tool_version,
-                    }
-                ]
+    for skill in inventory["skills"]:
+        archive = output / skill["archive"]
+        if not archive.is_file():
+            raise EvidenceError(f"missing skill archive: {archive.name}")
+        skill_bom = {
+            "bomFormat": "CycloneDX",
+            "specVersion": inventory["sbomTool"]["specVersion"],
+            "version": 1,
+            "metadata": {
+                "tools": {
+                    "components": [
+                        {
+                            "type": "application",
+                            "name": inventory["sbomTool"]["package"],
+                            "version": expected_tool_version,
+                        }
+                    ]
+                },
+                "component": {
+                    "type": "file",
+                    "name": skill["name"],
+                    "version": version,
+                    "hashes": [{"alg": "SHA-256", "content": sha256(archive)}],
+                    "licenses": [{"license": {"id": skill["license"]}}],
+                    "properties": [
+                        {"name": "officeagent:targetFramework", "value": "not-applicable"}
+                    ],
+                },
             },
-            "component": {
-                "type": "file",
-                "name": skill["name"],
-                "version": version,
-                "hashes": [{"alg": "SHA-256", "content": sha256(archive)}],
-                "licenses": [{"license": {"id": skill["license"]}}],
-                "properties": [
-                    {"name": "officeagent:targetFramework", "value": "not-applicable"}
-                ],
-            },
-        },
-        "components": [],
-        "dependencies": [],
-    }
-    (output / f"{skill['name']}.{version}.cdx.json").write_text(
-        json.dumps(skill_bom, indent=2, sort_keys=True) + "\n", encoding="utf-8"
-    )
+            "components": [],
+            "dependencies": [],
+        }
+        (output / f"{skill['name']}.{version}.cdx.json").write_text(
+            json.dumps(skill_bom, indent=2, sort_keys=True) + "\n", encoding="utf-8"
+        )
 
 
 def validate_sbom(
@@ -254,22 +279,11 @@ def create_evidence(
             raise EvidenceError(f"missing release artifact: {path.name}")
         product["sha256"] = sha256(path)
 
-    package_by_id = {package["id"]: package for package in inventory["packages"]}
     for filename in sboms:
         path = output / filename
         if not path.is_file():
             raise EvidenceError(f"missing SBOM: {filename}")
-        if filename.startswith(f"{inventory['skill']['name']}."):
-            component_name = inventory["skill"]["name"]
-        else:
-            component_name = next(
-                package_id for package_id in package_by_id if filename.startswith(f"{package_id}.")
-            )
-        framework = "not-applicable" if component_name == inventory["skill"]["name"] else (
-            filename.removeprefix(f"{component_name}.{version}.").removesuffix(".cdx.json")
-            if filename != f"{component_name}.{version}.cdx.json"
-            else "all"
-        )
+        component_name, framework = sbom_identity(inventory, filename, version)
         validate_sbom(
             path, component_name, version, inventory["sbomTool"]["specVersion"], framework
         )
@@ -398,16 +412,7 @@ def verify_evidence(
     for sbom in sboms:
         if material_map[sbom].get("sha256") != sha256(output / sbom):
             raise EvidenceError(f"{sbom} digest does not match release manifest")
-        component_name = (
-            inventory["skill"]["name"]
-            if sbom.startswith(f"{inventory['skill']['name']}.")
-            else next(package["id"] for package in inventory["packages"] if sbom.startswith(f"{package['id']}."))
-        )
-        framework = "not-applicable" if component_name == inventory["skill"]["name"] else (
-            sbom.removeprefix(f"{component_name}.{version}.").removesuffix(".cdx.json")
-            if sbom != f"{component_name}.{version}.cdx.json"
-            else "all"
-        )
+        component_name, framework = sbom_identity(inventory, sbom, version)
         validate_sbom(
             output / sbom, component_name, version,
             inventory["sbomTool"]["specVersion"], framework,

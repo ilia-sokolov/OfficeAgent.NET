@@ -110,7 +110,7 @@ gh release create $officeAgentTag `
 Publishing the GitHub release triggers [the publish workflow](../.github/workflows/publish.yml).
 That workflow checks out the release tag, validates the metadata, packs the packages, pushes
 the libraries before `OfficeAgent.Mcp`, and attaches the original packages, symbol packages,
-skill archive, CycloneDX SBOMs, `release-manifest.json`, and `SHA256SUMS` to the same release.
+skill archives, CycloneDX SBOMs, `release-manifest.json`, and `SHA256SUMS` to the same release.
 It also creates GitHub build provenance and package-specific SBOM attestations. It is the only
 NuGet publisher; do not publish the same version manually.
 
@@ -126,6 +126,7 @@ The exact source ref must still be a release tag, even during this unpublished d
 
 ```bash
 dotnet tool restore
+python scripts/package_skills.py --output artifacts
 python scripts/release_evidence.py sbom --version "$VERSION" --artifacts artifacts
 python scripts/release_evidence.py create \
   --version "$VERSION" \
@@ -185,7 +186,7 @@ gh attestation verify "$VERIFY_DIR/OfficeAgent.Core.$VERSION.nupkg" \
   --predicate-type https://cyclonedx.org/bom
 ```
 
-Repeat both commands for every `.nupkg`, `.snupkg`, and the skill archive. The manifest maps each
+Repeat both commands for every `.nupkg`, `.snupkg`, and skill archive. The manifest maps each
 artifact to its aggregate SBOM and, for multi-targeted packages, separate `netstandard2.0` and
 `net8.0` inventories. Missing license values mean upstream NuGet metadata did not supply them;
 they are not inferred.
@@ -196,6 +197,7 @@ Verify all of the following before publishing the MCP Registry entry:
   [github.com/ilia-sokolov/OfficeAgent.NET/releases](https://github.com/ilia-sokolov/OfficeAgent.NET/releases);
 - all expected packages show the new version on NuGet;
 - `word-document-review.zip` contains `word-document-review/SKILL.md`;
+- `officeagent-integration.zip` contains `officeagent-integration/SKILL.md`, its recipe reference, and its recipe assets;
 - the release notes render correctly and their links resolve;
 - the global tool installs from NuGet on a clean machine.
 
@@ -340,8 +342,9 @@ version-specific notes in the release issue.
 
 ## Distribution gaps outside the release
 
-The `word-document-review` skill is packaged as a GitHub release asset, but it is not
-automatically installed into agent skill directories. If a broadly used skill registry or
-installer becomes available, treat submission there as a separate distribution task.
+The `word-document-review` and `officeagent-integration` skills are packaged as GitHub release
+assets, but they are not automatically installed into agent skill directories. If a broadly
+used skill registry or installer becomes available, treat submission there as a separate
+distribution task.
 
 `glama.json` contains repository metadata and does not normally need a version update.
