@@ -10,8 +10,9 @@ on:
         required: true
 
 permissions:
-  contents: write         # attach the version-matched Agent Skill to the release
-  id-token: write          # required: OIDC token exchange with nuget.org
+  contents: write          # attach the version-matched release assets
+  id-token: write          # NuGet OIDC and GitHub artifact attestations
+  attestations: write      # publish build and SBOM attestations
 
 jobs:
   publish:
@@ -28,9 +29,21 @@ jobs:
           dotnet-version: 8.0.x
 
       - name: Validate release metadata and documentation
+        id: release
         env:
           RELEASE_TAG: ${{ github.event.release.tag_name || format('v{0}', inputs.version) }}
-        run: python scripts/validate_release.py "$RELEASE_TAG"
+        run: |
+          EXPECTED_REF="refs/tags/$RELEASE_TAG"
+          if [ "$GITHUB_REF" != "$EXPECTED_REF" ]; then
+            echo "Release workflow must run from $EXPECTED_REF, not $GITHUB_REF" >&2
+            exit 1
+          fi
+          if [ "$(git rev-parse HEAD)" != "$GITHUB_SHA" ]; then
+            echo "Checked-out source does not match the workflow source SHA" >&2
+            exit 1
+          fi
+          echo "version=${RELEASE_TAG#v}" >> "$GITHUB_OUTPUT"
+          python scripts/validate_release.py "$RELEASE_TAG"
 
       - name: Validate MCP Registry manifest
         run: |
@@ -59,11 +72,134 @@ jobs:
           cd skills
           zip -r ../artifacts/word-document-review.zip word-document-review
 
-      - name: Attach Word review skill to release
+      - name: Restore pinned release tools
+        run: dotnet tool restore
+
+      - name: Generate release SBOMs
+        run: >-
+          python scripts/release_evidence.py sbom
+          --version "${{ steps.release.outputs.version }}"
+          --artifacts artifacts
+
+      - name: Generate and verify release manifest
+        run: |
+          python scripts/release_evidence.py create \
+            --version "${{ steps.release.outputs.version }}" \
+            --source-sha "$GITHUB_SHA" \
+            --source-ref "$GITHUB_REF" \
+            --artifacts artifacts
+          python scripts/release_evidence.py verify \
+            --repository "$GITHUB_REPOSITORY" \
+            --workflow ".github/workflows/publish.yml" \
+            --source-sha "$GITHUB_SHA" \
+            --source-ref "$GITHUB_REF" \
+            --artifacts artifacts
+
+      - name: Test release evidence failure boundaries
+        run: python -m unittest tests/test_release_evidence.py -v
+
+      - name: Attest release build provenance
+        uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2
+        with:
+          subject-path: artifacts/*
+
+      - name: Attest OfficeAgent.Abstractions SBOM
+        uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2
+        with:
+          subject-path: |
+            artifacts/OfficeAgent.Abstractions.${{ steps.release.outputs.version }}.nupkg
+            artifacts/OfficeAgent.Abstractions.${{ steps.release.outputs.version }}.snupkg
+          sbom-path: artifacts/OfficeAgent.Abstractions.${{ steps.release.outputs.version }}.cdx.json
+
+      - name: Attest OfficeAgent.AgentFramework SBOM
+        uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2
+        with:
+          subject-path: |
+            artifacts/OfficeAgent.AgentFramework.${{ steps.release.outputs.version }}.nupkg
+            artifacts/OfficeAgent.AgentFramework.${{ steps.release.outputs.version }}.snupkg
+          sbom-path: artifacts/OfficeAgent.AgentFramework.${{ steps.release.outputs.version }}.cdx.json
+
+      - name: Attest OfficeAgent.Core SBOM
+        uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2
+        with:
+          subject-path: |
+            artifacts/OfficeAgent.Core.${{ steps.release.outputs.version }}.nupkg
+            artifacts/OfficeAgent.Core.${{ steps.release.outputs.version }}.snupkg
+          sbom-path: artifacts/OfficeAgent.Core.${{ steps.release.outputs.version }}.cdx.json
+
+      - name: Attest OfficeAgent.Excel SBOM
+        uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2
+        with:
+          subject-path: |
+            artifacts/OfficeAgent.Excel.${{ steps.release.outputs.version }}.nupkg
+            artifacts/OfficeAgent.Excel.${{ steps.release.outputs.version }}.snupkg
+          sbom-path: artifacts/OfficeAgent.Excel.${{ steps.release.outputs.version }}.cdx.json
+
+      - name: Attest OfficeAgent.Mcp SBOM
+        uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2
+        with:
+          subject-path: |
+            artifacts/OfficeAgent.Mcp.${{ steps.release.outputs.version }}.nupkg
+            artifacts/OfficeAgent.Mcp.${{ steps.release.outputs.version }}.snupkg
+          sbom-path: artifacts/OfficeAgent.Mcp.${{ steps.release.outputs.version }}.cdx.json
+
+      - name: Attest OfficeAgent.PowerPoint SBOM
+        uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2
+        with:
+          subject-path: |
+            artifacts/OfficeAgent.PowerPoint.${{ steps.release.outputs.version }}.nupkg
+            artifacts/OfficeAgent.PowerPoint.${{ steps.release.outputs.version }}.snupkg
+          sbom-path: artifacts/OfficeAgent.PowerPoint.${{ steps.release.outputs.version }}.cdx.json
+
+      - name: Attest OfficeAgent.Rendering SBOM
+        uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2
+        with:
+          subject-path: |
+            artifacts/OfficeAgent.Rendering.${{ steps.release.outputs.version }}.nupkg
+            artifacts/OfficeAgent.Rendering.${{ steps.release.outputs.version }}.snupkg
+          sbom-path: artifacts/OfficeAgent.Rendering.${{ steps.release.outputs.version }}.cdx.json
+
+      - name: Attest OfficeAgent.SharePoint SBOM
+        uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2
+        with:
+          subject-path: |
+            artifacts/OfficeAgent.SharePoint.${{ steps.release.outputs.version }}.nupkg
+            artifacts/OfficeAgent.SharePoint.${{ steps.release.outputs.version }}.snupkg
+          sbom-path: artifacts/OfficeAgent.SharePoint.${{ steps.release.outputs.version }}.cdx.json
+
+      - name: Attest OfficeAgent.Word SBOM
+        uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2
+        with:
+          subject-path: |
+            artifacts/OfficeAgent.Word.${{ steps.release.outputs.version }}.nupkg
+            artifacts/OfficeAgent.Word.${{ steps.release.outputs.version }}.snupkg
+          sbom-path: artifacts/OfficeAgent.Word.${{ steps.release.outputs.version }}.cdx.json
+
+      - name: Attest Word review skill SBOM
+        uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2
+        with:
+          subject-path: artifacts/word-document-review.zip
+          sbom-path: artifacts/word-document-review.${{ steps.release.outputs.version }}.cdx.json
+
+      - name: Attach original artifacts and verification materials to release
         env:
           GH_TOKEN: ${{ github.token }}
           RELEASE_TAG: ${{ github.event.release.tag_name || format('v{0}', inputs.version) }}
-        run: gh release upload "$RELEASE_TAG" artifacts/word-document-review.zip --clobber
+        run: gh release upload "$RELEASE_TAG" artifacts/* --clobber
+
+      - name: Verify complete release attachment set
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ github.event.release.tag_name || format('v{0}', inputs.version) }}
+        run: |
+          gh release view "$RELEASE_TAG" --json assets --jq '.assets[].name' > "$RUNNER_TEMP/release-assets.txt"
+          python scripts/release_evidence.py verify \
+            --repository "$GITHUB_REPOSITORY" \
+            --workflow ".github/workflows/publish.yml" \
+            --source-sha "$GITHUB_SHA" \
+            --source-ref "$GITHUB_REF" \
+            --release-asset-list "$RUNNER_TEMP/release-assets.txt" \
+            --artifacts artifacts
 
       - name: Login to NuGet.org (Trusted Publishing → short-lived key)
         id: nuget-login

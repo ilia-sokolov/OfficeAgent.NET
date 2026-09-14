@@ -13,6 +13,7 @@ this page to choose the shortest path for your scenario.
 
 | Goal | Start here | Then read |
 | --- | --- | --- |
+| Decide whether OfficeAgent fits | [Library selection guide](choose-officeagent.md) | [Support and compatibility](../SUPPORT.md) |
 | Edit a Word document from C# | [Getting started](getting-started.md) | [Concepts](concepts.md), [document plans](document-plans.md) |
 | Create a Word document from scratch | [Create a document](getting-started.md#create-a-document-instead) | [Document plans](document-plans.md) |
 | Create or update a PowerPoint deck | [PowerPoint support](powerpoint.md#creating-a-deck) | [Generating a deck](powerpoint.md#generating-a-deck) |
@@ -64,6 +65,7 @@ and optimistic-concurrency conflicts instead of guessing.
 
 ### Tutorials
 
+- [Library selection guide](choose-officeagent.md) - supported jobs, explicit non-goals, package choices, alternatives, and a verified direct .NET recipe.
 - [Getting started](getting-started.md) — first successful Word edit from C#.
 - [Deployment and client setup](deployment.md) — local and hosted MCP recipes.
 - [Skill installation](skill-installation.md) — optionally teach Claude Code or Codex a repeatable Word review workflow.

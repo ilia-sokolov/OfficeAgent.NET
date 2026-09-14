@@ -1,0 +1,69 @@
+{
+  "schemaVersion": 1,
+  "repository": "ilia-sokolov/OfficeAgent.NET",
+  "workflow": ".github/workflows/publish.yml",
+  "sbomTool": {
+    "package": "CycloneDX",
+    "version": "5.5.0",
+    "format": "CycloneDX",
+    "specVersion": "1.6"
+  },
+  "packages": [
+    {
+      "id": "OfficeAgent.Abstractions",
+      "project": "src/OfficeAgent.Abstractions/OfficeAgent.Abstractions.csproj",
+      "frameworks": ["netstandard2.0", "net8.0"]
+    },
+    {
+      "id": "OfficeAgent.AgentFramework",
+      "project": "src/OfficeAgent.AgentFramework/OfficeAgent.AgentFramework.csproj",
+      "frameworks": ["netstandard2.0", "net8.0"]
+    },
+    {
+      "id": "OfficeAgent.Core",
+      "project": "src/OfficeAgent.Core/OfficeAgent.Core.csproj",
+      "frameworks": ["netstandard2.0", "net8.0"]
+    },
+    {
+      "id": "OfficeAgent.Excel",
+      "project": "src/OfficeAgent.Excel/OfficeAgent.Excel.csproj",
+      "frameworks": ["netstandard2.0", "net8.0"]
+    },
+    {
+      "id": "OfficeAgent.Mcp",
+      "project": "src/OfficeAgent.Mcp/OfficeAgent.Mcp.csproj",
+      "frameworks": ["net8.0"],
+      "packageKind": "dotnet-tool"
+    },
+    {
+      "id": "OfficeAgent.PowerPoint",
+      "project": "src/OfficeAgent.PowerPoint/OfficeAgent.PowerPoint.csproj",
+      "frameworks": ["netstandard2.0", "net8.0"]
+    },
+    {
+      "id": "OfficeAgent.Rendering",
+      "project": "src/OfficeAgent.Rendering/OfficeAgent.Rendering.csproj",
+      "frameworks": ["net8.0"]
+    },
+    {
+      "id": "OfficeAgent.SharePoint",
+      "project": "src/OfficeAgent.SharePoint/OfficeAgent.SharePoint.csproj",
+      "frameworks": ["netstandard2.0", "net8.0"]
+    },
+    {
+      "id": "OfficeAgent.Word",
+      "project": "src/OfficeAgent.Word/OfficeAgent.Word.csproj",
+      "frameworks": ["netstandard2.0", "net8.0"]
+    }
+  ],
+  "skill": {
+    "name": "word-document-review",
+    "archive": "word-document-review.zip",
+    "source": "skills/word-document-review",
+    "license": "MIT"
+  },
+  "container": {
+    "name": "ghcr.io/ilia-sokolov/officeagent-mcp",
+    "workflow": ".github/workflows/publish-image.yml"
+  }
+}

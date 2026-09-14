@@ -6,15 +6,15 @@
 [![downloads](https://img.shields.io/nuget/dt/OfficeAgent.Core.svg)](https://www.nuget.org/packages/OfficeAgent.Core)
 [![license](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
-Give coding agents a structured way to create and edit real Word documents,
-PowerPoint decks, and Excel workbooks. OfficeAgent.NET turns an agent's intent into typed, validated
-operations and applies them directly to OOXML packages while preserving document
-structure.
+OfficeAgent.NET is a .NET document-automation library built on the
+[Open XML SDK](https://learn.microsoft.com/office/open-xml/open-xml-sdk). Its direct
+.NET API turns document intent into typed, validated operations for Word `.docx`,
+PowerPoint `.pptx`, and Excel `.xlsx` packages.
 
 Use it to generate documents and presentations, make targeted edits, update tables,
-styles, and images, or manage comments and review state. The engine ships as an MCP
-server, Microsoft Agent Framework tools, and a .NET API, with filesystem, SharePoint,
-session, and inline document workflows.
+styles, and images, or manage comments and review state. An MCP server and adapters
+for Microsoft Agent Framework and `Microsoft.Extensions.AI` are optional interfaces
+to the same engine. Applications can use the engine directly without MCP.
 
 One example is a targeted Word edit whose result remains reviewable:
 
@@ -55,6 +55,7 @@ it for a workflow that depends on Office's layout or calculation engine.
 
 | I want to... | Start here |
 | --- | --- |
+| Decide whether OfficeAgent fits my application | [Library selection guide](docs/choose-officeagent.md) |
 | Try a targeted Word edit | [Try a Word edit](#try-a-word-edit) |
 | Create a Word document from scratch | [Create a document](docs/getting-started.md#create-a-document-instead) |
 | Create or edit a PowerPoint deck | [PowerPoint support](docs/powerpoint.md) |
@@ -335,6 +336,7 @@ the provider to create and register it without overwriting an existing name.
 | Guide | Covers |
 | --- | --- |
 | [Documentation hub](docs/README.md) | Learning paths, package map, and the complete documentation set |
+| [Library selection guide](docs/choose-officeagent.md) | Supported jobs, non-goals, package choices, alternatives, and a verified direct .NET recipe |
 | [Getting started](docs/getting-started.md) | A complete edit from service registration to reading the result |
 | [Concepts](docs/concepts.md) | Anchors, snapshots, plans, providers, transactions, and capabilities |
 | [Document plans](docs/document-plans.md) | JSON shapes and validation rules for every operation |

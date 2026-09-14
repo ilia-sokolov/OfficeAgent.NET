@@ -1,5 +1,10 @@
 # Agent integration
 
+This adapter is optional. If your application needs document automation but not
+model tool calling, use `OfficeAgent.Core` and a format module directly. See
+[Choose OfficeAgent.NET](choose-officeagent.md) for package selection, non-goals,
+and a complete direct .NET edit before adding an agent adapter.
+
 `OfficeAgent.AgentFramework` exposes the OfficeAgent workflow as
 Microsoft.Extensions.AI `AIFunction` tools through `OfficeAgentTools`. The tools
 address documents by `(connectionId, documentId)` and route every call through

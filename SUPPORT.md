@@ -49,9 +49,15 @@ Every release is expected to provide:
 - the normal main-branch build and test matrix on Ubuntu and Windows;
 - a direct and transitive NuGet vulnerability audit;
 - deterministic NuGet packages, symbols, Source Link metadata, and a matching changelog;
+- SHA-256 manifests for original release files, machine-readable CycloneDX dependency inventories,
+  and GitHub build and SBOM attestations bound to the release workflow, tag, and source commit;
+- BuildKit SBOM and provenance attestations plus GitHub build provenance for the container digest;
 - version alignment across the GitHub release, NuGet package, and MCP Registry entry.
 
 NuGet trusted publishing authenticates the release workflow without a long-lived API key.
-OfficeAgent packages are not currently author-signed, and releases do not currently include an
-SBOM or a service-level commitment. These are explicit assurance limits rather than guarantees
-provided by the package.
+NuGet.org adds a repository signature after upload, so the registry-distributed archive bytes can
+differ from the original packages attached to GitHub. The repository signature identifies the
+repository, not the package author. OfficeAgent packages are not currently author-signed and no
+service-level commitment is provided. Checksums detect changed bytes but do not establish author
+identity, authorization, or provenance by themselves. See the [release runbook](docs/releasing.md)
+for the separate verification paths and their trust assumptions.

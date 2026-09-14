@@ -4,6 +4,11 @@ In this tutorial, you build a console application that registers a Word
 document, finds text, previews a tracked change, commits it, and writes an edited
 copy you can open in Microsoft Word.
 
+If you are still choosing a dependency, start with
+[Choose OfficeAgent.NET](choose-officeagent.md). It includes the shortest direct
+.NET recipe, explicit non-goals, and package guidance. MCP is not required for
+either tutorial.
+
 Estimated time: 10 minutes.
 
 ## Prerequisites
