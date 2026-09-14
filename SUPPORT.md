@@ -30,9 +30,26 @@ latest published minor version as described in [SECURITY.md](SECURITY.md#support
 
 The abstractions, core, format, SharePoint, and Agent Framework libraries target
 `netstandard2.0` and `net8.0`. `OfficeAgent.Rendering` and the standalone MCP tool target
-`net8.0`. The build workflow compiles and tests on current GitHub-hosted Ubuntu and Windows
-runners with the .NET 8 SDK. macOS is expected to work through .NET and is included in adoption
-trials, but it is not currently part of the automated CI matrix.
+`net8.0`.
+
+The build workflow compiles, tests, and runs an installed-package smoke on current
+GitHub-hosted Ubuntu, Windows, and macOS runners with the .NET 8 SDK. The smoke installs
+the packed `officeagent-mcp` tool into an empty tool directory backed by a fresh package
+cache and an explicit local-only feed, drives a create, inspect, find, preview, apply, and
+export workflow over stdio, and builds a direct consumer that loads the Word, PowerPoint,
+and Excel modules from package references.
+
+Compilation and tested execution are different claims:
+
+| Target | Compiled | Tested by CI |
+| --- | --- | --- |
+| `net8.0` on Linux x64, Windows x64, macOS | Yes | Yes, on the GitHub-hosted runner architectures |
+| `netstandard2.0` consumers (.NET Framework, Mono, Xamarin, Unity) | Yes | No. The libraries compile for it, but no runtime test executes there |
+| Linux arm64, Windows arm64, and other architectures | Yes | No. Not covered by the hosted runners used here |
+| Alpine and other musl distributions | Yes | No |
+
+A row marked untested is not a statement that it fails. It means this project has no
+automated evidence for it, so validate it yourself before depending on it.
 
 OfficeAgent reads and writes OOXML `.docx`, `.pptx`, and `.xlsx` packages through the
 documented operation set. Compatibility means the produced package opens in supported desktop
@@ -46,7 +63,7 @@ adoption.
 Every release is expected to provide:
 
 - tests of the exact release tag on Ubuntu;
-- the normal main-branch build and test matrix on Ubuntu and Windows;
+- the normal main-branch build, test, and packaged-artifact smoke matrix on Ubuntu, Windows, and macOS;
 - a direct and transitive NuGet vulnerability audit;
 - deterministic NuGet packages, symbols, Source Link metadata, and a matching changelog;
 - SHA-256 manifests for original release files, machine-readable CycloneDX dependency inventories,
