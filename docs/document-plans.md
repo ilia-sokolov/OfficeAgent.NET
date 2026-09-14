@@ -792,6 +792,7 @@ Returned by `preview_plan` and `apply_plan` in the `errors` array. Stable wire c
 | `invalid-operation` | The operation is structurally invalid (e.g. empty `expect` against a paragraph that has text, no formatting properties). |
 | `requires-renderer` | The requested change needs a layout / calculation engine. |
 | `operation-conflict` | Two operations target the same location in one plan. |
+| `revision-overlap` | The Word edit spans a pending tracked revision, so the resulting redline would no longer reject back to the original text. Resolve the pending revisions first, or target a span wholly inside or wholly outside them. See [pending revisions](pending-revisions.md). |
 | `contract-mismatch` | The edit-plan version is not exactly `0.2`, or the plan asserted a `format` the document is not. Omit the version for legacy `0.2` behavior or rebuild it for `0.2`, then preview again. |
 | `invalid-json` | The plan is not valid JSON, contains an unknown property, operation or enum value, uses an integer enum value, or supplies a non-string version. Correct the named member; unknown operation errors list the verbs that exist. |
 | `invalid-argument` | A tool argument outside the plan is wrong - an unrecognised `saveMode`, for example. |

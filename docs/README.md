@@ -31,6 +31,7 @@ this page to choose the shortest path for your scenario.
 | Read or write SharePoint files | [SharePoint provider](document-providers.md#the-sharepoint-provider) | [Authentication and identity](deployment.md#authentication--identity) |
 | Look up an operation's JSON | [Document plans](document-plans.md) | [Validation errors](document-plans.md#validation-errors) |
 | Run a tracked Word review | [Sample review workflows](../samples/documents/README.md#reproducible-review-workflows) | [Optional review skill](skill-installation.md) |
+| Edit a document that already has tracked changes | [Pending revisions](pending-revisions.md) | [Document plans](document-plans.md#validation-errors) |
 
 ## Packages
 
@@ -76,6 +77,7 @@ and optimistic-concurrency conflicts instead of guessing.
 ### Concepts
 
 - [Concepts](concepts.md) — providers, anchors, snapshots, plans, and transactions.
+- [Pending revisions](pending-revisions.md) - the text view of a redlined document, which successive edits are allowed, and what accept and reject guarantee.
 - [PowerPoint support](powerpoint.md) — slide-specific addressing and behavior.
 - [Excel support](excel.md) — worksheet, range, table, formula, and cell-note behavior.
 

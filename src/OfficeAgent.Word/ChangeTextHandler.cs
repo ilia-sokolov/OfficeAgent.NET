@@ -65,6 +65,17 @@ internal sealed class ChangeTextHandler : IOperationHandler
                 ValidationErrorCodes.AmbiguousAnchor,
                 $"Occurrence {anchor.Occurrence} of '{anchor.Expect}' does not exist ({occurrences} found).", anchor));
 
+        if (PendingRevisionOverlap(paragraph, start, anchor.Expect.Length) is { } overlap)
+            return OperationPreview.Fail(new ValidationError(
+                ValidationErrorCodes.RevisionOverlap,
+                $"'{anchor.Expect}' in paragraph '{anchor.ParaId}' spans {overlap}. " +
+                "Applying the edit here would produce a redline that no longer rejects back to the " +
+                "original text. Resolve the pending revisions first with a revision operation " +
+                "(accept or reject, addressed by id, by 'author:<name>', or 'all'), re-inspect, " +
+                "then reissue the edit. Alternatively target a span that lies wholly inside or " +
+                "wholly outside the pending revision.",
+                anchor));
+
         return OperationPreview.Ok(new ProposedChange
         {
             Target = anchor,
@@ -74,6 +85,87 @@ internal sealed class ChangeTextHandler : IOperationHandler
             Context = WordModel.Snippet(text, start, anchor.Expect.Length),
             BlastRadius = 1
         });
+    }
+
+    /// <summary>
+    /// Describes why a span cannot be safely redlined, or null when it can.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// A tracked replacement writes one <c>w:del</c> and one <c>w:ins</c> beside the first
+    /// run it covers. That is sound while the covered runs are contiguous siblings, and it
+    /// is sound when they all sit inside the same earlier <c>w:ins</c> - deleting text a
+    /// pending insertion added is exactly the <c>w:ins/w:del</c> nesting Word writes.
+    /// </para>
+    /// <para>
+    /// It is not sound when the span reaches across a pending deletion or out of one
+    /// revision container into another. The text view hides <c>w:del</c> and
+    /// <c>w:moveFrom</c>, so two runs that read as adjacent can have another author's
+    /// deleted words physically between them. Moving the replacement to the front of that
+    /// span leaves the earlier deletion after it, and rejecting everything then restores
+    /// the old words in the wrong place instead of restoring the original paragraph.
+    /// Refusing before any mutation keeps that document unreachable.
+    /// </para>
+    /// </remarks>
+    private static string? PendingRevisionOverlap(OpenXmlElement paragraph, int start, int length)
+    {
+        var covered = CoveredRuns(paragraph, start, length);
+        if (covered.Count < 2) return null;
+
+        // Runs drawn from different containers: part of the span is inside a revision the
+        // rest is not, so no single insertion point represents the whole edit.
+        var parents = covered.Select(run => run.Parent).Distinct().ToList();
+        if (parents.Count > 1)
+        {
+            var named = parents
+                .Select(parent => WordRevisions.TagOf(parent!) ?? "unmarked text")
+                .Distinct();
+            return $"more than one tracked-change container ({string.Join(" and ", named)})";
+        }
+
+        // One container, but with a pending deletion physically between the covered runs.
+        var parent = covered[0].Parent!;
+        var first = parent.ChildElements.ToList().IndexOf(covered[0]);
+        var last = parent.ChildElements.ToList().IndexOf(covered[covered.Count - 1]);
+        for (int i = first + 1; i < last; i++)
+        {
+            var between = parent.ChildElements[i];
+            if (between is DeletedRun or MoveFromRun)
+                return $"a pending {(between is DeletedRun ? "deletion" : "move")} by " +
+                       $"'{WordRevisions.AuthorOf(between) ?? "unknown"}'";
+        }
+
+        return null;
+    }
+
+    /// <summary>
+    /// The runs a logical span touches, found without mutating the paragraph. Span
+    /// isolation splits runs, which a preview must never do.
+    /// </summary>
+    private static List<OpenXmlElement> CoveredRuns(OpenXmlElement paragraph, int start, int length)
+    {
+        var covered = new List<OpenXmlElement>();
+        int end = start + length;
+        int offset = 0;
+
+        foreach (var run in WordModel.Dialect.GetRuns(paragraph))
+        {
+            int runLength = WordModel.Dialect.GetRunText(run).Length;
+            int runEnd = offset + runLength;
+
+            // A zero-length run inside the span still participates: the apply path isolates
+            // it along with the rest, and an empty inserted run is exactly what an earlier
+            // tracked deletion leaves behind.
+            bool overlaps = runLength == 0
+                ? offset > start && offset < end
+                : offset < end && runEnd > start;
+
+            if (overlaps) covered.Add(run);
+            offset = runEnd;
+            if (offset >= end && covered.Count > 0 && runLength > 0) break;
+        }
+
+        return covered;
     }
 
     public void Apply(ApplyContext context, PlanOperation operation)

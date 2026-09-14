@@ -158,7 +158,13 @@ public enum ValidationErrorCode
     RequiresRenderer,
 
     /// <summary>Multiple operations in the same plan target the same location.</summary>
-    OperationConflict
+    OperationConflict,
+
+    /// <summary>
+    /// The edit spans a pending tracked revision, so applying it would leave a redline
+    /// that cannot be rejected back to the original content.
+    /// </summary>
+    RevisionOverlap
 }
 
 /// <summary>
@@ -194,6 +200,12 @@ public static class ValidationErrorCodes
     /// <summary>Multiple operations in the same plan target the same location.</summary>
     public const string OperationConflict = "operation-conflict";
 
+    /// <summary>
+    /// The edit spans a pending tracked revision, so applying it would leave a redline
+    /// that cannot be rejected back to the original content.
+    /// </summary>
+    public const string RevisionOverlap = "revision-overlap";
+
     /// <summary>Parses a wire code to its strongly typed enum value.</summary>
     public static ValidationErrorCode Parse(string code) => code switch
     {
@@ -206,6 +218,7 @@ public static class ValidationErrorCodes
         InvalidOperation => ValidationErrorCode.InvalidOperation,
         RequiresRenderer => ValidationErrorCode.RequiresRenderer,
         OperationConflict => ValidationErrorCode.OperationConflict,
+        RevisionOverlap => ValidationErrorCode.RevisionOverlap,
         _ => ValidationErrorCode.Unknown
     };
 
@@ -221,6 +234,7 @@ public static class ValidationErrorCodes
         ValidationErrorCode.InvalidOperation => InvalidOperation,
         ValidationErrorCode.RequiresRenderer => RequiresRenderer,
         ValidationErrorCode.OperationConflict => OperationConflict,
+        ValidationErrorCode.RevisionOverlap => RevisionOverlap,
         _ => "unknown"
     };
 }
