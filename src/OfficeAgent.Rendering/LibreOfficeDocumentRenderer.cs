@@ -109,7 +109,7 @@ public sealed class LibreOfficeDocumentRenderer : IDocumentRenderer
                 pages.Add(new RenderedPage { PageNumber = index + 1, Content = bytes });
             }
 
-            return new RenderResult { Succeeded = true, Pages = pages };
+            return RenderResult.Success(pages);
         }
         finally
         {
@@ -300,10 +300,6 @@ public sealed class LibreOfficeDocumentRenderer : IDocumentRenderer
             : int.MaxValue;
     }
 
-    private static RenderResult Failure(string code, string message) => new()
-    {
-        Succeeded = false,
-        FailureCode = code,
-        Message = message
-    };
+    private static RenderResult Failure(string code, string message) =>
+        RenderResult.Failure(code, message);
 }

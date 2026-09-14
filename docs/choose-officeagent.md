@@ -60,6 +60,7 @@ and [Support and compatibility](../SUPPORT.md) before production use.
 | `Microsoft.Extensions.AI` or Microsoft Agent Framework tools | Optional adapter over the same client | `OfficeAgent.AgentFramework` plus the required format modules |
 | A standalone MCP process | Optional server over the same engine | `OfficeAgent.Mcp` |
 | Low-level package-part or schema work outside OfficeAgent operations | Open XML SDK directly | `DocumentFormat.OpenXml` |
+| Both, in one application | [SDK interoperability recipe](sdk-interoperability.md) | OfficeAgent packages plus `DocumentFormat.OpenXml` |
 
 Add a storage provider only when the hosting model needs it. `OfficeAgent.Core`
 includes the filesystem and in-memory provider surfaces. `OfficeAgent.SharePoint`
@@ -88,6 +89,12 @@ This comparison is based on the following primary documentation, checked on
 
 There is no popularity or product-ranking claim here. Evaluate the actual
 operation and deployment requirements of your application.
+
+You can also combine the two. The tested copy, edit, validate, reinspect workflow and
+the exact guarantees that apply at each stage are in
+[Open XML SDK interoperability](sdk-interoperability.md). Anchors, snapshots, approved
+previews, and receipts do not carry across an SDK edit, and there is no supported path
+that replaces a registered document with externally edited bytes through OfficeAgent.
 
 ## Verified direct Word edit
 

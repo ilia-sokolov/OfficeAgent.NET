@@ -45,3 +45,40 @@ The renderer reports `renderer-unavailable`, `renderer-failed`, `renderer-output
 `output-limit-exceeded`, or `invalid-render-options`. The first implementation returns page
 images. Visual overflow detection requires a chosen renderer and a representative document
 corpus and is not inferred from these images yet.
+
+## Reading the result
+
+`RenderAsync` does not throw when a renderer is missing or a limit is hit. It returns a
+`RenderResult` that is either a success carrying pages or a failure carrying a code — the two
+states cannot be mixed, and a failed result carries no pages.
+
+Because a page count drives decisions such as "refuse anything over four pages", reading pages
+from a failed render is a mistake that must not read as an empty document. `Pages` and
+`PageCount` therefore throw `RenderFailedException`, carrying the failure code, unless rendering
+succeeded:
+
+```csharp
+var result = await renderer.RenderAsync(input, options);
+
+// Fails closed: on a container with no LibreOffice installed this throws
+// RenderFailedException("renderer-unavailable"), it does not report zero pages.
+if (result.PageCount > 4) return Reject("The contract exceeds four pages.");
+```
+
+To branch on the failure instead of catching it, check `Succeeded`, call `EnsureSucceeded()`, or
+use `TryGetPages`:
+
+```csharp
+if (!result.TryGetPages(out var pages))
+{
+    logger.LogError("Rendering failed: {Code}", result.FailureCode);
+    return Reject("The page count could not be established.");   // never admit on failure
+}
+```
+
+A page count is the pagination of whichever renderer produced it. LibreOffice and Word can
+disagree on documents containing tables, unembedded fonts, unresolved fields, or pending
+revisions, so pin the renderer version and the container's font set, and report the count
+alongside the renderer that produced it rather than as an absolute property of the file.
+Resolve revisions before measuring: an unaccepted insertion changes text length and therefore
+pagination.

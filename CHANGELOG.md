@@ -3,6 +3,18 @@
 Notable changes per release. The body of each version section is also the text used for the
 corresponding GitHub release.
 
+## 0.9.0 — unreleased
+
+- Made a failed render fail closed. `RenderResult.Pages` and the new `RenderResult.PageCount`
+  now throw `RenderFailedException`, carrying the stable failure code, when rendering did not
+  succeed. Previously a caller that did not check `Succeeded` read the empty page list of a
+  failed render as a zero-page document, so a page-count gate admitted every document on a host
+  where LibreOffice was absent or a limit was hit. Use `Succeeded`, `EnsureSucceeded()`, or
+  `TryGetPages` to branch on the failure without an exception. `RenderResult` is now built
+  through the validated `RenderResult.Success` and `RenderResult.Failure` factories instead of
+  object initializers, so a result cannot hold a success state and a failure code at once, and
+  the failure contract is documented in [Visual rendering](docs/rendering.md#reading-the-result).
+
 ## 0.8.0 — 2026-09-12
 
 - Added ordered Word document assembly with source formatting compatibility checks, native

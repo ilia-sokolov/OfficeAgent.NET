@@ -30,7 +30,7 @@ public sealed class RenderingTests
 
         Assert.False(result.Succeeded);
         Assert.Equal("page-limit-exceeded", result.FailureCode);
-        Assert.Empty(result.Pages);
+        AssertFailsClosed(result);
     }
 
     [Fact]
@@ -43,7 +43,7 @@ public sealed class RenderingTests
 
         Assert.False(result.Succeeded);
         Assert.Equal("render-timeout", result.FailureCode);
-        Assert.Empty(result.Pages);
+        AssertFailsClosed(result);
     }
 
     [Fact]
@@ -69,7 +69,7 @@ public sealed class RenderingTests
 
         Assert.False(result.Succeeded);
         Assert.Equal("output-limit-exceeded", result.FailureCode);
-        Assert.Empty(result.Pages);
+        AssertFailsClosed(result);
     }
 
     [Fact]
@@ -83,7 +83,70 @@ public sealed class RenderingTests
 
         Assert.False(result.Succeeded);
         Assert.Equal("memory-limit-exceeded", result.FailureCode);
-        Assert.Empty(result.Pages);
+        AssertFailsClosed(result);
+    }
+
+    [Fact]
+    public async Task Missing_renderer_executable_fails_a_page_gate_closed()
+    {
+        // The renderer is configured to a command that does not exist, as on a container built
+        // without LibreOffice. A page-count gate written the obvious way must not read that as
+        // a zero-page document and admit the contract.
+        var renderer = new LibreOfficeDocumentRenderer(new LibreOfficeRendererOptions
+        {
+            LibreOfficeExecutable = "officeagent-no-such-renderer",
+            PdfToPpmExecutable = "officeagent-no-such-rasterizer"
+        });
+
+        var result = await renderer.RenderAsync(new MemoryStream(new byte[] { 1 }), Options());
+
+        Assert.False(result.Succeeded);
+        Assert.Equal("renderer-unavailable", result.FailureCode);
+
+        var thrown = Assert.Throws<RenderFailedException>(() => result.PageCount);
+        Assert.Equal("renderer-unavailable", thrown.FailureCode);
+        Assert.False(WithinPageBudget(result, budget: 4));
+    }
+
+    [Fact]
+    public void A_failed_result_never_reports_pages_and_a_successful_one_needs_no_check()
+    {
+        var failure = RenderResult.Failure("renderer-failed", "A renderer process exited unsuccessfully.");
+
+        Assert.Throws<RenderFailedException>(() => failure.Pages);
+        Assert.Throws<RenderFailedException>(() => failure.PageCount);
+        Assert.Throws<RenderFailedException>(() => failure.EnsureSucceeded());
+        Assert.False(failure.TryGetPages(out var none));
+        Assert.Empty(none);
+
+        var success = RenderResult.Success(new[] { new RenderedPage { PageNumber = 1 } });
+
+        Assert.Equal(1, success.PageCount);
+        Assert.True(success.TryGetPages(out var pages));
+        Assert.Single(pages);
+        Assert.Null(success.FailureCode);
+        success.EnsureSucceeded();
+    }
+
+    [Fact]
+    public void A_failed_result_can_still_be_serialized_for_a_log()
+    {
+        // Logging a failure must not trip over the guarded members, and page bytes never
+        // belong in a log line.
+        var json = System.Text.Json.JsonSerializer.Serialize(
+            RenderResult.Failure("renderer-unavailable", "A configured renderer executable was not found."));
+
+        Assert.Contains("renderer-unavailable", json);
+        Assert.DoesNotContain("Pages", json);
+        Assert.DoesNotContain("PageCount", json);
+    }
+
+    [Fact]
+    public void A_failure_cannot_be_constructed_without_a_code()
+    {
+        Assert.Throws<ArgumentException>(() => RenderResult.Failure("", "missing code"));
+        Assert.Throws<ArgumentException>(() => RenderResult.Failure("renderer-failed", " "));
+        Assert.Throws<ArgumentNullException>(() => RenderResult.Success(null!));
     }
 
     [Fact]
@@ -94,6 +157,22 @@ public sealed class RenderingTests
             typeof(OfficeAgent.Core.OfficeAgentClient).GetConstructors()
                 .SelectMany(constructor => constructor.GetParameters())
                 .Select(parameter => parameter.ParameterType));
+    }
+
+    /// <summary>A failed render exposes no pages by any route.</summary>
+    private static void AssertFailsClosed(RenderResult result)
+    {
+        Assert.False(result.Succeeded);
+        Assert.Throws<RenderFailedException>(() => result.Pages);
+        Assert.False(result.TryGetPages(out var pages));
+        Assert.Empty(pages);
+    }
+
+    /// <summary>A page gate written the way a caller would write it.</summary>
+    private static bool WithinPageBudget(RenderResult result, int budget)
+    {
+        if (!result.TryGetPages(out var pages)) return false;
+        return pages.Count <= budget;
     }
 
     private static LibreOfficeDocumentRenderer Renderer(

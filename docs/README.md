@@ -14,6 +14,7 @@ this page to choose the shortest path for your scenario.
 | Goal | Start here | Then read |
 | --- | --- | --- |
 | Decide whether OfficeAgent fits | [Library selection guide](choose-officeagent.md) | [Support and compatibility](../SUPPORT.md) |
+| Combine OfficeAgent with direct Open XML SDK edits | [SDK interoperability](sdk-interoperability.md) | [Concepts](concepts.md), [operations](operations.md) |
 | Inspect Word preservation evidence | [Word preservation matrix](word-preservation-evidence.md) | [Corpus and rerun recipe](../tests/OfficeAgent.Tests/Corpus/v0.9.0/word-preservation/README.md) |
 | Edit a Word document from C# | [Getting started](getting-started.md) | [Concepts](concepts.md), [document plans](document-plans.md) |
 | Create a Word document from scratch | [Create a document](getting-started.md#create-a-document-instead) | [Document plans](document-plans.md) |
@@ -82,6 +83,7 @@ and optimistic-concurrency conflicts instead of guessing.
 
 - [Agent integration](agent-integration.md) — expose bounded tools and deliver output.
 - [Document providers](document-providers.md) — filesystem and SharePoint storage.
+- [Open XML SDK interoperability](sdk-interoperability.md) - the tested copy, edit, reinspect workflow, per-stage guarantees, and the two distinct staleness guards.
 - [Operations](operations.md) — concurrency, memory, telemetry, and production operation.
 - [Visual rendering](rendering.md) — optional out-of-process PDF and page-image conversion.
 - [Template population and comparison](document-workflows.md) — batch binding, repeating Word rows, comparison coverage, and redline generation.

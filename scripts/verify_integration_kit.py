@@ -21,6 +21,8 @@ EXPECTED_OUTPUT = {
     "refusal=unsupported-operation bytes-unchanged=True",
     "template-population=passed",
     "complete-comparison=passed",
+    "sdk-interop=passed",
+    "sdk-conflict=version-conflict document-unchanged=True",
     "all-recipes=passed",
 }
 

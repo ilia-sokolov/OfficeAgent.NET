@@ -42,6 +42,20 @@ The recipe requires `comparison.IsComplete` and a non-null `comparison.Plan`, pr
 
 When comparison coverage is incomplete, stop and surface the diagnostics. Never apply partial findings as if they were a complete plan.
 
+## Recipe 4: Open XML SDK interoperability
+
+Input: a generated `agreement.docx` registered with the filesystem connection.
+
+The recipe takes an authorized provider snapshot, copies the bytes to a separate `agreement-sdk.docx`, appends a paragraph to that copy with the Open XML SDK, validates the copy against the Office 2019 schema, then registers and reinspects it and commits a freshly authored tracked plan. It asserts:
+
+- the registered source is byte-identical before and after the SDK edit and after the commit;
+- the SDK output passes schema validation;
+- reinspection sees the SDK paragraph and the fresh plan previews and commits.
+
+It then makes a second SDK write to the output and replays the earlier plan. The expected recovery evidence is a `DocumentVersionConflictException` and an unchanged document.
+
+Anchors, snapshots, approved previews, and receipts never carry across an SDK edit. Reinspect and rebuild the plan instead. An SDK edit produces no OfficeAgent receipt and is covered by no OfficeAgent audit trail, and schema validation does not prove native layout or tracked-change semantics. The per-stage guarantees are in the versioned [SDK interoperability guide](https://github.com/ilia-sokolov/OfficeAgent.NET/blob/v0.9.0/docs/sdk-interoperability.md).
+
 ## Expected output
 
 ```text
@@ -49,6 +63,8 @@ tracked-edit=passed
 refusal=unsupported-operation bytes-unchanged=True
 template-population=passed
 complete-comparison=passed
+sdk-interop=passed
+sdk-conflict=version-conflict document-unchanged=True
 all-recipes=passed
 ```
 

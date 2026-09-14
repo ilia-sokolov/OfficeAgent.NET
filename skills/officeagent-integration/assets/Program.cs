@@ -16,6 +16,7 @@ try
     await VerifyTrackedEditAndRefusalAsync(root);
     await VerifyTemplatePopulationAsync(root);
     await VerifyCompleteComparisonAsync(root);
+    await VerifySdkInteroperabilityAsync(root);
     Console.WriteLine("all-recipes=passed");
     return 0;
 }
@@ -194,6 +195,118 @@ static async Task VerifyCompleteComparisonAsync(string root)
         ValidateSchema(document, "comparison output");
     }
     Console.WriteLine("complete-comparison=passed");
+}
+
+static async Task VerifySdkInteroperabilityAsync(string root)
+{
+    var storage = Path.Combine(root, "interop-storage");
+    Directory.CreateDirectory(storage);
+    var sourcePath = Path.Combine(storage, "agreement.docx");
+    CreateDocument(sourcePath, "Services agreement", "Invoices are due in 30 days.", "Signed for Adventure Works.");
+    var sourceHashBefore = Convert.ToHexString(SHA256.HashData(await File.ReadAllBytesAsync(sourcePath)));
+    var client = CreateStoredClient(storage);
+    var source = await client.RegisterAsync("workspace", sourcePath);
+
+    // Stage 1: take an authorized snapshot through the provider. The canonical
+    // reference carries the provider version the copy was taken at.
+    byte[] snapshotBytes;
+    using (var content = await client.OpenReadAsync(source))
+    using (var buffer = new MemoryStream())
+    {
+        await content.Stream.CopyToAsync(buffer);
+        snapshotBytes = buffer.ToArray();
+    }
+
+    // Stage 2: edit a separate output with the Open XML SDK. The registered source is
+    // never opened for writing and no OfficeAgent operation is involved.
+    var outputPath = Path.Combine(storage, "agreement-sdk.docx");
+    await File.WriteAllBytesAsync(outputPath, snapshotBytes);
+    using (var document = WordprocessingDocument.Open(outputPath, isEditable: true))
+    {
+        document.MainDocumentPart!.Document!.Body!
+            .AppendChild(new Paragraph(new Run(new Text("Appendix A is incorporated by reference."))));
+        document.MainDocumentPart.Document.Save();
+    }
+
+    // Stage 3: validate the SDK output before OfficeAgent is asked to trust it.
+    using (var document = WordprocessingDocument.Open(outputPath, isEditable: false))
+        ValidateSchema(document, "sdk output");
+
+    Require(
+        sourceHashBefore == Convert.ToHexString(SHA256.HashData(await File.ReadAllBytesAsync(sourcePath))),
+        "the SDK edit must not change the registered source");
+
+    // Stage 4: register and reinspect the SDK output, then author a fresh plan against
+    // that inspection. Anchors and snapshots from before the SDK edit are not reused.
+    var output = await client.RegisterAsync("workspace", outputPath);
+    var inspection = await client.InspectAsync(output);
+    Require(
+        inspection.Paragraphs.Any(paragraph => paragraph.Text == "Appendix A is incorporated by reference."),
+        "reinspection must see the SDK paragraph");
+
+    var hit = (await client.FindAsync(output, new FindQuery("Invoices are due in 30 days."))).Single();
+    var plan = new DocumentPlan
+    {
+        Snapshot = inspection.Snapshot,
+        Operations = new PlanOperation[]
+        {
+            new ChangeTextOp
+            {
+                Target = hit.Anchor,
+                With = "Invoices are due in 45 days.",
+                Mode = ChangeMode.Tracked
+            }
+        }
+    };
+    var preview = await client.PreviewAsync(output, plan);
+    Require(preview.IsValid, FormatErrors(preview.Errors));
+
+    string outputVersion;
+    using (var current = await client.OpenReadAsync(output))
+        outputVersion = current.Reference.Version!;
+
+    var commit = await client.CommitAsync(output, plan, new SaveDocumentOptions
+    {
+        Mode = SaveMode.Replace,
+        ExpectedVersion = outputVersion
+    });
+    Require(commit.Committed, FormatErrors(commit.Report.Errors));
+    Require(
+        sourceHashBefore == Convert.ToHexString(SHA256.HashData(await File.ReadAllBytesAsync(sourcePath))),
+        "the committed plan must stay scoped to the SDK output");
+    Console.WriteLine("sdk-interop=passed");
+
+    // A plan held across an external SDK write is refused, not reapplied. The provider
+    // version pinned in the reference is the guard that fires.
+    var stalePlan = new DocumentPlan
+    {
+        Snapshot = inspection.Snapshot,
+        Operations = new PlanOperation[]
+        {
+            new ChangeTextOp { Target = hit.Anchor, With = "Invoices are due in 60 days." }
+        }
+    };
+    using (var document = WordprocessingDocument.Open(outputPath, isEditable: true))
+    {
+        document.MainDocumentPart!.Document!.Body!
+            .AppendChild(new Paragraph(new Run(new Text("Appendix B was added outside OfficeAgent."))));
+        document.MainDocumentPart.Document.Save();
+    }
+    var changedHash = Convert.ToHexString(SHA256.HashData(await File.ReadAllBytesAsync(outputPath)));
+
+    var refused = "none";
+    try
+    {
+        await client.CommitAsync(output, stalePlan, new SaveDocumentOptions { Mode = SaveMode.Replace });
+    }
+    catch (DocumentVersionConflictException)
+    {
+        refused = "version-conflict";
+    }
+    var unchanged = changedHash == Convert.ToHexString(SHA256.HashData(await File.ReadAllBytesAsync(outputPath)));
+    Require(refused == "version-conflict", "a stale plan must be refused after an external SDK write");
+    Require(unchanged, "a refused commit must not change the document");
+    Console.WriteLine($"sdk-conflict={refused} document-unchanged={unchanged}");
 }
 
 static OfficeAgentClient CreateStoredClient(string root) => new(
