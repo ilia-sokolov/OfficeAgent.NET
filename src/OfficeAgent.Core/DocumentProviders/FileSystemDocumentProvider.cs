@@ -62,6 +62,10 @@ public sealed class FileSystemDocumentProvider : IDocumentProvider, IDocumentCre
     private readonly long _maximumBytes;
     private readonly HashSet<string> _allowedExtensions;
     private readonly SemaphoreSlim _indexLock = new(1, 1);
+    // One gate per item, so a contested write to one document serializes its own
+    // check-and-publish while writes to other documents proceed in parallel. A single
+    // shared gate would make every save in the connection queue behind every other.
+    private readonly Dictionary<string, SemaphoreSlim> _itemLocks = new(StringComparer.Ordinal);
     private readonly Dictionary<string, string> _index;
 
     /// <summary>Initializes a rooted filesystem provider.</summary>
@@ -240,6 +244,43 @@ public sealed class FileSystemDocumentProvider : IDocumentProvider, IDocumentCre
         CancellationToken cancellationToken = default)
     {
         ValidateReference(source);
+
+        // The optimistic check reads the file and the publish writes it. Without holding
+        // the item's gate across both, two callers that read the same version both pass
+        // the check and both write, and the first caller's edit disappears while it is
+        // told the save succeeded. The gate makes check-and-publish one step.
+        var gate = ItemLock(source.ItemId);
+        await gate.WaitAsync(cancellationToken).ConfigureAwait(false);
+        try
+        {
+            return await SaveCoreAsync(source, content, options, cancellationToken).ConfigureAwait(false);
+        }
+        finally
+        {
+            gate.Release();
+        }
+    }
+
+    private SemaphoreSlim ItemLock(string itemId)
+    {
+        lock (_itemLocks)
+        {
+            if (!_itemLocks.TryGetValue(itemId, out var gate))
+            {
+                gate = new SemaphoreSlim(1, 1);
+                _itemLocks[itemId] = gate;
+            }
+
+            return gate;
+        }
+    }
+
+    private async Task<DocumentReference> SaveCoreAsync(
+        DocumentReference source,
+        Stream content,
+        SaveDocumentOptions options,
+        CancellationToken cancellationToken)
+    {
         if (content is null) throw new ArgumentNullException(nameof(content));
         if (options is null) throw new ArgumentNullException(nameof(options));
         if (!string.IsNullOrEmpty(options.DestinationItemId))

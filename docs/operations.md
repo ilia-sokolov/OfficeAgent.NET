@@ -16,7 +16,11 @@ services
 
 Two concurrent `Commit` calls on the *same* document id are safe at the engine level - each opens its own in-memory copy. Under the default `Replace` save mode they are also checked at the provider boundary: the commit carries the version read when it opened the document, and a save whose source changed in between is rejected with `DocumentVersionConflictException` rather than overwriting the other writer. Handle that exception by re-inspecting and re-authoring the plan.
 
-That check covers the read-modify-write window of a single commit. It is not a lock, and it does nothing for `NewVersion`/`NewDocument`, which write to a fresh name. If you need ordering rather than conflict detection - or you want to fail before doing the work instead of after - pass an explicit `SaveDocumentOptions.ExpectedVersion`, or serialise the commits in your application layer (`SemaphoreSlim` keyed by id).
+The filesystem provider holds a gate per document id across the version check and the publish, so that check and the write it guards are one step. Without it two callers that read the same version would both pass the check and both write, and the first caller's edit would disappear while it was told the save succeeded. The gate is keyed by item, so contested writes to one document serialise while writes to other documents continue in parallel.
+
+**That gate is in-process.** It orders callers inside one `OfficeAgentClient`; it does nothing about another process, another machine, or someone editing the file in Word. Those are still caught by the version check, which compares content, but they are caught rather than ordered - the loser receives a conflict. For ordering across processes, use storage that provides it, or coordinate above OfficeAgent.
+
+The version check does nothing for `NewVersion`/`NewDocument`, which write to a fresh name. If you want to fail before doing the work instead of after, pass an explicit `SaveDocumentOptions.ExpectedVersion`.
 
 ## Stream and lifetime ownership
 
@@ -175,6 +179,18 @@ For a direct in-memory call, pass the actor with
 | MCP server exits during startup | An invalid `AuthMode`, unreadable config file, or incomplete provider configuration | Read the named configuration error and restart. No storage configuration by itself starts the `session` connection; invalid authentication modes never fall back to app-only. |
 | Graph returns 429 or a transient 5xx | Throttling or a service interruption | Respect `Retry-After` in the host; reconcile an attempted write before retrying |
 | A create call reports an I/O error but the name is now occupied | Storage accepted the file before registration or the response failed | Inspect the destination and register the surviving item; do not overwrite or blindly retry the name |
+
+## What a failed commit tells you about storage
+
+Three outcomes are distinguishable, and only the first lets you conclude that nothing was written.
+
+| Outcome | How you know | What to do |
+|---|---|---|
+| **Nothing was written** | `ApplyResult.Committed` is `false` with validation `Errors`, or a `DocumentVersionConflictException` from the pre-save check | The plan never reached storage. Fix the plan or re-inspect, then retry safely |
+| **The write landed** | The call returned and `ProviderApplyResult.Committed` is `true` with a `Document` reference | Use the returned reference. The receipt names the output |
+| **Unknown** | A provider or cancellation error raised *after* the content was handed to storage | Do not retry blindly and do not report the document as unchanged. Inspect the destination, reconcile what is actually there, and report the possibly-written name to the operator |
+
+The uncertainty in the third row is real and cannot be engineered away at this layer: a provider that accepts bytes and then fails to confirm leaves a write this library cannot see. OfficeAgent does not claim exactly-once delivery. What it does guarantee is that plan validation failures are always the first row - they are decided entirely in memory, before any provider write.
 
 ## Versioning
 
