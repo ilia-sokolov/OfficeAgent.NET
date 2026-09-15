@@ -293,6 +293,24 @@ public sealed partial class OfficeAgentClient
         PopulateTemplateBatchAsync(ReferenceFor(connectionId, documentId), request, cancellationToken);
 
     /// <summary>
+    /// Populates a template batch by opaque ids, refusing the commit when the template or
+    /// the batch has changed since the preview issued <paramref name="expectedToken"/>.
+    /// </summary>
+    /// <remarks>
+    /// Without this overload the hash-bound commit was reachable only by callers holding a
+    /// <see cref="DocumentReference"/>, which excluded both adapters: an agent could commit
+    /// a batch but could not bind that commit to the preview it had reviewed.
+    /// </remarks>
+    public Task<TemplateBatchResult> PopulateTemplateBatchAsync(
+        string connectionId,
+        string documentId,
+        TemplateBatchRequest request,
+        TemplateBatchToken? expectedToken,
+        CancellationToken cancellationToken = default) =>
+        PopulateTemplateBatchAsync(
+            ReferenceFor(connectionId, documentId), request, expectedToken, cancellationToken);
+
+    /// <summary>
     /// Compares two provider-backed Word documents without writing either one. A complete
     /// result carries a tracked, original-snapshot-bound plan suitable for normal preview
     /// and commit against the original document.

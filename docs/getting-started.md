@@ -161,6 +161,25 @@ Console.WriteLine($"Receipt: {result.Receipt!.InputSha256} -> {result.Receipt.Ou
 Open `contract-edited.docx` in Word. The replacement appears as a tracked
 deletion and insertion.
 
+### What "it worked" means here
+
+Three different things get called verification, and this walkthrough only establishes the
+first of them.
+
+| Class | What it establishes | Established here? |
+| --- | --- | --- |
+| Structural and schema validity | The output is a well formed OOXML package that passes Open XML schema validation, and the operation produced the change it reported | Yes. The engine validates before it commits, and the receipt binds the exact input and output bytes |
+| Native Office opening | Word, PowerPoint or Excel opens the file without a repair prompt, and accept and reject behave as intended | No. Opening the file above is your own observation, not a check this project ran for you |
+| Rendered visual parity | Layout, pagination and appearance match a reference rendering | No, and this project does not claim it. OfficeAgent does not paginate or render |
+
+A schema-valid document is not automatically a document Word is happy with, and a document
+Word opens is not automatically one that looks right. Treat the three as separate questions.
+
+Where this project has native-opening observations, they are recorded as observations with
+their scope stated, including what was left unrun. See
+[Word preservation evidence](word-preservation-evidence.md) for the current record and
+[SUPPORT.md](../SUPPORT.md) for which platforms and runtimes are actually tested.
+
 `result.Receipt` also records the effective plan hash, apply outcome, resolved revision
 identity, and provider output reference. Hosts that authenticate callers can register an
 `IAuditActorProvider` so the receipt carries that trusted actor separately from the author

@@ -41,6 +41,13 @@ REQUIRED_TOOLS = {
     "import_document_content",
     "export_document_content",
     "describe_capabilities",
+    # The template workflow an agent is meant to run: look before binding, validate the
+    # whole batch before committing any of it, and bind the commit to what was reviewed.
+    # All three landed on the direct client first and reached the adapters in V09-14, so
+    # the installed package is where their absence would otherwise go unnoticed.
+    "discover_template",
+    "preview_template_batch",
+    "populate_template_batch",
 }
 
 STARTUP_TIMEOUT_SECONDS = 90
@@ -369,6 +376,165 @@ def verify_document_workflow(server: StdioServer, version: str) -> None:
         raise SmokeError("export_document_content returned no bytes")
     verify_docx_bytes(base64.b64decode(payload), "Contoso Research")
     print("mcp-workflow=passed")
+
+    verify_template_workflow(server)
+
+
+CONTENT_TYPES = (
+    '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+    '<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">'
+    '<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>'
+    '<Default Extension="xml" ContentType="application/xml"/>'
+    '<Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument'
+    '.wordprocessingml.document.main+xml"/>'
+    "</Types>"
+)
+
+PACKAGE_RELS = (
+    '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+    '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">'
+    '<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships'
+    '/officeDocument" Target="word/document.xml"/>'
+    "</Relationships>"
+)
+
+TEMPLATE_DOCUMENT = (
+    '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+    '<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body>'
+    "<w:p><w:r><w:t xml:space=\"preserve\">Quote for </w:t></w:r>"
+    "<w:sdt><w:sdtPr><w:tag w:val=\"CustomerName\"/><w:id w:val=\"101\"/></w:sdtPr>"
+    "<w:sdtContent><w:r><w:t>CUSTOMER</w:t></w:r></w:sdtContent></w:sdt></w:p>"
+    "<w:p/>"
+    "</w:body></w:document>"
+)
+
+
+def build_template_docx() -> bytes:
+    """
+    A minimal .docx carrying one content control, built here rather than committed.
+
+    No plan operation creates a content control, so the packaged server cannot mint a
+    template with create_document: fill only fills a control that already exists. A .docx is
+    a zip of a few XML parts, so the fixture is assembled in-process with the standard
+    library. That keeps the smoke free of Office, of the .NET test tree, and of a binary
+    checked into the repository whose bytes nothing here could explain.
+    """
+    buffer = io.BytesIO()
+    with zipfile.ZipFile(buffer, "w", zipfile.ZIP_DEFLATED) as package:
+        for name, content in (
+            ("[Content_Types].xml", CONTENT_TYPES),
+            ("_rels/.rels", PACKAGE_RELS),
+            ("word/document.xml", TEMPLATE_DOCUMENT),
+        ):
+            # A fixed timestamp keeps the bytes, and therefore the template hash the server
+            # reports, identical on every run and every platform.
+            info = zipfile.ZipInfo(name, date_time=(2026, 1, 1, 0, 0, 0))
+            info.compress_type = zipfile.ZIP_DEFLATED
+            package.writestr(info, content)
+    return buffer.getvalue()
+
+
+def verify_template_workflow(server: StdioServer) -> None:
+    """
+    The template preflight contract, driven through the installed package.
+
+    Discovery, batch preflight and the hash-bound commit reached the adapters late: they
+    existed on the direct .NET client while neither adapter exposed them, so an agent could
+    commit a batch it had never previewed. Listing the three tools proves they are offered.
+    Only running them proves they work from a package, which is the claim that matters.
+    """
+    imported = server.call_tool(
+        "import_document_content",
+        {
+            "connectionId": "session",
+            "name": "quote-template.docx",
+            "contentBase64": base64.b64encode(build_template_docx()).decode("ascii"),
+        },
+    )
+    template_id = imported.get("documentId")
+    if not template_id:
+        raise SmokeError(f"import_document_content returned no documentId: {json.dumps(imported)[:400]}")
+
+    discovery = server.call_tool(
+        "discover_template", {"connectionId": "session", "documentId": template_id}
+    )
+    slots = [slot.get("name") for slot in discovery.get("slots", [])]
+    if "CustomerName" not in slots:
+        raise SmokeError(f"discover_template did not report the CustomerName slot: {slots}")
+    if not discovery.get("templateSha256"):
+        raise SmokeError("discover_template reported no template hash")
+
+    def batch(customer: str) -> str:
+        return json.dumps(
+            {
+                "items": [
+                    {
+                        "outputName": "quote-smoke.docx",
+                        "binding": {
+                            "values": {"CustomerName": customer},
+                            "missingValueBehavior": "Ignore",
+                        },
+                    }
+                ]
+            }
+        )
+
+    preview = server.call_tool(
+        "preview_template_batch",
+        {"connectionId": "session", "documentId": template_id, "requestJson": batch("Contoso Research")},
+    )
+    if not preview.get("isValid"):
+        raise SmokeError(f"preview_template_batch refused a valid batch: {json.dumps(preview)[:600]}")
+    token = preview.get("token")
+    if not token or not token.get("templateSha256") or not token.get("batchSha256"):
+        raise SmokeError(f"preview_template_batch issued no usable token: {json.dumps(preview)[:600]}")
+
+    # The refusal first, so a commit cannot be credited to a token it never honoured. The
+    # reviewed batch said Contoso Research; this one asks for something else.
+    stale = server.call_tool(
+        "populate_template_batch",
+        {
+            "connectionId": "session",
+            "documentId": template_id,
+            "requestJson": batch("Someone Else"),
+            "expectedTokenJson": json.dumps(token),
+        },
+    )
+    if stale.get("committed"):
+        raise SmokeError("a commit whose batch changed after review was accepted")
+    if "stale-batch-preview" not in json.dumps(stale):
+        raise SmokeError(f"a stale commit was refused without naming why: {json.dumps(stale)[:600]}")
+
+    committed = server.call_tool(
+        "populate_template_batch",
+        {
+            "connectionId": "session",
+            "documentId": template_id,
+            "requestJson": batch("Contoso Research"),
+            "expectedTokenJson": json.dumps(token),
+        },
+    )
+    if not committed.get("committed"):
+        raise SmokeError(f"a token-bound commit was refused: {json.dumps(committed)[:600]}")
+
+    output_id = next(
+        (item["document"]["itemId"]
+         for item in committed.get("items", [])
+         if isinstance(item.get("document"), dict) and item["document"].get("itemId")),
+        None,
+    )
+    if not output_id:
+        raise SmokeError(f"populate_template_batch reported no output document: {json.dumps(committed)[:600]}")
+
+    exported = server.call_tool(
+        "export_document_content", {"connectionId": "session", "documentId": output_id}
+    )
+    payload = exported.get("contentBase64")
+    if not payload:
+        raise SmokeError("the populated output exported no bytes")
+    # Read the produced document, not the status field that claimed to have produced it.
+    verify_docx_bytes(base64.b64decode(payload), "Contoso Research")
+    print(f"template-workflow=passed slots={len(slots)}")
 
 
 def verify_docx_bytes(content: bytes, expected_text: str) -> None:

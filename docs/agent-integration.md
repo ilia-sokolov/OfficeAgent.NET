@@ -20,6 +20,11 @@ The tools use OpenAI / Azure OpenAI strict-mode schemas. Every outcome -
 including bad input - is returned as structured JSON, so the model gets an error
 it can read and react to instead of an exception.
 
+
+Structural validation is not native Office acceptance and neither is visual parity. See
+[what "it worked" means](getting-started.md#what-it-worked-means-here) before reporting a
+document as verified.
+
 ## Wire up
 
 Install the integration, format modules, and dependency-injection container:
@@ -77,8 +82,10 @@ than omitting a property.
 | `find_in_document(connectionId, documentId, pattern, regex, wholeWord, caseSensitive, spreadsheetValueView)` | Returns content-verified anchors usable as plan targets. Send `false` for each search flag and `"both"` for the spreadsheet value default. |
 | `preview_plan(connectionId, documentId, planJson)` | Validates a `DocumentPlan` JSON without writing. Returns the canonical plan-report envelope below, with `committed: false` and null output fields. |
 | `apply_plan(connectionId, documentId, planJson, saveMode, newName)` | Applies the plan atomically and saves through the provider. Send `"Replace"` and `""` for the defaults; other modes are `NewVersion` and `NewDocument`. `NewDocument` optionally accepts `newName`; when it is empty, the provider derives a versioned sibling name. An unrecognised mode is refused. |
-| `populate_template_batch(connectionId, documentId, requestJson)` | Resolves tagged scalar values and repeating Word rows and saves bounded, independent outputs with one receipt per item. Exposed only with `AllowCreation`; requires read and create access on the connection. |
-| `compare_documents(originalConnectionId, originalDocumentId, revisedConnectionId, revisedDocumentId, revisionAuthor)` | Reads two Word files and returns hashes, paragraph differences, coverage diagnostics, and a snapshot-bound tracked plan when coverage is complete. Requires read access to both connections and writes nothing. |
+| `discover_template(connectionId, documentId)` | Reports what a template can be bound to: scalar slots, image and native-chart media slots, repeating Word rows, ambiguity diagnostics, and the template hash. Writes nothing and requires read access only. Exposed with `AllowCreation`, because a preflight exists to precede a commit. |
+| `preview_template_batch(connectionId, documentId, requestJson)` | Validates a whole batch and writes nothing, reporting every item rather than stopping at the first failure, with per-item operation, row, image and byte counts. Returns a token binding the preview to the exact template bytes and normalized batch. Read access only. |
+| `populate_template_batch(connectionId, documentId, requestJson, expectedTokenJson)` | Resolves scalar, image and native-chart values and repeating Word rows and saves bounded, independent outputs with one receipt per item. Pass the token from `preview_template_batch` to refuse a commit whose template or batch changed since it was reviewed; send `""` to commit without that binding. Exposed only with `AllowCreation`; requires read and create access on the connection. |
+| `compare_documents(originalConnectionId, originalDocumentId, revisedConnectionId, revisedDocumentId, revisionAuthor)` | Reads two Word files and returns hashes, differences, coverage diagnostics, and a snapshot-bound tracked plan when coverage is complete. Covers body paragraph text and table cell text where the table geometry is unchanged; see [what the comparison understands](document-workflows.md#what-the-comparison-understands). Requires read access to both connections and writes nothing. |
 | `preview_document_merge(requestJson)` | Previews ordered whole-document Word assembly, reports compatibility and remapping, and returns a hash-bound merge plan. Requires read access to every source. |
 | `merge_documents(planJson, destinationConnectionId, outputName)` | Revalidates every source and creates one new `.docx`. Exposed with `AllowCreation`; requires source read and destination create access. See [assembly](document-assembly.md). |
 

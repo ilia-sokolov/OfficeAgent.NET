@@ -389,9 +389,22 @@ public sealed class OfficeAgentTools
                 "Pass planJson \"\" for a minimal document. The starting anchor differs by format: a Word document has one empty paragraph at { \"paraId\": \"auto-0000\", \"expect\": \"\" }; a deck has one empty title placeholder at { \"paraId\": \"slide256/shape2/p0\", \"expect\": \"\" }, and its slide-targeted verbs use { \"kind\": \"slide\", \"path\": \"slide#256\" }. " +
                 "Plan-validation errors guarantee no write. Provider and cancellation errors may occur after storage accepted the file, so do not retry the same name; report the possibly unregistered name to the host for recovery. " +
                 "Returns {isValid, committed, receipt, sourceDocumentId, outputConnectionId, outputDocumentId, outputVersion, outputName, outputContentType, changes, errors}; non-applicable values are null.")));
+            functions.Add(AIFunctionFactory.Create(DiscoverTemplate, Opts(
+                "discover_template",
+                "Read a Word or PowerPoint template and report what it can be bound to, without writing anything. " +
+                "Returns {slots, mediaSlots, repeatingRows, diagnostics, templateSha256}: scalar slots are content-control tags or PowerPoint shape names, mediaSlots are image placements and native charts already in the template, and repeatingRows are Word-only {{Field}} rows. " +
+                "Call this before building a batch instead of guessing tag names: a name that does not exist is a binding error at commit time. Diagnostics report ambiguity, such as one tag used twice, which still reads but cannot be bound.")));
+            functions.Add(AIFunctionFactory.Create(PreviewTemplateBatch, Opts(
+                "preview_template_batch",
+                "Validate a whole template batch and write nothing. Same requestJson as populate_template_batch. " +
+                "Returns {isValid, items, diagnostics, token, limits}; every item is validated even after an earlier one fails, so one call reports all the problems rather than the first. Each item reports operationCount, rowCount, imageCount and imageBytes so an oversized batch is visible before it is committed. " +
+                "token binds this preview to the exact template bytes and the exact normalized batch, including the bytes any image id resolved to. Pass it back as populate_template_batch's expectedTokenJson to refuse a commit if either changed after you reviewed it.")));
             functions.Add(AIFunctionFactory.Create(PopulateTemplateBatch, Opts(
                 "populate_template_batch",
-                "Populate one Word or PowerPoint template into separate new documents. requestJson contains items with outputName and binding. Scalar values address content-control tags or PowerPoint shape names. Repeating rows are Word-only and replace {{Field}} placeholders in an explicitly selected row. Every output validates and saves atomically and returns its own receipt.")));
+                "Populate one Word or PowerPoint template into separate new documents. requestJson contains items with outputName and binding. " +
+                "Scalar values address content-control tags or PowerPoint shape names. Bindings may also place an image or set the data of a native chart the template already contains; discover_template lists those slots. Repeating rows are Word-only and replace {{Field}} placeholders in an explicitly selected row. " +
+                "The batch is preflighted whether or not you asked for a preview, so a batch that cannot validate writes nothing rather than leaving part of itself in storage. Pass expectedTokenJson from preview_template_batch to additionally refuse a commit whose template or batch changed since that preview. " +
+                "Every output validates and saves atomically and returns its own receipt.")));
             functions.Add(AIFunctionFactory.Create(MergeDocuments, Opts(
                 "merge_documents",
                 "Commit a Word assembly plan from preview_document_merge. planJson is the complete returned plan, including all source hashes. Revalidates every input and creates one new .docx in destinationConnectionId. Requires read access to every source and create access to the destination. Provider errors can indicate an uncertain write; do not retry blindly.")));
@@ -535,7 +548,10 @@ public sealed class OfficeAgentTools
             "Apply a DocumentPlan JSON to (connectionId, documentId) and save through the provider. Returns {isValid, committed, receipt, sourceDocumentId, outputConnectionId, outputDocumentId, outputVersion, outputName, outputContentType, changes, errors}; non-applicable values are null. The receipt hashes the effective plan and exact input/output bytes and keeps the host-authenticated actor separate from the plan's display revision author. saveMode: 'Replace' (default, overwrites the source after an optimistic version check), 'NewVersion' (keeps the source and mints a new id under the same connection), 'NewDocument' (mints a fresh id with an optional newName for display). On any failure nothing is written.")),
         AIFunctionFactory.Create(CompareDocuments, Opts(
             "compare_documents",
-            "Read two Word documents and return paragraph differences, exact input SHA-256 hashes, coverage diagnostics, and a tracked-change plan bound to the original snapshot. The first version covers free body paragraphs. Unsupported changes make isComplete false and plan null. This tool writes nothing; preview and apply the returned plan against the original document.")),
+            "Read two Word documents and return paragraph differences, exact input SHA-256 hashes, coverage diagnostics, and a tracked-change plan bound to the original snapshot. " +
+            "Covered: text added, removed or changed in free body paragraphs, and text changed inside a table cell when the table's geometry is unchanged. The same words split differently across equally formatted runs are not a difference, because Word re-segments runs constantly. " +
+            "Refused, with a per-area diagnostic and no plan: changed table geometry, a cell whose formatting changed along with its words, paragraph formatting or style changes, and changes in headers, footers, notes, images, numbering or other parts. Differences found in the areas that are covered are still reported when another area blocks the plan, so a refusal tells you what it saw. " +
+            "Unsupported changes make isComplete false and plan null. This tool writes nothing; preview and apply the returned plan against the original document.")),
         AIFunctionFactory.Create(PreviewDocumentMerge, Opts(
             "preview_document_merge",
             "Preview ordered whole-document Word assembly without saving. requestJson contains sources [{connectionId, documentId}] in output order and optional options {title, author}. Returns a merge plan bound to exact input hashes, source counts, identifier remapping decisions, and blocking diagnostics. Source formatting is preserved within the documented compatibility scope; each document starts on a new page. This is assembly, not reconciliation of edited versions."))
@@ -585,19 +601,73 @@ public sealed class OfficeAgentTools
         return JsonSerializer.Serialize(result, PlanJson);
     });
 
-    /// <summary>Populates one template into a bounded set of independent outputs.</summary>
-    public Task<string> PopulateTemplateBatch(
+    /// <summary>
+    /// Reports what a template can be bound to, without writing anything.
+    /// </summary>
+    /// <remarks>
+    /// Read access only. Discovery reads a template and reports its shape; it creates no
+    /// document, so demanding create here would refuse callers who are entitled to look at
+    /// a template they may not populate.
+    /// </remarks>
+    public Task<string> DiscoverTemplate(
+        string connectionId,
+        string documentId,
+        CancellationToken cancellationToken = default) => SafeAsync(async () =>
+        {
+            await DemandAccessAsync(connectionId, ConnectionCapability.Read, cancellationToken).ConfigureAwait(false);
+            var result = await _client.DiscoverTemplateAsync(
+                connectionId, documentId, cancellationToken).ConfigureAwait(false);
+            return JsonSerializer.Serialize(result, PlanJson);
+        });
+
+    /// <summary>
+    /// Validates an entire template batch and returns a token binding that validation to
+    /// the exact template bytes and the exact batch. Writes nothing.
+    /// </summary>
+    /// <remarks>
+    /// Read access only, for the same reason as discovery: a preflight that writes nothing
+    /// should not require the capability to create documents. The commit still demands
+    /// create.
+    /// </remarks>
+    public Task<string> PreviewTemplateBatch(
         string connectionId,
         string documentId,
         string requestJson,
         CancellationToken cancellationToken = default) => SafeAsync(async () =>
         {
             await DemandAccessAsync(connectionId, ConnectionCapability.Read, cancellationToken).ConfigureAwait(false);
+            var request = JsonSerializer.Deserialize<TemplateBatchRequest>(requestJson, PlanJson)
+                ?? throw new JsonException("Template batch JSON was null.");
+            var preview = await _client.PreviewTemplateBatchAsync(
+                connectionId, documentId, request, cancellationToken).ConfigureAwait(false);
+            return JsonSerializer.Serialize(preview, PlanJson);
+        });
+
+    /// <summary>Populates one template into a bounded set of independent outputs.</summary>
+    /// <remarks>
+    /// <paramref name="expectedTokenJson"/> is the token from
+    /// <c>preview_template_batch</c>. Supplying it makes the commit refuse a template or a
+    /// batch that has changed since the preview was reviewed, which is the point of
+    /// reviewing one. Omitting it keeps the previous behavior: the batch is still
+    /// preflighted internally, but nothing binds this commit to an earlier review.
+    /// </remarks>
+    public Task<string> PopulateTemplateBatch(
+        string connectionId,
+        string documentId,
+        string requestJson,
+        string expectedTokenJson = "",
+        CancellationToken cancellationToken = default) => SafeAsync(async () =>
+        {
+            await DemandAccessAsync(connectionId, ConnectionCapability.Read, cancellationToken).ConfigureAwait(false);
             await DemandAccessAsync(connectionId, ConnectionCapability.Create, cancellationToken).ConfigureAwait(false);
             var request = JsonSerializer.Deserialize<TemplateBatchRequest>(requestJson, PlanJson)
                 ?? throw new JsonException("Template batch JSON was null.");
+            var expectedToken = string.IsNullOrWhiteSpace(expectedTokenJson)
+                ? null
+                : JsonSerializer.Deserialize<TemplateBatchToken>(expectedTokenJson, PlanJson)
+                    ?? throw new JsonException("Template batch token JSON was null.");
             var result = await _client.PopulateTemplateBatchAsync(
-                connectionId, documentId, request, cancellationToken).ConfigureAwait(false);
+                connectionId, documentId, request, expectedToken, cancellationToken).ConfigureAwait(false);
             return JsonSerializer.Serialize(result, PlanJson);
         });
 

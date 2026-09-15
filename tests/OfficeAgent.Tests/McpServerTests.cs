@@ -51,9 +51,15 @@ public class McpServerTests
 
         options.AllowCreation = true;
         var names = OfficeAgentMcpServer.BuildToolset(options).Select(t => t.ProtocolTool.Name).ToArray();
-        Assert.Equal(15, names.Length);
+        Assert.Equal(17, names.Length);
         Assert.Contains("create_document", names);
         Assert.Contains("populate_template_batch", names);
+
+        // The template workflow arrives whole. Discovery and preflight write nothing and
+        // demand only read, but a preflight exists to precede a commit, so offering it
+        // where nothing can be committed would advertise a dead end.
+        Assert.Contains("discover_template", names);
+        Assert.Contains("preview_template_batch", names);
     }
 
     [Fact]
@@ -67,6 +73,8 @@ public class McpServerTests
 
         Assert.Equal(7, names.Length);
         Assert.DoesNotContain("populate_template_batch", names);
+        Assert.DoesNotContain("discover_template", names);
+        Assert.DoesNotContain("preview_template_batch", names);
         Assert.Contains("compare_documents", names);
         Assert.DoesNotContain("register_document", names);
         Assert.DoesNotContain("create_document", names);
@@ -79,9 +87,11 @@ public class McpServerTests
 
         options.AllowCreation = true;
         names = OfficeAgentMcpServer.BuildToolset(options).Select(t => t.ProtocolTool.Name).ToArray();
-        Assert.Equal(11, names.Length);
+        Assert.Equal(13, names.Length);
         Assert.Contains("create_document", names);
         Assert.Contains("populate_template_batch", names);
+        Assert.Contains("discover_template", names);
+        Assert.Contains("preview_template_batch", names);
         Assert.Contains("list_connections", names);
         Assert.DoesNotContain("register_document", names);
         Assert.DoesNotContain("remove_document", names);
@@ -150,6 +160,13 @@ public class McpServerTests
         // Creation comes with it: the session starts empty, so without it the agent would
         // hold a connection it can do nothing with until something is handed to it.
         Assert.Contains("create_document", names);
+
+        // The zero-configuration server is what the packaged-artifact smoke drives on every
+        // platform, and that smoke now requires the template trio. Asserting it here means a
+        // gating change is caught by a unit test rather than by a CI job on three runners.
+        Assert.Contains("discover_template", names);
+        Assert.Contains("preview_template_batch", names);
+        Assert.Contains("populate_template_batch", names);
 
         var connections = OfficeAgentMcpServer.ConnectionsPayload(options);
         Assert.Contains($"\"connectionId\":\"{OfficeAgentMcpServer.DefaultSessionConnectionId}\"", connections);

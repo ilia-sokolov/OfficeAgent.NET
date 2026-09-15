@@ -205,6 +205,131 @@ class RequiredToolsTests(unittest.TestCase):
             self.assertIn(f'"{name}"', source, f"{name} is no longer defined by the adapter")
 
 
+class TemplateFixtureTests(unittest.TestCase):
+    """The template the smoke builds must be a real, stable package."""
+
+    def test_the_fixture_is_a_package_carrying_a_tagged_content_control(self) -> None:
+        content = smoke.build_template_docx()
+        self.assertEqual(b"PK", content[:2])
+        with zipfile.ZipFile(io.BytesIO(content)) as package:
+            self.assertEqual(
+                {"[Content_Types].xml", "_rels/.rels", "word/document.xml"},
+                set(package.namelist()),
+            )
+            document = package.read("word/document.xml").decode("utf-8")
+        self.assertIn('w:val="CustomerName"', document)
+
+    def test_the_fixture_is_byte_identical_on_every_build(self) -> None:
+        """
+        The server reports a hash of these bytes and the token binds to it, so a fixture
+        that varied between runs would make the token meaningless and the failure obscure.
+        """
+        self.assertEqual(smoke.build_template_docx(), smoke.build_template_docx())
+
+
+class TemplateWorkflowTests(unittest.TestCase):
+    """
+    The template checks must fail when the server misbehaves.
+
+    A smoke step that cannot fail is worse than no step: it reports success for a surface
+    that was never exercised, which is the exact defect this workflow was added to catch.
+    """
+
+    class FakeServer:
+        def __init__(self, overrides: dict) -> None:
+            self.overrides = overrides
+            self.calls: list[str] = []
+
+        def call_tool(self, name: str, arguments: dict) -> dict:
+            self.calls.append(name)
+            if name in self.overrides:
+                value = self.overrides[name]
+                return value(self.calls) if callable(value) else value
+            return self.defaults(name)
+
+        def defaults(self, name: str) -> dict:
+            if name == "populate_template_batch":
+                # The first commit is the stale one and must be refused; the second carries
+                # the matching token and proceeds. A fake that committed both would make the
+                # happy path pass for the wrong reason.
+                if self.calls.count("populate_template_batch") == 1:
+                    return {
+                        "committed": False,
+                        "items": [{"diagnostics": [{"code": "stale-batch-preview"}]}],
+                    }
+                return {"committed": True, "items": [{"document": {"itemId": "output-1"}}]}
+            return self.fixed(name)
+
+        @staticmethod
+        def fixed(name: str) -> dict:
+            if name == "import_document_content":
+                return {"documentId": "template-1"}
+            if name == "discover_template":
+                return {"slots": [{"name": "CustomerName"}], "templateSha256": "abc"}
+            if name == "preview_template_batch":
+                return {
+                    "isValid": True,
+                    "token": {"templateSha256": "abc", "batchSha256": "def"},
+                }
+            if name == "export_document_content":
+                return {
+                    "contentBase64": base64.b64encode(
+                        _package_with("Contoso Research")
+                    ).decode("ascii")
+                }
+            raise AssertionError(f"unexpected tool {name}")
+
+    def run_with(self, overrides: dict) -> None:
+        smoke.verify_template_workflow(self.FakeServer(overrides))
+
+    def test_the_happy_path_passes(self) -> None:
+        self.run_with({})
+
+    def test_a_missing_slot_is_reported(self) -> None:
+        with self.assertRaises(smoke.SmokeError):
+            self.run_with({"discover_template": {"slots": [], "templateSha256": "abc"}})
+
+    def test_a_preview_without_a_token_is_reported(self) -> None:
+        with self.assertRaises(smoke.SmokeError):
+            self.run_with({"preview_template_batch": {"isValid": True, "token": {}}})
+
+    def test_a_server_that_commits_a_stale_batch_is_reported(self) -> None:
+        """The refusal is the point of the token; accepting it must fail the smoke."""
+        with self.assertRaises(smoke.SmokeError):
+            self.run_with({"populate_template_batch": {"committed": True, "items": []}})
+
+    def test_a_refusal_that_does_not_name_the_reason_is_reported(self) -> None:
+        def populate(calls: list[str]) -> dict:
+            first = calls.count("populate_template_batch") == 1
+            if first:
+                return {"committed": False, "items": []}
+            return {"committed": True, "items": [{"document": {"itemId": "output-1"}}]}
+
+        with self.assertRaises(smoke.SmokeError):
+            self.run_with({"populate_template_batch": populate})
+
+    def test_an_output_that_lacks_the_bound_value_is_reported(self) -> None:
+        """The produced bytes are read, not the status field that claimed to produce them."""
+        with self.assertRaises(smoke.SmokeError):
+            self.run_with(
+                {
+                    "export_document_content": {
+                        "contentBase64": base64.b64encode(
+                            _package_with("Someone Else")
+                        ).decode("ascii")
+                    }
+                }
+            )
+
+
+def _package_with(text: str) -> bytes:
+    buffer = io.BytesIO()
+    with zipfile.ZipFile(buffer, "w") as package:
+        package.writestr("[Content_Types].xml", "<Types/>")
+        package.writestr("word/document.xml", f"<w:document>{text}</w:document>")
+    return buffer.getvalue()
+
+
 class PackageSetTests(unittest.TestCase):
     def test_missing_packages_are_reported_before_anything_is_installed(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:

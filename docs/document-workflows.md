@@ -65,8 +65,8 @@ population in Word. Repeating rows are Word-only. Scalar binding also supports u
 PowerPoint shape names.
 
 The equivalent MCP or Agent Framework call is `populate_template_batch(connectionId,
-documentId, requestJson)`. The host must opt in with `AllowCreation`; its connection access
-policy must also grant read and create. For example:
+documentId, requestJson, expectedTokenJson)`. The host must opt in with `AllowCreation`; its
+connection access policy must also grant read and create. For example:
 
 ```json
 {
@@ -335,6 +335,31 @@ access policy must grant read access to both connections. The tool never writes;
 plan to normal preview and apply tools against the original.
 
 Run the [document-comparison sample](../samples/DocumentComparison/) with two `.docx` files.
+
+### Preflighting a batch from an agent
+
+An agent does not have to guess a template's tag names or discover a bad batch one output at
+a time. Three tools cover the workflow, and the same contract is on the direct client as
+`DiscoverTemplateAsync`, `PreviewTemplateBatchAsync` and `PopulateTemplateBatchAsync`.
+
+1. `discover_template(connectionId, documentId)` reports the scalar slots, the image and
+   native-chart media slots, and the repeating Word rows the template exposes, plus
+   diagnostics for anything ambiguous such as one tag used twice. It writes nothing.
+2. `preview_template_batch(connectionId, documentId, requestJson)` validates the entire
+   batch and writes nothing. Every item is validated even after an earlier one fails, so one
+   call reports all the problems rather than the first, and each item reports the operation,
+   row, image and byte counts it would produce.
+3. `populate_template_batch(connectionId, documentId, requestJson, expectedTokenJson)`
+   commits. Passing the preview's `token` refuses the commit if the template bytes or the
+   normalized batch changed after the review, including the bytes a provider-held image id
+   resolved to. Send `""` to commit without that binding.
+
+The batch is preflighted internally whether or not step 2 was called, so a batch that cannot
+validate writes nothing rather than leaving part of itself in storage. The token adds the
+separate guarantee that what commits is what was reviewed.
+
+A stale token is reported as `stale-batch-preview` and writes nothing. The repair is to
+preview the batch you actually intend to commit and use the token that preview returns.
 
 ### What the comparison understands
 

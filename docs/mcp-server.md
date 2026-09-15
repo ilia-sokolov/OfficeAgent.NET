@@ -201,13 +201,23 @@ A SharePoint connection in `appsettings.json`:
 
 with `OfficeAgent__SharePointConnections__0__ClientSecret` supplied from the environment.
 
+
+Structural validation is not native Office acceptance and neither is visual parity. See
+[what "it worked" means](getting-started.md#what-it-worked-means-here) before reporting a
+document as verified.
+
 ## Tools
 
 Word assembly adds the read-only `preview_document_merge` and, when `AllowCreation` is
 enabled, `merge_documents`. They authorize every input connection; commit also authorizes
 the destination. See [Word document assembly](document-assembly.md) for the JSON contracts.
 
-The MCP toolset is the projection of [the agent-integration surface](agent-integration.md): `inspect_document`, `find_in_document`, `preview_plan`, `apply_plan`, `compare_documents`, and `preview_document_merge`; `AllowRegistration` independently adds `register_document` / `remove_document` plus the composites `open_document` / `edit_document`, while `AllowCreation` adds `create_document`, `populate_template_batch`, and `merge_documents` when at least one connection allows a creatable extension - `.docx`, `.pptx`, or `.xlsx` (SharePoint also requires its creation destination). Either opt-in adds `list_connections`, which returns `{connectionId, provider, canCreateDocuments}` entries. That boolean means the connection is configured for at least one creatable format; it is not a format list, a permission check, or a readiness probe. The higher-level workflow contracts and their limits are documented in [template population and comparison](document-workflows.md) and [Word document assembly](document-assembly.md).
+The MCP toolset is the projection of [the agent-integration surface](agent-integration.md): `inspect_document`, `find_in_document`, `preview_plan`, `apply_plan`, `compare_documents`, and `preview_document_merge`; `AllowRegistration` independently adds `register_document` / `remove_document` plus the composites `open_document` / `edit_document`, while `AllowCreation` adds `create_document`, the template trio `discover_template` / `preview_template_batch` / `populate_template_batch`, and `merge_documents` when at least one connection allows a creatable extension - `.docx`, `.pptx`, or `.xlsx` (SharePoint also requires its creation destination). Either opt-in adds `list_connections`, which returns `{connectionId, provider, canCreateDocuments}` entries. That boolean means the connection is configured for at least one creatable format; it is not a format list, a permission check, or a readiness probe. The higher-level workflow contracts and their limits are documented in [template population and comparison](document-workflows.md) and [Word document assembly](document-assembly.md).
+
+Discovery and batch preflight write nothing and demand read access only, but they arrive
+with `AllowCreation` rather than separately: a preflight exists to precede a commit, so
+offering one where nothing can be committed would advertise a dead end. The capability each
+tool demands is enforced independently of which opt-in reveals it.
 
 Every tool named above addresses a document by `(connectionId, documentId)` and is offered
 only when a connection exists to name. `AllowInlineContent` adds a separate set that
