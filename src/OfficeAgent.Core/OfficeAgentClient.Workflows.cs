@@ -157,6 +157,7 @@ public sealed partial class OfficeAgentClient
 
         // Every batch is preflighted, asked for or not. A batch that cannot validate is
         // refused before any output exists rather than leaving a prefix of it in storage.
+        var limits = EffectiveLimits(request);
         var preview = await PreviewTemplateBatchAsync(template, request, cancellationToken)
             .ConfigureAwait(false);
 
@@ -198,7 +199,8 @@ public sealed partial class OfficeAgentClient
             }
 
             cancellationToken.ThrowIfCancellationRequested();
-            var plan = await BuildTemplatePlanAsync(template, item.Binding, cancellationToken).ConfigureAwait(false);
+            var plan = await BuildTemplatePlanWithMediaAsync(template, item.Binding, limits, cancellationToken)
+                .ConfigureAwait(false);
             if (!plan.IsValid || plan.Plan is null)
             {
                 results.Add(new TemplateBatchItemResult

@@ -29,6 +29,17 @@ public sealed class TemplateBinding
     /// <summary>Gets scalar values keyed by content-control tag or PowerPoint shape name.</summary>
     public IReadOnlyDictionary<string, string?> Values { get; init; }
         = new Dictionary<string, string?>(StringComparer.Ordinal);
+    /// <summary>
+    /// Gets typed values keyed by slot name: text, an image, or native chart data.
+    /// </summary>
+    /// <remarks>
+    /// These sit beside <see cref="Values"/> rather than replacing them. A name may
+    /// appear in one or the other, not both. A typed value aimed at a slot that cannot
+    /// hold it is refused, never stringified and never dropped.
+    /// </remarks>
+    public IReadOnlyDictionary<string, TemplateValue> TypedValues { get; init; }
+        = new Dictionary<string, TemplateValue>(StringComparer.Ordinal);
+
     /// <summary>Gets repeating Word table bindings.</summary>
     public IReadOnlyList<RepeatingTableBinding> RepeatingTables { get; init; }
         = Array.Empty<RepeatingTableBinding>();

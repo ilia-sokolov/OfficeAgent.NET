@@ -155,6 +155,103 @@ Omitting the token keeps the older one-call behavior. The batch is still preflig
 either way: a batch that cannot validate is refused before any output exists, rather than
 leaving a prefix of it in storage.
 
+### Binding images and charts
+
+Scalar values are strings. An image or a native chart is bound through `TypedValues`,
+which sits beside `Values` rather than replacing it: a scalar-only request behaves
+exactly as it always did.
+
+```csharp
+var binding = new TemplateBinding
+{
+    Values = new Dictionary<string, string?> { ["CustomerName"] = "Fabrikam Services" },
+    TypedValues = new Dictionary<string, TemplateValue>
+    {
+        ["Photo"] = new TemplateImageValue
+        {
+            Base64Bytes = photoBase64,
+            ImageType = "png",
+            WidthPx = 120,
+            HeightPx = 120,
+            AltText = "A product photograph"
+        }
+    }
+};
+```
+
+Ask discovery which slots can hold what before binding:
+
+```csharp
+foreach (var slot in (await client.DiscoverTemplateAsync(template)).MediaSlots)
+    Console.WriteLine($"{slot.Name} holds {slot.MediaKind}");
+```
+
+#### Where the bytes may come from
+
+Exactly one of two places, and never the open internet:
+
+- **Inline**, as base64 the caller already holds.
+- **A provider document** the caller previously registered, named by `ImageConnectionId`
+  and `ImageDocumentId`. It is read through the provider, so that connection's access
+  rules and size limits apply to the image exactly as they would to any other document.
+
+There is no URL form. Fetching one would make the engine a client of whatever address a
+plan happened to carry, which is not a decision a template binding should be able to
+make.
+
+#### What is checked before anything is written
+
+| Check | Refusal |
+| --- | --- |
+| The slot can hold this kind of value | `wrong-slot-kind` |
+| The slot is not inside a repeating table row | `media-in-repeating-row` |
+| The image carries alt text | `missing-alt-text` |
+| The bytes match the declared image type | `image-type-mismatch` |
+| Exactly one byte source is given | `invalid-image-binding` |
+| The image fits the budget | `image-too-large` |
+| The same slot is not bound twice | `duplicate-template-binding` |
+| A chart binding targets a native chart in a deck | `wrong-slot-kind` |
+| A chart binding is not aimed at a Word template | `unsupported-template-feature` |
+
+The type check compares the declared type against the actual magic bytes, so arbitrary
+content cannot be labelled a PNG and embedded under that name.
+
+#### Charts are PowerPoint only
+
+A chart binding updates a native chart that is **already in the template**; it does not
+create one. This engine has no native Word chart handling, so a Word template reports no
+chart slots and a chart binding against one is refused with
+`unsupported-template-feature`. That absence is the honest answer rather than an
+omission.
+
+#### Media in repeating rows
+
+Not supported. A slot inside a table row is reported with `InRepeatingRow` true, and a
+binding that targets one is refused: every generated row would otherwise share a single
+image. Move the media slot outside the table.
+
+#### The token covers the resolved bytes
+
+`TemplateBatchToken.MediaSha256` hashes the payloads the bindings actually resolved to.
+The batch hash covers the binding as written, which for a provider-held image is only its
+id, so replacing the image behind an unchanged reference would not move it. The media
+hash does, and a commit carrying the older token is refused.
+
+Media is resolved during preview, not at commit, because the exact bytes have to be in
+hand before the token can bind to them.
+
+#### Media budgets
+
+| Budget | Default |
+| --- | --- |
+| `MaximumImageBytes` | 8 MiB |
+| `MaximumImagesPerDocument` | 20 |
+| `MaximumTotalImageBytes` | 64 MiB |
+| `MaximumChartPoints` | 1,000 |
+
+Set through `TemplateBatchLimits.Media`. As with every other budget here, a request may
+ask for something stricter and can never raise a host ceiling.
+
 ### Host budgets
 
 `TemplateBatchLimits` is owned by the host:

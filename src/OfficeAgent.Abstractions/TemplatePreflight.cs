@@ -19,6 +19,13 @@ public sealed class TemplateDiscoveryResult
     public IReadOnlyList<WorkflowDiagnostic> Diagnostics { get; init; } =
         Array.Empty<WorkflowDiagnostic>();
 
+    /// <summary>
+    /// Gets the slots that hold something other than text: image placements and native
+    /// charts already in the template.
+    /// </summary>
+    public IReadOnlyList<TemplateMediaSlot> MediaSlots { get; init; } =
+        Array.Empty<TemplateMediaSlot>();
+
     /// <summary>Gets the SHA-256 of the template bytes this result describes.</summary>
     public string TemplateSha256 { get; init; } = string.Empty;
 }
@@ -110,6 +117,9 @@ public sealed class TemplateBatchLimits
     /// </summary>
     public int MaximumDiagnosticsPerItem { get; init; } = 50;
 
+    /// <summary>Gets the budgets for media carried by the batch.</summary>
+    public TemplateMediaLimits Media { get; init; } = TemplateMediaLimits.Default;
+
     /// <summary>Returns the stricter of the host budgets and a request's own.</summary>
     public TemplateBatchLimits Restrict(TemplateBatchLimits? requested)
     {
@@ -123,7 +133,8 @@ public sealed class TemplateBatchLimits
             MaximumTotalRows = Math.Min(MaximumTotalRows, requested.MaximumTotalRows),
             MaximumValueLength = Math.Min(MaximumValueLength, requested.MaximumValueLength),
             MaximumDiagnosticsPerItem =
-                Math.Min(MaximumDiagnosticsPerItem, requested.MaximumDiagnosticsPerItem)
+                Math.Min(MaximumDiagnosticsPerItem, requested.MaximumDiagnosticsPerItem),
+            Media = Media.Restrict(requested.Media)
         };
     }
 
@@ -136,6 +147,7 @@ public sealed class TemplateBatchLimits
         Positive(MaximumTotalRows, nameof(MaximumTotalRows));
         Positive(MaximumValueLength, nameof(MaximumValueLength));
         Positive(MaximumDiagnosticsPerItem, nameof(MaximumDiagnosticsPerItem));
+        Media.Validate();
     }
 
     private static void Positive(int value, string name)
@@ -206,6 +218,12 @@ public sealed class TemplateBatchPreviewItem
     /// <summary>Gets the repeating rows the item would create.</summary>
     public int RowCount { get; init; }
 
+    /// <summary>Gets the images this item would place.</summary>
+    public int ImageCount { get; init; }
+
+    /// <summary>Gets the decoded image bytes this item would carry.</summary>
+    public long ImageBytes { get; init; }
+
     /// <summary>Gets this item's diagnostics, capped by the effective budget.</summary>
     public IReadOnlyList<WorkflowDiagnostic> Diagnostics { get; init; } =
         Array.Empty<WorkflowDiagnostic>();
@@ -233,4 +251,14 @@ public sealed class TemplateBatchToken
 
     /// <summary>Gets the SHA-256 of the deterministically normalized batch.</summary>
     public string BatchSha256 { get; init; } = string.Empty;
+
+    /// <summary>
+    /// Gets the SHA-256 over every resolved media payload, in item and slot order.
+    /// </summary>
+    /// <remarks>
+    /// The batch hash covers the binding as written, which for a provider-held image is
+    /// only its id. This covers the bytes that id resolved to, so replacing the image
+    /// behind an unchanged reference still invalidates the reviewed preview.
+    /// </remarks>
+    public string MediaSha256 { get; init; } = string.Empty;
 }
