@@ -103,6 +103,16 @@ public sealed class OfficeAgentTools
 
     private static readonly JsonSerializerOptions Json = new() { WriteIndented = false };
 
+    /// <summary>
+    /// Discovery is read by a model, so its enums are written as names. A format reported
+    /// as <c>2</c> tells an agent nothing it can act on.
+    /// </summary>
+    private static readonly JsonSerializerOptions CapabilityJson = new()
+    {
+        WriteIndented = false,
+        Converters = { new JsonStringEnumConverter() }
+    };
+
     private static readonly JsonSerializerOptions PlanJson = new()
     {
         PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
@@ -142,6 +152,60 @@ public sealed class OfficeAgentTools
         CancellationToken cancellationToken = default) =>
         _connectionAccess.IsAllowedAsync(
             _principalAccessor.Principal, connectionId, capability, cancellationToken);
+
+    /// <summary>
+    /// Describes what this caller can actually do: the engine's formats, verbs, wire
+    /// versions and ceilings, plus only the connections this principal may use and only
+    /// the capabilities they hold on each.
+    /// </summary>
+    /// <remarks>
+    /// A connection the caller cannot touch at all is dropped rather than listed as
+    /// denied, so the result never discloses that it exists. The engine half comes
+    /// straight from the client, so discovery and validation cannot disagree.
+    /// </remarks>
+    public async Task<EngineCapabilities> DescribeCapabilitiesAsync(
+        CancellationToken cancellationToken = default)
+    {
+        var engine = _client.DescribeCapabilities();
+        var visible = new List<ConnectionCapabilities>();
+
+        foreach (var connection in engine.Connections)
+        {
+            var allowed = new List<string>();
+            foreach (ConnectionCapability capability in Enum.GetValues(typeof(ConnectionCapability)))
+            {
+                if (await CanAccessConnectionAsync(connection.ConnectionId, capability, cancellationToken)
+                        .ConfigureAwait(false))
+                    allowed.Add(capability.ToString());
+            }
+
+            if (allowed.Count == 0) continue;
+
+            allowed.Sort(StringComparer.Ordinal);
+            visible.Add(new ConnectionCapabilities
+            {
+                ConnectionId = connection.ConnectionId,
+                Provider = connection.Provider,
+                Allowed = allowed
+            });
+        }
+
+        return new EngineCapabilities
+        {
+            Contracts = engine.Contracts,
+            Formats = engine.Formats,
+            Limits = engine.Limits,
+            RenderingAvailable = engine.RenderingAvailable,
+            RequiresInspection = engine.RequiresInspection,
+            Connections = visible
+        };
+    }
+
+    /// <summary>Serializes <see cref="DescribeCapabilitiesAsync"/> for a model-facing tool.</summary>
+    public Task<string> DescribeCapabilities(CancellationToken cancellationToken = default)
+        => SafeAsync(async () =>
+            JsonSerializer.Serialize(
+                await DescribeCapabilitiesAsync(cancellationToken).ConfigureAwait(false), CapabilityJson));
 
     /// <summary>
     /// System-prompt guidance to concatenate into the agent's instructions. Teaches
@@ -448,6 +512,13 @@ public sealed class OfficeAgentTools
 
     private AIFunction[] CoreFunctions() => new[]
     {
+        AIFunctionFactory.Create(DescribeCapabilities, Opts(
+            "describe_capabilities",
+            "List what this server actually supports before planning an edit: the accepted edit-plan " +
+            "contract version, every registered format with the plan verbs and change modes it takes, " +
+            "the host's document size and expansion ceilings, and the connections you may use with the " +
+            "capabilities you hold on each. A verb missing from a format is not supported there and will " +
+            "be refused. Anchor ids are never listed: they come from inspect_document for the document in hand.")),
         AIFunctionFactory.Create(InspectDocument, Opts(
             "inspect_document",
             "Inspect a Word, PowerPoint, or Excel document. Excel returns worksheets, tables, and a bounded cell list; use sheetId, range, and maximumCells to narrow it. Other formats return their outline, paragraphs, content controls, nodes, and styles. Copy anchors and node paths from this result.")),

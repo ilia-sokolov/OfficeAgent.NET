@@ -12,7 +12,7 @@ namespace OfficeAgent.Word;
 /// Provides Word inspection, search, and supported plan operation handling over
 /// WordprocessingML across the body, headers, footers, footnotes, and endnotes.
 /// </summary>
-public sealed class WordModule : IFormatModule, IBlankDocumentFactory, IPlanValidatingModule, IApplyTimeProvider, IDocumentAssembler
+public sealed class WordModule : IFormatModule, IBlankDocumentFactory, IPlanValidatingModule, IApplyTimeProvider, IDocumentAssembler, ICapabilityDeclaringModule
 {
     /// <inheritdoc />
     public DocumentAssemblyCandidate Assemble(IReadOnlyList<byte[]> sources, DocumentMergeOptions options,
@@ -24,6 +24,13 @@ public sealed class WordModule : IFormatModule, IBlankDocumentFactory, IPlanVali
     private readonly IReadOnlyList<IWordNodeProvider> _providers;
 
     public IReadOnlyList<IOperationHandler> Handlers { get; }
+
+    /// <inheritdoc />
+    public IReadOnlyList<ChangeMode> SupportedChangeModes { get; } = new[] { ChangeMode.Direct, ChangeMode.Tracked };
+
+    /// <inheritdoc />
+    /// <remarks>Read from the module's own node providers, so it cannot drift from them.</remarks>
+    public IReadOnlyList<string> NodeKinds => _providers.Select(provider => provider.Kind).Distinct().ToList();
 
     /// <inheritdoc />
     public TimeProvider Clock { get; }

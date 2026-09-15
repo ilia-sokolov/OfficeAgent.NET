@@ -326,6 +326,44 @@ public sealed partial class OfficeAgentClient
         return factory.CreateBlank();
     }
 
+    /// <summary>
+    /// Describes what this engine supports as configured: wire versions, registered
+    /// formats and their verbs, host ingestion ceilings, and every connection registered
+    /// here.
+    /// </summary>
+    /// <remarks>
+    /// This client has no access policy of its own, so it reports every registered
+    /// connection and leaves <see cref="ConnectionCapabilities.Allowed"/> empty: it does
+    /// not know who is asking. The Agent Framework adapter holds the policy and fills in
+    /// the capabilities the caller actually has, dropping connections they cannot use.
+    /// </remarks>
+    public EngineCapabilities DescribeCapabilities()
+    {
+        var engine = _service as ICapabilityReportingService
+            ?? throw new NotSupportedException(
+                "The configured IDocumentService does not report capabilities. " +
+                "Implement ICapabilityReportingService to support discovery.");
+
+        var described = engine.Describe();
+
+        return new EngineCapabilities
+        {
+            Contracts = described.Contracts,
+            Formats = described.Formats,
+            Limits = described.Limits,
+            RenderingAvailable = described.RenderingAvailable,
+            RequiresInspection = described.RequiresInspection,
+            Connections = _providers.All
+                .Select(provider => new ConnectionCapabilities
+                {
+                    ConnectionId = provider.ConnectionId,
+                    Provider = provider.Provider
+                })
+                .OrderBy(connection => connection.ConnectionId, StringComparer.Ordinal)
+                .ToList()
+        };
+    }
+
     /// <summary>The extensions a registered module can mint a blank document for.</summary>
     public IReadOnlyList<string> CreatableExtensions =>
         _blankDocumentFactories

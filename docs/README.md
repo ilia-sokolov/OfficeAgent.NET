@@ -33,6 +33,7 @@ this page to choose the shortest path for your scenario.
 | Run a tracked Word review | [Sample review workflows](../samples/documents/README.md#reproducible-review-workflows) | [Optional review skill](skill-installation.md) |
 | Edit a document that already has tracked changes | [Pending revisions](pending-revisions.md) | [Document plans](document-plans.md#validation-errors) |
 | Bound what an untrusted document can spend | [Ingestion limits](ingestion-limits.md) | [Operations](operations.md) |
+| Find out what the server supports before planning | [Capability discovery](capability-discovery.md) | [Document plans](document-plans.md) |
 
 ## Packages
 
@@ -89,6 +90,7 @@ and optimistic-concurrency conflicts instead of guessing.
 - [Open XML SDK interoperability](sdk-interoperability.md) - the tested copy, edit, reinspect workflow, per-stage guarantees, and the two distinct staleness guards.
 - [Operations](operations.md) — concurrency, memory, telemetry, and production operation.
 - [Ingestion limits](ingestion-limits.md) - host ceilings for package size, expansion, parts, and XML, plus what is refused and how.
+- [Capability discovery](capability-discovery.md) - the contract version, per-format verbs and change modes, effective ceilings, and authorized connections.
 - [Visual rendering](rendering.md) — optional out-of-process PDF and page-image conversion.
 - [Template population and comparison](document-workflows.md) — batch binding, repeating Word rows, comparison coverage, and redline generation.
 - [Troubleshooting](troubleshooting.md) — diagnose setup, identity, and edit failures.

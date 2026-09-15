@@ -253,6 +253,7 @@ internal sealed class OpenXmlPackageService
         }
 
         using (zip)
+        try
         {
             var names = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
             long declaredExpanded = 0;
@@ -299,6 +300,14 @@ internal sealed class OpenXmlPackageService
                     "Not an OOXML package: the required '[Content_Types].xml' part is missing.");
 
             return DetectFormat(contentTypes);
+        }
+        // Entry enumeration and opening an entry fault lazily too: a damaged local header
+        // or an unsupported compression method only surfaces when that entry is reached.
+        catch (InvalidDataException ex)
+        {
+            throw new OpenXmlPackageRejectedException(
+                "The package could not be read: an entry is corrupt or uses an unsupported " +
+                "compression method.", ex);
         }
     }
 

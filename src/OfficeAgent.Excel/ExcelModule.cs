@@ -11,7 +11,7 @@ using DocFormat = OfficeAgent.Abstractions.DocumentFormat;
 namespace OfficeAgent.Excel;
 
 /// <summary>Inspects and edits Open XML workbooks without evaluating formulas.</summary>
-public sealed class ExcelModule : IFormatModule, IBlankDocumentFactory, IApplyTimeProvider
+public sealed class ExcelModule : IFormatModule, IBlankDocumentFactory, IApplyTimeProvider, ICapabilityDeclaringModule
 {
     /// <summary>Initializes an Excel module using the system clock.</summary>
     public ExcelModule() : this(TimeProvider.System) { }
@@ -36,6 +36,14 @@ public sealed class ExcelModule : IFormatModule, IBlankDocumentFactory, IApplyTi
     public TimeProvider Clock { get; }
     /// <inheritdoc />
     public IReadOnlyList<IOperationHandler> Handlers { get; }
+
+    /// <inheritdoc />
+    /// <remarks>SpreadsheetML has no tracked-changes vocabulary this engine writes.</remarks>
+    public IReadOnlyList<ChangeMode> SupportedChangeModes { get; } = new[] { ChangeMode.Direct };
+
+    /// <inheritdoc />
+    /// <remarks>The workbook module surfaces no node kinds; its anchors are cells and tables.</remarks>
+    public IReadOnlyList<string> NodeKinds { get; } = Array.Empty<string>();
     /// <inheritdoc />
     public bool CanHandle(IOpenXmlPackage package) => package.Format == DocFormat.Excel;
     /// <inheritdoc />

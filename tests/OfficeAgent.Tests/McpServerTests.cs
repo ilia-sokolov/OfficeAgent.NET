@@ -23,7 +23,7 @@ public class McpServerTests
         var tools = OfficeAgentMcpServer.BuildToolset(options);
 
         var names = tools.Select(t => t.ProtocolTool.Name).ToArray();
-        Assert.Equal(11, names.Length);
+        Assert.Equal(12, names.Length);
         Assert.Contains("open_document", names);
         Assert.Contains("edit_document", names);
         Assert.Contains("inspect_document", names);
@@ -51,7 +51,7 @@ public class McpServerTests
 
         options.AllowCreation = true;
         var names = OfficeAgentMcpServer.BuildToolset(options).Select(t => t.ProtocolTool.Name).ToArray();
-        Assert.Equal(14, names.Length);
+        Assert.Equal(15, names.Length);
         Assert.Contains("create_document", names);
         Assert.Contains("populate_template_batch", names);
     }
@@ -65,7 +65,7 @@ public class McpServerTests
 
         var names = OfficeAgentMcpServer.BuildToolset(options).Select(t => t.ProtocolTool.Name).ToArray();
 
-        Assert.Equal(6, names.Length);
+        Assert.Equal(7, names.Length);
         Assert.DoesNotContain("populate_template_batch", names);
         Assert.Contains("compare_documents", names);
         Assert.DoesNotContain("register_document", names);
@@ -79,7 +79,7 @@ public class McpServerTests
 
         options.AllowCreation = true;
         names = OfficeAgentMcpServer.BuildToolset(options).Select(t => t.ProtocolTool.Name).ToArray();
-        Assert.Equal(10, names.Length);
+        Assert.Equal(11, names.Length);
         Assert.Contains("create_document", names);
         Assert.Contains("populate_template_batch", names);
         Assert.Contains("list_connections", names);

@@ -19,6 +19,7 @@ internal sealed class FlowOrchestrator
 {
     private readonly OpenXmlPackageService _opc;
     private readonly OpenXmlIngestionLimits _limits;
+    private readonly IReadOnlyList<IFormatModule> _modules;
     private readonly FormatRouter _router;
     private readonly PlanValidator _validator = new();
     private readonly TransactionManager _transaction = new();
@@ -41,13 +42,17 @@ internal sealed class FlowOrchestrator
         ILogger logger,
         OpenXmlIngestionLimits limits)
     {
-        _router = new FormatRouter(modules);
+        _modules = modules.ToList();
+        _router = new FormatRouter(_modules);
         _resolvers = resolvers.ToList();
         _logger = logger;
         _limits = limits ?? OpenXmlIngestionLimits.Default;
         _limits.Validate();
         _opc = new OpenXmlPackageService(_limits);
     }
+
+    /// <summary>Describes the engine from the modules and ceilings actually registered.</summary>
+    public EngineCapabilities Describe() => CapabilityDiscovery.Describe(_modules, _limits);
 
     public InspectResult Inspect(DocumentHandle handle, InspectOptions options) =>
         InspectCore(ReadAll(handle), options);

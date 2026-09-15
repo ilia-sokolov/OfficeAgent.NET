@@ -20,7 +20,8 @@ public class AiToolsTests
         // pre-registers documents and threads the id into the system prompt; the agent
         // only reads, compares, validates, and applies. Creation remains an opt-in.
         var names = functions.Select(f => f.Name).ToArray();
-        Assert.Equal(6, functions.Length);
+        Assert.Equal(7, functions.Length);
+        Assert.Contains("describe_capabilities", names);
         Assert.Contains("inspect_document", names);
         Assert.Contains("find_in_document", names);
         Assert.Contains("preview_plan", names);

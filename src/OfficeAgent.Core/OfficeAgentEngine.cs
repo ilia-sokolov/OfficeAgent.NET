@@ -9,7 +9,7 @@ namespace OfficeAgent.Core;
 /// the format modules it should serve. Optionally accepts an <see cref="ILoggerFactory"/>
 /// for structured logging; uses <see cref="NullLoggerFactory.Instance"/> by default.
 /// </summary>
-internal sealed class OfficeAgentEngine : IDocumentService
+internal sealed class OfficeAgentEngine : IDocumentService, ICapabilityReportingService
 {
     private readonly FlowOrchestrator _flow;
 
@@ -23,6 +23,9 @@ internal sealed class OfficeAgentEngine : IDocumentService
             resolvers ?? DefaultHandleResolver.For(limits ?? OpenXmlIngestionLimits.Default),
             (loggerFactory ?? NullLoggerFactory.Instance).CreateLogger(OfficeAgentTelemetry.LogCategory),
             limits ?? OpenXmlIngestionLimits.Default);
+
+    /// <inheritdoc />
+    public EngineCapabilities Describe() => _flow.Describe();
 
     public InspectResult Inspect(DocumentHandle handle, InspectOptions options) =>
         _flow.Inspect(handle, options);

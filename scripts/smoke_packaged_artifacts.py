@@ -40,6 +40,7 @@ REQUIRED_TOOLS = {
     "create_document",
     "import_document_content",
     "export_document_content",
+    "describe_capabilities",
 }
 
 STARTUP_TIMEOUT_SECONDS = 90
@@ -271,6 +272,26 @@ def verify_document_workflow(server: StdioServer, version: str) -> None:
     if not tools:
         raise SmokeError("packaged server offered no tools")
 
+    # Discovery first, then act only on what it advertised. This is the whole point of
+    # the capability tool: the workflow below is chosen from the server's own answer
+    # rather than from assumptions baked into this script.
+    capabilities = server.call_tool("describe_capabilities", {})
+    contract = capabilities.get("Contracts", {}).get("EditPlan")
+    if not contract:
+        raise SmokeError(f"discovery reported no edit-plan contract: {json.dumps(capabilities)[:400]}")
+
+    word = next(
+        (fmt for fmt in capabilities.get("Formats", []) if fmt.get("Format") == "Word"), None)
+    if word is None:
+        raise SmokeError("discovery reported no Word format on a server that offers Word tools")
+    if "changeText" not in word.get("Operations", []):
+        raise SmokeError(f"discovery does not advertise changeText for Word: {json.dumps(word)[:400]}")
+    if "Tracked" not in word.get("ChangeModes", []):
+        raise SmokeError(f"discovery does not advertise Tracked for Word: {json.dumps(word)[:400]}")
+    if not capabilities.get("Limits", {}).get("MaximumCompressedBytes"):
+        raise SmokeError("discovery reported no ingestion ceiling")
+    print(f"discovery=passed contract={contract} word-operations={len(word['Operations'])}")
+
     created = server.call_tool(
         "create_document",
         {
@@ -278,6 +299,7 @@ def verify_document_workflow(server: StdioServer, version: str) -> None:
             "name": "platform-smoke.docx",
             "planJson": json.dumps(
                 {
+                    "contractVersion": contract,
                     "operations": [
                         {
                             "op": "changeText",
