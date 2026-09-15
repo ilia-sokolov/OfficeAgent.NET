@@ -79,7 +79,7 @@ public sealed class RenderingTests
 
         var result = await renderer.RenderAsync(
             new MemoryStream(new byte[] { 1 }),
-            Options(maximumWorkingSetBytes: 32L * 1024 * 1024));
+            Options(timeout: TimeSpan.FromSeconds(5), maximumWorkingSetBytes: 32L * 1024 * 1024));
 
         Assert.False(result.Succeeded);
         Assert.Equal("memory-limit-exceeded", result.FailureCode);

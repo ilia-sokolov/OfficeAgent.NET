@@ -29,8 +29,16 @@ internal static class Program
         if (allocation > 0)
         {
             memory = new byte[allocation * 1024 * 1024];
-            for (var index = 0; index < memory.Length; index += 4096) memory[index] = 1;
-            await Task.Delay(500).ConfigureAwait(false);
+
+            var hold = Value(args, "--allocate-hold-ms=");
+            if (hold <= 0) hold = 30_000;
+            var holding = System.Diagnostics.Stopwatch.StartNew();
+            do
+            {
+                for (var index = 0; index < memory.Length; index += 4096) memory[index] = 1;
+                await Task.Delay(25).ConfigureAwait(false);
+            }
+            while (holding.ElapsedMilliseconds < hold);
         }
 
         var convert = Array.IndexOf(args, "--convert-to");
