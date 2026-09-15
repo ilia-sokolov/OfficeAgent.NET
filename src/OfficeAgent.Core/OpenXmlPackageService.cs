@@ -176,22 +176,42 @@ internal sealed class OpenXmlPackageService
         }
     }
 
-    /// <summary>Forces the format's main part to parse, so lazy faults are not deferred.</summary>
+    /// <summary>
+    /// Forces the format's main part to parse, so lazy faults are not deferred, and refuses
+    /// a package that has no main part at all.
+    /// </summary>
+    /// <remarks>
+    /// A package whose content types announce a Word document but which carries no main
+    /// document part is damaged, not empty. Admitting it only defers the failure: the
+    /// format modules dereference the main part and throw a bare
+    /// <see cref="InvalidOperationException"/> from somewhere inside a later inspect or
+    /// apply, which is neither the stable refusal code callers are promised nor traceable
+    /// to the document that caused it.
+    /// </remarks>
     private static void ForceMainPart(OpenXmlPackage package, DocFormat format)
     {
         switch (format)
         {
             case DocFormat.Word:
-                _ = ((WordprocessingDocument)package).MainDocumentPart?.Document?.Body;
+                _ = RequireMainPart(((WordprocessingDocument)package).MainDocumentPart, "main document")
+                    .Document?.Body;
                 break;
             case DocFormat.Excel:
-                _ = ((SpreadsheetDocument)package).WorkbookPart?.Workbook?.Sheets;
+                _ = RequireMainPart(((SpreadsheetDocument)package).WorkbookPart, "workbook")
+                    .Workbook?.Sheets;
                 break;
             case DocFormat.PowerPoint:
-                _ = ((PresentationDocument)package).PresentationPart?.Presentation?.SlideIdList;
+                _ = RequireMainPart(((PresentationDocument)package).PresentationPart, "presentation")
+                    .Presentation?.SlideIdList;
                 break;
         }
     }
+
+    /// <summary>Refuses a package whose declared main part is absent.</summary>
+    private static TPart RequireMainPart<TPart>(TPart? part, string described)
+        where TPart : class =>
+        part ?? throw new OpenXmlPackageRejectedException(
+            $"The package could not be opened: it declares this format but has no {described} part.");
 
     public void Save(IOpenXmlPackage package, Stream destination)
     {

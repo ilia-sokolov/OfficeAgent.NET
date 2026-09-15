@@ -468,6 +468,35 @@ public sealed class BoundedIngestionTests
         Assert.Contains("Xml", error.Limit, StringComparison.Ordinal);
     }
 
+    /// <summary>
+    /// A package that announces a Word document but carries no main document part is
+    /// damaged, and must be refused where every other damaged package is refused.
+    /// </summary>
+    /// <remarks>
+    /// Seed 11 of the malformed corpus reaches exactly this state on Linux and macOS, where
+    /// its byte flip lands on the main part's relationship. It did not on Windows, so the
+    /// gap survived until the platform matrix ran. Building the shape directly makes the
+    /// refusal provable on every platform instead of only where a byte flip happens to land.
+    /// </remarks>
+    [Fact]
+    public void A_package_that_declares_a_main_part_but_omits_it_is_refused()
+    {
+        var withoutMainPart = Archive(add =>
+        {
+            add("[Content_Types].xml", ContentTypes);
+            add("_rels/.rels", PackageRelationships);
+        });
+
+        var error = Assert.Throws<OpenXmlPackageRejectedException>(() => Client().Inspect(withoutMainPart));
+        Assert.Equal("malformed-package", OpenXmlPackageRejectedException.Code);
+
+        // Pins which refusal fired. Without this the test would also pass if the SDK
+        // happened to reject the package first, and the missing-main-part guard could be
+        // removed without a failure.
+        Assert.Contains("no main document part", error.Message, StringComparison.Ordinal);
+        Assert.True(error.Message.Length < 600, $"diagnostic was {error.Message.Length} characters");
+    }
+
     // ── Deterministic malformed seeds ────────────────────────────────────
 
     /// <summary>
@@ -531,6 +560,13 @@ public sealed class BoundedIngestionTests
         "<Override PartName=\"/word/document.xml\" " +
         "ContentType=\"application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml\"/>" +
         "</Types>";
+
+    private const string PackageRelationships =
+        "<Relationships xmlns=\"http://schemas.openxmlformats.org/package/2006/relationships\">" +
+        "<Relationship Id=\"rId1\" " +
+        "Type=\"http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument\" " +
+        "Target=\"word/document.xml\"/>" +
+        "</Relationships>";
 
     private const string MinimalDocument =
         "<w:document xmlns:w=\"http://schemas.openxmlformats.org/wordprocessingml/2006/main\"><w:body/></w:document>";

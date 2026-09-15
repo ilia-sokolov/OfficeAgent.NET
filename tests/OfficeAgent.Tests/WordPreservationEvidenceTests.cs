@@ -1,3 +1,4 @@
+using System.IO.Compression;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
@@ -91,16 +92,18 @@ public sealed class WordPreservationEvidenceTests
         var committedPath = Path.Combine(CorpusRoot, "rich-word-features.docx");
         Assert.True(File.Exists(committedPath), $"Missing preservation fixture: {committedPath}");
         var committed = File.ReadAllBytes(committedPath);
-        Assert.Equal(Sha256(generated), Sha256(committed));
+        AssertSamePackageContent(generated, committed, "rich-word-features.docx");
 
         using var bodyEdit = ApplyBodyEdit(generated);
-        Assert.Equal(
-            Sha256(bodyEdit.ToBytes()),
-            Sha256(File.ReadAllBytes(Path.Combine(CorpusRoot, "tracked-mixed-run-replacement.docx"))));
+        AssertSamePackageContent(
+            bodyEdit.ToBytes(),
+            File.ReadAllBytes(Path.Combine(CorpusRoot, "tracked-mixed-run-replacement.docx")),
+            "tracked-mixed-run-replacement.docx");
         using var commentResolve = ApplyCommentResolve(generated);
-        Assert.Equal(
-            Sha256(commentResolve.ToBytes()),
-            Sha256(File.ReadAllBytes(Path.Combine(CorpusRoot, "resolved-comment.docx"))));
+        AssertSamePackageContent(
+            commentResolve.ToBytes(),
+            File.ReadAllBytes(Path.Combine(CorpusRoot, "resolved-comment.docx")),
+            "resolved-comment.docx");
     }
 
     [Fact]
@@ -308,6 +311,71 @@ public sealed class WordPreservationEvidenceTests
 
     private static OfficeAgentClient Client() =>
         new(new WordModule(EvidenceClock));
+
+
+    /// <summary>
+    /// Asserts that a freshly generated package holds the same parts, with the same
+    /// content, as the committed fixture.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// This deliberately does not compare the packages byte for byte. A .docx is a zip,
+    /// and the compressed bytes depend on the deflate implementation the running platform
+    /// and runtime patch level happen to ship, which is not something this repository
+    /// controls or should assert. Comparing container bytes made the recipe look broken on
+    /// Linux and macOS while passing on Windows, when every part in the package was in fact
+    /// identical.
+    /// </para>
+    /// <para>
+    /// What the fixture actually claims is that the recipe is the provenance of the
+    /// committed file: the same parts, holding the same OOXML. That is what is asserted
+    /// here, and a mismatch names the parts that differ instead of printing two hashes.
+    /// </para>
+    /// </remarks>
+    private static void AssertSamePackageContent(byte[] generated, byte[] committed, string what)
+    {
+        var left = PartContentHashes(generated);
+        var right = PartContentHashes(committed);
+
+        // A package with no parts would make every comparison below vacuously true.
+        Assert.NotEmpty(left);
+        Assert.NotEmpty(right);
+
+        var onlyGenerated = left.Keys.Except(right.Keys, StringComparer.Ordinal)
+            .OrderBy(name => name, StringComparer.Ordinal).ToArray();
+        var onlyCommitted = right.Keys.Except(left.Keys, StringComparer.Ordinal)
+            .OrderBy(name => name, StringComparer.Ordinal).ToArray();
+        Assert.True(
+            onlyGenerated.Length == 0 && onlyCommitted.Length == 0,
+            $"{what}: part names differ. Only generated: [{string.Join(", ", onlyGenerated)}]. " +
+            $"Only committed: [{string.Join(", ", onlyCommitted)}].");
+
+        var differing = left
+            .Where(part => !string.Equals(right[part.Key], part.Value, StringComparison.Ordinal))
+            .Select(part => part.Key)
+            .OrderBy(name => name, StringComparer.Ordinal)
+            .ToArray();
+        Assert.True(
+            differing.Length == 0,
+            $"{what}: the generated recipe no longer reproduces the committed fixture. " +
+            $"Parts whose content differs: [{string.Join(", ", differing)}].");
+    }
+
+    /// <summary>The uncompressed content of every package part, keyed by part name.</summary>
+    private static IReadOnlyDictionary<string, string> PartContentHashes(byte[] package)
+    {
+        using var archive = new ZipArchive(new MemoryStream(package, writable: false), ZipArchiveMode.Read);
+        var hashes = new Dictionary<string, string>(StringComparer.Ordinal);
+        foreach (var entry in archive.Entries)
+        {
+            using var content = entry.Open();
+            using var copy = new MemoryStream();
+            content.CopyTo(copy);
+            hashes[entry.FullName] = Sha256(copy.ToArray());
+        }
+
+        return hashes;
+    }
 
     private static byte[] Fixture() =>
         File.ReadAllBytes(Path.Combine(CorpusRoot, "rich-word-features.docx"));
