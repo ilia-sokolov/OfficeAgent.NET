@@ -6,6 +6,8 @@ using OfficeAgent.Abstractions;
 using OfficeAgent.AgentFramework;
 using OfficeAgent.Core;
 using OfficeAgent.Core.DocumentProviders;
+using OfficeAgent.Excel;
+using OfficeAgent.PowerPoint;
 using OfficeAgent.Word;
 
 namespace OfficeAgent.Tests;
@@ -497,6 +499,54 @@ public sealed class BoundedIngestionTests
         Assert.True(error.Message.Length < 600, $"diagnostic was {error.Message.Length} characters");
     }
 
+    /// <summary>
+    /// The same refusal for the other two formats, whose guards were written alongside
+    /// Word's but exercised by nothing until now.
+    /// </summary>
+    [Theory]
+    [InlineData("excel")]
+    [InlineData("powerpoint")]
+    public void A_spreadsheet_or_presentation_with_no_main_part_is_refused(string format)
+    {
+        var (contentTypes, target, client, described) = format switch
+        {
+            "excel" => (
+                Override("/xl/workbook.xml",
+                    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"),
+                "xl/workbook.xml",
+                new OfficeAgentClient(new ExcelModule()),
+                "workbook"),
+            _ => (
+                Override("/ppt/presentation.xml",
+                    "application/vnd.openxmlformats-officedocument.presentationml.presentation.main+xml"),
+                "ppt/presentation.xml",
+                new OfficeAgentClient(new PowerPointModule()),
+                "presentation")
+        };
+
+        var withoutMainPart = Archive(add =>
+        {
+            add("[Content_Types].xml", contentTypes);
+            add("_rels/.rels", Relationships(target));
+        });
+
+        var error = Assert.Throws<OpenXmlPackageRejectedException>(() => client.Inspect(withoutMainPart));
+        Assert.Contains($"no {described} part", error.Message, StringComparison.Ordinal);
+        Assert.True(error.Message.Length < 600, $"diagnostic was {error.Message.Length} characters");
+    }
+
+    private static string Override(string partName, string contentType) =>
+        "<Types xmlns=\"http://schemas.openxmlformats.org/package/2006/content-types\">" +
+        $"<Override PartName=\"{partName}\" ContentType=\"{contentType}\"/>" +
+        "</Types>";
+
+    private static string Relationships(string target) =>
+        "<Relationships xmlns=\"http://schemas.openxmlformats.org/package/2006/relationships\">" +
+        "<Relationship Id=\"rId1\" " +
+        "Type=\"http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument\" " +
+        $"Target=\"{target}\"/>" +
+        "</Relationships>";
+
     // ── Deterministic malformed seeds ────────────────────────────────────
 
     /// <summary>
@@ -533,6 +583,128 @@ public sealed class BoundedIngestionTests
             $"seed {seed} produced {thrown.GetType().Name}: {thrown.Message}");
         Assert.True(thrown.Message.Length < 600, $"seed {seed} diagnostic was {thrown.Message.Length} characters");
     }
+
+    /// <summary>
+    /// Every malformed seed must produce a bounded refusal from <em>every</em> entry point,
+    /// not only from an inspect.
+    /// </summary>
+    /// <remarks>
+    /// The original corpus drove `Inspect` alone. That is the cheapest thing a damaged
+    /// package can survive: parts load lazily, so a package can inspect cleanly and then
+    /// fault during plan validation, during a commit, or while the result is serialised
+    /// back to bytes. A hole in the boundary anywhere but a read was therefore untested,
+    /// which is how a raw exception reached a caller on Linux and macOS and not on Windows.
+    /// </remarks>
+    [Theory]
+    [InlineData(0)]
+    [InlineData(1)]
+    [InlineData(2)]
+    [InlineData(3)]
+    [InlineData(4)]
+    [InlineData(5)]
+    [InlineData(6)]
+    [InlineData(7)]
+    [InlineData(8)]
+    [InlineData(9)]
+    [InlineData(10)]
+    [InlineData(11)]
+    public void Every_malformed_seed_is_bounded_on_every_entry_point(int seed)
+    {
+        var corrupted = Mutate(DocxFactory.Contract(), seed);
+        var client = Client();
+        var plan = new DocumentPlan
+        {
+            Operations = new PlanOperation[]
+            {
+                new ChangeTextOp
+                {
+                    Target = new TextSpanAnchor { ParaId = "p1", Expect = "Acme Corp" },
+                    With = "Globex"
+                }
+            }
+        };
+
+        AssertBounded(seed, "inspect", () => client.Inspect(corrupted));
+        AssertBounded(seed, "find", () => client.Find(Handle(corrupted), new FindQuery("Acme Corp")));
+        AssertBounded(seed, "preview", () => client.Preview(Handle(corrupted), plan));
+        AssertBounded(seed, "commit", () => client.Commit(Handle(corrupted), plan));
+    }
+
+    /// <summary>
+    /// A package whose main part is intact but whose secondary part is corrupt must still
+    /// refuse in a bounded way from every entry point.
+    /// </summary>
+    /// <remarks>
+    /// This is the case a byte-flip corpus reaches only by luck, and the reason the boundary
+    /// hole was found by a foreign platform rather than by a test. The Open XML SDK loads
+    /// parts lazily, so a damaged styles or numbering part costs nothing at open time and
+    /// nothing during an inspect that does not read it. It faults later, inside plan
+    /// validation, inside a commit, or while the package is serialised back to bytes, which
+    /// are exactly the paths the refusal boundary did not cover.
+    /// </remarks>
+    [Fact]
+    public void A_corrupt_secondary_part_is_bounded_on_every_entry_point()
+    {
+        var damaged = WithReplacedPart(DocxFactory.Contract(), "word/styles.xml", "<not-xml unclosed");
+        var client = Client();
+
+        // The operation matters as much as the damage. A part nothing reads is copied
+        // through untouched, which is the preservation guarantee working, not a hole. This
+        // plan defines a style, so the style part is read during both plan validation and
+        // the commit, which are the paths the boundary did not cover.
+        var plan = new DocumentPlan
+        {
+            Operations = new PlanOperation[]
+            {
+                new DefineStyleOp { StyleId = "Quote", Name = "Quote", Bold = true }
+            }
+        };
+
+        AssertBounded("styles", "inspect", () => client.Inspect(damaged));
+        AssertBounded("styles", "find", () => client.Find(Handle(damaged), new FindQuery("Acme Corp")));
+        AssertBounded("styles", "preview", () => client.Preview(Handle(damaged), plan));
+        AssertBounded("styles", "commit", () => client.Commit(Handle(damaged), plan));
+    }
+
+    /// <summary>
+    /// Replaces one part's bytes inside an otherwise valid package, leaving the zip itself
+    /// well formed so the damage is only discovered when that part is read.
+    /// </summary>
+    private static byte[] WithReplacedPart(byte[] original, string partName, string content)
+    {
+        var copy = new MemoryStream();
+        copy.Write(original, 0, original.Length);
+        copy.Position = 0;
+        using (var archive = new ZipArchive(copy, ZipArchiveMode.Update, leaveOpen: true))
+        {
+            archive.GetEntry(partName)?.Delete();
+            var entry = archive.CreateEntry(partName, CompressionLevel.Optimal);
+            using var writer = new StreamWriter(entry.Open(), Encoding.UTF8);
+            writer.Write(content);
+        }
+
+        return copy.ToArray();
+    }
+
+    /// <summary>
+    /// Runs one entry point and requires that it either succeeds or refuses with one of the
+    /// two documented ingestion exceptions. Any other exception type is the failure this
+    /// test exists to catch.
+    /// </summary>
+    private static void AssertBounded(object input, string entryPoint, Func<object?> work)
+    {
+        var thrown = Record.Exception(() => work());
+        if (thrown is null) return;
+
+        Assert.True(
+            thrown is OpenXmlPackageRejectedException or OpenXmlIngestionLimitException,
+            $"input {input} leaked {thrown.GetType().Name} from {entryPoint}: {thrown.Message}");
+        Assert.True(
+            thrown.Message.Length < 600,
+            $"input {input} diagnostic from {entryPoint} was {thrown.Message.Length} characters");
+    }
+
+    private static StreamHandle Handle(byte[] bytes) => new(new MemoryStream(bytes, writable: false));
 
     /// <summary>
     /// One deterministic byte flip per seed, at a position derived from the seed. No
