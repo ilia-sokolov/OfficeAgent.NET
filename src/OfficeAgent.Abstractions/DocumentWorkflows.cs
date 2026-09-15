@@ -142,6 +142,47 @@ public sealed class TemplateBatchResult
     public bool Committed => Items.Count > 0 && Items.All(item => item.Committed);
 }
 
+/// <summary>What a comparison was able to say about one area of the documents.</summary>
+public enum ComparisonAreaState
+{
+    /// <summary>The area was compared and is the same in both documents.</summary>
+    Unchanged,
+
+    /// <summary>The area was compared, differs, and the difference is represented in the plan.</summary>
+    Changed,
+
+    /// <summary>
+    /// The area differs and this comparison cannot represent the difference, so no plan is
+    /// offered for the whole comparison.
+    /// </summary>
+    Blocked,
+
+    /// <summary>
+    /// The area was not examined, so nothing is known about it. This is never the same as
+    /// unchanged: silence about an area is not evidence that it matches.
+    /// </summary>
+    NotCompared
+}
+
+/// <summary>One area of the documents and what the comparison could say about it.</summary>
+public sealed class ComparisonArea
+{
+    /// <summary>Gets the area name, for example <c>bodyParagraphs</c> or <c>images</c>.</summary>
+    public string Name { get; init; } = string.Empty;
+
+    /// <summary>Gets what the comparison established about this area.</summary>
+    public ComparisonAreaState State { get; init; }
+
+    /// <summary>
+    /// Gets the diagnostic code explaining a blocked area, or null when there is nothing
+    /// to explain.
+    /// </summary>
+    public string? Code { get; init; }
+
+    /// <summary>Gets a short human-readable note, when one helps.</summary>
+    public string? Detail { get; init; }
+}
+
 /// <summary>Kind of paragraph difference found by a comparison.</summary>
 public enum DocumentDifferenceKind
 {
@@ -194,6 +235,25 @@ public sealed class DocumentComparisonResult
     public IReadOnlyList<DocumentDifference> Differences { get; init; } = Array.Empty<DocumentDifference>();
     /// <summary>Gets unsupported-area and resource diagnostics.</summary>
     public IReadOnlyList<WorkflowDiagnostic> Diagnostics { get; init; } = Array.Empty<WorkflowDiagnostic>();
-    /// <summary>Gets a snapshot-bound tracked-change plan when coverage is complete.</summary>
+
+    /// <summary>
+    /// Gets what the comparison established about each area of the documents, in a stable
+    /// order.
+    /// </summary>
+    /// <remarks>
+    /// This is the difference between "these documents match" and "this comparison did not
+    /// look". An area reported <see cref="ComparisonAreaState.NotCompared"/> is unknown,
+    /// and treating it as unchanged is exactly the inference this result refuses to make
+    /// on a caller's behalf.
+    /// </remarks>
+    public IReadOnlyList<ComparisonArea> Coverage { get; init; } = Array.Empty<ComparisonArea>();
+
+    /// <summary>
+    /// Gets a snapshot-bound tracked-change plan when coverage is complete.
+    /// </summary>
+    /// <remarks>
+    /// Null whenever any area is blocked. There is no partial plan and no way to ask for
+    /// one: applying a subset of detected changes would silently drop the rest.
+    /// </remarks>
     public DocumentPlan? Plan { get; init; }
 }

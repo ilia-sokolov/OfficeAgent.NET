@@ -299,7 +299,11 @@ public sealed class DocumentWorkflowTests
 
         Assert.False(comparison.IsComplete);
         Assert.Null(comparison.Plan);
-        Assert.Contains(comparison.Diagnostics, diagnostic => diagnostic.Code == "unsupported-package-change");
+        // The image change is now named specifically rather than folded into one blanket
+        // package diagnostic, so a caller can see which area blocked the plan.
+        Assert.Contains(comparison.Diagnostics, diagnostic => diagnostic.Code == "unsupported-image-change");
+        Assert.Contains(comparison.Coverage, area =>
+            area.Name == "images" && area.State == ComparisonAreaState.Blocked);
     }
 
     [Fact]
@@ -317,7 +321,11 @@ public sealed class DocumentWorkflowTests
 
         Assert.False(comparison.IsComplete);
         Assert.Null(comparison.Plan);
-        Assert.Contains(comparison.Diagnostics, diagnostic => diagnostic.Code == "unsupported-package-change");
+        // The table change is now named specifically rather than folded into one blanket
+        // package diagnostic, so a caller can see which area blocked the plan.
+        Assert.Contains(comparison.Diagnostics, diagnostic => diagnostic.Code == "unsupported-table-change");
+        Assert.Contains(comparison.Coverage, area =>
+            area.Name == "tables" && area.State == ComparisonAreaState.Blocked);
     }
 
     [Theory]

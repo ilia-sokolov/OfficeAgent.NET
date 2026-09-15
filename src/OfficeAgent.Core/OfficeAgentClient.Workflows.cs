@@ -395,7 +395,21 @@ public sealed partial class OfficeAgentClient
         if (!SequenceEqual(UnsupportedNodeSignature(before), UnsupportedNodeSignature(after)))
             diagnostics.Add(Diagnostic("unsupported-node-change",
                 "Document nodes outside free body text changed, such as properties, fields, comments, sections, or table structure.", "nodes"));
-        if (diagnostics.Count > 0)
+        // Two different kinds of problem live in this list. A precondition means the diff
+        // itself cannot run: there is no anchor, or there are more paragraphs than the
+        // ceiling allows, or the inputs still carry revisions. Those stop here, and every
+        // area is reported not compared rather than unchanged.
+        //
+        // An unsupported *area* is different: the body diff runs fine, it just cannot be
+        // turned into a plan. Those no longer stop the walk. Withholding the plan is the
+        // safety property; withholding the findings as well was only a side effect of
+        // stopping early, and it left a caller with nothing to act on by hand.
+        var blocking = diagnostics
+            .Where(diagnostic => diagnostic.Code is "comparison-anchor-unavailable"
+                or "comparison-paragraph-limit-exceeded"
+                or "unsupported-existing-revisions")
+            .ToList();
+        if (blocking.Count > 0)
             return ComparisonResult(original, revised, diagnostics: diagnostics);
 
         var operations = new List<PlanOperation>();
@@ -442,9 +456,12 @@ public sealed partial class OfficeAgentClient
         if (totalDifferenceCount > options.MaximumDifferences)
             diagnostics.Add(Diagnostic("comparison-difference-limit-exceeded",
                 $"The comparison reached the {options.MaximumDifferences}-difference limit.", "body"));
-        if (!string.Equals(UnsupportedWordPackageSignature(original), UnsupportedWordPackageSignature(revised), StringComparison.Ordinal))
-            diagnostics.Add(Diagnostic("unsupported-package-change",
-                "Content outside free body paragraphs changed, such as tables, images, relationships, properties, or package metadata.", "package"));
+        // Which areas outside free body paragraphs differ, named individually. One
+        // blanket "something else changed" tells a caller nothing they can act on.
+        var areaChanges = CompareAreas(original, revised);
+        foreach (var area in areaChanges.Where(area => area.Value))
+            diagnostics.Add(Diagnostic(AreaCodes[area.Key], AreaMessages[area.Key], area.Key));
+
         return ComparisonResult(
             original,
             revised,
@@ -458,7 +475,8 @@ public sealed partial class OfficeAgentClient
                     Revision = options.Revision,
                     Operations = operations
                 }
-                : null);
+                : null,
+            BuildCoverage(differences, diagnostics, areaChanges));
     }
 
     private static void ProcessHunk(
@@ -658,6 +676,212 @@ public sealed partial class OfficeAgentClient
         return paragraph.ToString(SaveOptions.DisableFormatting);
     }
 
+
+    /// <summary>The package areas this comparison reports on, in a stable order.</summary>
+    private static readonly string[] AreaNames =
+    {
+        "tables", "images", "notes", "headersAndFooters", "styles", "numbering", "otherParts"
+    };
+
+    private static readonly IReadOnlyDictionary<string, string> AreaCodes =
+        new Dictionary<string, string>(StringComparer.Ordinal)
+        {
+            ["tables"] = "unsupported-table-change",
+            ["images"] = "unsupported-image-change",
+            ["notes"] = "unsupported-note-change",
+            ["headersAndFooters"] = "unsupported-header-footer-change",
+            ["styles"] = "unsupported-style-definition-change",
+            ["numbering"] = "unsupported-numbering-change",
+            ["otherParts"] = "unsupported-package-change"
+        };
+
+    private static readonly IReadOnlyDictionary<string, string> AreaMessages =
+        new Dictionary<string, string>(StringComparer.Ordinal)
+        {
+            ["tables"] = "Table content or geometry differs. This comparison covers free body " +
+                         "paragraphs only, so the table difference is reported but not planned.",
+            ["images"] = "Embedded image bytes or drawings differ. Image content is not compared, " +
+                         "so the difference is reported but not planned.",
+            ["notes"] = "Footnote or endnote content differs. Note content is not compared, so the " +
+                        "difference is reported but not planned.",
+            ["headersAndFooters"] = "Header or footer content differs. Only the body is compared, so " +
+                                    "the difference is reported but not planned.",
+            ["styles"] = "The style definitions differ. Style definitions are not compared, so the " +
+                         "difference is reported but not planned.",
+            ["numbering"] = "List numbering definitions differ. Numbering is not compared, so the " +
+                            "difference is reported but not planned.",
+            ["otherParts"] = "A package part outside the compared areas differs, such as document " +
+                             "properties, relationships, or custom XML."
+        };
+
+    /// <summary>
+    /// Hashes each area of both packages separately and reports which ones differ.
+    /// </summary>
+    /// <remarks>
+    /// The previous implementation hashed everything outside free body paragraphs into one
+    /// value, so any difference anywhere produced the same message. Splitting it is what
+    /// turns "something else changed" into "the images changed".
+    /// </remarks>
+    private static IReadOnlyDictionary<string, bool> CompareAreas(byte[] original, byte[] revised)
+    {
+        var before = AreaSignatures(original);
+        var after = AreaSignatures(revised);
+
+        var changed = new Dictionary<string, bool>(StringComparer.Ordinal);
+        foreach (var area in AreaNames)
+            changed[area] = !string.Equals(
+                before.TryGetValue(area, out var left) ? left : string.Empty,
+                after.TryGetValue(area, out var right) ? right : string.Empty,
+                StringComparison.Ordinal);
+
+        return changed;
+    }
+
+    /// <summary>One hash per reported area of a Word package.</summary>
+    private static IReadOnlyDictionary<string, string> AreaSignatures(byte[] bytes)
+    {
+        var buckets = AreaNames.ToDictionary(
+            area => area,
+            _ => new SortedDictionary<string, byte[]>(StringComparer.Ordinal),
+            StringComparer.Ordinal);
+
+        using (var package = new ZipArchive(new MemoryStream(bytes, writable: false), ZipArchiveMode.Read))
+        {
+            foreach (var entry in package.Entries)
+            {
+                var name = entry.FullName;
+                byte[] content;
+                using (var input = entry.Open())
+                using (var copy = new MemoryStream())
+                {
+                    input.CopyTo(copy);
+                    content = copy.ToArray();
+                }
+
+                if (string.Equals(name, "word/document.xml", StringComparison.Ordinal))
+                {
+                    // Free body paragraphs are compared paragraph by paragraph above, so
+                    // only the table content of this part belongs to an area signature.
+                    buckets["tables"][name] = TableSignature(content);
+                    continue;
+                }
+
+                var area = AreaFor(name);
+                if (area is null) continue;
+                buckets[area][name] = content;
+            }
+        }
+
+        var signatures = new Dictionary<string, string>(StringComparer.Ordinal);
+        foreach (var bucket in buckets)
+        {
+            using var hash = IncrementalHash.CreateHash(HashAlgorithmName.SHA256);
+            foreach (var entry in bucket.Value)
+            {
+                hash.AppendData(Encoding.UTF8.GetBytes(entry.Key));
+                hash.AppendData(entry.Value);
+            }
+
+            signatures[bucket.Key] = BitConverter.ToString(hash.GetHashAndReset()).Replace("-", string.Empty);
+        }
+
+        return signatures;
+    }
+
+    private static readonly string[] ImageExtensions =
+        { ".png", ".jpg", ".jpeg", ".gif", ".bmp", ".tif", ".tiff", ".emf", ".wmf", ".svg" };
+
+    private static string? AreaFor(string name)
+    {
+        // By media extension rather than by folder: an image part is not guaranteed to
+        // live under word/media, and misfiling one would report it as a metadata change.
+        if (ImageExtensions.Any(extension => name.EndsWith(extension, StringComparison.OrdinalIgnoreCase)))
+            return "images";
+        if (name is "word/footnotes.xml" or "word/endnotes.xml") return "notes";
+        if (name.StartsWith("word/header", StringComparison.Ordinal) ||
+            name.StartsWith("word/footer", StringComparison.Ordinal)) return "headersAndFooters";
+        if (string.Equals(name, "word/styles.xml", StringComparison.Ordinal)) return "styles";
+        if (string.Equals(name, "word/numbering.xml", StringComparison.Ordinal)) return "numbering";
+
+        // Relationship parts move whenever anything they point at moves, so folding them
+        // into otherParts would make every image change also look like a metadata change.
+        if (name.EndsWith(".rels", StringComparison.Ordinal)) return null;
+        return "otherParts";
+    }
+
+    /// <summary>The table content of a document part, with free body paragraphs removed.</summary>
+    private static byte[] TableSignature(byte[] documentPart)
+    {
+        XNamespace word = "http://schemas.openxmlformats.org/wordprocessingml/2006/main";
+        using var input = new MemoryStream(documentPart, writable: false);
+        using var reader = XmlReader.Create(input, new XmlReaderSettings
+        {
+            DtdProcessing = DtdProcessing.Prohibit,
+            XmlResolver = null,
+            MaxCharactersInDocument = documentPart.LongLength + 1
+        });
+
+        var xml = XDocument.Load(reader);
+        var tables = xml.Root?.Element(word + "body")?.Elements(word + "tbl").ToList();
+        if (tables is null || tables.Count == 0) return Array.Empty<byte>();
+
+        using var normalized = new MemoryStream();
+        new XDocument(new XElement(word + "tables", tables)).Save(normalized, SaveOptions.DisableFormatting);
+        return normalized.ToArray();
+    }
+
+    /// <summary>
+    /// Describes every area, so a caller can tell an area that matched from one nobody
+    /// looked at.
+    /// </summary>
+    private static IReadOnlyList<ComparisonArea> BuildCoverage(
+        IReadOnlyList<DocumentDifference> differences,
+        IReadOnlyList<WorkflowDiagnostic> diagnostics,
+        IReadOnlyDictionary<string, bool> areaChanges)
+    {
+        var coverage = new List<ComparisonArea>
+        {
+            new()
+            {
+                Name = "bodyParagraphs",
+                State = diagnostics.Any(diagnostic =>
+                            diagnostic.Code is "comparison-difference-limit-exceeded"
+                                or "comparison-paragraph-limit-exceeded"
+                                or "unsupported-existing-revisions")
+                    ? ComparisonAreaState.Blocked
+                    : differences.Count > 0 ? ComparisonAreaState.Changed : ComparisonAreaState.Unchanged,
+                Code = diagnostics.FirstOrDefault(diagnostic =>
+                    diagnostic.Code is "comparison-difference-limit-exceeded"
+                        or "comparison-paragraph-limit-exceeded"
+                        or "unsupported-existing-revisions")?.Code
+            },
+            new()
+            {
+                Name = "paragraphFormatting",
+                State = diagnostics.Any(diagnostic =>
+                            diagnostic.Code is "unsupported-style-change"
+                                or "unsupported-paragraph-markup-change")
+                    ? ComparisonAreaState.Blocked
+                    : ComparisonAreaState.Unchanged,
+                Code = diagnostics.FirstOrDefault(diagnostic =>
+                    diagnostic.Code is "unsupported-style-change"
+                        or "unsupported-paragraph-markup-change")?.Code
+            }
+        };
+
+        foreach (var area in AreaNames)
+            coverage.Add(new ComparisonArea
+            {
+                Name = area,
+                State = areaChanges.TryGetValue(area, out var changed) && changed
+                    ? ComparisonAreaState.Blocked
+                    : ComparisonAreaState.Unchanged,
+                Code = areaChanges.TryGetValue(area, out var blocked) && blocked ? AreaCodes[area] : null
+            });
+
+        return coverage;
+    }
+
     private static string UnsupportedWordPackageSignature(byte[] bytes)
     {
         const string documentPart = "word/document.xml";
@@ -727,14 +951,30 @@ public sealed partial class OfficeAgentClient
         byte[] revised,
         IReadOnlyList<DocumentDifference>? differences = null,
         IReadOnlyList<WorkflowDiagnostic>? diagnostics = null,
-        DocumentPlan? plan = null) => new()
+        DocumentPlan? plan = null,
+        IReadOnlyList<ComparisonArea>? coverage = null) => new()
         {
             OriginalSha256 = Sha256(original),
             RevisedSha256 = Sha256(revised),
             Differences = differences ?? Array.Empty<DocumentDifference>(),
             Diagnostics = diagnostics ?? Array.Empty<WorkflowDiagnostic>(),
+            // A comparison that stopped early knows nothing about any area, and saying so
+            // is the whole point: an empty coverage list would read as "all unchanged".
+            Coverage = coverage ?? NothingCompared(),
             Plan = plan
         };
+
+    /// <summary>Every area marked not compared, for a comparison that never ran.</summary>
+    private static IReadOnlyList<ComparisonArea> NothingCompared() =>
+        new[] { "bodyParagraphs", "paragraphFormatting" }
+            .Concat(AreaNames)
+            .Select(name => new ComparisonArea
+            {
+                Name = name,
+                State = ComparisonAreaState.NotCompared,
+                Detail = "The comparison stopped before this area was examined."
+            })
+            .ToList();
 
     private static async Task<byte[]> ReadBoundedAsync(
         Stream source,

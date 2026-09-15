@@ -336,6 +336,73 @@ plan to normal preview and apply tools against the original.
 
 Run the [document-comparison sample](../samples/DocumentComparison/) with two `.docx` files.
 
+### Reading comparison coverage
+
+A comparison answers two separate questions: what changed in the body, and whether it can
+offer a redline for it. `Coverage` reports the second one area by area.
+
+| State | Meaning |
+| --- | --- |
+| `Unchanged` | Compared, and the same in both documents |
+| `Changed` | Compared, differs, and represented in the plan |
+| `Blocked` | Differs, and this comparison cannot represent the difference |
+| `NotCompared` | Not examined. **Nothing is known about it** |
+
+`NotCompared` is not a softer `Unchanged`. A comparison that stopped at a precondition -
+no anchor paragraph, too many paragraphs, existing tracked revisions - reports every area
+`NotCompared`, because it never looked. Treating that as "matches" is the inference this
+result refuses to make for you.
+
+#### Findings survive a blocked area
+
+An unsupported change no longer discards the supported ones. A batch with an edited
+paragraph and a replaced image reports the paragraph difference **and** names the image
+area as blocked:
+
+```csharp
+var comparison = await client.CompareDocumentsAsync(original, revised);
+
+foreach (var difference in comparison.Differences)
+    Console.WriteLine($"{difference.Before} -> {difference.After}");   // still reported
+
+foreach (var area in comparison.Coverage.Where(a => a.State == ComparisonAreaState.Blocked))
+    Console.WriteLine($"{area.Name}: {area.Code}");                     // images: unsupported-image-change
+
+Console.WriteLine(comparison.Plan is null);                             // True
+```
+
+You can act on the findings by hand. What you cannot do is apply a plan, because there
+isn't one.
+
+#### Which area blocked it
+
+Each area has its own code, so a refusal says what to look at:
+
+| Area | Code |
+| --- | --- |
+| `tables` | `unsupported-table-change` |
+| `images` | `unsupported-image-change` |
+| `notes` | `unsupported-note-change` |
+| `headersAndFooters` | `unsupported-header-footer-change` |
+| `styles` | `unsupported-style-definition-change` |
+| `numbering` | `unsupported-numbering-change` |
+| `otherParts` | `unsupported-package-change` |
+
+Body-level reasons keep their existing codes: `unsupported-style-change`,
+`unsupported-paragraph-markup-change`, `unsupported-existing-revisions`,
+`comparison-anchor-unavailable`, `comparison-paragraph-limit-exceeded` and
+`comparison-difference-limit-exceeded`.
+
+#### There is no partial plan
+
+`IsComplete` is false whenever any diagnostic exists, and `Plan` is null whenever
+`IsComplete` is false. Hitting a resource ceiling cannot be traded for a plan either: a
+truncated finding list is visible in the diagnostics and the body area is reported
+`Blocked`, so a shortened list is never mistaken for a complete one.
+
+The agent and MCP tools report the same thing. An incomplete comparison serializes with
+no plan at all, so there is no adapter-shaped way around this.
+
 ## Evidence boundary
 
 The samples and automated checks prove contract behavior, round trips, stale-snapshot
