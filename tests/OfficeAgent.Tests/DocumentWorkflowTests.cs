@@ -269,17 +269,24 @@ public sealed class DocumentWorkflowTests
     }
 
     [Fact]
-    public void Comparison_reports_unsupported_table_changes_and_returns_no_plan()
+    public void Comparison_supports_a_cell_text_change_when_geometry_is_unchanged()
     {
+        // This case was refused before V09-12: any table-cell paragraph difference was
+        // reported as an unsupported non-body change. The table's shape is identical here
+        // and only the words differ, which is now a supported, reviewable difference.
         var original = QuoteTemplate();
         var revised = ReplacePackageText(original, "{{Amount}}", "Changed");
         var client = new OfficeAgentClient(new WordModule());
 
         var comparison = client.CompareDocuments(original, revised);
 
-        Assert.False(comparison.IsComplete);
-        Assert.Null(comparison.Plan);
-        Assert.Contains(comparison.Diagnostics, diagnostic => diagnostic.Code == "unsupported-non-body-change");
+        Assert.True(comparison.IsComplete, string.Join("; ",
+            comparison.Diagnostics.Select(diagnostic => $"{diagnostic.Code}: {diagnostic.Message}")));
+        Assert.NotNull(comparison.Plan);
+        Assert.Contains(comparison.Differences, difference =>
+            difference.Before == "{{Amount}}" && difference.After == "Changed");
+        Assert.Contains(comparison.Coverage, area =>
+            area.Name == "tables" && area.State != ComparisonAreaState.Blocked);
     }
 
     [Fact]

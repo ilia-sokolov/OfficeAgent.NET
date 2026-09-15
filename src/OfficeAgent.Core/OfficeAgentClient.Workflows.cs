@@ -456,6 +456,12 @@ public sealed partial class OfficeAgentClient
         if (totalDifferenceCount > options.MaximumDifferences)
             diagnostics.Add(Diagnostic("comparison-difference-limit-exceeded",
                 $"The comparison reached the {options.MaximumDifferences}-difference limit.", "body"));
+
+        // Cell text, but only once the table's shape is known to be identical. Geometry is
+        // checked by the text-stripped table signature below, so an aligned cell pair
+        // really is the same cell in both documents rather than two cells that happen to
+        // share a position.
+        CompareTableCells(original, revised, before, after, operations, differences, diagnostics, options);
         // Which areas outside free body paragraphs differ, named individually. One
         // blanket "something else changed" tells a caller nothing they can act on.
         var areaChanges = CompareAreas(original, revised);
@@ -597,9 +603,24 @@ public sealed partial class OfficeAgentClient
     private static bool IsFreeBodyParagraph(ParagraphInfo paragraph) =>
         paragraph.Location == "body" && paragraph.In is null;
 
+    /// <summary>
+    /// Paragraphs outside the compared areas, keyed by where they live and what they say.
+    /// </summary>
+    /// <remarks>
+    /// Table cells are excluded: their text is compared directly by the cell comparison
+    /// once geometry is known to be unchanged. Including them here would report every
+    /// supported cell edit as an unsupported non-body change.
+    /// </remarks>
     private static IEnumerable<string> UnsupportedParagraphs(InspectResult result) =>
-        result.Paragraphs.Where(paragraph => !IsFreeBodyParagraph(paragraph))
+        result.Paragraphs
+            .Where(paragraph => !IsFreeBodyParagraph(paragraph) && !IsTableCellParagraph(paragraph))
             .Select(paragraph => $"{paragraph.Location}|{paragraph.In}|{paragraph.Text}");
+
+    /// <summary>Whether a paragraph lives inside a table cell in the document body.</summary>
+    private static bool IsTableCellParagraph(ParagraphInfo paragraph) =>
+        string.Equals(paragraph.Location, "body", StringComparison.Ordinal) &&
+        paragraph.In is { Length: > 0 } node &&
+        node.StartsWith("table#", StringComparison.Ordinal);
 
     private static IEnumerable<string> NodeSignature(InspectResult result, string kind) =>
         result.Nodes.Where(node => node.Kind == kind).Select(node => $"{node.Path}|{node.Summary}");
@@ -637,8 +658,223 @@ public sealed partial class OfficeAgentClient
                          (attribute.IsNamespaceDeclaration && attribute.Value != word.NamespaceName) ||
                          attribute.Name.LocalName.StartsWith("rsid", StringComparison.OrdinalIgnoreCase)).ToArray())
                 attribute.Remove();
+            MergeEquivalentRuns(normalized);
             return normalized.ToString(SaveOptions.DisableFormatting);
         }).ToArray();
+    }
+
+
+    /// <summary>
+    /// Collapses adjacent runs that differ only in where the text was split.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Word re-segments runs constantly: typing in the middle of a sentence, a spell-check
+    /// pass, or a round trip through another editor can turn one run into three carrying
+    /// exactly the same formatting and exactly the same words. Comparing run structure
+    /// directly reports that as a formatting change and withholds the plan, which is a
+    /// false difference: no reader would call those documents different.
+    /// </para>
+    /// <para>
+    /// Only text-carrying runs merge, and only into a neighbour with identical run
+    /// properties. A run holding a break, a tab, a field, a drawing, a footnote reference
+    /// or anything else is left exactly where it is, because those are content and moving
+    /// them would change the document. Merging happens after text has been stripped, so
+    /// this decides segmentation equivalence and never touches the words themselves.
+    /// </para>
+    /// </remarks>
+    private static void MergeEquivalentRuns(XElement container)
+    {
+        XNamespace word = "http://schemas.openxmlformats.org/wordprocessingml/2006/main";
+
+        // Hyperlinks, content controls and revision wrappers each hold their own run
+        // sequence, and a run may only merge with a sibling inside the same wrapper.
+        foreach (var parent in container.DescendantsAndSelf().ToList())
+        {
+            XElement? previous = null;
+            foreach (var child in parent.Elements().ToList())
+            {
+                if (child.Name != word + "r" || !IsTextOnlyRun(child, word))
+                {
+                    previous = null;
+                    continue;
+                }
+
+                if (previous is not null && SameRunProperties(previous, child, word))
+                {
+                    // The text is already stripped, so the merge is the removal itself.
+                    child.Remove();
+                    continue;
+                }
+
+                previous = child;
+            }
+        }
+    }
+
+    /// <summary>
+    /// Whether a run carries only text, so its boundary is a segmentation detail rather
+    /// than content.
+    /// </summary>
+    private static bool IsTextOnlyRun(XElement run, XNamespace word) =>
+        run.Elements().All(element => element.Name == word + "rPr" || element.Name == word + "t");
+
+    private static bool SameRunProperties(XElement left, XElement right, XNamespace word)
+    {
+        var leftProperties = left.Element(word + "rPr");
+        var rightProperties = right.Element(word + "rPr");
+
+        if (leftProperties is null && rightProperties is null) return true;
+        if (leftProperties is null || rightProperties is null) return false;
+
+        return string.Equals(
+            leftProperties.ToString(SaveOptions.DisableFormatting),
+            rightProperties.ToString(SaveOptions.DisableFormatting),
+            StringComparison.Ordinal);
+    }
+
+
+    /// <summary>
+    /// Compares the text of table cells that occupy the same position in tables whose
+    /// geometry is unchanged.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Alignment is positional, which is only sound because it runs after the table
+    /// signature has established that the grids, spans and nesting are identical. If the
+    /// shape moved, the cells in position three are not the same cell, and the signature
+    /// difference blocks the plan before anything here is trusted.
+    /// </para>
+    /// <para>
+    /// Only text changes are supported. A cell whose run structure carries something other
+    /// than equivalently formatted text is reported unsupported rather than flattened:
+    /// replacing rich content with plain text would lose the thing the caller was editing.
+    /// </para>
+    /// </remarks>
+    private static void CompareTableCells(
+        byte[] original,
+        byte[] revised,
+        InspectResult before,
+        InspectResult after,
+        List<PlanOperation> operations,
+        List<DocumentDifference> differences,
+        List<WorkflowDiagnostic> diagnostics,
+        DocumentComparisonOptions options)
+    {
+        // Geometry first. A changed shape is reported by the area check, and cell text is
+        // not comparable across it.
+        if (!string.Equals(
+                Convert.ToBase64String(TableSignature(DocumentPart(original))),
+                Convert.ToBase64String(TableSignature(DocumentPart(revised))),
+                StringComparison.Ordinal))
+            return;
+
+        var beforeCells = before.Paragraphs.Where(IsTableCellParagraph).ToList();
+        var afterCells = after.Paragraphs.Where(IsTableCellParagraph).ToList();
+
+        if (beforeCells.Count != afterCells.Count)
+        {
+            // The signature said the shape matched, so a differing cell-paragraph count
+            // means something this comparison does not model. Refuse rather than guess.
+            diagnostics.Add(Diagnostic("unsupported-table-change",
+                "The tables have the same geometry but a different number of cell paragraphs, " +
+                "so cells cannot be aligned safely.", "tables"));
+            return;
+        }
+
+        var markupBefore = TableCellMarkup(original);
+        var markupAfter = TableCellMarkup(revised);
+
+        for (var i = 0; i < beforeCells.Count; i++)
+        {
+            if (differences.Count >= options.MaximumDifferences)
+            {
+                diagnostics.Add(Diagnostic("comparison-difference-limit-exceeded",
+                    $"The comparison reached the {options.MaximumDifferences}-difference limit.", "tables"));
+                return;
+            }
+
+            var left = beforeCells[i];
+            var right = afterCells[i];
+            if (string.Equals(left.Text, right.Text, StringComparison.Ordinal)) continue;
+
+            if (i >= markupBefore.Count || i >= markupAfter.Count ||
+                !string.Equals(markupBefore[i], markupAfter[i], StringComparison.Ordinal))
+            {
+                diagnostics.Add(Diagnostic("unsupported-table-markup-change",
+                    $"Run structure or direct formatting changed in a cell of '{left.In}', so the " +
+                    "text change cannot be reproduced without losing the formatting.", left.ParaId));
+                continue;
+            }
+
+            differences.Add(new DocumentDifference
+            {
+                Kind = DocumentDifferenceKind.Changed,
+                Before = left.Text,
+                After = right.Text
+            });
+
+            operations.Add(new ChangeTextOp
+            {
+                Target = new TextSpanAnchor { ParaId = left.ParaId, Expect = left.Text },
+                With = right.Text,
+                Mode = ChangeMode.Tracked
+            });
+        }
+    }
+
+    /// <summary>The main document part of a Word package.</summary>
+    private static byte[] DocumentPart(byte[] bytes)
+    {
+        using var package = new ZipArchive(new MemoryStream(bytes, writable: false), ZipArchiveMode.Read);
+        var entry = package.GetEntry("word/document.xml")
+            ?? throw new InvalidDataException("The Word package has no main document part.");
+        using var input = entry.Open();
+        using var copy = new MemoryStream();
+        input.CopyTo(copy);
+        return copy.ToArray();
+    }
+
+    /// <summary>
+    /// The run structure of each table-cell paragraph, in document order, with text
+    /// stripped and equivalent segmentation merged.
+    /// </summary>
+    private static IReadOnlyList<string> TableCellMarkup(byte[] bytes)
+    {
+        XNamespace word = "http://schemas.openxmlformats.org/wordprocessingml/2006/main";
+        var part = DocumentPart(bytes);
+        using var input = new MemoryStream(part, writable: false);
+        using var reader = XmlReader.Create(input, new XmlReaderSettings
+        {
+            DtdProcessing = DtdProcessing.Prohibit,
+            XmlResolver = null,
+            MaxCharactersInDocument = part.LongLength + 1
+        });
+
+        var document = XDocument.Load(reader);
+        var body = document.Root?.Element(word + "body");
+        if (body is null) return Array.Empty<string>();
+
+        return body.Elements(word + "tbl")
+            .SelectMany(table => table.Descendants(word + "p"))
+            .Select(paragraph =>
+            {
+                var normalized = new XElement(paragraph);
+                foreach (var text in normalized.Descendants().Where(element =>
+                             element.Name == word + "t" || element.Name == word + "delText" ||
+                             element.Name == word + "instrText").ToList())
+                    text.RemoveNodes();
+                foreach (var attribute in normalized.DescendantsAndSelf().Attributes().Where(attribute =>
+                             attribute.Name.LocalName is "paraId" or "textId" ||
+                             attribute.Name == XNamespace.Xml + "space" ||
+                             (attribute.IsNamespaceDeclaration && attribute.Value != word.NamespaceName) ||
+                             attribute.Name.LocalName.StartsWith("rsid", StringComparison.OrdinalIgnoreCase))
+                         .ToArray())
+                    attribute.Remove();
+                MergeEquivalentRuns(normalized);
+                return normalized.ToString(SaveOptions.DisableFormatting);
+            })
+            .ToList();
     }
 
     private static void CompareParagraphMarkup(
@@ -809,7 +1045,15 @@ public sealed partial class OfficeAgentClient
         return "otherParts";
     }
 
-    /// <summary>The table content of a document part, with free body paragraphs removed.</summary>
+    /// <summary>
+    /// The geometry and formatting of a part's tables, with cell words removed.
+    /// </summary>
+    /// <remarks>
+    /// Text is stripped deliberately. This signature answers "did the table's shape
+    /// change", and a cell whose words were edited is a supported difference handled by
+    /// the cell comparison. Leaving text in would make every supported cell edit block
+    /// itself as a geometry change.
+    /// </remarks>
     private static byte[] TableSignature(byte[] documentPart)
     {
         XNamespace word = "http://schemas.openxmlformats.org/wordprocessingml/2006/main";
@@ -822,8 +1066,26 @@ public sealed partial class OfficeAgentClient
         });
 
         var xml = XDocument.Load(reader);
-        var tables = xml.Root?.Element(word + "body")?.Elements(word + "tbl").ToList();
+        var tables = xml.Root?.Element(word + "body")?.Elements(word + "tbl")
+            .Select(table => new XElement(table)).ToList();
         if (tables is null || tables.Count == 0) return Array.Empty<byte>();
+
+        foreach (var table in tables)
+        {
+            foreach (var text in table.Descendants().Where(element =>
+                         element.Name == word + "t" || element.Name == word + "delText" ||
+                         element.Name == word + "instrText").ToList())
+                text.RemoveNodes();
+
+            foreach (var attribute in table.DescendantsAndSelf().Attributes().Where(attribute =>
+                         attribute.Name.LocalName is "paraId" or "textId" ||
+                         attribute.Name == XNamespace.Xml + "space" ||
+                         attribute.Name.LocalName.StartsWith("rsid", StringComparison.OrdinalIgnoreCase))
+                     .ToArray())
+                attribute.Remove();
+
+            MergeEquivalentRuns(table);
+        }
 
         using var normalized = new MemoryStream();
         new XDocument(new XElement(word + "tables", tables)).Save(normalized, SaveOptions.DisableFormatting);

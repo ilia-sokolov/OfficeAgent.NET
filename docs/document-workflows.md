@@ -336,6 +336,45 @@ plan to normal preview and apply tools against the original.
 
 Run the [document-comparison sample](../samples/DocumentComparison/) with two `.docx` files.
 
+### What the comparison understands
+
+The comparison covers free body paragraphs and, since it learned about table cells, the
+words inside a table whose shape has not moved.
+
+| Difference | Result |
+| --- | --- |
+| Body paragraph text added, removed or changed | Tracked revision in the plan |
+| The same text split differently across equally formatted runs | **Not a difference.** No finding, no refusal |
+| Cell text changed with the table's geometry unchanged | Tracked revision in the plan |
+| Cell text changed together with its formatting | Refused, `unsupported-table-markup-change` |
+| Table rows, columns, spans or nesting changed | Refused, `unsupported-table-change` |
+| Paragraph formatting or style changed | Refused, `unsupported-paragraph-markup-change` or `unsupported-style-change` |
+| Headers, footers, notes, images, numbering, styles, other parts changed | Refused, with that area's own code |
+
+#### Run segmentation is not content
+
+Word re-segments runs constantly. Typing in the middle of a sentence, a spell-check pass,
+or a round trip through another editor can turn one run into three carrying identical
+formatting and identical words. The comparison merges adjacent runs that hold only text
+and share the same run properties before comparing structure, so that stops being a
+difference.
+
+Only text-carrying runs merge. A run holding a break, a tab, a field, a drawing or a note
+reference keeps its boundary, because those are content: merging them would change the
+document rather than normalise it. Whitespace is likewise text - a paragraph whose spacing
+changed is a real difference and is reported as one.
+
+#### Cells align by position, only when the shape matches
+
+Cell alignment is positional, which is sound **only** because it runs after the table's
+geometry has been confirmed identical. The geometry check hashes the tables with cell
+words stripped, so it answers "did the shape move" rather than "did anything change". If
+it moved, the cells in position three are not the same cell in both documents, and the
+plan is withheld before any cell text is trusted.
+
+A cell whose formatting changed alongside its words is refused rather than flattened:
+reproducing it as plain text would lose the formatting the author was editing.
+
 ### Reading comparison coverage
 
 A comparison answers two separate questions: what changed in the body, and whether it can

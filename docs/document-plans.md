@@ -799,6 +799,7 @@ Returned by `preview_plan` and `apply_plan` in the `errors` array. Stable wire c
 | `regex-timeout` | A regular-expression search exceeded its time limit. Simplify the pattern or use a literal search. |
 | `input-too-large` | The document exceeds a host ingestion ceiling. The message names the limit and the observed value. See [ingestion limits](ingestion-limits.md). |
 | `unsupported-table-change`, `unsupported-image-change`, `unsupported-note-change`, `unsupported-header-footer-change`, `unsupported-style-definition-change`, `unsupported-numbering-change` | A comparison found a difference in that area that it cannot represent as a plan. The findings it did detect are still returned; the plan is withheld. See [comparison coverage](document-workflows.md#reading-comparison-coverage). |
+| `unsupported-table-markup-change` | A table cell's words and its formatting both changed. The text change is not reproduced, because doing so would flatten the formatting. |
 | `malformed-package` | The document is not a package this engine will open: corrupt, truncated, carrying a duplicate or traversing part name, or declaring a document type definition. See [ingestion limits](ingestion-limits.md). |
 
 Provider boundary errors (`apply_plan` only) use a separate set of wire codes - see [document-providers.md](document-providers.md).
