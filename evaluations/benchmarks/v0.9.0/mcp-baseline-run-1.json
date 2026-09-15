@@ -1,0 +1,204 @@
+{
+  "SchemaVersion": "1.1",
+  "Environment": {
+    "Commit": "e24d913da402906c00fe3aec089beea0bfcb1064",
+    "CommitIsClean": false,
+    "Corpus": "packaged officeagent-mcp over stdio",
+    "RepetitionsPerScenario": 5,
+    "WarmupIterations": 2,
+    "Runtime": "packaged tool 0.8.0",
+    "OperatingSystem": "Windows 11",
+    "Architecture": "AMD64",
+    "ProcessorCount": 12,
+    "ServerGarbageCollection": false,
+    "Configuration": "Release",
+    "MeasurementMethod": "perf_counter wall clock around one stdio workflow against an installed tool. Protocol frames and bytes are counted at the stdio boundary and are exact. Managed allocation is not observable from this side and is recorded as zero.",
+    "StartedUtc": "2026-09-15T13:08:47.144322+00:00"
+  },
+  "Scenarios": [
+    {
+      "Name": "mcp-document-workflow",
+      "Description": "Create, inspect, preview, apply, find and export one document over stdio.",
+      "Inputs": [
+        "packaged officeagent-mcp"
+      ],
+      "WarmupIterations": 2,
+      "Iterations": [
+        {
+          "Index": 0,
+          "ElapsedMilliseconds": 20.88289999664994,
+          "AllocatedBytes": 0,
+          "OutputBytes": 2105,
+          "WorkUnits": 6,
+          "Succeeded": true,
+          "Failure": null,
+          "Protocol": {
+            "FramesSent": 6,
+            "FramesReceived": 6,
+            "BytesSent": 1542,
+            "BytesReceived": 11106,
+            "ToolCalls": 6
+          }
+        },
+        {
+          "Index": 1,
+          "ElapsedMilliseconds": 25.19630000460893,
+          "AllocatedBytes": 0,
+          "OutputBytes": 2105,
+          "WorkUnits": 6,
+          "Succeeded": true,
+          "Failure": null,
+          "Protocol": {
+            "FramesSent": 6,
+            "FramesReceived": 6,
+            "BytesSent": 1542,
+            "BytesReceived": 11186,
+            "ToolCalls": 6
+          }
+        },
+        {
+          "Index": 2,
+          "ElapsedMilliseconds": 19.72879999811994,
+          "AllocatedBytes": 0,
+          "OutputBytes": 2105,
+          "WorkUnits": 6,
+          "Succeeded": true,
+          "Failure": null,
+          "Protocol": {
+            "FramesSent": 6,
+            "FramesReceived": 6,
+            "BytesSent": 1542,
+            "BytesReceived": 11186,
+            "ToolCalls": 6
+          }
+        },
+        {
+          "Index": 3,
+          "ElapsedMilliseconds": 21.290799995767884,
+          "AllocatedBytes": 0,
+          "OutputBytes": 2106,
+          "WorkUnits": 6,
+          "Succeeded": true,
+          "Failure": null,
+          "Protocol": {
+            "FramesSent": 6,
+            "FramesReceived": 6,
+            "BytesSent": 1542,
+            "BytesReceived": 11234,
+            "ToolCalls": 6
+          }
+        },
+        {
+          "Index": 4,
+          "ElapsedMilliseconds": 19.59760000318056,
+          "AllocatedBytes": 0,
+          "OutputBytes": 2106,
+          "WorkUnits": 6,
+          "Succeeded": true,
+          "Failure": null,
+          "Protocol": {
+            "FramesSent": 6,
+            "FramesReceived": 6,
+            "BytesSent": 1542,
+            "BytesReceived": 11210,
+            "ToolCalls": 6
+          }
+        }
+      ],
+      "FailedIterations": 0,
+      "ProcessPeakWorkingSetBytes": 0
+    },
+    {
+      "Name": "mcp-template-batch",
+      "Description": "Import a template, discover it, preflight a four-item batch and commit it bound to that preview, over stdio.",
+      "Inputs": [
+        "packaged officeagent-mcp"
+      ],
+      "WarmupIterations": 2,
+      "Iterations": [
+        {
+          "Index": 0,
+          "ElapsedMilliseconds": 30.6812999988324,
+          "AllocatedBytes": 0,
+          "OutputBytes": 0,
+          "WorkUnits": 4,
+          "Succeeded": true,
+          "Failure": null,
+          "Protocol": {
+            "FramesSent": 4,
+            "FramesReceived": 4,
+            "BytesSent": 3562,
+            "BytesReceived": 13462,
+            "ToolCalls": 4
+          }
+        },
+        {
+          "Index": 1,
+          "ElapsedMilliseconds": 37.52890000032494,
+          "AllocatedBytes": 0,
+          "OutputBytes": 0,
+          "WorkUnits": 4,
+          "Succeeded": true,
+          "Failure": null,
+          "Protocol": {
+            "FramesSent": 4,
+            "FramesReceived": 4,
+            "BytesSent": 3562,
+            "BytesReceived": 13460,
+            "ToolCalls": 4
+          }
+        },
+        {
+          "Index": 2,
+          "ElapsedMilliseconds": 31.81100000074366,
+          "AllocatedBytes": 0,
+          "OutputBytes": 0,
+          "WorkUnits": 4,
+          "Succeeded": true,
+          "Failure": null,
+          "Protocol": {
+            "FramesSent": 4,
+            "FramesReceived": 4,
+            "BytesSent": 3562,
+            "BytesReceived": 13460,
+            "ToolCalls": 4
+          }
+        },
+        {
+          "Index": 3,
+          "ElapsedMilliseconds": 41.22769999958109,
+          "AllocatedBytes": 0,
+          "OutputBytes": 0,
+          "WorkUnits": 4,
+          "Succeeded": true,
+          "Failure": null,
+          "Protocol": {
+            "FramesSent": 4,
+            "FramesReceived": 4,
+            "BytesSent": 3562,
+            "BytesReceived": 13462,
+            "ToolCalls": 4
+          }
+        },
+        {
+          "Index": 4,
+          "ElapsedMilliseconds": 36.35660000145435,
+          "AllocatedBytes": 0,
+          "OutputBytes": 0,
+          "WorkUnits": 4,
+          "Succeeded": true,
+          "Failure": null,
+          "Protocol": {
+            "FramesSent": 4,
+            "FramesReceived": 4,
+            "BytesSent": 3562,
+            "BytesReceived": 13460,
+            "ToolCalls": 4
+          }
+        }
+      ],
+      "FailedIterations": 0,
+      "ProcessPeakWorkingSetBytes": 0
+    }
+  ]
+}

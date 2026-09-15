@@ -34,7 +34,7 @@ jobs:
 
       - name: Test skill packaging, agent evaluation, and release inventory
         if: matrix.os == 'ubuntu-latest'
-        run: python -m unittest tests/test_agent_evaluation.py tests/test_package_skills.py tests/test_release_evidence.py tests/test_smoke_packaged_artifacts.py -v
+        run: python -m unittest tests/test_agent_evaluation.py tests/test_package_skills.py tests/test_release_evidence.py tests/test_smoke_packaged_artifacts.py tests/test_benchmark_report.py tests/test_byte_exact_fixtures.py -v
 
       - name: Validate MCP Registry manifest
         if: matrix.os == 'ubuntu-latest'

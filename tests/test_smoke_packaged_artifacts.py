@@ -195,6 +195,80 @@ class StdioBoundaryTests(unittest.TestCase):
         self.assertEqual({"committed": True}, server.call_tool("apply_plan", {}))
 
 
+class ProtocolCounterTests(unittest.TestCase):
+    """
+    The stdio driver counts what an agent pays: round trips and bytes.
+
+    These are the only metrics on the MCP path steady enough to gate on, so a counter that
+    silently stopped counting would turn the gate into a rubber stamp.
+    """
+
+    def setUp(self) -> None:
+        self.temporary = tempfile.TemporaryDirectory()
+        self.addCleanup(self.temporary.cleanup)
+        self.cwd = Path(self.temporary.name)
+
+    def start(self, script: str) -> smoke.StdioServer:
+        server = smoke.StdioServer(fake_server(script), self.cwd, {"PATH": "", "SYSTEMROOT": ""})
+        self.addCleanup(server.terminate)
+        return server
+
+    ECHO = """
+        import json, sys
+        for line in sys.stdin:
+            request = json.loads(line)
+            sys.stdout.write(json.dumps({
+                "jsonrpc": "2.0", "id": request["id"],
+                "result": {"content": [{"type": "text", "text": json.dumps({"ok": True})}]}
+            }) + "\\n")
+            sys.stdout.flush()
+        """
+
+    def test_a_fresh_server_starts_at_zero(self) -> None:
+        server = self.start(self.ECHO)
+        self.assertEqual(
+            {"FramesSent": 0, "FramesReceived": 0, "BytesSent": 0, "BytesReceived": 0,
+             "ToolCalls": 0},
+            server.protocol_counters,
+        )
+
+    def test_every_frame_and_byte_in_both_directions_is_counted(self) -> None:
+        server = self.start(self.ECHO)
+        server.call_tool("inspect_document", {"connectionId": "session"})
+
+        counters = server.protocol_counters
+        self.assertEqual(1, counters["ToolCalls"])
+        self.assertEqual(1, counters["FramesSent"])
+        self.assertEqual(1, counters["FramesReceived"])
+        self.assertGreater(counters["BytesSent"], 0)
+        self.assertGreater(counters["BytesReceived"], 0)
+
+    def test_counts_accumulate_across_calls(self) -> None:
+        server = self.start(self.ECHO)
+        server.call_tool("a", {})
+        first = dict(server.protocol_counters)
+        server.call_tool("b", {})
+        second = server.protocol_counters
+
+        self.assertEqual(2, second["ToolCalls"])
+        self.assertGreater(second["BytesSent"], first["BytesSent"])
+
+    def test_reset_makes_one_iteration_attributable_to_itself(self) -> None:
+        """Without this, every iteration would report the whole run's traffic."""
+        server = self.start(self.ECHO)
+        server.call_tool("a", {})
+        server.reset_counters()
+        server.call_tool("b", {})
+        self.assertEqual(1, server.protocol_counters["ToolCalls"])
+
+    def test_a_raw_frame_is_counted_too(self) -> None:
+        """A caller that builds its own frame must not be able to bypass the counters."""
+        server = self.start(self.ECHO)
+        server.send_raw('{"jsonrpc": "2.0", "id": 99, "method": "ping"}')
+        self.assertEqual(1, server.protocol_counters["FramesSent"])
+        self.assertEqual(0, server.protocol_counters["ToolCalls"])
+
+
 class RequiredToolsTests(unittest.TestCase):
     def test_the_required_tool_set_matches_the_shipped_tool_names(self) -> None:
         """A renamed tool must break this list rather than silently weaken the smoke."""

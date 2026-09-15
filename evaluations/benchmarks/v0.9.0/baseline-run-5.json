@@ -1,0 +1,1223 @@
+{
+  "SchemaVersion": "1.0",
+  "Environment": {
+    "Commit": "e24d913da402906c00fe3aec089beea0bfcb1064",
+    "CommitIsClean": false,
+    "Corpus": "C:\\Projects\\OfficeAgent.NET\\OfficeAgent.NET\\tests\\OfficeAgent.Tests\\Corpus\\v0.8.0",
+    "RepetitionsPerScenario": 15,
+    "WarmupIterations": 3,
+    "Runtime": ".NET 8.0.0",
+    "OperatingSystem": "Microsoft Windows 10.0.26200",
+    "Architecture": "X64",
+    "ProcessorCount": 12,
+    "ServerGarbageCollection": false,
+    "Configuration": "Release",
+    "MeasurementMethod": "Stopwatch wall clock around one scenario iteration, after a forced blocking collection. Allocation is GC.GetTotalAllocatedBytes delta for the iteration. Peak working set is process-level and cumulative, not per scenario.",
+    "StartedUtc": "2026-09-15T13:53:25.887272+00:00"
+  },
+  "Scenarios": [
+    {
+      "Name": "word-contract-tracked-edit",
+      "Description": "Inspect a contract, then apply one tracked text change through a provider.",
+      "Inputs": [
+        "complex-contract.docx"
+      ],
+      "WarmupIterations": 3,
+      "Iterations": [
+        {
+          "Index": 0,
+          "ElapsedMilliseconds": 63.408,
+          "AllocatedBytes": 2823912,
+          "OutputBytes": 5230,
+          "WorkUnits": 28,
+          "InputBytes": 5181,
+          "Succeeded": true
+        },
+        {
+          "Index": 1,
+          "ElapsedMilliseconds": 60.8516,
+          "AllocatedBytes": 2841512,
+          "OutputBytes": 5228,
+          "WorkUnits": 28,
+          "InputBytes": 5181,
+          "Succeeded": true
+        },
+        {
+          "Index": 2,
+          "ElapsedMilliseconds": 62.8176,
+          "AllocatedBytes": 2821840,
+          "OutputBytes": 5231,
+          "WorkUnits": 28,
+          "InputBytes": 5181,
+          "Succeeded": true
+        },
+        {
+          "Index": 3,
+          "ElapsedMilliseconds": 43.8886,
+          "AllocatedBytes": 2821840,
+          "OutputBytes": 5230,
+          "WorkUnits": 28,
+          "InputBytes": 5181,
+          "Succeeded": true
+        },
+        {
+          "Index": 4,
+          "ElapsedMilliseconds": 46.5606,
+          "AllocatedBytes": 2821840,
+          "OutputBytes": 5230,
+          "WorkUnits": 28,
+          "InputBytes": 5181,
+          "Succeeded": true
+        },
+        {
+          "Index": 5,
+          "ElapsedMilliseconds": 54.593,
+          "AllocatedBytes": 2821840,
+          "OutputBytes": 5230,
+          "WorkUnits": 28,
+          "InputBytes": 5181,
+          "Succeeded": true
+        },
+        {
+          "Index": 6,
+          "ElapsedMilliseconds": 53.3296,
+          "AllocatedBytes": 2821840,
+          "OutputBytes": 5231,
+          "WorkUnits": 28,
+          "InputBytes": 5181,
+          "Succeeded": true
+        },
+        {
+          "Index": 7,
+          "ElapsedMilliseconds": 49.2004,
+          "AllocatedBytes": 2821896,
+          "OutputBytes": 5230,
+          "WorkUnits": 28,
+          "InputBytes": 5181,
+          "Succeeded": true
+        },
+        {
+          "Index": 8,
+          "ElapsedMilliseconds": 53.6234,
+          "AllocatedBytes": 2821896,
+          "OutputBytes": 5228,
+          "WorkUnits": 28,
+          "InputBytes": 5181,
+          "Succeeded": true
+        },
+        {
+          "Index": 9,
+          "ElapsedMilliseconds": 88.9062,
+          "AllocatedBytes": 2821896,
+          "OutputBytes": 5229,
+          "WorkUnits": 28,
+          "InputBytes": 5181,
+          "Succeeded": true
+        },
+        {
+          "Index": 10,
+          "ElapsedMilliseconds": 91.7596,
+          "AllocatedBytes": 2821896,
+          "OutputBytes": 5228,
+          "WorkUnits": 28,
+          "InputBytes": 5181,
+          "Succeeded": true
+        },
+        {
+          "Index": 11,
+          "ElapsedMilliseconds": 67.7272,
+          "AllocatedBytes": 2821896,
+          "OutputBytes": 5230,
+          "WorkUnits": 28,
+          "InputBytes": 5181,
+          "Succeeded": true
+        },
+        {
+          "Index": 12,
+          "ElapsedMilliseconds": 68.8825,
+          "AllocatedBytes": 2822632,
+          "OutputBytes": 5229,
+          "WorkUnits": 28,
+          "InputBytes": 5181,
+          "Succeeded": true
+        },
+        {
+          "Index": 13,
+          "ElapsedMilliseconds": 50.6769,
+          "AllocatedBytes": 2821896,
+          "OutputBytes": 5231,
+          "WorkUnits": 28,
+          "InputBytes": 5181,
+          "Succeeded": true
+        },
+        {
+          "Index": 14,
+          "ElapsedMilliseconds": 54.9733,
+          "AllocatedBytes": 2821896,
+          "OutputBytes": 5229,
+          "WorkUnits": 28,
+          "InputBytes": 5181,
+          "Succeeded": true
+        }
+      ],
+      "FailedIterations": 0,
+      "ProcessPeakWorkingSetBytes": 79224832,
+      "ConcurrencyLevel": 1,
+      "PreservedParts": [
+        "word/comments.xml",
+        "word/footnotes.xml",
+        "word/styles.xml"
+      ]
+    },
+    {
+      "Name": "word-comparison",
+      "Description": "Compare two revisions of a Word document and produce a tracked-change plan.",
+      "Inputs": [
+        "comparison-original.docx",
+        "comparison-revised.docx"
+      ],
+      "WarmupIterations": 3,
+      "Iterations": [
+        {
+          "Index": 0,
+          "ElapsedMilliseconds": 49.1827,
+          "AllocatedBytes": 1368808,
+          "OutputBytes": 0,
+          "WorkUnits": 1,
+          "InputBytes": 2565,
+          "Succeeded": true
+        },
+        {
+          "Index": 1,
+          "ElapsedMilliseconds": 49.4173,
+          "AllocatedBytes": 1368808,
+          "OutputBytes": 0,
+          "WorkUnits": 1,
+          "InputBytes": 2565,
+          "Succeeded": true
+        },
+        {
+          "Index": 2,
+          "ElapsedMilliseconds": 42.345,
+          "AllocatedBytes": 1368808,
+          "OutputBytes": 0,
+          "WorkUnits": 1,
+          "InputBytes": 2565,
+          "Succeeded": true
+        },
+        {
+          "Index": 3,
+          "ElapsedMilliseconds": 26.4582,
+          "AllocatedBytes": 1368808,
+          "OutputBytes": 0,
+          "WorkUnits": 1,
+          "InputBytes": 2565,
+          "Succeeded": true
+        },
+        {
+          "Index": 4,
+          "ElapsedMilliseconds": 40.3929,
+          "AllocatedBytes": 1368808,
+          "OutputBytes": 0,
+          "WorkUnits": 1,
+          "InputBytes": 2565,
+          "Succeeded": true
+        },
+        {
+          "Index": 5,
+          "ElapsedMilliseconds": 48.6216,
+          "AllocatedBytes": 1369544,
+          "OutputBytes": 0,
+          "WorkUnits": 1,
+          "InputBytes": 2565,
+          "Succeeded": true
+        },
+        {
+          "Index": 6,
+          "ElapsedMilliseconds": 52.1722,
+          "AllocatedBytes": 1368808,
+          "OutputBytes": 0,
+          "WorkUnits": 1,
+          "InputBytes": 2565,
+          "Succeeded": true
+        },
+        {
+          "Index": 7,
+          "ElapsedMilliseconds": 52.9416,
+          "AllocatedBytes": 1368912,
+          "OutputBytes": 0,
+          "WorkUnits": 1,
+          "InputBytes": 2565,
+          "Succeeded": true
+        },
+        {
+          "Index": 8,
+          "ElapsedMilliseconds": 48.819,
+          "AllocatedBytes": 1368912,
+          "OutputBytes": 0,
+          "WorkUnits": 1,
+          "InputBytes": 2565,
+          "Succeeded": true
+        },
+        {
+          "Index": 9,
+          "ElapsedMilliseconds": 49.3223,
+          "AllocatedBytes": 1368912,
+          "OutputBytes": 0,
+          "WorkUnits": 1,
+          "InputBytes": 2565,
+          "Succeeded": true
+        },
+        {
+          "Index": 10,
+          "ElapsedMilliseconds": 35.3309,
+          "AllocatedBytes": 1368912,
+          "OutputBytes": 0,
+          "WorkUnits": 1,
+          "InputBytes": 2565,
+          "Succeeded": true
+        },
+        {
+          "Index": 11,
+          "ElapsedMilliseconds": 34.4985,
+          "AllocatedBytes": 1368912,
+          "OutputBytes": 0,
+          "WorkUnits": 1,
+          "InputBytes": 2565,
+          "Succeeded": true
+        },
+        {
+          "Index": 12,
+          "ElapsedMilliseconds": 34.6686,
+          "AllocatedBytes": 1368912,
+          "OutputBytes": 0,
+          "WorkUnits": 1,
+          "InputBytes": 2565,
+          "Succeeded": true
+        },
+        {
+          "Index": 13,
+          "ElapsedMilliseconds": 34.1724,
+          "AllocatedBytes": 1369872,
+          "OutputBytes": 0,
+          "WorkUnits": 1,
+          "InputBytes": 2565,
+          "Succeeded": true
+        },
+        {
+          "Index": 14,
+          "ElapsedMilliseconds": 40.4949,
+          "AllocatedBytes": 1370032,
+          "OutputBytes": 0,
+          "WorkUnits": 1,
+          "InputBytes": 2565,
+          "Succeeded": true
+        }
+      ],
+      "FailedIterations": 0,
+      "ProcessPeakWorkingSetBytes": 81395712,
+      "ConcurrencyLevel": 1,
+      "PreservedParts": []
+    },
+    {
+      "Name": "template-batch-repeated",
+      "Description": "Populate one Word template into eight independent outputs through a preflighted batch.",
+      "Inputs": [
+        "template.docx"
+      ],
+      "WarmupIterations": 3,
+      "Iterations": [
+        {
+          "Index": 0,
+          "ElapsedMilliseconds": 310.0334,
+          "AllocatedBytes": 10430648,
+          "OutputBytes": 11490,
+          "WorkUnits": 8,
+          "InputBytes": 1311,
+          "Succeeded": true
+        },
+        {
+          "Index": 1,
+          "ElapsedMilliseconds": 280.232,
+          "AllocatedBytes": 10430808,
+          "OutputBytes": 11494,
+          "WorkUnits": 8,
+          "InputBytes": 1311,
+          "Succeeded": true
+        },
+        {
+          "Index": 2,
+          "ElapsedMilliseconds": 324.9351,
+          "AllocatedBytes": 10430248,
+          "OutputBytes": 11498,
+          "WorkUnits": 8,
+          "InputBytes": 1311,
+          "Succeeded": true
+        },
+        {
+          "Index": 3,
+          "ElapsedMilliseconds": 240.9816,
+          "AllocatedBytes": 10430088,
+          "OutputBytes": 11486,
+          "WorkUnits": 8,
+          "InputBytes": 1311,
+          "Succeeded": true
+        },
+        {
+          "Index": 4,
+          "ElapsedMilliseconds": 284.4081,
+          "AllocatedBytes": 10434568,
+          "OutputBytes": 11490,
+          "WorkUnits": 8,
+          "InputBytes": 1311,
+          "Succeeded": true
+        },
+        {
+          "Index": 5,
+          "ElapsedMilliseconds": 287.5145,
+          "AllocatedBytes": 10434408,
+          "OutputBytes": 11495,
+          "WorkUnits": 8,
+          "InputBytes": 1311,
+          "Succeeded": true
+        },
+        {
+          "Index": 6,
+          "ElapsedMilliseconds": 277.6766,
+          "AllocatedBytes": 10434568,
+          "OutputBytes": 11495,
+          "WorkUnits": 8,
+          "InputBytes": 1311,
+          "Succeeded": true
+        },
+        {
+          "Index": 7,
+          "ElapsedMilliseconds": 264.044,
+          "AllocatedBytes": 10435936,
+          "OutputBytes": 11487,
+          "WorkUnits": 8,
+          "InputBytes": 1311,
+          "Succeeded": true
+        },
+        {
+          "Index": 8,
+          "ElapsedMilliseconds": 248.6687,
+          "AllocatedBytes": 10433216,
+          "OutputBytes": 11505,
+          "WorkUnits": 8,
+          "InputBytes": 1311,
+          "Succeeded": true
+        },
+        {
+          "Index": 9,
+          "ElapsedMilliseconds": 241.6377,
+          "AllocatedBytes": 10425640,
+          "OutputBytes": 11492,
+          "WorkUnits": 8,
+          "InputBytes": 1311,
+          "Succeeded": true
+        },
+        {
+          "Index": 10,
+          "ElapsedMilliseconds": 289.9302,
+          "AllocatedBytes": 10423896,
+          "OutputBytes": 11493,
+          "WorkUnits": 8,
+          "InputBytes": 1311,
+          "Succeeded": true
+        },
+        {
+          "Index": 11,
+          "ElapsedMilliseconds": 267.098,
+          "AllocatedBytes": 10423016,
+          "OutputBytes": 11500,
+          "WorkUnits": 8,
+          "InputBytes": 1311,
+          "Succeeded": true
+        },
+        {
+          "Index": 12,
+          "ElapsedMilliseconds": 257.2928,
+          "AllocatedBytes": 10418400,
+          "OutputBytes": 11493,
+          "WorkUnits": 8,
+          "InputBytes": 1311,
+          "Succeeded": true
+        },
+        {
+          "Index": 13,
+          "ElapsedMilliseconds": 234.6872,
+          "AllocatedBytes": 10419112,
+          "OutputBytes": 11496,
+          "WorkUnits": 8,
+          "InputBytes": 1311,
+          "Succeeded": true
+        },
+        {
+          "Index": 14,
+          "ElapsedMilliseconds": 258.393,
+          "AllocatedBytes": 10418456,
+          "OutputBytes": 11488,
+          "WorkUnits": 8,
+          "InputBytes": 1311,
+          "Succeeded": true
+        }
+      ],
+      "FailedIterations": 0,
+      "ProcessPeakWorkingSetBytes": 88780800,
+      "ConcurrencyLevel": 1,
+      "PreservedParts": []
+    },
+    {
+      "Name": "word-assembly",
+      "Description": "Assemble two Word documents into one through preview and commit.",
+      "Inputs": [
+        "assembly-source-a.docx",
+        "assembly-source-b.docx"
+      ],
+      "WarmupIterations": 3,
+      "Iterations": [
+        {
+          "Index": 0,
+          "ElapsedMilliseconds": 76.9307,
+          "AllocatedBytes": 9428904,
+          "OutputBytes": 6056,
+          "WorkUnits": 2,
+          "InputBytes": 5016,
+          "Succeeded": true
+        },
+        {
+          "Index": 1,
+          "ElapsedMilliseconds": 75.5344,
+          "AllocatedBytes": 9428584,
+          "OutputBytes": 6056,
+          "WorkUnits": 2,
+          "InputBytes": 5016,
+          "Succeeded": true
+        },
+        {
+          "Index": 2,
+          "ElapsedMilliseconds": 91.8079,
+          "AllocatedBytes": 9428504,
+          "OutputBytes": 6056,
+          "WorkUnits": 2,
+          "InputBytes": 5016,
+          "Succeeded": true
+        },
+        {
+          "Index": 3,
+          "ElapsedMilliseconds": 80.5634,
+          "AllocatedBytes": 9428664,
+          "OutputBytes": 6056,
+          "WorkUnits": 2,
+          "InputBytes": 5016,
+          "Succeeded": true
+        },
+        {
+          "Index": 4,
+          "ElapsedMilliseconds": 96.9032,
+          "AllocatedBytes": 9428744,
+          "OutputBytes": 6056,
+          "WorkUnits": 2,
+          "InputBytes": 5016,
+          "Succeeded": true
+        },
+        {
+          "Index": 5,
+          "ElapsedMilliseconds": 81.7512,
+          "AllocatedBytes": 9428584,
+          "OutputBytes": 6056,
+          "WorkUnits": 2,
+          "InputBytes": 5016,
+          "Succeeded": true
+        },
+        {
+          "Index": 6,
+          "ElapsedMilliseconds": 97.8892,
+          "AllocatedBytes": 9428584,
+          "OutputBytes": 6056,
+          "WorkUnits": 2,
+          "InputBytes": 5016,
+          "Succeeded": true
+        },
+        {
+          "Index": 7,
+          "ElapsedMilliseconds": 77.4987,
+          "AllocatedBytes": 9428512,
+          "OutputBytes": 6056,
+          "WorkUnits": 2,
+          "InputBytes": 5016,
+          "Succeeded": true
+        },
+        {
+          "Index": 8,
+          "ElapsedMilliseconds": 104.705,
+          "AllocatedBytes": 9428592,
+          "OutputBytes": 6056,
+          "WorkUnits": 2,
+          "InputBytes": 5016,
+          "Succeeded": true
+        },
+        {
+          "Index": 9,
+          "ElapsedMilliseconds": 101.6948,
+          "AllocatedBytes": 9428592,
+          "OutputBytes": 6056,
+          "WorkUnits": 2,
+          "InputBytes": 5016,
+          "Succeeded": true
+        },
+        {
+          "Index": 10,
+          "ElapsedMilliseconds": 63.8841,
+          "AllocatedBytes": 9428432,
+          "OutputBytes": 6056,
+          "WorkUnits": 2,
+          "InputBytes": 5016,
+          "Succeeded": true
+        },
+        {
+          "Index": 11,
+          "ElapsedMilliseconds": 63.2118,
+          "AllocatedBytes": 9424176,
+          "OutputBytes": 6056,
+          "WorkUnits": 2,
+          "InputBytes": 5016,
+          "Succeeded": true
+        },
+        {
+          "Index": 12,
+          "ElapsedMilliseconds": 73.4773,
+          "AllocatedBytes": 9424416,
+          "OutputBytes": 6056,
+          "WorkUnits": 2,
+          "InputBytes": 5016,
+          "Succeeded": true
+        },
+        {
+          "Index": 13,
+          "ElapsedMilliseconds": 93.0413,
+          "AllocatedBytes": 9424256,
+          "OutputBytes": 6056,
+          "WorkUnits": 2,
+          "InputBytes": 5016,
+          "Succeeded": true
+        },
+        {
+          "Index": 14,
+          "ElapsedMilliseconds": 70.2958,
+          "AllocatedBytes": 9424576,
+          "OutputBytes": 6056,
+          "WorkUnits": 2,
+          "InputBytes": 5016,
+          "Succeeded": true
+        }
+      ],
+      "FailedIterations": 0,
+      "ProcessPeakWorkingSetBytes": 93437952,
+      "ConcurrencyLevel": 1,
+      "PreservedParts": []
+    },
+    {
+      "Name": "powerpoint-chart-binding",
+      "Description": "Discover a deck\u0027s native chart slot and rewrite the chart\u0027s data through a bound batch.",
+      "Inputs": [
+        "deck-with-chart.pptx"
+      ],
+      "WarmupIterations": 3,
+      "Iterations": [
+        {
+          "Index": 0,
+          "ElapsedMilliseconds": 68.458,
+          "AllocatedBytes": 5470824,
+          "OutputBytes": 9048,
+          "WorkUnits": 4,
+          "InputBytes": 8981,
+          "Succeeded": true
+        },
+        {
+          "Index": 1,
+          "ElapsedMilliseconds": 61.3381,
+          "AllocatedBytes": 5471040,
+          "OutputBytes": 9053,
+          "WorkUnits": 4,
+          "InputBytes": 8981,
+          "Succeeded": true
+        },
+        {
+          "Index": 2,
+          "ElapsedMilliseconds": 57.5499,
+          "AllocatedBytes": 5470880,
+          "OutputBytes": 9051,
+          "WorkUnits": 4,
+          "InputBytes": 8981,
+          "Succeeded": true
+        },
+        {
+          "Index": 3,
+          "ElapsedMilliseconds": 57.3315,
+          "AllocatedBytes": 5473408,
+          "OutputBytes": 9055,
+          "WorkUnits": 4,
+          "InputBytes": 8981,
+          "Succeeded": true
+        },
+        {
+          "Index": 4,
+          "ElapsedMilliseconds": 56.6401,
+          "AllocatedBytes": 5474232,
+          "OutputBytes": 9048,
+          "WorkUnits": 4,
+          "InputBytes": 8981,
+          "Succeeded": true
+        },
+        {
+          "Index": 5,
+          "ElapsedMilliseconds": 54.5902,
+          "AllocatedBytes": 5471040,
+          "OutputBytes": 9053,
+          "WorkUnits": 4,
+          "InputBytes": 8981,
+          "Succeeded": true
+        },
+        {
+          "Index": 6,
+          "ElapsedMilliseconds": 63.8244,
+          "AllocatedBytes": 5470888,
+          "OutputBytes": 9056,
+          "WorkUnits": 4,
+          "InputBytes": 8981,
+          "Succeeded": true
+        },
+        {
+          "Index": 7,
+          "ElapsedMilliseconds": 72.9099,
+          "AllocatedBytes": 5471072,
+          "OutputBytes": 9052,
+          "WorkUnits": 4,
+          "InputBytes": 8981,
+          "Succeeded": true
+        },
+        {
+          "Index": 8,
+          "ElapsedMilliseconds": 57.1086,
+          "AllocatedBytes": 5470912,
+          "OutputBytes": 9050,
+          "WorkUnits": 4,
+          "InputBytes": 8981,
+          "Succeeded": true
+        },
+        {
+          "Index": 9,
+          "ElapsedMilliseconds": 77.4334,
+          "AllocatedBytes": 5471072,
+          "OutputBytes": 9053,
+          "WorkUnits": 4,
+          "InputBytes": 8981,
+          "Succeeded": true
+        },
+        {
+          "Index": 10,
+          "ElapsedMilliseconds": 85.7514,
+          "AllocatedBytes": 5470912,
+          "OutputBytes": 9052,
+          "WorkUnits": 4,
+          "InputBytes": 8981,
+          "Succeeded": true
+        },
+        {
+          "Index": 11,
+          "ElapsedMilliseconds": 76.9476,
+          "AllocatedBytes": 5471072,
+          "OutputBytes": 9050,
+          "WorkUnits": 4,
+          "InputBytes": 8981,
+          "Succeeded": true
+        },
+        {
+          "Index": 12,
+          "ElapsedMilliseconds": 61.0696,
+          "AllocatedBytes": 5470912,
+          "OutputBytes": 9050,
+          "WorkUnits": 4,
+          "InputBytes": 8981,
+          "Succeeded": true
+        },
+        {
+          "Index": 13,
+          "ElapsedMilliseconds": 81.6889,
+          "AllocatedBytes": 5471016,
+          "OutputBytes": 9047,
+          "WorkUnits": 4,
+          "InputBytes": 8981,
+          "Succeeded": true
+        },
+        {
+          "Index": 14,
+          "ElapsedMilliseconds": 81.9838,
+          "AllocatedBytes": 5637944,
+          "OutputBytes": 9055,
+          "WorkUnits": 4,
+          "InputBytes": 8981,
+          "Succeeded": true
+        }
+      ],
+      "FailedIterations": 0,
+      "ProcessPeakWorkingSetBytes": 103563264,
+      "ConcurrencyLevel": 1,
+      "PreservedParts": [
+        "ppt/slideMasters/slideMaster1.xml",
+        "ppt/notesSlides/notesSlide1.xml"
+      ]
+    },
+    {
+      "Name": "powerpoint-image-heavy-deck",
+      "Description": "Grow a deck to eight slides and place a background image on every one of them.",
+      "Inputs": [
+        "deck-with-chart.pptx"
+      ],
+      "WarmupIterations": 3,
+      "Iterations": [
+        {
+          "Index": 0,
+          "ElapsedMilliseconds": 121.8357,
+          "AllocatedBytes": 7780048,
+          "OutputBytes": 15471,
+          "WorkUnits": 8,
+          "InputBytes": 8981,
+          "Succeeded": true
+        },
+        {
+          "Index": 1,
+          "ElapsedMilliseconds": 119.8882,
+          "AllocatedBytes": 7780456,
+          "OutputBytes": 15485,
+          "WorkUnits": 8,
+          "InputBytes": 8981,
+          "Succeeded": true
+        },
+        {
+          "Index": 2,
+          "ElapsedMilliseconds": 127.4475,
+          "AllocatedBytes": 7780240,
+          "OutputBytes": 15480,
+          "WorkUnits": 8,
+          "InputBytes": 8981,
+          "Succeeded": true
+        },
+        {
+          "Index": 3,
+          "ElapsedMilliseconds": 117.687,
+          "AllocatedBytes": 7780032,
+          "OutputBytes": 15467,
+          "WorkUnits": 8,
+          "InputBytes": 8981,
+          "Succeeded": true
+        },
+        {
+          "Index": 4,
+          "ElapsedMilliseconds": 125.3944,
+          "AllocatedBytes": 7780256,
+          "OutputBytes": 15477,
+          "WorkUnits": 8,
+          "InputBytes": 8981,
+          "Succeeded": true
+        },
+        {
+          "Index": 5,
+          "ElapsedMilliseconds": 111.3557,
+          "AllocatedBytes": 7780256,
+          "OutputBytes": 15471,
+          "WorkUnits": 8,
+          "InputBytes": 8981,
+          "Succeeded": true
+        },
+        {
+          "Index": 6,
+          "ElapsedMilliseconds": 197.0664,
+          "AllocatedBytes": 7780256,
+          "OutputBytes": 15475,
+          "WorkUnits": 8,
+          "InputBytes": 8981,
+          "Succeeded": true
+        },
+        {
+          "Index": 7,
+          "ElapsedMilliseconds": 124.6829,
+          "AllocatedBytes": 7780240,
+          "OutputBytes": 15472,
+          "WorkUnits": 8,
+          "InputBytes": 8981,
+          "Succeeded": true
+        },
+        {
+          "Index": 8,
+          "ElapsedMilliseconds": 111.6588,
+          "AllocatedBytes": 7780480,
+          "OutputBytes": 15474,
+          "WorkUnits": 8,
+          "InputBytes": 8981,
+          "Succeeded": true
+        },
+        {
+          "Index": 9,
+          "ElapsedMilliseconds": 121.2126,
+          "AllocatedBytes": 7780432,
+          "OutputBytes": 15480,
+          "WorkUnits": 8,
+          "InputBytes": 8981,
+          "Succeeded": true
+        },
+        {
+          "Index": 10,
+          "ElapsedMilliseconds": 122.5408,
+          "AllocatedBytes": 7780368,
+          "OutputBytes": 15472,
+          "WorkUnits": 8,
+          "InputBytes": 8981,
+          "Succeeded": true
+        },
+        {
+          "Index": 11,
+          "ElapsedMilliseconds": 126.8589,
+          "AllocatedBytes": 7780216,
+          "OutputBytes": 15470,
+          "WorkUnits": 8,
+          "InputBytes": 8981,
+          "Succeeded": true
+        },
+        {
+          "Index": 12,
+          "ElapsedMilliseconds": 125.1573,
+          "AllocatedBytes": 7780416,
+          "OutputBytes": 15478,
+          "WorkUnits": 8,
+          "InputBytes": 8981,
+          "Succeeded": true
+        },
+        {
+          "Index": 13,
+          "ElapsedMilliseconds": 114.338,
+          "AllocatedBytes": 7780216,
+          "OutputBytes": 15468,
+          "WorkUnits": 8,
+          "InputBytes": 8981,
+          "Succeeded": true
+        },
+        {
+          "Index": 14,
+          "ElapsedMilliseconds": 134.7102,
+          "AllocatedBytes": 7780432,
+          "OutputBytes": 15476,
+          "WorkUnits": 8,
+          "InputBytes": 8981,
+          "Succeeded": true
+        }
+      ],
+      "FailedIterations": 0,
+      "ProcessPeakWorkingSetBytes": 105852928,
+      "ConcurrencyLevel": 1,
+      "PreservedParts": []
+    },
+    {
+      "Name": "excel-bounded-cell-edit",
+      "Description": "Edit cells in a styled workbook under a bounded cell budget, then read the output back.",
+      "Inputs": [
+        "workbook-styles.xlsx"
+      ],
+      "WarmupIterations": 3,
+      "Iterations": [
+        {
+          "Index": 0,
+          "ElapsedMilliseconds": 16.7708,
+          "AllocatedBytes": 2088288,
+          "OutputBytes": 3024,
+          "WorkUnits": 8,
+          "InputBytes": 2906,
+          "Succeeded": true
+        },
+        {
+          "Index": 1,
+          "ElapsedMilliseconds": 15.8823,
+          "AllocatedBytes": 2088288,
+          "OutputBytes": 3024,
+          "WorkUnits": 8,
+          "InputBytes": 2906,
+          "Succeeded": true
+        },
+        {
+          "Index": 2,
+          "ElapsedMilliseconds": 15.3462,
+          "AllocatedBytes": 2088288,
+          "OutputBytes": 3024,
+          "WorkUnits": 8,
+          "InputBytes": 2906,
+          "Succeeded": true
+        },
+        {
+          "Index": 3,
+          "ElapsedMilliseconds": 18.5127,
+          "AllocatedBytes": 2088288,
+          "OutputBytes": 3024,
+          "WorkUnits": 8,
+          "InputBytes": 2906,
+          "Succeeded": true
+        },
+        {
+          "Index": 4,
+          "ElapsedMilliseconds": 17.1715,
+          "AllocatedBytes": 2088288,
+          "OutputBytes": 3024,
+          "WorkUnits": 8,
+          "InputBytes": 2906,
+          "Succeeded": true
+        },
+        {
+          "Index": 5,
+          "ElapsedMilliseconds": 14.6129,
+          "AllocatedBytes": 2088288,
+          "OutputBytes": 3024,
+          "WorkUnits": 8,
+          "InputBytes": 2906,
+          "Succeeded": true
+        },
+        {
+          "Index": 6,
+          "ElapsedMilliseconds": 14.3817,
+          "AllocatedBytes": 2088288,
+          "OutputBytes": 3024,
+          "WorkUnits": 8,
+          "InputBytes": 2906,
+          "Succeeded": true
+        },
+        {
+          "Index": 7,
+          "ElapsedMilliseconds": 16.3852,
+          "AllocatedBytes": 2088424,
+          "OutputBytes": 3024,
+          "WorkUnits": 8,
+          "InputBytes": 2906,
+          "Succeeded": true
+        },
+        {
+          "Index": 8,
+          "ElapsedMilliseconds": 16.8384,
+          "AllocatedBytes": 2088424,
+          "OutputBytes": 3024,
+          "WorkUnits": 8,
+          "InputBytes": 2906,
+          "Succeeded": true
+        },
+        {
+          "Index": 9,
+          "ElapsedMilliseconds": 15.4888,
+          "AllocatedBytes": 2088424,
+          "OutputBytes": 3024,
+          "WorkUnits": 8,
+          "InputBytes": 2906,
+          "Succeeded": true
+        },
+        {
+          "Index": 10,
+          "ElapsedMilliseconds": 13.6826,
+          "AllocatedBytes": 2088424,
+          "OutputBytes": 3024,
+          "WorkUnits": 8,
+          "InputBytes": 2906,
+          "Succeeded": true
+        },
+        {
+          "Index": 11,
+          "ElapsedMilliseconds": 15.4542,
+          "AllocatedBytes": 2088424,
+          "OutputBytes": 3024,
+          "WorkUnits": 8,
+          "InputBytes": 2906,
+          "Succeeded": true
+        },
+        {
+          "Index": 12,
+          "ElapsedMilliseconds": 13.6927,
+          "AllocatedBytes": 2088424,
+          "OutputBytes": 3024,
+          "WorkUnits": 8,
+          "InputBytes": 2906,
+          "Succeeded": true
+        },
+        {
+          "Index": 13,
+          "ElapsedMilliseconds": 15.5785,
+          "AllocatedBytes": 2088424,
+          "OutputBytes": 3024,
+          "WorkUnits": 8,
+          "InputBytes": 2906,
+          "Succeeded": true
+        },
+        {
+          "Index": 14,
+          "ElapsedMilliseconds": 15.7907,
+          "AllocatedBytes": 2088512,
+          "OutputBytes": 3024,
+          "WorkUnits": 8,
+          "InputBytes": 2906,
+          "Succeeded": true
+        }
+      ],
+      "FailedIterations": 0,
+      "ProcessPeakWorkingSetBytes": 106672128,
+      "ConcurrencyLevel": 1,
+      "PreservedParts": [
+        "xl/styles.xml"
+      ]
+    },
+    {
+      "Name": "word-concurrent-edits",
+      "Description": "Apply a tracked edit to each of four documents at once through one client.",
+      "Inputs": [
+        "complex-contract.docx"
+      ],
+      "WarmupIterations": 3,
+      "Iterations": [
+        {
+          "Index": 0,
+          "ElapsedMilliseconds": 161.7381,
+          "AllocatedBytes": 11026544,
+          "OutputBytes": 20914,
+          "WorkUnits": 4,
+          "InputBytes": 20724,
+          "Succeeded": true
+        },
+        {
+          "Index": 1,
+          "ElapsedMilliseconds": 175.6934,
+          "AllocatedBytes": 11024872,
+          "OutputBytes": 20915,
+          "WorkUnits": 4,
+          "InputBytes": 20724,
+          "Succeeded": true
+        },
+        {
+          "Index": 2,
+          "ElapsedMilliseconds": 174.1275,
+          "AllocatedBytes": 11027328,
+          "OutputBytes": 20916,
+          "WorkUnits": 4,
+          "InputBytes": 20724,
+          "Succeeded": true
+        },
+        {
+          "Index": 3,
+          "ElapsedMilliseconds": 160.3985,
+          "AllocatedBytes": 11024872,
+          "OutputBytes": 20919,
+          "WorkUnits": 4,
+          "InputBytes": 20724,
+          "Succeeded": true
+        },
+        {
+          "Index": 4,
+          "ElapsedMilliseconds": 158.1023,
+          "AllocatedBytes": 11025456,
+          "OutputBytes": 20915,
+          "WorkUnits": 4,
+          "InputBytes": 20724,
+          "Succeeded": true
+        },
+        {
+          "Index": 5,
+          "ElapsedMilliseconds": 173.1378,
+          "AllocatedBytes": 11025608,
+          "OutputBytes": 20916,
+          "WorkUnits": 4,
+          "InputBytes": 20724,
+          "Succeeded": true
+        },
+        {
+          "Index": 6,
+          "ElapsedMilliseconds": 166.5821,
+          "AllocatedBytes": 11025176,
+          "OutputBytes": 20917,
+          "WorkUnits": 4,
+          "InputBytes": 20724,
+          "Succeeded": true
+        },
+        {
+          "Index": 7,
+          "ElapsedMilliseconds": 157.881,
+          "AllocatedBytes": 11024728,
+          "OutputBytes": 20917,
+          "WorkUnits": 4,
+          "InputBytes": 20724,
+          "Succeeded": true
+        },
+        {
+          "Index": 8,
+          "ElapsedMilliseconds": 153.0201,
+          "AllocatedBytes": 11155744,
+          "OutputBytes": 20917,
+          "WorkUnits": 4,
+          "InputBytes": 20724,
+          "Succeeded": true
+        },
+        {
+          "Index": 9,
+          "ElapsedMilliseconds": 160.9398,
+          "AllocatedBytes": 11025296,
+          "OutputBytes": 20917,
+          "WorkUnits": 4,
+          "InputBytes": 20724,
+          "Succeeded": true
+        },
+        {
+          "Index": 10,
+          "ElapsedMilliseconds": 168.9851,
+          "AllocatedBytes": 11056912,
+          "OutputBytes": 20914,
+          "WorkUnits": 4,
+          "InputBytes": 20724,
+          "Succeeded": true
+        },
+        {
+          "Index": 11,
+          "ElapsedMilliseconds": 176.0684,
+          "AllocatedBytes": 11024808,
+          "OutputBytes": 20914,
+          "WorkUnits": 4,
+          "InputBytes": 20724,
+          "Succeeded": true
+        },
+        {
+          "Index": 12,
+          "ElapsedMilliseconds": 161.5942,
+          "AllocatedBytes": 11027040,
+          "OutputBytes": 20910,
+          "WorkUnits": 4,
+          "InputBytes": 20724,
+          "Succeeded": true
+        },
+        {
+          "Index": 13,
+          "ElapsedMilliseconds": 166.2688,
+          "AllocatedBytes": 11024808,
+          "OutputBytes": 20915,
+          "WorkUnits": 4,
+          "InputBytes": 20724,
+          "Succeeded": true
+        },
+        {
+          "Index": 14,
+          "ElapsedMilliseconds": 166.9455,
+          "AllocatedBytes": 11156064,
+          "OutputBytes": 20913,
+          "WorkUnits": 4,
+          "InputBytes": 20724,
+          "Succeeded": true
+        }
+      ],
+      "FailedIterations": 0,
+      "ProcessPeakWorkingSetBytes": 109826048,
+      "ConcurrencyLevel": 4,
+      "PreservedParts": []
+    }
+  ]
+}

@@ -1,1 +1,8 @@
 tests/OfficeAgent.Tests/Corpus/** -text
+
+# The agent-selection evaluation is regenerated and compared byte for byte against the
+# committed report, for the same reason and with the same failure mode. This was found after
+# the corpus rule was added: the first audit looked for SHA-256 comparisons and missed a test
+# that compares file bytes directly, so the rule below is scoped by what the files are for
+# rather than by how a test happens to check them.
+evaluations/** -text

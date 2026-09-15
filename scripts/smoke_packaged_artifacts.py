@@ -140,6 +140,30 @@ class StdioServer:
         self._drain.start()
         self._next_id = 0
 
+        # Protocol counters. Every frame in either direction passes through `send`,
+        # `send_raw` or `read_message`, so counting there cannot be bypassed by a caller
+        # that builds its own payload. Unlike wall-clock time these are deterministic
+        # properties of the exchange, which is what makes them worth gating on.
+        self.reset_counters()
+
+    def reset_counters(self) -> None:
+        """Zero the protocol counters, so one iteration's traffic is attributable to it."""
+        self.frames_sent = 0
+        self.frames_received = 0
+        self.bytes_sent = 0
+        self.bytes_received = 0
+        self.tool_calls = 0
+
+    @property
+    def protocol_counters(self) -> dict[str, int]:
+        return {
+            "FramesSent": self.frames_sent,
+            "FramesReceived": self.frames_received,
+            "BytesSent": self.bytes_sent,
+            "BytesReceived": self.bytes_received,
+            "ToolCalls": self.tool_calls,
+        }
+
     def _drain_stderr(self) -> None:
         assert self._process.stderr is not None
         for line in self._process.stderr:
@@ -150,12 +174,12 @@ class StdioServer:
         return "\n".join(self._stderr)
 
     def send(self, payload: dict) -> None:
-        assert self._process.stdin is not None
-        self._process.stdin.write(json.dumps(payload) + "\n")
-        self._process.stdin.flush()
+        self.send_raw(json.dumps(payload))
 
     def send_raw(self, line: str) -> None:
         assert self._process.stdin is not None
+        self.frames_sent += 1
+        self.bytes_sent += len(line.encode("utf-8")) + 1
         self._process.stdin.write(line + "\n")
         self._process.stdin.flush()
 
@@ -178,6 +202,8 @@ class StdioServer:
             )
         if not result:
             raise SmokeError(f"server closed stdout unexpectedly; stderr:\n{self.stderr_text}")
+        self.frames_received += 1
+        self.bytes_received += len(result[0].encode("utf-8"))
         try:
             return json.loads(result[0])
         except json.JSONDecodeError as exc:
@@ -203,6 +229,7 @@ class StdioServer:
         return payload
 
     def call_tool_json(self, name: str, arguments: dict):
+        self.tool_calls += 1
         result = self.request("tools/call", {"name": name, "arguments": arguments})
         if result.get("isError"):
             raise SmokeError(f"tool {name} returned an error: {json.dumps(result)[:800]}")

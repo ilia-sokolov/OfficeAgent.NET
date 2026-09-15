@@ -35,6 +35,7 @@ this page to choose the shortest path for your scenario.
 | Edit a document that already has tracked changes | [Pending revisions](pending-revisions.md) | [Document plans](document-plans.md#validation-errors) |
 | Bound what an untrusted document can spend | [Ingestion limits](ingestion-limits.md) | [Operations](operations.md) |
 | Find out what the server supports before planning | [Capability discovery](capability-discovery.md) | [Document plans](document-plans.md) |
+| Measure a candidate, or check for a regression | [Benchmarks](benchmarks.md) | [Word preservation evidence](word-preservation-evidence.md) |
 
 ## Packages
 

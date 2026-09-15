@@ -333,7 +333,10 @@ models do not do that reliably. One exploratory run produced the following resul
 | Failed calls | 0 | 3 |
 
 This is an observation rather than a general benchmark: the original run did not preserve
-the model version and raw traces needed for reproduction. The inline run failed because the
+the model version and raw traces needed for reproduction. It is kept because the failure mode
+it shows is real, not because the numbers are measurements. For measurements that can be
+reproduced, see [benchmarks](benchmarks.md); engine performance and model behaviour are
+separate questions and the figures above are the latter. The inline run failed because the
 model reproduced 2,928 characters of base64 with one
 character wrong, then retried the same string twice. A document that arrives altered is
 refused as `invalid-argument` saying so, rather than as an unexplained error — but it

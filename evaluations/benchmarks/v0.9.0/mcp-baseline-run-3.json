@@ -1,0 +1,364 @@
+{
+  "SchemaVersion": "1.1",
+  "Environment": {
+    "Commit": "e24d913da402906c00fe3aec089beea0bfcb1064",
+    "CommitIsClean": false,
+    "Corpus": "packaged officeagent-mcp over stdio",
+    "RepetitionsPerScenario": 10,
+    "WarmupIterations": 2,
+    "Runtime": "packaged tool 0.8.0",
+    "OperatingSystem": "Windows 11",
+    "Architecture": "AMD64",
+    "ProcessorCount": 12,
+    "ServerGarbageCollection": false,
+    "Configuration": "Release",
+    "MeasurementMethod": "perf_counter wall clock around one stdio workflow against an installed tool. Protocol frames and bytes are counted at the stdio boundary and are exact. Managed allocation is not observable from this side and is recorded as zero.",
+    "StartedUtc": "2026-09-15T13:10:46.289566+00:00"
+  },
+  "Scenarios": [
+    {
+      "Name": "mcp-document-workflow",
+      "Description": "Create, inspect, preview, apply, find and export one document over stdio.",
+      "Inputs": [
+        "packaged officeagent-mcp"
+      ],
+      "WarmupIterations": 2,
+      "Iterations": [
+        {
+          "Index": 0,
+          "ElapsedMilliseconds": 18.510699999751523,
+          "AllocatedBytes": 0,
+          "OutputBytes": 2102,
+          "WorkUnits": 6,
+          "Succeeded": true,
+          "Failure": null,
+          "Protocol": {
+            "FramesSent": 6,
+            "FramesReceived": 6,
+            "BytesSent": 1542,
+            "BytesReceived": 11142,
+            "ToolCalls": 6
+          }
+        },
+        {
+          "Index": 1,
+          "ElapsedMilliseconds": 26.341799995861948,
+          "AllocatedBytes": 0,
+          "OutputBytes": 2106,
+          "WorkUnits": 6,
+          "Succeeded": true,
+          "Failure": null,
+          "Protocol": {
+            "FramesSent": 6,
+            "FramesReceived": 6,
+            "BytesSent": 1542,
+            "BytesReceived": 11266,
+            "ToolCalls": 6
+          }
+        },
+        {
+          "Index": 2,
+          "ElapsedMilliseconds": 21.268799995596055,
+          "AllocatedBytes": 0,
+          "OutputBytes": 2101,
+          "WorkUnits": 6,
+          "Succeeded": true,
+          "Failure": null,
+          "Protocol": {
+            "FramesSent": 6,
+            "FramesReceived": 6,
+            "BytesSent": 1542,
+            "BytesReceived": 11142,
+            "ToolCalls": 6
+          }
+        },
+        {
+          "Index": 3,
+          "ElapsedMilliseconds": 21.71000000089407,
+          "AllocatedBytes": 0,
+          "OutputBytes": 2107,
+          "WorkUnits": 6,
+          "Succeeded": true,
+          "Failure": null,
+          "Protocol": {
+            "FramesSent": 6,
+            "FramesReceived": 6,
+            "BytesSent": 1542,
+            "BytesReceived": 11286,
+            "ToolCalls": 6
+          }
+        },
+        {
+          "Index": 4,
+          "ElapsedMilliseconds": 18.921800001407973,
+          "AllocatedBytes": 0,
+          "OutputBytes": 2106,
+          "WorkUnits": 6,
+          "Succeeded": true,
+          "Failure": null,
+          "Protocol": {
+            "FramesSent": 6,
+            "FramesReceived": 6,
+            "BytesSent": 1542,
+            "BytesReceived": 11242,
+            "ToolCalls": 6
+          }
+        },
+        {
+          "Index": 5,
+          "ElapsedMilliseconds": 20.01880000170786,
+          "AllocatedBytes": 0,
+          "OutputBytes": 2104,
+          "WorkUnits": 6,
+          "Succeeded": true,
+          "Failure": null,
+          "Protocol": {
+            "FramesSent": 6,
+            "FramesReceived": 6,
+            "BytesSent": 1542,
+            "BytesReceived": 11146,
+            "ToolCalls": 6
+          }
+        },
+        {
+          "Index": 6,
+          "ElapsedMilliseconds": 20.66410000406904,
+          "AllocatedBytes": 0,
+          "OutputBytes": 2104,
+          "WorkUnits": 6,
+          "Succeeded": true,
+          "Failure": null,
+          "Protocol": {
+            "FramesSent": 6,
+            "FramesReceived": 6,
+            "BytesSent": 1542,
+            "BytesReceived": 11202,
+            "ToolCalls": 6
+          }
+        },
+        {
+          "Index": 7,
+          "ElapsedMilliseconds": 18.68139999714913,
+          "AllocatedBytes": 0,
+          "OutputBytes": 2104,
+          "WorkUnits": 6,
+          "Succeeded": true,
+          "Failure": null,
+          "Protocol": {
+            "FramesSent": 6,
+            "FramesReceived": 6,
+            "BytesSent": 1542,
+            "BytesReceived": 11138,
+            "ToolCalls": 6
+          }
+        },
+        {
+          "Index": 8,
+          "ElapsedMilliseconds": 19.26360000652494,
+          "AllocatedBytes": 0,
+          "OutputBytes": 2106,
+          "WorkUnits": 6,
+          "Succeeded": true,
+          "Failure": null,
+          "Protocol": {
+            "FramesSent": 6,
+            "FramesReceived": 6,
+            "BytesSent": 1543,
+            "BytesReceived": 11174,
+            "ToolCalls": 6
+          }
+        },
+        {
+          "Index": 9,
+          "ElapsedMilliseconds": 20.95740000368096,
+          "AllocatedBytes": 0,
+          "OutputBytes": 2105,
+          "WorkUnits": 6,
+          "Succeeded": true,
+          "Failure": null,
+          "Protocol": {
+            "FramesSent": 6,
+            "FramesReceived": 6,
+            "BytesSent": 1543,
+            "BytesReceived": 11222,
+            "ToolCalls": 6
+          }
+        }
+      ],
+      "FailedIterations": 0,
+      "ProcessPeakWorkingSetBytes": 0
+    },
+    {
+      "Name": "mcp-template-batch",
+      "Description": "Import a template, discover it, preflight a four-item batch and commit it bound to that preview, over stdio.",
+      "Inputs": [
+        "packaged officeagent-mcp"
+      ],
+      "WarmupIterations": 2,
+      "Iterations": [
+        {
+          "Index": 0,
+          "ElapsedMilliseconds": 37.96180000063032,
+          "AllocatedBytes": 0,
+          "OutputBytes": 0,
+          "WorkUnits": 4,
+          "Succeeded": true,
+          "Failure": null,
+          "Protocol": {
+            "FramesSent": 4,
+            "FramesReceived": 4,
+            "BytesSent": 3562,
+            "BytesReceived": 13462,
+            "ToolCalls": 4
+          }
+        },
+        {
+          "Index": 1,
+          "ElapsedMilliseconds": 37.19679999630898,
+          "AllocatedBytes": 0,
+          "OutputBytes": 0,
+          "WorkUnits": 4,
+          "Succeeded": true,
+          "Failure": null,
+          "Protocol": {
+            "FramesSent": 4,
+            "FramesReceived": 4,
+            "BytesSent": 3562,
+            "BytesReceived": 13458,
+            "ToolCalls": 4
+          }
+        },
+        {
+          "Index": 2,
+          "ElapsedMilliseconds": 32.34640000300715,
+          "AllocatedBytes": 0,
+          "OutputBytes": 0,
+          "WorkUnits": 4,
+          "Succeeded": true,
+          "Failure": null,
+          "Protocol": {
+            "FramesSent": 4,
+            "FramesReceived": 4,
+            "BytesSent": 3562,
+            "BytesReceived": 13462,
+            "ToolCalls": 4
+          }
+        },
+        {
+          "Index": 3,
+          "ElapsedMilliseconds": 31.07770000497112,
+          "AllocatedBytes": 0,
+          "OutputBytes": 0,
+          "WorkUnits": 4,
+          "Succeeded": true,
+          "Failure": null,
+          "Protocol": {
+            "FramesSent": 4,
+            "FramesReceived": 4,
+            "BytesSent": 3562,
+            "BytesReceived": 13462,
+            "ToolCalls": 4
+          }
+        },
+        {
+          "Index": 4,
+          "ElapsedMilliseconds": 32.38829999463633,
+          "AllocatedBytes": 0,
+          "OutputBytes": 0,
+          "WorkUnits": 4,
+          "Succeeded": true,
+          "Failure": null,
+          "Protocol": {
+            "FramesSent": 4,
+            "FramesReceived": 4,
+            "BytesSent": 3564,
+            "BytesReceived": 13464,
+            "ToolCalls": 4
+          }
+        },
+        {
+          "Index": 5,
+          "ElapsedMilliseconds": 34.50929999962682,
+          "AllocatedBytes": 0,
+          "OutputBytes": 0,
+          "WorkUnits": 4,
+          "Succeeded": true,
+          "Failure": null,
+          "Protocol": {
+            "FramesSent": 4,
+            "FramesReceived": 4,
+            "BytesSent": 3566,
+            "BytesReceived": 13464,
+            "ToolCalls": 4
+          }
+        },
+        {
+          "Index": 6,
+          "ElapsedMilliseconds": 42.31639999488834,
+          "AllocatedBytes": 0,
+          "OutputBytes": 0,
+          "WorkUnits": 4,
+          "Succeeded": true,
+          "Failure": null,
+          "Protocol": {
+            "FramesSent": 4,
+            "FramesReceived": 4,
+            "BytesSent": 3566,
+            "BytesReceived": 13466,
+            "ToolCalls": 4
+          }
+        },
+        {
+          "Index": 7,
+          "ElapsedMilliseconds": 37.82360000332119,
+          "AllocatedBytes": 0,
+          "OutputBytes": 0,
+          "WorkUnits": 4,
+          "Succeeded": true,
+          "Failure": null,
+          "Protocol": {
+            "FramesSent": 4,
+            "FramesReceived": 4,
+            "BytesSent": 3566,
+            "BytesReceived": 13466,
+            "ToolCalls": 4
+          }
+        },
+        {
+          "Index": 8,
+          "ElapsedMilliseconds": 30.38370000285795,
+          "AllocatedBytes": 0,
+          "OutputBytes": 0,
+          "WorkUnits": 4,
+          "Succeeded": true,
+          "Failure": null,
+          "Protocol": {
+            "FramesSent": 4,
+            "FramesReceived": 4,
+            "BytesSent": 3575,
+            "BytesReceived": 13483,
+            "ToolCalls": 4
+          }
+        },
+        {
+          "Index": 9,
+          "ElapsedMilliseconds": 29.652299999725074,
+          "AllocatedBytes": 0,
+          "OutputBytes": 0,
+          "WorkUnits": 4,
+          "Succeeded": true,
+          "Failure": null,
+          "Protocol": {
+            "FramesSent": 4,
+            "FramesReceived": 4,
+            "BytesSent": 3575,
+            "BytesReceived": 13481,
+            "ToolCalls": 4
+          }
+        }
+      ],
+      "FailedIterations": 0,
+      "ProcessPeakWorkingSetBytes": 0
+    }
+  ]
+}
