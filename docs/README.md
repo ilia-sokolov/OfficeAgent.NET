@@ -21,6 +21,7 @@ this page to choose the shortest path for your scenario.
 | Create or update a PowerPoint deck | [PowerPoint support](powerpoint.md#creating-a-deck) | [Generating a deck](powerpoint.md#generating-a-deck) |
 | Inspect or update an Excel workbook | [Excel support](excel.md) | [Document plans](document-plans.md) |
 | Generate many documents from a template | [Template population](document-workflows.md#populate-a-template-batch) | [TemplateBatch sample](../samples/TemplateBatch/) |
+| Check a template batch before it writes | [Template preflight](document-workflows.md#preflight-a-template-batch) | [Capability discovery](capability-discovery.md) |
 | Compare two Word documents and create a redline | [Document comparison](document-workflows.md#compare-two-word-documents) | [DocumentComparison sample](../samples/DocumentComparison/) |
 | Assemble a proposal and appendices | [Word document assembly](document-assembly.md) | [DocumentAssembly sample](../samples/DocumentAssembly/) |
 | Add document tools to an agent | [Agent integration](agent-integration.md) | [Document providers](document-providers.md) |

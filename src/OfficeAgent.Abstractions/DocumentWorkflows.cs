@@ -59,8 +59,21 @@ public sealed class TemplateBatchRequest
     public IReadOnlyList<TemplateBatchItem> Items { get; init; } = Array.Empty<TemplateBatchItem>();
     /// <summary>Gets whether later items run after one item fails.</summary>
     public bool ContinueOnError { get; init; } = true;
-    /// <summary>Gets the maximum accepted item count.</summary>
+    /// <summary>
+    /// Gets the maximum accepted item count requested by the caller.
+    /// </summary>
+    /// <remarks>
+    /// This is a request, not a ceiling. The effective limit is the stricter of this and
+    /// the host's <see cref="TemplateBatchLimits"/>, so raising it here cannot raise the
+    /// host's budget.
+    /// </remarks>
     public int MaximumDocuments { get; init; } = 100;
+
+    /// <summary>
+    /// Gets budgets this request asks to be held to, which are intersected with the
+    /// host's. Omit it to run under the host budgets alone.
+    /// </summary>
+    public TemplateBatchLimits? Limits { get; init; }
 }
 
 /// <summary>A stable diagnostic returned by a higher-level document workflow.</summary>
@@ -92,6 +105,13 @@ public sealed class TemplateBatchItemResult
     public string OutputName { get; init; } = string.Empty;
     /// <summary>Gets whether the provider saved the output.</summary>
     public bool Committed { get; init; }
+
+    /// <summary>
+    /// Gets how far this item got. <see cref="Committed"/> stays the simple question
+    /// "is there an output"; this distinguishes a refusal from an item never attempted
+    /// and from a write whose fate is unknown.
+    /// </summary>
+    public TemplateItemOutcome Outcome { get; init; } = TemplateItemOutcome.Failed;
     /// <summary>Gets the saved output reference.</summary>
     public DocumentReference? Document { get; init; }
     /// <summary>Gets the apply report when a plan reached preview or commit.</summary>

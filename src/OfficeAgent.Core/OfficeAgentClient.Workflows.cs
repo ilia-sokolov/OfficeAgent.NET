@@ -21,6 +21,16 @@ public sealed partial class OfficeAgentClient
         if (binding is null) throw new ArgumentNullException(nameof(binding));
 
         var inspect = await InspectAsync(template, InspectOptions.Default, cancellationToken).ConfigureAwait(false);
+        return BuildTemplatePlanCore(inspect, binding);
+    }
+
+    /// <summary>
+    /// Resolves a binding against an inspection already in hand. Preflight uses this so a
+    /// whole batch is validated against one reading of the template rather than one per
+    /// item, which is also what makes the preview's template hash meaningful.
+    /// </summary>
+    internal static TemplatePlanResult BuildTemplatePlanCore(InspectResult inspect, TemplateBinding binding)
+    {
         var diagnostics = new List<WorkflowDiagnostic>();
         var operations = new List<PlanOperation>();
         var slots = inspect.StructuralAnchors
@@ -124,20 +134,69 @@ public sealed partial class OfficeAgentClient
     /// Produces separate provider documents from one template. Each output is validated
     /// and saved atomically and has its own result and audit receipt.
     /// </summary>
+    public Task<TemplateBatchResult> PopulateTemplateBatchAsync(
+        DocumentReference template,
+        TemplateBatchRequest request,
+        CancellationToken cancellationToken = default) =>
+        PopulateTemplateBatchAsync(template, request, expectedToken: null, cancellationToken);
+
+    /// <summary>
+    /// Populates a template batch, refusing the commit when the template or the batch has
+    /// changed since the preview issued the supplied token.
+    /// </summary>
     public async Task<TemplateBatchResult> PopulateTemplateBatchAsync(
         DocumentReference template,
         TemplateBatchRequest request,
+        TemplateBatchToken? expectedToken,
         CancellationToken cancellationToken = default)
     {
         if (template is null) throw new ArgumentNullException(nameof(template));
         if (request is null) throw new ArgumentNullException(nameof(request));
-        if (request.MaximumDocuments <= 0 || request.Items.Count > request.MaximumDocuments)
-            throw new ArgumentOutOfRangeException(nameof(request),
-                $"Template batches must contain at most {request.MaximumDocuments} documents.");
+        if (request.MaximumDocuments <= 0)
+            throw new ArgumentOutOfRangeException(nameof(request), "MaximumDocuments must be positive.");
+
+        // Every batch is preflighted, asked for or not. A batch that cannot validate is
+        // refused before any output exists rather than leaving a prefix of it in storage.
+        var preview = await PreviewTemplateBatchAsync(template, request, cancellationToken)
+            .ConfigureAwait(false);
+
+        if (expectedToken is not null && !Matches(expectedToken, preview.Token))
+            return Refused(request,
+                "stale-batch-preview",
+                "The template or the batch has changed since it was previewed, so this commit would " +
+                "apply intent nobody reviewed. Preview again and commit the new token.");
+
+        if (preview.Diagnostics.Count > 0)
+            return new TemplateBatchResult
+            {
+                Items = request.Items.Select(item => new TemplateBatchItemResult
+                {
+                    OutputName = item.OutputName,
+                    Outcome = TemplateItemOutcome.Failed,
+                    Diagnostics = preview.Diagnostics
+                }).ToArray()
+            };
 
         var results = new List<TemplateBatchItemResult>();
+        bool stopped = false;
         foreach (var item in request.Items)
         {
+            if (stopped)
+            {
+                results.Add(new TemplateBatchItemResult
+                {
+                    OutputName = item.OutputName,
+                    Outcome = TemplateItemOutcome.Skipped,
+                    Diagnostics = new[]
+                    {
+                        Diagnostic("item-skipped",
+                            "An earlier item failed and this batch stops on error, so this output was " +
+                            "never attempted and does not exist.", item.OutputName)
+                    }
+                });
+                continue;
+            }
+
             cancellationToken.ThrowIfCancellationRequested();
             var plan = await BuildTemplatePlanAsync(template, item.Binding, cancellationToken).ConfigureAwait(false);
             if (!plan.IsValid || plan.Plan is null)
@@ -145,9 +204,10 @@ public sealed partial class OfficeAgentClient
                 results.Add(new TemplateBatchItemResult
                 {
                     OutputName = item.OutputName,
+                    Outcome = TemplateItemOutcome.Failed,
                     Diagnostics = plan.Diagnostics
                 });
-                if (!request.ContinueOnError) break;
+                if (!request.ContinueOnError) stopped = true;
                 continue;
             }
 
@@ -162,26 +222,65 @@ public sealed partial class OfficeAgentClient
                 {
                     OutputName = item.OutputName,
                     Committed = applied.Committed,
+                    Outcome = applied.Committed ? TemplateItemOutcome.Committed : TemplateItemOutcome.Failed,
                     Document = applied.Document,
                     Report = applied.Report,
                     Receipt = applied.Receipt,
                     Diagnostics = applied.Report.Errors.Select(error =>
                         Diagnostic(error.Code, error.Message, error.Target?.Id)).ToArray()
                 });
-                if (!applied.Committed && !request.ContinueOnError) break;
+                if (!applied.Committed && !request.ContinueOnError) stopped = true;
             }
             catch (DocumentProviderException ex)
             {
+                // A provider that already accepted the bytes and then failed leaves an
+                // output that may or may not exist. Reporting that as a plain failure
+                // would be a guess, and a caller acting on it would either lose the file
+                // or create a duplicate.
+                bool decidedBeforeAnyWrite = ex.Code is ProviderErrorCode.AlreadyExists
+                    or ProviderErrorCode.AccessDenied
+                    or ProviderErrorCode.ExtensionNotAllowed
+                    or ProviderErrorCode.InvalidArgument
+                    or ProviderErrorCode.ContentTooLarge
+                    or ProviderErrorCode.ConfigurationError
+                    or ProviderErrorCode.NotFound;
+
                 results.Add(new TemplateBatchItemResult
                 {
                     OutputName = item.OutputName,
-                    Diagnostics = new[] { Diagnostic(ToKebabCase(ex.Code.ToString()), ex.Message, item.OutputName) }
+                    Outcome = decidedBeforeAnyWrite
+                        ? TemplateItemOutcome.Failed
+                        : TemplateItemOutcome.Uncertain,
+                    Diagnostics = new[]
+                    {
+                        Diagnostic(ToKebabCase(ex.Code.ToString()),
+                            decidedBeforeAnyWrite
+                                ? ex.Message
+                                : ex.Message + " Storage may already hold this output; do not retry the " +
+                                  "same name blindly. Inspect the destination and reconcile it.",
+                            item.OutputName)
+                    }
                 });
-                if (!request.ContinueOnError) break;
+                if (!request.ContinueOnError) stopped = true;
             }
         }
         return new TemplateBatchResult { Items = results };
     }
+
+    private static bool Matches(TemplateBatchToken expected, TemplateBatchToken actual) =>
+        string.Equals(expected.TemplateSha256, actual.TemplateSha256, StringComparison.OrdinalIgnoreCase) &&
+        string.Equals(expected.BatchSha256, actual.BatchSha256, StringComparison.OrdinalIgnoreCase);
+
+    private static TemplateBatchResult Refused(TemplateBatchRequest request, string code, string message) =>
+        new()
+        {
+            Items = request.Items.Select(item => new TemplateBatchItemResult
+            {
+                OutputName = item.OutputName,
+                Outcome = TemplateItemOutcome.Failed,
+                Diagnostics = new[] { Diagnostic(code, message, item.OutputName) }
+            }).ToArray()
+        };
 
     /// <summary>Populates a template batch by opaque connection and document ids.</summary>
     public Task<TemplateBatchResult> PopulateTemplateBatchAsync(
