@@ -37,6 +37,7 @@ public sealed class MemoryDocumentProvider : IDocumentProvider, IDocumentCreatin
 
     private readonly ConcurrentDictionary<string, Entry> _documents = new(StringComparer.Ordinal);
     private readonly MemoryDocumentProviderOptions _options;
+    private readonly object _mutationGate = new();
 
     /// <summary>Initializes a provider for one connection.</summary>
     public MemoryDocumentProvider(string connectionId, MemoryDocumentProviderOptions? options = null)
@@ -61,7 +62,14 @@ public sealed class MemoryDocumentProvider : IDocumentProvider, IDocumentCreatin
     public int Count => _documents.Count;
 
     /// <summary>Gets the total size of everything currently held, in bytes.</summary>
-    public long TotalBytes => _documents.Values.Sum(entry => (long)entry.Bytes.Length);
+    public long TotalBytes
+    {
+        get
+        {
+            lock (_mutationGate)
+                return TotalBytesUnsafe();
+        }
+    }
 
     /// <summary>
     /// Adds a document the caller already holds the bytes of, and returns its reference.
@@ -75,17 +83,14 @@ public sealed class MemoryDocumentProvider : IDocumentProvider, IDocumentCreatin
         var safeName = ValidateName(name);
         Require(content.LongLength <= _options.MaximumBytes, ProviderErrorCode.ContentTooLarge,
             $"Document exceeds the configured maximum of {_options.MaximumBytes} bytes.", itemId: null);
-        RequireRoom(content.LongLength, replacing: 0);
+        var owned = content.ToArray();
 
-        var itemId = Guid.NewGuid().ToString("N");
-        var entry = new Entry(safeName, content, Version(content));
-        _documents[itemId] = entry;
-
-        return Reference(itemId, entry);
+        lock (_mutationGate)
+            return AddUnsafe(safeName, owned);
     }
 
     /// <summary>Returns the bytes held under an item id.</summary>
-    public byte[] Read(string itemId) => Locate(itemId).Bytes;
+    public byte[] Read(string itemId) => Locate(itemId).Bytes.ToArray();
 
     /// <summary>Returns the current reference for an item id, without reading its bytes.</summary>
     public DocumentReference Describe(string itemId) => Reference(itemId, Locate(itemId));
@@ -151,27 +156,32 @@ public sealed class MemoryDocumentProvider : IDocumentProvider, IDocumentCreatin
             throw new DocumentVersionConflictException(
                 expectedVersion!, existing.Version, ProviderName, ConnectionId, source.ItemId);
 
-        var bytes = await ReadAllAsync(content, cancellationToken).ConfigureAwait(false);
+        var bytes = await ReadAllAsync(content, source.ItemId, cancellationToken).ConfigureAwait(false);
         Require(bytes.LongLength <= _options.MaximumBytes, ProviderErrorCode.ContentTooLarge,
             $"Document exceeds the configured maximum of {_options.MaximumBytes} bytes.", source.ItemId);
 
-        if (options.Mode == SaveMode.Replace)
+        lock (_mutationGate)
         {
-            RequireRoom(bytes.LongLength, replacing: existing.Bytes.LongLength);
-            var replaced = new Entry(existing.Name, bytes, Version(bytes));
-            _documents[source.ItemId] = replaced;
-            return Reference(source.ItemId, replaced);
+            // The stream read above may take arbitrarily long. Re-read and re-check under
+            // the same gate as the mutation so another successful writer cannot be lost.
+            var current = Locate(source.ItemId);
+            RequireExpectedVersion(expectedVersion, current, source.ItemId);
+
+            if (options.Mode == SaveMode.Replace)
+            {
+                RequireRoomUnsafe(bytes.LongLength, replacing: current.Bytes.LongLength);
+                var replaced = new Entry(current.Name, bytes, Version(bytes));
+                _documents[source.ItemId] = replaced;
+                return Reference(source.ItemId, replaced);
+            }
+
+            RequireRoomUnsafe(bytes.LongLength, replacing: 0);
+            var name = string.IsNullOrWhiteSpace(options.NewName)
+                ? NextVersionedNameUnsafe(current.Name)
+                : ValidateName(options.NewName!);
+
+            return AddUnsafe(name, bytes, roomAlreadyChecked: true);
         }
-
-        RequireRoom(bytes.LongLength, replacing: 0);
-        var name = string.IsNullOrWhiteSpace(options.NewName)
-            ? NextVersionedName(existing.Name)
-            : ValidateName(options.NewName!);
-
-        var itemId = Guid.NewGuid().ToString("N");
-        var created = new Entry(name, bytes, Version(bytes));
-        _documents[itemId] = created;
-        return Reference(itemId, created);
     }
 
     /// <inheritdoc />
@@ -183,7 +193,8 @@ public sealed class MemoryDocumentProvider : IDocumentProvider, IDocumentCreatin
     public Task RemoveAsync(DocumentReference reference, CancellationToken cancellationToken = default)
     {
         if (reference is null) throw new ArgumentNullException(nameof(reference));
-        _documents.TryRemove(reference.ItemId, out _);
+        lock (_mutationGate)
+            _documents.TryRemove(reference.ItemId, out _);
         return Task.CompletedTask;
     }
 
@@ -194,12 +205,15 @@ public sealed class MemoryDocumentProvider : IDocumentProvider, IDocumentCreatin
         if (content is null) throw new ArgumentNullException(nameof(content));
 
         var safeName = ValidateName(name);
-        Require(!_documents.Values.Any(entry => string.Equals(entry.Name, safeName, StringComparison.OrdinalIgnoreCase)),
-            ProviderErrorCode.AlreadyExists,
-            $"A document named '{safeName}' is already open in this connection.", itemId: null);
+        var bytes = await ReadAllAsync(content, itemId: null, cancellationToken).ConfigureAwait(false);
 
-        var bytes = await ReadAllAsync(content, cancellationToken).ConfigureAwait(false);
-        return Add(safeName, bytes);
+        lock (_mutationGate)
+        {
+            Require(!_documents.Values.Any(entry => string.Equals(entry.Name, safeName, StringComparison.OrdinalIgnoreCase)),
+                ProviderErrorCode.AlreadyExists,
+                $"A document named '{safeName}' is already open in this connection.", itemId: null);
+            return AddUnsafe(safeName, bytes);
+        }
     }
 
     // ── Internals ────────────────────────────────────────────────────────
@@ -251,9 +265,9 @@ public sealed class MemoryDocumentProvider : IDocumentProvider, IDocumentCreatin
     /// Keeps the connection inside its total budget. The store is memory, so an
     /// unbounded one is a leak with a friendly name.
     /// </summary>
-    private void RequireRoom(long incoming, long replacing)
+    private void RequireRoomUnsafe(long incoming, long replacing)
     {
-        var projected = TotalBytes - replacing + incoming;
+        var projected = TotalBytesUnsafe() - replacing + incoming;
         Require(projected <= _options.MaximumTotalBytes, ProviderErrorCode.ContentTooLarge,
             $"The '{ConnectionId}' connection holds documents in memory and is limited to " +
             $"{_options.MaximumTotalBytes} bytes in total; this would take it to {projected}. " +
@@ -262,7 +276,7 @@ public sealed class MemoryDocumentProvider : IDocumentProvider, IDocumentCreatin
     }
 
     /// <summary>A sibling name for a NewVersion save, matching the filesystem provider's shape.</summary>
-    private string NextVersionedName(string name)
+    private string NextVersionedNameUnsafe(string name)
     {
         var stem = Path.GetFileNameWithoutExtension(name);
         var extension = Path.GetExtension(name);
@@ -275,13 +289,51 @@ public sealed class MemoryDocumentProvider : IDocumentProvider, IDocumentCreatin
         }
     }
 
-    private static async Task<byte[]> ReadAllAsync(Stream content, CancellationToken cancellationToken)
+    private async Task<byte[]> ReadAllAsync(
+        Stream content,
+        string? itemId,
+        CancellationToken cancellationToken)
     {
-        if (content is MemoryStream ready) return ready.ToArray();
+        if (content.CanSeek && content.Length - content.Position > _options.MaximumBytes)
+            throw Error(
+                ProviderErrorCode.ContentTooLarge,
+                $"Document exceeds the configured maximum of {_options.MaximumBytes} bytes.",
+                itemId);
 
         using var buffer = new MemoryStream();
-        await content.CopyToAsync(buffer, 81920, cancellationToken).ConfigureAwait(false);
+        var chunk = new byte[81920];
+        while (true)
+        {
+            var read = await content.ReadAsync(chunk, 0, chunk.Length, cancellationToken).ConfigureAwait(false);
+            if (read == 0) break;
+            if (buffer.Length + read > _options.MaximumBytes)
+                throw Error(
+                    ProviderErrorCode.ContentTooLarge,
+                    $"Document exceeds the configured maximum of {_options.MaximumBytes} bytes.",
+                    itemId);
+            await buffer.WriteAsync(chunk, 0, read, cancellationToken).ConfigureAwait(false);
+        }
         return buffer.ToArray();
+    }
+
+    private DocumentReference AddUnsafe(string name, byte[] ownedContent, bool roomAlreadyChecked = false)
+    {
+        if (!roomAlreadyChecked) RequireRoomUnsafe(ownedContent.LongLength, replacing: 0);
+
+        var itemId = Guid.NewGuid().ToString("N");
+        var entry = new Entry(name, ownedContent, Version(ownedContent));
+        _documents[itemId] = entry;
+        return Reference(itemId, entry);
+    }
+
+    private long TotalBytesUnsafe() => _documents.Values.Sum(entry => (long)entry.Bytes.Length);
+
+    private void RequireExpectedVersion(string? expectedVersion, Entry current, string itemId)
+    {
+        if (!string.IsNullOrEmpty(expectedVersion) &&
+            !string.Equals(expectedVersion, current.Version, StringComparison.Ordinal))
+            throw new DocumentVersionConflictException(
+                expectedVersion!, current.Version, ProviderName, ConnectionId, itemId);
     }
 
     private static string Version(byte[] bytes)

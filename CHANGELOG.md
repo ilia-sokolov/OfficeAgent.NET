@@ -3,7 +3,71 @@
 Notable changes per release. The body of each version section is also the text used for the
 corresponding GitHub release.
 
-## 0.9.0 — unreleased
+## 0.9.0 — 2026-09-16
+
+### Breaking changes and migration
+
+- **Edit plans are now checked against a wire contract.** A plan carrying an unknown
+  `contractVersion` is rejected with the stable code `contract-mismatch` before any provider
+  is touched. Omitting the field keeps the legacy `0.2` behaviour, and the only value accepted
+  explicitly is `"0.2"`. Plans with unknown properties, unknown operations or unknown enum
+  values are rejected with `invalid-json` rather than being silently ignored. A v0.8 plan that
+  omitted the field, or set it to `0.2`, still applies with identical change semantics.
+  Migration: send no `contractVersion`, or exactly `"0.2"`, and stop sending fields the schema
+  does not define. See [document plans](docs/document-plans.md).
+
+- **Host resource ceilings are now enforced on every ingested package.** Seven limits bound
+  compressed size, expanded size, entry count, XML characters, nesting depth, expansion ratio
+  and part count. A package over a limit is refused with `input-too-large`, and a damaged or
+  hostile package with `malformed-package`, both before any content is parsed. These are host
+  ceilings: a request may narrow them and can never raise them. Documents that worked in v0.8
+  are unaffected unless they exceed a ceiling, in which case they are now refused rather than
+  processed. Migration: if you handle very large documents, set the limits you need on the
+  host rather than relying on the defaults. See [ingestion limits](docs/ingestion-limits.md).
+
+- A Word edit that would overlap an existing pending revision is now refused with
+  `revision-overlap` instead of producing a redline that could not be rejected back to the
+  original. This fixes silent content corruption; an edit that v0.8 accepted may now be
+  refused, which is the point.
+
+### Added
+
+- Template preflight: `discover_template` reports a template's scalar slots, image and native
+  chart slots and repeating rows; `preview_template_batch` validates a whole batch without
+  writing and returns a token binding that review to the exact template bytes and batch; and
+  `populate_template_batch` accepts that token so a commit whose inputs changed after review is
+  refused with `stale-batch-preview`. Available on the direct API, the Agent Framework tools
+  and the MCP server.
+- Typed template values: a binding can place an image or set the data of a native chart the
+  template already contains, bounded by per-batch media limits.
+- Capability discovery: `describe_capabilities` reports the accepted plan contract, every
+  registered format with its verbs and change modes, the host's ceilings, and the connections
+  available with the capabilities held on each.
+- Word comparison now covers table cell text where the table geometry is unchanged, and no
+  longer reports a difference when the same words are merely split differently across equally
+  formatted runs. Findings in covered areas survive a refusal elsewhere, so a blocked
+  comparison still reports what it saw.
+- Reproducible benchmarks over the tracked acceptance corpus, for both the direct API and an
+  installed MCP server, with published raw runs and a documented threshold policy. See
+  [benchmarks](docs/benchmarks.md).
+- Open XML SDK interoperability guidance for applications that use both this library and the
+  SDK directly. See [SDK interoperability](docs/sdk-interoperability.md).
+
+### Fixed
+
+- Concurrent replacement saves through the in-memory session provider now perform the version
+  check and mutation atomically. One of two writers using the same version succeeds and the other
+  receives a version conflict instead of both being told they committed.
+- Session import now validates the package against every configured ingestion ceiling before
+  retaining it, and inline base64 admission uses the host's configured compressed-size ceiling.
+- Word comparison now attributes table-cell changes to the table coverage area and does not report
+  an unchanged table as exceeding the difference limit when body changes exactly fill that limit.
+- Concurrent saves through the filesystem provider no longer lose an update. The version check
+  and the publish are now one step per document, so two writers cannot both be told they
+  succeeded while one write is discarded.
+- A package that declares a main part but omits it is refused as `malformed-package` at the
+  boundary instead of escaping later as an unhandled exception.
+- Comparison findings are no longer discarded when an unsupported area blocks the plan.
 
 - Made a failed render fail closed. `RenderResult.Pages` and the new `RenderResult.PageCount`
   now throw `RenderFailedException`, carrying the stable failure code, when rendering did not

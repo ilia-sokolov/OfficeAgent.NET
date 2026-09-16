@@ -1155,7 +1155,16 @@ public sealed class OfficeAgentTools
         {
             await DemandAccessAsync(connectionId, ConnectionCapability.Create, cancellationToken).ConfigureAwait(false);
             var store = Ephemeral(connectionId);
-            var reference = store.Add(name, DecodeContent(contentBase64));
+            var bytes = DecodeContent(contentBase64);
+
+            // Import is an ingestion entry point, not an opaque byte cache. Open through
+            // the engine before retaining anything so every package ceiling and malformed
+            // package check applies with the host's configured policy.
+            _client.Inspect(
+                new StreamHandle(new MemoryStream(bytes, writable: false), name),
+                new InspectOptions { Fidelity = Fidelity.Outline });
+
+            var reference = store.Add(name, bytes);
 
             return JsonSerializer.Serialize(new
             {
@@ -1211,7 +1220,7 @@ public sealed class OfficeAgentTools
     };
 
     /// <summary>Decodes the document a caller supplied inline, naming the fix when it is not base64.</summary>
-    private static byte[] DecodeContent(string contentBase64)
+    private byte[] DecodeContent(string contentBase64)
     {
         if (string.IsNullOrWhiteSpace(contentBase64))
             throw new ArgumentException(
@@ -1221,7 +1230,7 @@ public sealed class OfficeAgentTools
         // oversized payload never reaches Convert.FromBase64String, which would allocate
         // the decoded array before anything could inspect it.
         long decoded = (long)contentBase64.Length / 4 * 3;
-        long ceiling = OpenXmlIngestionLimits.Default.MaximumCompressedBytes;
+        long ceiling = _client.DescribeCapabilities().Limits.MaximumCompressedBytes;
         if (decoded > ceiling)
             throw new OpenXmlIngestionLimitException(
                 "MaximumCompressedBytes", ceiling, decoded,

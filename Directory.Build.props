@@ -8,7 +8,7 @@
   </PropertyGroup>
 
   <PropertyGroup>
-    <Version>0.8.0</Version>
+    <Version>0.9.0</Version>
     <Authors>Ilia Sokolov</Authors>
     <Company>Ilia Sokolov</Company>
     <Product>OfficeAgent.NET</Product>

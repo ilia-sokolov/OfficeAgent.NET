@@ -475,6 +475,8 @@ public sealed partial class OfficeAgentClient
             diagnostics.Add(Diagnostic("comparison-difference-limit-exceeded",
                 $"The comparison reached the {options.MaximumDifferences}-difference limit.", "body"));
 
+        var bodyDifferenceCount = differences.Count;
+
         // Cell text, but only once the table's shape is known to be identical. Geometry is
         // checked by the text-stripped table signature below, so an aligned cell pair
         // really is the same cell in both documents rather than two cells that happen to
@@ -500,7 +502,11 @@ public sealed partial class OfficeAgentClient
                     Operations = operations
                 }
                 : null,
-            BuildCoverage(differences, diagnostics, areaChanges));
+            BuildCoverage(
+                bodyDifferenceCount,
+                differences.Count - bodyDifferenceCount,
+                diagnostics,
+                areaChanges));
     }
 
     private static void ProcessHunk(
@@ -805,16 +811,16 @@ public sealed partial class OfficeAgentClient
 
         for (var i = 0; i < beforeCells.Count; i++)
         {
+            var left = beforeCells[i];
+            var right = afterCells[i];
+            if (string.Equals(left.Text, right.Text, StringComparison.Ordinal)) continue;
+
             if (differences.Count >= options.MaximumDifferences)
             {
                 diagnostics.Add(Diagnostic("comparison-difference-limit-exceeded",
                     $"The comparison reached the {options.MaximumDifferences}-difference limit.", "tables"));
                 return;
             }
-
-            var left = beforeCells[i];
-            var right = afterCells[i];
-            if (string.Equals(left.Text, right.Text, StringComparison.Ordinal)) continue;
 
             if (i >= markupBefore.Count || i >= markupAfter.Count ||
                 !string.Equals(markupBefore[i], markupAfter[i], StringComparison.Ordinal))
@@ -952,8 +958,8 @@ public sealed partial class OfficeAgentClient
     private static readonly IReadOnlyDictionary<string, string> AreaMessages =
         new Dictionary<string, string>(StringComparer.Ordinal)
         {
-            ["tables"] = "Table content or geometry differs. This comparison covers free body " +
-                         "paragraphs only, so the table difference is reported but not planned.",
+            ["tables"] = "Table geometry or unsupported table content differs. Cell text is " +
+                         "compared only when geometry and supported markup remain unchanged.",
             ["images"] = "Embedded image bytes or drawings differ. Image content is not compared, " +
                          "so the difference is reported but not planned.",
             ["notes"] = "Footnote or endnote content differs. Note content is not compared, so the " +
@@ -1115,25 +1121,30 @@ public sealed partial class OfficeAgentClient
     /// looked at.
     /// </summary>
     private static IReadOnlyList<ComparisonArea> BuildCoverage(
-        IReadOnlyList<DocumentDifference> differences,
+        int bodyDifferenceCount,
+        int tableDifferenceCount,
         IReadOnlyList<WorkflowDiagnostic> diagnostics,
         IReadOnlyDictionary<string, bool> areaChanges)
     {
+        var bodyDiagnostic = diagnostics.FirstOrDefault(diagnostic =>
+            (diagnostic.Code is "comparison-difference-limit-exceeded"
+                or "comparison-paragraph-limit-exceeded"
+                or "unsupported-existing-revisions") &&
+            !string.Equals(diagnostic.Path, "tables", StringComparison.Ordinal));
+        var tableDiagnostic = diagnostics.FirstOrDefault(diagnostic =>
+            diagnostic.Code is "unsupported-table-change" or "unsupported-table-markup-change" ||
+            (diagnostic.Code == "comparison-difference-limit-exceeded" &&
+             string.Equals(diagnostic.Path, "tables", StringComparison.Ordinal)));
+
         var coverage = new List<ComparisonArea>
         {
             new()
             {
                 Name = "bodyParagraphs",
-                State = diagnostics.Any(diagnostic =>
-                            diagnostic.Code is "comparison-difference-limit-exceeded"
-                                or "comparison-paragraph-limit-exceeded"
-                                or "unsupported-existing-revisions")
+                State = bodyDiagnostic is not null
                     ? ComparisonAreaState.Blocked
-                    : differences.Count > 0 ? ComparisonAreaState.Changed : ComparisonAreaState.Unchanged,
-                Code = diagnostics.FirstOrDefault(diagnostic =>
-                    diagnostic.Code is "comparison-difference-limit-exceeded"
-                        or "comparison-paragraph-limit-exceeded"
-                        or "unsupported-existing-revisions")?.Code
+                    : bodyDifferenceCount > 0 ? ComparisonAreaState.Changed : ComparisonAreaState.Unchanged,
+                Code = bodyDiagnostic?.Code
             },
             new()
             {
@@ -1146,10 +1157,24 @@ public sealed partial class OfficeAgentClient
                 Code = diagnostics.FirstOrDefault(diagnostic =>
                     diagnostic.Code is "unsupported-style-change"
                         or "unsupported-paragraph-markup-change")?.Code
+            },
+            new()
+            {
+                Name = "tables",
+                State = tableDiagnostic is not null ||
+                        areaChanges.TryGetValue("tables", out var tableChanged) && tableChanged
+                    ? ComparisonAreaState.Blocked
+                    : tableDifferenceCount > 0
+                        ? ComparisonAreaState.Changed
+                        : ComparisonAreaState.Unchanged,
+                Code = tableDiagnostic?.Code ??
+                       (areaChanges.TryGetValue("tables", out var tableAreaBlocked) && tableAreaBlocked
+                           ? AreaCodes["tables"]
+                           : null)
             }
         };
 
-        foreach (var area in AreaNames)
+        foreach (var area in AreaNames.Where(area => area != "tables"))
             coverage.Add(new ComparisonArea
             {
                 Name = area,

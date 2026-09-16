@@ -76,8 +76,34 @@ git tag -a $officeAgentTag -m "OfficeAgent.NET $officeAgentVersion"
 git push origin $officeAgentTag
 ```
 
+Pushing the version tag is itself a publication action. It triggers
+[`publish-image.yml`](../.github/workflows/publish-image.yml), which publishes the versioned
+and `latest` container images to GHCR. Obtain publication authorization before pushing the tag,
+and verify the resulting image in step 4.
+
 Use the matching changelog section as the GitHub release body so the two descriptions do not
 drift. Extract that section into a temporary file and inspect it before publishing.
+
+### The release summary format
+
+The changelog section is the detailed record: everything that changed, why, and what a caller
+has to do about it. A release summary is a different document with a different reader, and it
+uses four sections in this order and no others:
+
+| Section | Holds |
+| --- | --- |
+| Highlights | What is now possible that was not before, in the reader's terms. A few items, not an inventory |
+| Reliability and compatibility | Behaviour that changed for existing callers, including anything now refused that previously succeeded, and what to do about it |
+| Install | The exact pinned commands for this version |
+| Documentation | Links to the pages a new reader needs, not every page that changed |
+
+Write it in plain prose with no em dashes, pin every version-bearing link to this release's
+tag rather than to a branch, and keep it shorter than the changelog section it summarises. A
+summary that lists every change is a changelog with a different heading, which leaves the
+reader no better off than before.
+
+The extraction below takes the changelog section verbatim. When a summary is wanted instead,
+write it against the table above and pass that file to `--notes-file`.
 
 Bash:
 
@@ -113,6 +139,9 @@ the libraries before `OfficeAgent.Mcp`, and attaches the original packages, symb
 skill archives, CycloneDX SBOMs, `release-manifest.json`, and `SHA256SUMS` to the same release.
 It also creates GitHub build provenance and package-specific SBOM attestations. It is the only
 NuGet publisher; do not publish the same version manually.
+
+The publish workflow does not update the MCP Registry. Registry publication is the separate,
+manual step 3 after NuGet exposes the matching `OfficeAgent.Mcp` package.
 
 The manual workflow path is intentionally fail-closed. Dispatch it from the release tag so
 GitHub's signed workflow identity and the checked-out source describe the same ref:

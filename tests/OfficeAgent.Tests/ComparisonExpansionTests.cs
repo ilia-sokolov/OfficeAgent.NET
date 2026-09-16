@@ -159,6 +159,21 @@ public sealed class ComparisonExpansionTests
         Assert.Equal(3, comparison.Differences.Count);
     }
 
+    /// <summary>Coverage attributes a cell-only difference to tables, not body text.</summary>
+    [Fact]
+    public void A_cell_only_change_is_attributed_to_the_table_area()
+    {
+        var original = TableDocument("Region", "Q1", "North", "41850");
+        var revised = TableDocument("Region", "Q1", "North", "58200");
+
+        var comparison = Client().CompareDocuments(original, revised);
+
+        Assert.Contains(comparison.Coverage, area =>
+            area.Name == "bodyParagraphs" && area.State == ComparisonAreaState.Unchanged);
+        Assert.Contains(comparison.Coverage, area =>
+            area.Name == "tables" && area.State == ComparisonAreaState.Changed);
+    }
+
     /// <summary>
     /// A table whose geometry moved is still refused. Positional alignment is only sound
     /// while the shape is identical, so a changed grid blocks the plan.
@@ -244,6 +259,28 @@ public sealed class ComparisonExpansionTests
         Assert.True(comparison.Differences.Count <= 5,
             $"expected at most 5 differences, got {comparison.Differences.Count}");
         Assert.Contains(comparison.Diagnostics, d => d.Code == "comparison-difference-limit-exceeded");
+    }
+
+    /// <summary>
+    /// Reaching the limit with a real body difference does not make unchanged table cells
+    /// look like an additional truncated difference.
+    /// </summary>
+    [Fact]
+    public void An_exact_body_limit_with_unchanged_tables_is_complete()
+    {
+        var cells = new[] { "Region", "Q1", "North", "41850" };
+        var original = TableDocument(cells, "Regional results.");
+        var revised = TableDocument(cells, "Regional summary.");
+
+        var comparison = Client().CompareDocuments(
+            original,
+            revised,
+            new DocumentComparisonOptions { MaximumDifferences = 1 });
+
+        Assert.True(comparison.IsComplete, Explain(comparison));
+        Assert.Single(comparison.Differences);
+        Assert.DoesNotContain(comparison.Diagnostics,
+            diagnostic => diagnostic.Code == "comparison-difference-limit-exceeded");
     }
 
     /// <summary>

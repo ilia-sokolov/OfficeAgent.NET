@@ -216,6 +216,35 @@ public class EphemeralDocumentTests
     }
 
     [Fact]
+    public async Task Session_import_rejects_malformed_packages_before_storing_them()
+    {
+        using var session = new Session();
+
+        var refused = await session.Tools.ImportDocumentContent(
+            "session", "broken.docx", Convert.ToBase64String(new byte[] { 1, 2, 3, 4 }));
+
+        Assert.Contains("malformed-package", refused);
+        Assert.DoesNotContain("documentId", refused);
+    }
+
+    [Fact]
+    public async Task Session_import_uses_the_hosts_configured_compressed_ceiling()
+    {
+        var contract = DocxFactory.Contract();
+        using var session = new Session(limits: new OpenXmlIngestionLimits
+        {
+            MaximumCompressedBytes = contract.LongLength - 1
+        });
+
+        var refused = await session.Tools.ImportDocumentContent(
+            "session", "contract.docx", Convert.ToBase64String(contract));
+
+        Assert.Contains("input-too-large", refused);
+        Assert.Contains((contract.LongLength - 1).ToString(), refused);
+        Assert.DoesNotContain("documentId", refused);
+    }
+
+    [Fact]
     public void A_deck_in_a_session_connection_is_created_like_any_other()
     {
         using var session = new Session(deck: true);
@@ -289,12 +318,16 @@ public class EphemeralDocumentTests
         public OfficeAgentClient Client { get; }
         public OfficeAgentTools Tools { get; }
 
-        public Session(long totalBytes = 100L * 1024 * 1024, bool deck = false)
+        public Session(
+            long totalBytes = 100L * 1024 * 1024,
+            bool deck = false,
+            OpenXmlIngestionLimits? limits = null)
         {
             var services = new ServiceCollection();
             services.AddWordFormat();
             if (deck) services.AddPowerPointFormat();
             services.AddMemoryDocumentProvider("session", o => o.MaximumTotalBytes = totalBytes);
+            if (limits is not null) services.AddSingleton(limits);
             services.AddOfficeAgent();
             _services = services.BuildServiceProvider();
 

@@ -95,6 +95,58 @@ public sealed class ConcurrencyAndIsolationTests
     }
 
     /// <summary>
+    /// The session provider has the same optimistic-concurrency contract as persistent
+    /// providers. Both reads are held until they have observed the shared version, making
+    /// this a deterministic lost-update test rather than a timing-dependent stress test.
+    /// </summary>
+    [Fact]
+    public async Task Two_memory_saves_from_one_version_produce_one_winner_and_one_conflict()
+    {
+        var provider = new MemoryDocumentProvider("session");
+        var original = provider.Add("contract.docx", new byte[] { 0 });
+        var bothReading = new AsyncRendezvous(2);
+
+        async Task<(bool Won, byte Value)> Save(byte value)
+        {
+            await using var content = new RendezvousReadStream(new[] { value }, bothReading);
+            try
+            {
+                await provider.SaveAsync(original, content, new SaveDocumentOptions
+                {
+                    Mode = SaveMode.Replace,
+                    ExpectedVersion = original.Version
+                });
+                return (true, value);
+            }
+            catch (DocumentVersionConflictException)
+            {
+                return (false, value);
+            }
+        }
+
+        var outcomes = await Task.WhenAll(Save(1), Save(2));
+        var winner = Assert.Single(outcomes, outcome => outcome.Won);
+        Assert.Single(outcomes, outcome => !outcome.Won);
+        Assert.Equal(new[] { winner.Value }, provider.Read(original.ItemId));
+    }
+
+    /// <summary>The provider owns stored bytes and never exposes a mutable backing array.</summary>
+    [Fact]
+    public void Memory_documents_cannot_be_changed_without_a_versioned_save()
+    {
+        var provider = new MemoryDocumentProvider("session");
+        var supplied = new byte[] { 1, 2, 3 };
+        var reference = provider.Add("contract.docx", supplied);
+
+        supplied[0] = 9;
+        var returned = provider.Read(reference.ItemId);
+        returned[1] = 9;
+
+        Assert.Equal(new byte[] { 1, 2, 3 }, provider.Read(reference.ItemId));
+        Assert.Equal(reference.Version, provider.Describe(reference.ItemId).Version);
+    }
+
+    /// <summary>
     /// Edits to unrelated documents run at the same time. The barrier only releases once
     /// both callers are inside their commit, so a global lock would deadlock here rather
     /// than merely run slowly.
@@ -155,6 +207,64 @@ public sealed class ConcurrencyAndIsolationTests
             if (Interlocked.Increment(ref _arrived) >= _participants)
                 _all.TrySetResult(true);
             return _all.Task;
+        }
+    }
+
+    private sealed class RendezvousReadStream : Stream
+    {
+        private readonly MemoryStream _content;
+        private readonly AsyncRendezvous _rendezvous;
+        private bool _arrived;
+
+        public RendezvousReadStream(byte[] content, AsyncRendezvous rendezvous)
+        {
+            _content = new MemoryStream(content, writable: false);
+            _rendezvous = rendezvous;
+        }
+
+        public override bool CanRead => true;
+        public override bool CanSeek => false;
+        public override bool CanWrite => false;
+        public override long Length => throw new NotSupportedException();
+        public override long Position
+        {
+            get => throw new NotSupportedException();
+            set => throw new NotSupportedException();
+        }
+
+        public override int Read(byte[] buffer, int offset, int count) =>
+            throw new NotSupportedException("The provider must use asynchronous reads.");
+
+        public override async Task<int> ReadAsync(
+            byte[] buffer,
+            int offset,
+            int count,
+            CancellationToken cancellationToken)
+        {
+            if (!_arrived)
+            {
+                _arrived = true;
+                await _rendezvous.ArriveAsync().WaitAsync(cancellationToken);
+            }
+
+            return await _content.ReadAsync(buffer, offset, count, cancellationToken);
+        }
+
+        public override void Flush() { }
+        public override long Seek(long offset, SeekOrigin origin) => throw new NotSupportedException();
+        public override void SetLength(long value) => throw new NotSupportedException();
+        public override void Write(byte[] buffer, int offset, int count) => throw new NotSupportedException();
+
+        protected override void Dispose(bool disposing)
+        {
+            if (disposing) _content.Dispose();
+            base.Dispose(disposing);
+        }
+
+        public override async ValueTask DisposeAsync()
+        {
+            await _content.DisposeAsync();
+            await base.DisposeAsync();
         }
     }
 

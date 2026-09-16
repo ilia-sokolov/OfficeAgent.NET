@@ -5,14 +5,13 @@ structured way to inspect and edit OOXML files. It is built on the Open XML SDK,
 and its direct .NET API does not require MCP, an LLM, or an agent framework.
 
 > [!IMPORTANT]
-> The executable recipe on this page pins the published `0.8.0` packages and was
-> verified on 2026-09-14. The `v0.9.0` branch is unreleased candidate work. Do not
-> infer that a candidate feature is available from NuGet until that version is
-> published. Keep every OfficeAgent package on the same version.
+> This guide is versioned for OfficeAgent.NET `0.9.0`. Its executable recipe pins
+> `0.9.0` and was verified against the release-candidate packages on 2026-09-16.
+> Before the release appears on NuGet, use the locally packed candidate feed described
+> in the release runbook. Keep every OfficeAgent package on the same version.
 
-The supported-job summaries below describe the current candidate source. For a
-published release, use the operation documentation from that release's tag. The
-recipe is the published-package evidence on this page.
+The supported-job summaries and recipe describe the source and package contract in
+the `v0.9.0` tag. For another release, use the documentation from that release's tag.
 
 ## Use OfficeAgent.NET when
 
@@ -103,13 +102,13 @@ previews a tracked replacement, commits it, and checks both the document semanti
 and its Office 2019 Open XML schema. It then previews an Excel-only operation
 against the Word file to demonstrate the fail-closed unsupported result.
 
-Create the project and install the exact published packages:
+Create the project and install the exact packages:
 
 ```bash
 dotnet new console --framework net8.0 -n OfficeAgentSelectionTrial
 cd OfficeAgentSelectionTrial
-dotnet add package OfficeAgent.Core --version 0.8.0
-dotnet add package OfficeAgent.Word --version 0.8.0
+dotnet add package OfficeAgent.Core --version 0.9.0
+dotnet add package OfficeAgent.Word --version 0.9.0
 ```
 
 Replace `Program.cs` with:
