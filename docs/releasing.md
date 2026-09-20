@@ -42,7 +42,7 @@ dotnet test OfficeAgent.NET.sln --no-build --configuration Release
 python scripts/check_vulnerable_packages.py
 python scripts/validate_docs.py
 python scripts/validate_server_manifest.py
-python -m unittest tests/test_agent_evaluation.py tests/test_package_skills.py tests/test_release_evidence.py -v
+python -m unittest tests/test_agent_evaluation.py tests/test_package_samples.py tests/test_package_skills.py tests/test_release_evidence.py -v
 ```
 
 Update the changelog heading from `unreleased` to the release date. Remove any temporary
@@ -76,10 +76,9 @@ git tag -a $officeAgentTag -m "OfficeAgent.NET $officeAgentVersion"
 git push origin $officeAgentTag
 ```
 
-Pushing the version tag is itself a publication action. It triggers
-[`publish-image.yml`](../.github/workflows/publish-image.yml), which publishes the versioned
-and `latest` container images to GHCR. Obtain publication authorization before pushing the tag,
-and verify the resulting image in step 4.
+The tag fixes the source identity but does not publish a package or container by itself. Obtain
+publication authorization before creating the GitHub release, which starts the single gated
+publish workflow described below.
 
 Use the matching changelog section as the GitHub release body so the two descriptions do not
 drift. Extract that section into a temporary file and inspect it before publishing.
@@ -136,9 +135,10 @@ gh release create $officeAgentTag `
 Publishing the GitHub release triggers [the publish workflow](../.github/workflows/publish.yml).
 That workflow checks out the release tag, validates the metadata, packs the packages, pushes
 the libraries before `OfficeAgent.Mcp`, and attaches the original packages, symbol packages,
-skill archives, CycloneDX SBOMs, `release-manifest.json`, and `SHA256SUMS` to the same release.
-It also creates GitHub build provenance and package-specific SBOM attestations. It is the only
-NuGet publisher; do not publish the same version manually.
+skill archives, the standalone QuickEdit sample, CycloneDX SBOMs, `release-manifest.json`, and
+`SHA256SUMS` to the same release. It creates GitHub build provenance and product-specific SBOM
+attestations, then publishes NuGet packages and the versioned and `latest` GHCR image. It is the
+only NuGet and container publisher; do not publish the same version manually.
 
 The publish workflow does not update the MCP Registry. Registry publication is the separate,
 manual step 3 after NuGet exposes the matching `OfficeAgent.Mcp` package.
@@ -155,6 +155,7 @@ The exact source ref must still be a release tag, even during this unpublished d
 
 ```bash
 dotnet tool restore
+python scripts/package_samples.py --output artifacts
 python scripts/package_skills.py --output artifacts
 python scripts/release_evidence.py sbom --version "$VERSION" --artifacts artifacts
 python scripts/release_evidence.py create \
@@ -215,7 +216,7 @@ gh attestation verify "$VERIFY_DIR/OfficeAgent.Core.$VERSION.nupkg" \
   --predicate-type https://cyclonedx.org/bom
 ```
 
-Repeat both commands for every `.nupkg`, `.snupkg`, and skill archive. The manifest maps each
+Repeat both commands for every `.nupkg`, `.snupkg`, skill archive, and sample archive. The manifest maps each
 artifact to its aggregate SBOM and, for multi-targeted packages, separate `netstandard2.0` and
 `net8.0` inventories. Missing license values mean upstream NuGet metadata did not supply them;
 they are not inferred.
@@ -227,6 +228,7 @@ Verify all of the following before publishing the MCP Registry entry:
 - all expected packages show the new version on NuGet;
 - `word-document-review.zip` contains `word-document-review/SKILL.md`;
 - `officeagent-integration.zip` contains `officeagent-integration/SKILL.md`, its recipe reference, and its recipe assets;
+- `quickedit-sample.zip` restores, builds, and edits its included fictional contract outside the repository;
 - the release notes render correctly and their links resolve;
 - the global tool installs from NuGet on a clean machine.
 
@@ -293,9 +295,10 @@ Do not announce the release while the registry still resolves to an older versio
 
 ## 4. Verify the container image
 
-The container workflow builds only from the matching tag. BuildKit publishes an in-registry SBOM
-and maximum-mode provenance for the immutable image digest, and GitHub records a separate signed
-build attestation. Verify the version tag by digest, never through the mutable `latest` tag:
+The gated publish workflow builds the container only after release validation and NuGet upload.
+BuildKit publishes an in-registry SBOM and maximum-mode provenance for the immutable image digest,
+and GitHub records a separate signed build attestation. Verify the version tag by digest, never
+through the mutable `latest` tag:
 
 ```bash
 IMAGE="ghcr.io/ilia-sokolov/officeagent-mcp:$VERSION"
@@ -304,7 +307,7 @@ docker buildx imagetools inspect "$IMAGE" --format '{{ json .SBOM }}'
 docker buildx imagetools inspect "$IMAGE" --format '{{ json .Provenance }}'
 gh attestation verify "oci://$IMAGE" \
   --repo ilia-sokolov/OfficeAgent.NET \
-  --signer-workflow ilia-sokolov/OfficeAgent.NET/.github/workflows/publish-image.yml \
+  --signer-workflow ilia-sokolov/OfficeAgent.NET/.github/workflows/publish.yml \
   --source-ref "refs/tags/$TAG" \
   --source-digest "$SOURCE_SHA"
 ```

@@ -253,6 +253,7 @@ var hit = (await client.FindAsync(
 var plan = new DocumentPlan
 {
     Snapshot = inspect.Snapshot,
+    Revision = new RevisionMetadata { Author = "OfficeAgent Quickstart" },
     Operations = new PlanOperation[]
     {
         new ChangeTextOp
@@ -269,6 +270,9 @@ if (preview.IsValid)
     await client.CommitAsync("workspace", doc.ItemId, plan);
 ```
 
+`Revision.Author` is the name Word displays for the tracked change. It is not an
+authenticated actor identity. See [revision identity and audit receipts](docs/operations.md#revision-identity-and-audit-receipts).
+
 The complete example, including service registration and reading the saved
 file, is in [Getting started](docs/getting-started.md). The minimal direct-.NET
 sample runs against the bundled fictional contract, so it needs no MCP client,
@@ -282,7 +286,8 @@ dotnet run --project samples/QuickEdit -- \
 Open `quickedit-output.docx` in Word and verify that the payment term is a tracked
 change while the existing revision, comment, table, and headings remain intact.
 [QuickEdit](samples/QuickEdit/) also accepts an exact source and replacement text
-for your own document.
+for your own document. Releases also attach `quickedit-sample.zip`, a package-backed
+copy that runs outside the repository against the released NuGet packages.
 
 The repository also contains a
 [direct `IChatClient` Word-editing sample](samples/IChatClientWordEdit/) and an
@@ -348,6 +353,7 @@ the provider to create and register it without overwriting an existing name.
 | [Library selection guide](docs/choose-officeagent.md) | Supported jobs, non-goals, package choices, alternatives, and a verified direct .NET recipe |
 | [Getting started](docs/getting-started.md) | A complete edit from service registration to reading the result |
 | [Concepts](docs/concepts.md) | Anchors, snapshots, plans, providers, transactions, and capabilities |
+| [C# API reference](docs/csharp-api.md) | Generated public types and members for every library package |
 | [Document plans](docs/document-plans.md) | JSON shapes and validation rules for every operation |
 | [Document providers](docs/document-providers.md) | Filesystem, SharePoint, save modes, and custom providers |
 | [PowerPoint support](docs/powerpoint.md) | Slide addressing, the verbs the deck module implements, and what it preserves |

@@ -20,11 +20,11 @@ jobs:
       CI: true
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           fetch-depth: 0   # required for Source Link / deterministic builds
 
-      - uses: actions/setup-dotnet@v4
+      - uses: actions/setup-dotnet@67a3573c9a986a3f9c594539f4ab511d57bb3ce9 # v4
         with:
           dotnet-version: 8.0.x
 
@@ -34,7 +34,7 @@ jobs:
 
       - name: Test skill packaging, agent evaluation, and release inventory
         if: matrix.os == 'ubuntu-latest'
-        run: python -m unittest tests/test_agent_evaluation.py tests/test_package_skills.py tests/test_release_evidence.py tests/test_smoke_packaged_artifacts.py tests/test_benchmark_report.py tests/test_byte_exact_fixtures.py -v
+        run: python -m unittest tests/test_agent_evaluation.py tests/test_package_samples.py tests/test_package_skills.py tests/test_release_evidence.py tests/test_smoke_packaged_artifacts.py tests/test_benchmark_report.py tests/test_byte_exact_fixtures.py -v
 
       - name: Validate MCP Registry manifest
         if: matrix.os == 'ubuntu-latest'
@@ -52,18 +52,28 @@ jobs:
       - name: Build (both TFM legs)
         run: dotnet build OfficeAgent.NET.sln --no-restore --configuration Release
 
+      - name: Verify generated C# API reference
+        if: matrix.os == 'ubuntu-latest'
+        run: dotnet run --project tools/OfficeAgent.ApiDocs --configuration Release --no-build -- --check docs/csharp-api.md
+
       - name: Test
         run: dotnet test OfficeAgent.NET.sln --no-build --configuration Release --logger "trx" --results-directory ./TestResults
 
       - name: Upload test results
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: test-results-${{ matrix.os }}
           path: ./TestResults
 
       - name: Pack
         run: dotnet pack OfficeAgent.NET.sln --no-build --configuration Release --output ./artifacts
+
+      - name: Package standalone QuickEdit sample
+        run: python scripts/package_samples.py --output ./artifacts
+
+      - name: Verify standalone QuickEdit sample with installed packages
+        run: python scripts/verify_quickedit_sample.py --artifacts ./artifacts
 
       # Runs on every platform. Packaging, tool startup and runtime assembly loading
       # are exactly what differs per OS, so a Linux-only check would not see them.
@@ -81,7 +91,7 @@ jobs:
 
       - name: Upload packages and skills
         if: matrix.os == 'ubuntu-latest'
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: nupkgs
           path: |

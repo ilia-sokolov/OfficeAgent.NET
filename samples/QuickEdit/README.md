@@ -21,6 +21,7 @@ The default operation changes `within thirty days of receipt` to
 `within forty-five days of receipt`. Open `quickedit-output.docx` in Word and verify that:
 
 - clause 3 contains the replacement as a tracked change;
+- Word displays `QuickEdit` as the author of that replacement;
 - the existing interest-rate revision and Priya Raman's comment remain present;
 - the table and heading structure are unchanged.
 

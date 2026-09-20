@@ -4,6 +4,7 @@ import json
 import sys
 import tempfile
 import unittest
+import zipfile
 import xml.etree.ElementTree as ET
 from pathlib import Path
 
@@ -37,6 +38,11 @@ class ReleaseEvidenceTests(unittest.TestCase):
                     "id": "OfficeAgent.Test",
                     "project": "src/OfficeAgent.Test/OfficeAgent.Test.csproj",
                     "frameworks": ["netstandard2.0", "net8.0"],
+                },
+                {
+                    "id": "OfficeAgent.Dependency",
+                    "project": "src/OfficeAgent.Dependency/OfficeAgent.Dependency.csproj",
+                    "frameworks": ["netstandard2.0", "net8.0"],
                 }
             ],
             "skills": [
@@ -53,17 +59,61 @@ class ReleaseEvidenceTests(unittest.TestCase):
                     "license": "MIT",
                 },
             ],
+            "samples": [
+                {
+                    "name": "test-sample",
+                    "archive": "test-sample.zip",
+                    "license": "MIT",
+                }
+            ],
             "container": {
                 "name": "ghcr.io/owner/test",
-                "workflow": ".github/workflows/publish-image.yml",
+                "workflow": ".github/workflows/publish.yml",
             },
         }
         for product in release_evidence.expected_products(self.inventory, self.VERSION):
-            (self.output / product["name"]).write_bytes(product["name"].encode())
+            path = self.output / product["name"]
+            if product["name"] == "test-sample.zip":
+                with zipfile.ZipFile(path, "w") as archive:
+                    archive.writestr(
+                        "test-sample/Test.csproj",
+                        '<Project><ItemGroup><PackageReference Include="OfficeAgent.Test" '
+                        'Version="0.9.0" /></ItemGroup></Project>',
+                    )
+            elif product["name"].endswith(".nupkg"):
+                package_id = product["name"].removesuffix(f".{self.VERSION}.nupkg")
+                dependency = (
+                    '<dependency id="OfficeAgent.Dependency" version="[0.9.0, )" />'
+                    if package_id == "OfficeAgent.Test" else ""
+                )
+                nuspec = f"""<?xml version="1.0"?>
+<package xmlns="http://schemas.microsoft.com/packaging/2013/05/nuspec.xsd">
+  <metadata><id>{package_id}</id><version>{self.VERSION}</version><dependencies>
+    <group targetFramework=".NETStandard2.0">{dependency}</group>
+    <group targetFramework="net8.0">{dependency}</group>
+  </dependencies></metadata>
+</package>"""
+                with zipfile.ZipFile(path, "w") as archive:
+                    archive.writestr(f"{package_id}.nuspec", nuspec)
+            else:
+                path.write_bytes(product["name"].encode())
         for name in release_evidence.expected_sboms(self.inventory, self.VERSION):
             component, framework = release_evidence.sbom_identity(
                 self.inventory, name, self.VERSION
             )
+            expected_dependencies = release_evidence.expected_sbom_dependencies(
+                self.inventory, self.output, name, self.VERSION
+            )
+            root_ref = f"pkg:generic/{component}@{self.VERSION}"
+            dependency_components = [
+                {
+                    "type": "library",
+                    "name": package_id,
+                    "version": package_version,
+                    "bom-ref": f"pkg:nuget/{package_id}@{package_version}",
+                }
+                for package_id, package_version in expected_dependencies.items()
+            ]
             bom = {
                 "bomFormat": "CycloneDX",
                 "specVersion": "1.6",
@@ -73,13 +123,17 @@ class ReleaseEvidenceTests(unittest.TestCase):
                         "type": "library",
                         "name": component,
                         "version": self.VERSION,
+                        "bom-ref": root_ref,
                         "properties": [
                             {"name": "officeagent:targetFramework", "value": framework}
                         ],
                     }
                 },
-                "components": [],
-                "dependencies": [],
+                "components": dependency_components,
+                "dependencies": [{
+                    "ref": root_ref,
+                    "dependsOn": [item["bom-ref"] for item in dependency_components],
+                }],
             }
             (self.output / name).write_text(json.dumps(bom), encoding="utf-8")
         release_evidence.create_evidence(
@@ -154,6 +208,44 @@ class ReleaseEvidenceTests(unittest.TestCase):
         self.assertIn(
             f"integration-skill.{self.VERSION}.cdx.json",
             {item["name"] for item in manifest["verificationMaterials"]},
+        )
+
+    def test_missing_declared_first_party_component_fails(self) -> None:
+        path = self.output / f"OfficeAgent.Test.{self.VERSION}.net8.0.cdx.json"
+        bom = release_evidence.read_json(path)
+        bom["components"] = []
+        path.write_text(json.dumps(bom), encoding="utf-8")
+        with self.assertRaisesRegex(release_evidence.EvidenceError, "omits declared dependency"):
+            release_evidence.validate_sbom(
+                path,
+                "OfficeAgent.Test",
+                self.VERSION,
+                "1.6",
+                "net8.0",
+                {"OfficeAgent.Dependency": self.VERSION},
+            )
+
+    def test_missing_declared_first_party_root_edge_fails(self) -> None:
+        path = self.output / f"OfficeAgent.Test.{self.VERSION}.net8.0.cdx.json"
+        bom = release_evidence.read_json(path)
+        bom["dependencies"][0]["dependsOn"] = []
+        path.write_text(json.dumps(bom), encoding="utf-8")
+        with self.assertRaisesRegex(release_evidence.EvidenceError, "omits the root edge"):
+            release_evidence.validate_sbom(
+                path,
+                "OfficeAgent.Test",
+                self.VERSION,
+                "1.6",
+                "net8.0",
+                {"OfficeAgent.Dependency": self.VERSION},
+            )
+
+    def test_sample_has_its_own_product_and_sbom(self) -> None:
+        manifest = release_evidence.read_json(self.output / "release-manifest.json")
+        artifacts = {item["name"]: item for item in manifest["artifacts"]}
+        self.assertEqual(
+            artifacts["test-sample.zip"]["dependencyInventory"],
+            [f"test-sample.{self.VERSION}.cdx.json"],
         )
 
 

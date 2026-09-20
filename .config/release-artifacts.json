@@ -70,8 +70,15 @@
       "license": "MIT"
     }
   ],
+  "samples": [
+    {
+      "name": "quickedit-sample",
+      "archive": "quickedit-sample.zip",
+      "license": "MIT"
+    }
+  ],
   "container": {
     "name": "ghcr.io/ilia-sokolov/officeagent-mcp",
-    "workflow": ".github/workflows/publish-image.yml"
+    "workflow": ".github/workflows/publish.yml"
   }
 }

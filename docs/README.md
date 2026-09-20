@@ -17,6 +17,7 @@ this page to choose the shortest path for your scenario.
 | Combine OfficeAgent with direct Open XML SDK edits | [SDK interoperability](sdk-interoperability.md) | [Concepts](concepts.md), [operations](operations.md) |
 | Inspect Word preservation evidence | [Word preservation matrix](word-preservation-evidence.md) | [Corpus and rerun recipe](../tests/OfficeAgent.Tests/Corpus/v0.9.0/word-preservation/README.md) |
 | Edit a Word document from C# | [Getting started](getting-started.md) | [Concepts](concepts.md), [document plans](document-plans.md) |
+| Look up a public C# type or member | [Generated C# API reference](csharp-api.md) | [Getting started](getting-started.md), [document plans](document-plans.md) |
 | Create a Word document from scratch | [Create a document](getting-started.md#create-a-document-instead) | [Document plans](document-plans.md) |
 | Create or update a PowerPoint deck | [PowerPoint support](powerpoint.md#creating-a-deck) | [Generating a deck](powerpoint.md#generating-a-deck) |
 | Inspect or update an Excel workbook | [Excel support](excel.md) | [Document plans](document-plans.md) |
@@ -104,6 +105,7 @@ and optimistic-concurrency conflicts instead of guessing.
 
 ### Reference
 
+- [Generated C# API reference](csharp-api.md) - public types and members from every library package.
 - [Document plans](document-plans.md) — operation JSON and validation codes.
 - [MCP server](mcp-server.md) — transports, settings, tools, and response contracts.
 

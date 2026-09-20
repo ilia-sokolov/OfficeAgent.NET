@@ -76,6 +76,7 @@ try
     var plan = new DocumentPlan
     {
         Snapshot = inspect.Snapshot, // opt in to drift detection
+        Revision = new RevisionMetadata { Author = "QuickEdit" },
         Operations = new PlanOperation[]
         {
             new ChangeTextOp { Target = hits[0].Anchor, With = replacementText, Mode = ChangeMode.Tracked }

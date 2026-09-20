@@ -105,7 +105,7 @@ against the Word file to demonstrate the fail-closed unsupported result.
 Create the project and install the exact packages:
 
 ```bash
-dotnet new console --framework net8.0 -n OfficeAgentSelectionTrial
+dotnet new console -n OfficeAgentSelectionTrial
 cd OfficeAgentSelectionTrial
 dotnet add package OfficeAgent.Core --version 0.9.0
 dotnet add package OfficeAgent.Word --version 0.9.0
@@ -145,6 +145,7 @@ var hit = (await client.FindAsync(handle, new FindQuery(oldName))).Single();
 var plan = new DocumentPlan
 {
     Snapshot = inspection.Snapshot,
+    Revision = new RevisionMetadata { Author = "OfficeAgent Selection Trial" },
     Operations = new PlanOperation[]
     {
         new ChangeTextOp
@@ -198,6 +199,10 @@ var unsupported = await client.PreviewAsync(handle, unsupportedPlan);
 Console.WriteLine($"unsupported-valid={unsupported.IsValid}");
 Console.WriteLine($"unsupported-code={unsupported.Errors.Single().Code}");
 ```
+
+`Revision.Author` is the name Word displays for the tracked change. It is separate
+from any authenticated actor recorded by the host. See
+[revision identity and audit receipts](operations.md#revision-identity-and-audit-receipts).
 
 Run it:
 

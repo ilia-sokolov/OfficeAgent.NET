@@ -20,7 +20,7 @@ Create a console project and install the engine, Word module, and concrete
 dependency-injection container:
 
 ```bash
-dotnet new console --framework net8.0 -n OfficeAgentQuickstart
+dotnet new console -n OfficeAgentQuickstart
 cd OfficeAgentQuickstart
 dotnet add package OfficeAgent.Core
 dotnet add package OfficeAgent.Word
@@ -112,6 +112,7 @@ not write to storage.
 var plan = new DocumentPlan
 {
     Snapshot = inspection.Snapshot,
+    Revision = new RevisionMetadata { Author = "OfficeAgent Quickstart" },
     Operations = new PlanOperation[]
     {
         new ChangeTextOp
@@ -134,6 +135,10 @@ if (!preview.IsValid)
 foreach (var change in preview.Changes)
     Console.WriteLine($"{change.Verb}: {change.Before} -> {change.After}");
 ```
+
+`Revision.Author` is the name Word displays for the tracked change. It is separate
+from any authenticated actor recorded by the host. See
+[revision identity and audit receipts](operations.md#revision-identity-and-audit-receipts).
 
 ## 5. Commit and save the output
 

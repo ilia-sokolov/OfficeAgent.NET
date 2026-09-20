@@ -9,8 +9,10 @@ import json
 import re
 import subprocess
 import sys
+import zipfile
 from pathlib import Path
 from typing import Any
+from xml.etree import ElementTree as ET
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -58,6 +60,15 @@ def load_inventory(path: Path) -> dict[str, Any]:
             raise EvidenceError(f"release artifact skill {field} values must be non-empty strings")
         if field != "license" and len(values) != len(set(values)):
             raise EvidenceError(f"release artifact skill {field} values must be unique")
+    samples = value.get("samples", [])
+    if not isinstance(samples, list):
+        raise EvidenceError("release artifact samples must be a list")
+    for field in ("name", "archive", "license"):
+        values = [sample.get(field) for sample in samples if isinstance(sample, dict)]
+        if len(values) != len(samples) or any(not isinstance(item, str) or not item for item in values):
+            raise EvidenceError(f"release artifact sample {field} values must be non-empty strings")
+        if field != "license" and len(values) != len(set(values)):
+            raise EvidenceError(f"release artifact sample {field} values must be unique")
     return value
 
 
@@ -91,12 +102,24 @@ def expected_products(inventory: dict[str, Any], version: str) -> list[dict[str,
                 "dependencyInventory": [f"{skill['name']}.{version}.cdx.json"],
             }
         )
+    for sample in inventory.get("samples", []):
+        products.append(
+            {
+                "name": sample["archive"],
+                "kind": "consumer-sample",
+                "distribution": "github-original",
+                "dependencyInventory": [f"{sample['name']}.{version}.cdx.json"],
+            }
+        )
     return products
 
 
 def expected_sboms(inventory: dict[str, Any], version: str) -> list[str]:
     names = [name for package in inventory["packages"] for name in sbom_names(package, version)]
     names.extend(f"{skill['name']}.{version}.cdx.json" for skill in inventory["skills"])
+    names.extend(
+        f"{sample['name']}.{version}.cdx.json" for sample in inventory.get("samples", [])
+    )
     return sorted(names)
 
 
@@ -106,6 +129,9 @@ def sbom_identity(
     for skill in inventory["skills"]:
         if filename == f"{skill['name']}.{version}.cdx.json":
             return skill["name"], "not-applicable"
+    for sample in inventory.get("samples", []):
+        if filename == f"{sample['name']}.{version}.cdx.json":
+            return sample["name"], "not-applicable"
     for package in inventory["packages"]:
         package_id = package["id"]
         if filename == f"{package_id}.{version}.cdx.json":
@@ -114,6 +140,189 @@ def sbom_identity(
             if filename == f"{package_id}.{version}.{framework}.cdx.json":
                 return package_id, framework
     raise EvidenceError(f"unexpected SBOM name: {filename}")
+
+
+def normalized_framework(value: str) -> str:
+    return re.sub(r"[^a-z0-9]", "", value.lower())
+
+
+def declared_package_dependencies(
+    path: Path, known_package_ids: set[str], framework: str | None, version: str,
+) -> dict[str, str]:
+    try:
+        with zipfile.ZipFile(path) as archive:
+            nuspecs = [name for name in archive.namelist() if name.lower().endswith(".nuspec")]
+            if len(nuspecs) != 1:
+                raise EvidenceError(f"{path.name} must contain exactly one nuspec")
+            root = ET.fromstring(archive.read(nuspecs[0]))
+    except (OSError, zipfile.BadZipFile, ET.ParseError, KeyError) as exc:
+        raise EvidenceError(f"cannot read package metadata from {path.name}: {exc}") from exc
+
+    selected: dict[str, str] = {}
+    requested = normalized_framework(framework) if framework else None
+    dependency_parent = next(
+        (node for node in root.iter() if node.tag.rsplit("}", 1)[-1] == "dependencies"), None
+    )
+    if dependency_parent is None:
+        return selected
+    groups = [
+        node for node in dependency_parent
+        if node.tag.rsplit("}", 1)[-1] == "group"
+    ]
+    containers = groups or [dependency_parent]
+    for container in containers:
+        target = container.attrib.get("targetFramework")
+        if requested and target and normalized_framework(target) != requested:
+            continue
+        for dependency in container:
+            if dependency.tag.rsplit("}", 1)[-1] != "dependency":
+                continue
+            package_id = dependency.attrib.get("id")
+            if package_id not in known_package_ids:
+                continue
+            declared_version = dependency.attrib.get("version", "")
+            lower_bound = declared_version.strip("[]() ").split(",", 1)[0].strip()
+            if lower_bound != version:
+                raise EvidenceError(
+                    f"{path.name} declares {package_id} {declared_version!r}, expected {version}"
+                )
+            selected[package_id] = version
+    return selected
+
+
+def sample_dependencies(path: Path) -> dict[str, str]:
+    try:
+        with zipfile.ZipFile(path) as archive:
+            projects = [name for name in archive.namelist() if name.lower().endswith(".csproj")]
+            if len(projects) != 1:
+                raise EvidenceError(f"{path.name} must contain exactly one project file")
+            root = ET.fromstring(archive.read(projects[0]))
+    except (OSError, zipfile.BadZipFile, ET.ParseError, KeyError) as exc:
+        raise EvidenceError(f"cannot read sample metadata from {path.name}: {exc}") from exc
+    dependencies: dict[str, str] = {}
+    for reference in root.iter("PackageReference"):
+        package_id = reference.attrib.get("Include")
+        package_version = reference.attrib.get("Version") or reference.findtext("Version")
+        if not package_id or not package_version:
+            raise EvidenceError(f"{path.name} has an incomplete PackageReference")
+        dependencies[package_id] = package_version
+    if not dependencies:
+        raise EvidenceError(f"{path.name} has no PackageReference dependencies")
+    return dependencies
+
+
+def expected_sbom_dependencies(
+    inventory: dict[str, Any], output: Path, filename: str, version: str,
+) -> dict[str, str]:
+    known = {package["id"] for package in inventory["packages"]}
+    for package in inventory["packages"]:
+        package_id = package["id"]
+        aggregate = f"{package_id}.{version}.cdx.json"
+        if filename == aggregate:
+            return declared_package_dependencies(
+                output / f"{package_id}.{version}.nupkg", known, None, version
+            )
+        for framework in package["frameworks"]:
+            if filename == f"{package_id}.{version}.{framework}.cdx.json":
+                return declared_package_dependencies(
+                    output / f"{package_id}.{version}.nupkg", known, framework, version
+                )
+    for sample in inventory.get("samples", []):
+        if filename == f"{sample['name']}.{version}.cdx.json":
+            return sample_dependencies(output / sample["archive"])
+    return {}
+
+
+def reconcile_first_party_dependencies(
+    bom: dict[str, Any], package_id: str, version: str,
+    known_package_ids: set[str], expected: dict[str, str],
+) -> None:
+    component = bom["metadata"]["component"]
+    root_ref = f"pkg:nuget/{package_id}@{version}"
+    component["bom-ref"] = root_ref
+    components = [
+        item for item in bom.get("components", [])
+        if not isinstance(item, dict) or item.get("name") not in known_package_ids
+    ]
+    for dependency_id, dependency_version in sorted(expected.items()):
+        dependency_ref = f"pkg:nuget/{dependency_id}@{dependency_version}"
+        components.append(
+            {
+                "bom-ref": dependency_ref,
+                "type": "library",
+                "name": dependency_id,
+                "version": dependency_version,
+                "purl": dependency_ref,
+            }
+        )
+    bom["components"] = components
+
+    first_party_prefixes = tuple(f"pkg:nuget/{name}@" for name in known_package_ids)
+    dependencies = []
+    for edge in bom.get("dependencies", []):
+        if not isinstance(edge, dict):
+            continue
+        reference = edge.get("ref", "")
+        if isinstance(reference, str) and reference.startswith(first_party_prefixes):
+            continue
+        depends_on = [
+            item for item in edge.get("dependsOn", [])
+            if not isinstance(item, str) or not item.startswith(first_party_prefixes)
+        ]
+        dependencies.append({**edge, "dependsOn": depends_on})
+    root_edge = next((edge for edge in dependencies if edge.get("ref") == root_ref), None)
+    if root_edge is None:
+        root_edge = {"ref": root_ref, "dependsOn": []}
+        dependencies.append(root_edge)
+    root_edge["dependsOn"] = sorted(
+        set(root_edge.get("dependsOn", []))
+        | {f"pkg:nuget/{name}@{value}" for name, value in expected.items()}
+    )
+    bom["dependencies"] = dependencies
+
+
+def build_file_sbom(
+    inventory: dict[str, Any], name: str, version: str, archive: Path,
+    license_id: str, dependencies: dict[str, str], kind: str,
+) -> dict[str, Any]:
+    root_ref = f"pkg:generic/{name}@{version}"
+    component = {
+        "bom-ref": root_ref,
+        "type": "application" if kind == "consumer-sample" else "file",
+        "name": name,
+        "version": version,
+        "hashes": [{"alg": "SHA-256", "content": sha256(archive)}],
+        "licenses": [{"license": {"id": license_id}}],
+        "properties": [{"name": "officeagent:targetFramework", "value": "not-applicable"}],
+    }
+    components = [
+        {
+            "bom-ref": f"pkg:nuget/{package_id}@{package_version}",
+            "type": "library",
+            "name": package_id,
+            "version": package_version,
+            "purl": f"pkg:nuget/{package_id}@{package_version}",
+        }
+        for package_id, package_version in sorted(dependencies.items())
+    ]
+    return {
+        "bomFormat": "CycloneDX",
+        "specVersion": inventory["sbomTool"]["specVersion"],
+        "version": 1,
+        "metadata": {
+            "tools": {"components": [{
+                "type": "application",
+                "name": inventory["sbomTool"]["package"],
+                "version": inventory["sbomTool"]["version"],
+            }]},
+            "component": component,
+        },
+        "components": components,
+        "dependencies": [{
+            "ref": root_ref,
+            "dependsOn": [item["bom-ref"] for item in components],
+        }],
+    }
 
 
 def run_cyclonedx(
@@ -192,6 +401,19 @@ def run_cyclonedx(
                     "value": framework or "all",
                 }
             )
+            expected_dependencies = declared_package_dependencies(
+                output / f"{package['id']}.{version}.nupkg",
+                known_package_ids,
+                framework,
+                version,
+            )
+            reconcile_first_party_dependencies(
+                bom,
+                package["id"],
+                version,
+                known_package_ids,
+                expected_dependencies,
+            )
             bom_path.write_text(
                 json.dumps(bom, indent=2, sort_keys=True) + "\n", encoding="utf-8"
             )
@@ -200,42 +422,35 @@ def run_cyclonedx(
         archive = output / skill["archive"]
         if not archive.is_file():
             raise EvidenceError(f"missing skill archive: {archive.name}")
-        skill_bom = {
-            "bomFormat": "CycloneDX",
-            "specVersion": inventory["sbomTool"]["specVersion"],
-            "version": 1,
-            "metadata": {
-                "tools": {
-                    "components": [
-                        {
-                            "type": "application",
-                            "name": inventory["sbomTool"]["package"],
-                            "version": expected_tool_version,
-                        }
-                    ]
-                },
-                "component": {
-                    "type": "file",
-                    "name": skill["name"],
-                    "version": version,
-                    "hashes": [{"alg": "SHA-256", "content": sha256(archive)}],
-                    "licenses": [{"license": {"id": skill["license"]}}],
-                    "properties": [
-                        {"name": "officeagent:targetFramework", "value": "not-applicable"}
-                    ],
-                },
-            },
-            "components": [],
-            "dependencies": [],
-        }
+        skill_bom = build_file_sbom(
+            inventory, skill["name"], version, archive, skill["license"], {}, "agent-skill"
+        )
         (output / f"{skill['name']}.{version}.cdx.json").write_text(
             json.dumps(skill_bom, indent=2, sort_keys=True) + "\n", encoding="utf-8"
+        )
+
+    for sample in inventory.get("samples", []):
+        archive = output / sample["archive"]
+        if not archive.is_file():
+            raise EvidenceError(f"missing sample archive: {archive.name}")
+        dependencies = sample_dependencies(archive)
+        sample_bom = build_file_sbom(
+            inventory,
+            sample["name"],
+            version,
+            archive,
+            sample["license"],
+            dependencies,
+            "consumer-sample",
+        )
+        (output / f"{sample['name']}.{version}.cdx.json").write_text(
+            json.dumps(sample_bom, indent=2, sort_keys=True) + "\n", encoding="utf-8"
         )
 
 
 def validate_sbom(
     path: Path, expected_name: str, version: str, spec_version: str,
-    expected_framework: str,
+    expected_framework: str, expected_dependencies: dict[str, str] | None = None,
 ) -> None:
     value = read_json(path)
     if not isinstance(value, dict) or value.get("bomFormat") != "CycloneDX":
@@ -258,6 +473,31 @@ def validate_sbom(
         raise EvidenceError(f"{path.name} has incorrect target framework identity")
     if not isinstance(value.get("components"), list) or not isinstance(value.get("dependencies"), list):
         raise EvidenceError(f"{path.name} omits components or dependencies")
+    expected_dependencies = expected_dependencies or {}
+    components = {
+        item.get("name"): item
+        for item in value["components"]
+        if isinstance(item, dict) and isinstance(item.get("name"), str)
+    }
+    root_ref = component.get("bom-ref")
+    root_edges = [
+        item for item in value["dependencies"]
+        if isinstance(item, dict) and item.get("ref") == root_ref
+    ]
+    if expected_dependencies and len(root_edges) != 1:
+        raise EvidenceError(f"{path.name} has no unique root dependency edge")
+    root_dependencies = set(root_edges[0].get("dependsOn", [])) if root_edges else set()
+    for dependency_id, dependency_version in expected_dependencies.items():
+        dependency = components.get(dependency_id)
+        expected_ref = f"pkg:nuget/{dependency_id}@{dependency_version}"
+        if not dependency or dependency.get("version") != dependency_version:
+            raise EvidenceError(
+                f"{path.name} omits declared dependency {dependency_id} {dependency_version}"
+            )
+        if dependency.get("bom-ref") != expected_ref or expected_ref not in root_dependencies:
+            raise EvidenceError(
+                f"{path.name} omits the root edge for {dependency_id} {dependency_version}"
+            )
 
 
 def create_evidence(
@@ -284,8 +524,10 @@ def create_evidence(
         if not path.is_file():
             raise EvidenceError(f"missing SBOM: {filename}")
         component_name, framework = sbom_identity(inventory, filename, version)
+        dependencies = expected_sbom_dependencies(inventory, output, filename, version)
         validate_sbom(
-            path, component_name, version, inventory["sbomTool"]["specVersion"], framework
+            path, component_name, version, inventory["sbomTool"]["specVersion"], framework,
+            dependencies,
         )
 
     release_assets = sorted(
@@ -413,9 +655,10 @@ def verify_evidence(
         if material_map[sbom].get("sha256") != sha256(output / sbom):
             raise EvidenceError(f"{sbom} digest does not match release manifest")
         component_name, framework = sbom_identity(inventory, sbom, version)
+        dependencies = expected_sbom_dependencies(inventory, output, sbom, version)
         validate_sbom(
             output / sbom, component_name, version,
-            inventory["sbomTool"]["specVersion"], framework,
+            inventory["sbomTool"]["specVersion"], framework, dependencies,
         )
 
     expected_assets = sorted(

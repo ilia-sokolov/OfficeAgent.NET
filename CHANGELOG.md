@@ -3,7 +3,7 @@
 Notable changes per release. The body of each version section is also the text used for the
 corresponding GitHub release.
 
-## 0.9.0 — 2026-09-16
+## 0.9.0 — 2026-09-20
 
 ### Breaking changes and migration
 
@@ -52,6 +52,9 @@ corresponding GitHub release.
   [benchmarks](docs/benchmarks.md).
 - Open XML SDK interoperability guidance for applications that use both this library and the
   SDK directly. See [SDK interoperability](docs/sdk-interoperability.md).
+- A generated [C# API reference](docs/csharp-api.md) covering the public surface of every
+  library package, plus a package-backed `quickedit-sample.zip` release asset that runs outside
+  the repository.
 
 ### Fixed
 
@@ -68,6 +71,13 @@ corresponding GitHub release.
 - A package that declares a main part but omits it is refused as `malformed-package` at the
   boundary instead of escaping later as an unhandled exception.
 - Comparison findings are no longer discarded when an unsupported area blocks the plan.
+- Release SBOM validation now reconciles declared first-party package dependencies and rejects
+  a missing component or root dependency edge. Package, sample, and container publication now
+  share the validated release workflow, and every third-party workflow action is pinned to an
+  immutable commit.
+- The QuickEdit sample and primary tracked-edit examples now set an explicit displayed revision
+  author. Quickstart project creation works with current SDKs without requiring an installed
+  .NET 8 template pack.
 
 - Made a failed render fail closed. `RenderResult.Pages` and the new `RenderResult.PageCount`
   now throw `RenderFailedException`, carrying the stable failure code, when rendering did not
