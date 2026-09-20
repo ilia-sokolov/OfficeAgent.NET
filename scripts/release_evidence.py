@@ -9,6 +9,7 @@ import json
 import re
 import subprocess
 import sys
+import uuid
 import zipfile
 from pathlib import Path
 from typing import Any
@@ -24,6 +25,12 @@ SHA_RE = re.compile(r"^[0-9a-f]{40}$")
 
 class EvidenceError(ValueError):
     """A fail-closed release evidence validation error."""
+
+
+def sbom_serial_number(filename: str) -> str:
+    """Return a reproducible CycloneDX serial number for a release SBOM."""
+    value = uuid.uuid5(uuid.NAMESPACE_URL, f"https://officeagent.net/sbom/{filename}")
+    return f"urn:uuid:{value}"
 
 
 def read_json(path: Path) -> Any:
@@ -308,6 +315,7 @@ def build_file_sbom(
     return {
         "bomFormat": "CycloneDX",
         "specVersion": inventory["sbomTool"]["specVersion"],
+        "serialNumber": sbom_serial_number(f"{name}.{version}.cdx.json"),
         "version": 1,
         "metadata": {
             "tools": {"components": [{
@@ -391,6 +399,10 @@ def run_cyclonedx(
                 raise EvidenceError(f"CycloneDX failed for {package['id']} {framework or 'all frameworks'}")
             bom_path = output / filename
             bom = read_json(bom_path)
+            # CycloneDX can generate a random serial number, which breaks
+            # reproducible release evidence. Add a deterministic RFC 4122 URN
+            # after generation so GitHub can recognize the document as an SBOM.
+            bom["serialNumber"] = sbom_serial_number(filename)
             component = bom.get("metadata", {}).get("component")
             if not isinstance(component, dict):
                 raise EvidenceError(f"{filename} has no metadata component")
@@ -457,6 +469,8 @@ def validate_sbom(
         raise EvidenceError(f"{path.name} is not a CycloneDX SBOM")
     if value.get("specVersion") != spec_version:
         raise EvidenceError(f"{path.name} has unexpected CycloneDX specVersion")
+    if value.get("serialNumber") != sbom_serial_number(path.name):
+        raise EvidenceError(f"{path.name} has an invalid or non-reproducible CycloneDX serial number")
     metadata = value.get("metadata")
     component = metadata.get("component") if isinstance(metadata, dict) else None
     if not isinstance(component, dict):

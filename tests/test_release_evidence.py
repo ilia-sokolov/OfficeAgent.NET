@@ -117,6 +117,7 @@ class ReleaseEvidenceTests(unittest.TestCase):
             bom = {
                 "bomFormat": "CycloneDX",
                 "specVersion": "1.6",
+                "serialNumber": release_evidence.sbom_serial_number(name),
                 "version": 1,
                 "metadata": {
                     "component": {
@@ -190,6 +191,21 @@ class ReleaseEvidenceTests(unittest.TestCase):
         path.write_text(json.dumps(manifest), encoding="utf-8")
         with self.assertRaisesRegex(release_evidence.EvidenceError, "SBOM inventory"):
             self.verify()
+
+    def test_missing_cyclonedx_serial_number_fails(self) -> None:
+        path = self.output / f"OfficeAgent.Test.{self.VERSION}.net8.0.cdx.json"
+        bom = release_evidence.read_json(path)
+        del bom["serialNumber"]
+        path.write_text(json.dumps(bom), encoding="utf-8")
+        with self.assertRaisesRegex(release_evidence.EvidenceError, "serial number"):
+            release_evidence.validate_sbom(
+                path,
+                "OfficeAgent.Test",
+                self.VERSION,
+                "1.6",
+                "net8.0",
+                {"OfficeAgent.Dependency": self.VERSION},
+            )
 
     def test_incomplete_release_attachment_fails(self) -> None:
         manifest = release_evidence.read_json(self.output / "release-manifest.json")
