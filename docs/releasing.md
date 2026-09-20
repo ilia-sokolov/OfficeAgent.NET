@@ -138,7 +138,21 @@ the libraries before `OfficeAgent.Mcp`, and attaches the original packages, symb
 skill archives, the standalone QuickEdit sample, CycloneDX SBOMs, `release-manifest.json`, and
 `SHA256SUMS` to the same release. It creates GitHub build provenance and product-specific SBOM
 attestations, then publishes NuGet packages and the versioned and `latest` GHCR image. It is the
-only NuGet and container publisher; do not publish the same version manually.
+only NuGet publisher. Do not publish the same NuGet version manually.
+
+If NuGet publication succeeds but the GHCR stage fails, fix the container pipeline on `main`
+without moving the release tag. Then dispatch the gated
+[`publish container` workflow](../.github/workflows/publish-container.yml) for the existing
+version:
+
+```bash
+gh workflow run publish-container.yml --ref main -f version="$VERSION"
+```
+
+This recovery workflow refuses malformed versions, requires the tag to have a published GitHub
+release, requires that release to be the latest release, and builds from the immutable tag. It
+publishes only the versioned and `latest` GHCR image plus its attestations. It never rebuilds or
+pushes NuGet packages.
 
 The publish workflow does not update the MCP Registry. Registry publication is the separate,
 manual step 3 after NuGet exposes the matching `OfficeAgent.Mcp` package.
@@ -311,6 +325,12 @@ gh attestation verify "oci://$IMAGE" \
   --source-ref "refs/tags/$TAG" \
   --source-digest "$SOURCE_SHA"
 ```
+
+The normal signer is `publish.yml` at the release tag. When the gated container recovery
+workflow was required, verify against `publish-container.yml` at the exact `main` commit that
+dispatched the recovery, and confirm the image label `org.opencontainers.image.revision` equals
+the release tag commit. The recovery workflow itself checks out and validates that immutable tag
+before building.
 
 ## 5. Check repository discovery metadata
 
