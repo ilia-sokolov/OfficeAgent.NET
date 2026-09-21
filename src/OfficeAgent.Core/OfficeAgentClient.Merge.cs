@@ -97,7 +97,7 @@ public sealed partial class OfficeAgentClient
         cancellationToken.ThrowIfCancellationRequested();
         if (sources.Count != plan.Inputs.Count || sources.Where((bytes, index) =>
             !string.Equals(Sha256(bytes), plan.Inputs[index].Sha256, StringComparison.Ordinal)).Any())
-            return new() { Diagnostics = new[] { Diagnostic("stale-merge-source", "An assembly input changed; preview again.", "sources") } };
+            return new() { Diagnostics = new[] { Diagnostic(AssemblyDiagnosticCodes.StaleMergeSource, "An assembly input changed; preview again.", "sources") } };
         var candidate = AssembleMerge(sources, plan.Options, cancellationToken);
         if (candidate.Content is null || candidate.Diagnostics.Count != 0)
             return new() { Diagnostics = candidate.Diagnostics };

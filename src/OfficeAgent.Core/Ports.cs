@@ -1,3 +1,4 @@
+using System.Diagnostics.CodeAnalysis;
 using OfficeAgent.Abstractions;
 using DocFormat = OfficeAgent.Abstractions.DocumentFormat;
 
@@ -15,6 +16,7 @@ namespace OfficeAgent.Core;
 /// the same text body, so a second operation in the same plan addressing that body by
 /// index would land somewhere else.
 /// </remarks>
+[Experimental(EngineExtensibility.DiagnosticId, UrlFormat = EngineExtensibility.UrlFormat)]
 public interface IPlanValidatingModule
 {
     /// <summary>
@@ -29,6 +31,7 @@ public interface IPlanValidatingModule
 /// apply timestamp. Modules with time-dependent document metadata should expose the same
 /// clock so tests and receipts remain deterministic.
 /// </summary>
+[Experimental(EngineExtensibility.DiagnosticId, UrlFormat = EngineExtensibility.UrlFormat)]
 public interface IApplyTimeProvider
 {
     /// <summary>Gets the clock used for apply timestamps.</summary>
@@ -49,6 +52,7 @@ public interface IAuditActorProvider
 /// <summary>
 /// Defines the contract implemented by a document format module.
 /// </summary>
+[Experimental(EngineExtensibility.DiagnosticId, UrlFormat = EngineExtensibility.UrlFormat)]
 public interface IFormatModule
 {
     /// <summary>Gets the document format served by the module.</summary>
@@ -90,6 +94,7 @@ public interface IFormatModule
 /// Optional format-module capability that mints the empty package a new document starts
 /// from. This keeps format-specific markup out of the core engine.
 /// </summary>
+[Experimental(EngineExtensibility.DiagnosticId, UrlFormat = EngineExtensibility.UrlFormat)]
 public interface IBlankDocumentFactory
 {
     /// <summary>
@@ -107,6 +112,7 @@ public interface IBlankDocumentFactory
 /// <summary>
 /// Defines preview and apply behavior for one or more plan operations.
 /// </summary>
+[Experimental(EngineExtensibility.DiagnosticId, UrlFormat = EngineExtensibility.UrlFormat)]
 public interface IOperationHandler
 {
     /// <summary>Returns whether the handler supports the operation.</summary>
@@ -129,6 +135,7 @@ public interface IOperationHandler
 /// <summary>
 /// Contains the result of previewing one operation.
 /// </summary>
+[Experimental(EngineExtensibility.DiagnosticId, UrlFormat = EngineExtensibility.UrlFormat)]
 public sealed class OperationPreview
 {
     /// <summary>Gets the proposed change when preview succeeds.</summary>
@@ -152,6 +159,7 @@ public sealed class OperationPreview
 /// Carries the open package, the inspection captured when the context was created, and
 /// the anchor-alias map produced by <see cref="IFormatModule.Stabilize"/>.
 /// </summary>
+[Experimental(EngineExtensibility.DiagnosticId, UrlFormat = EngineExtensibility.UrlFormat)]
 public sealed class ApplyContext
 {
     private readonly IReadOnlyDictionary<string, string> _aliases;
@@ -203,6 +211,7 @@ public sealed class ApplyContext
 /// <summary>
 /// Resolves document handles to readable streams.
 /// </summary>
+[Experimental(EngineExtensibility.DiagnosticId, UrlFormat = EngineExtensibility.UrlFormat)]
 public interface IHandleResolver
 {
     /// <summary>Returns whether this resolver can open the handle.</summary>

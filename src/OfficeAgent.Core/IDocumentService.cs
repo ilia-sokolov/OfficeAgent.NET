@@ -1,3 +1,4 @@
+using System.Diagnostics.CodeAnalysis;
 using OfficeAgent.Abstractions;
 
 namespace OfficeAgent.Core;
@@ -9,6 +10,7 @@ namespace OfficeAgent.Core;
 /// supplied <see cref="System.Threading.CancellationToken"/> at operation
 /// boundaries.
 /// </summary>
+[Experimental(EngineExtensibility.DiagnosticId, UrlFormat = EngineExtensibility.UrlFormat)]
 public interface IDocumentService
 {
     InspectResult Inspect(DocumentHandle handle, InspectOptions options);

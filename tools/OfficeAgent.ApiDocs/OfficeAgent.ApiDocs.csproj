@@ -12,10 +12,16 @@
     <ProjectReference Include="..\..\src\OfficeAgent.AgentFramework\OfficeAgent.AgentFramework.csproj" />
     <ProjectReference Include="..\..\src\OfficeAgent.Core\OfficeAgent.Core.csproj" />
     <ProjectReference Include="..\..\src\OfficeAgent.Excel\OfficeAgent.Excel.csproj" />
+    <ProjectReference Include="..\..\src\OfficeAgent.Mcp\OfficeAgent.Mcp.csproj" />
     <ProjectReference Include="..\..\src\OfficeAgent.PowerPoint\OfficeAgent.PowerPoint.csproj" />
     <ProjectReference Include="..\..\src\OfficeAgent.Rendering\OfficeAgent.Rendering.csproj" />
     <ProjectReference Include="..\..\src\OfficeAgent.SharePoint\OfficeAgent.SharePoint.csproj" />
     <ProjectReference Include="..\..\src\OfficeAgent.Word\OfficeAgent.Word.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- The renderer is the compatibility gate; its precision is pinned by unit tests. -->
+    <InternalsVisibleTo Include="OfficeAgent.Tests" />
   </ItemGroup>
 
 </Project>

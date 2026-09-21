@@ -35,6 +35,7 @@
     <ProjectReference Include="..\..\src\OfficeAgent.Excel\OfficeAgent.Excel.csproj" />
     <ProjectReference Include="..\..\src\OfficeAgent.Rendering\OfficeAgent.Rendering.csproj" />
     <ProjectReference Include="..\..\samples\HostedGateway\HostedGateway.csproj" />
+    <ProjectReference Include="..\..\tools\OfficeAgent.ApiDocs\OfficeAgent.ApiDocs.csproj" />
     <ProjectReference Include="..\OfficeAgent.RenderWorker\OfficeAgent.RenderWorker.csproj" />
   </ItemGroup>
 

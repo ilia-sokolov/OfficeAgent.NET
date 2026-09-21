@@ -53,7 +53,7 @@ internal static class WordDocumentAssembler
         "document body p pPr r rPr t tab br cr noBreakHyphen softHyphen lastRenderedPageBreak " +
         "pStyle rStyle b bCs i iCs caps smallCaps strike dstrike outline shadow emboss imprint vanish webHidden " +
         "color spacing w kern position sz szCs highlight u effect bdr shd fitText vertAlign rtl cs em lang eastAsianLayout specVanish oMath rFonts " +
-        "keepNext keepLines pageBreakBefore widowControl numPr ilvl numId suppressLineNumbers pBdr top left bottom right between bar " +
+        "keepNext keepLines pageBreakBefore widowControl outlineLvl numPr ilvl numId suppressLineNumbers pBdr top left bottom right between bar " +
         "tabs contextualSpacing mirrorIndents suppressOverlap jc textDirection textAlignment textboxTightWrap ind " +
         "snapToGrid suppressAutoHyphens kinsoku wordWrap overflowPunct autoSpaceDE autoSpaceDN adjustRightInd " +
         "tbl tblPr tblGrid gridCol tr trPr tc tcPr tblStyle tblpPr tblOverlap bidiVisual tblStyleRowBandSize tblStyleColBandSize " +
@@ -360,7 +360,7 @@ internal static class WordDocumentAssembler
                 Sources = reports,
                 Diagnostics = new[] { new WorkflowDiagnostic
                 {
-                    Code = ex is MergeException merge ? merge.Code : "invalid-merge-package",
+                    Code = ex is MergeException merge ? merge.Code : AssemblyDiagnosticCodes.InvalidMergePackage,
                     Message = ex.Message, Path = (sourceIndex < 0 ? "output" : "sources/" + sourceIndex) + (ex is MergeException m ? "/" + m.Part : "")
                 } }
             };
@@ -382,23 +382,23 @@ internal static class WordDocumentAssembler
     }
 
     private static string Lookup(Dictionary<string, string> map, string value, string kind) => map.TryGetValue(value, out var result)
-        ? result : throw new MergeException("merge-unresolved-reference", $"Missing {kind} definition '{value}'.", Main);
+        ? result : throw new MergeException(AssemblyDiagnosticCodes.MergeUnresolvedReference, $"Missing {kind} definition '{value}'.", Main);
 
     private static void Assess(Package package, CancellationToken cancellationToken)
     {
         if (!package.Data.ContainsKey(Main) || package.Type(Main) != "application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml")
-            throw new MergeException("unsupported-merge-format", "Assembly requires a standard .docx package with word/document.xml.", Main);
+            throw new MergeException(AssemblyDiagnosticCodes.UnsupportedMergeFormat, "Assembly requires a standard .docx package with word/document.xml.", Main);
         foreach (var name in package.Data.Keys)
         {
             cancellationToken.ThrowIfCancellationRequested();
             if (name == "[Content_Types].xml") continue;
             var type = package.Type(name);
             if (!AllowedTypes.Contains(type) || type is "image/x-emf" or "image/x-wmf")
-                throw new MergeException("unsupported-merge-part", $"Unsupported part content type '{type}'.", name);
+                throw new MergeException(AssemblyDiagnosticCodes.UnsupportedMergePart, $"Unsupported part content type '{type}'.", name);
             if (IsRels(name))
             {
                 var owner = Owner(name);
-                if (owner.Length > 0 && !package.Data.ContainsKey(owner)) throw new MergeException("merge-unresolved-reference", "Relationship owner is missing.", name);
+                if (owner.Length > 0 && !package.Data.ContainsKey(owner)) throw new MergeException(AssemblyDiagnosticCodes.MergeUnresolvedReference, "Relationship owner is missing.", name);
                 var ids = new HashSet<string>(StringComparer.Ordinal);
                 foreach (var relationship in package.Xml(name).Root!.Elements())
                 {
@@ -408,15 +408,15 @@ internal static class WordDocumentAssembler
                         ? "http://schemas.openxmlformats.org/package/2006/relationships/metadata/core-properties"
                         : R.NamespaceName + "/" + tail;
                     if (!AllowedRelationships.Contains(tail) || relType != expectedType || !ids.Add((string?)relationship.Attribute("Id") ?? ""))
-                        throw new MergeException("unsupported-merge-relationship", "Unsupported or duplicate relationship.", name);
+                        throw new MergeException(AssemblyDiagnosticCodes.UnsupportedMergeRelationship, "Unsupported or duplicate relationship.", name);
                     var target = (string?)relationship.Attribute("Target") ?? "";
                     if ((string?)relationship.Attribute("TargetMode") == "External")
                     {
                         if (tail != "hyperlink" || !Uri.TryCreate(target, UriKind.Absolute, out var uri) || uri.Scheme is not ("http" or "https" or "mailto"))
-                            throw new MergeException("unsupported-merge-external-content", "Only http, https, and mailto external hyperlinks are supported; external content is never fetched.", name);
+                            throw new MergeException(AssemblyDiagnosticCodes.UnsupportedMergeExternalContent, "Only http, https, and mailto external hyperlinks are supported; external content is never fetched.", name);
                     }
                     else if (!package.Data.ContainsKey(Resolve(owner, target)))
-                        throw new MergeException("merge-unresolved-reference", "Internal relationship target is missing.", name);
+                        throw new MergeException(AssemblyDiagnosticCodes.MergeUnresolvedReference, "Internal relationship target is missing.", name);
                     else
                     {
                         var resolved = Resolve(owner, target);
@@ -431,7 +431,7 @@ internal static class WordDocumentAssembler
                             _ => null
                         };
                         if (canonical is not null && (resolved != canonical || owner != (tail == "officeDocument" ? "" : Main)))
-                            throw new MergeException("unsupported-merge-part-layout", "Shared parts must use the standard Word package layout.", name);
+                            throw new MergeException(AssemblyDiagnosticCodes.UnsupportedMergePartLayout, "Shared parts must use the standard Word package layout.", name);
                     }
                 }
             }
@@ -445,28 +445,28 @@ internal static class WordDocumentAssembler
                     {
                         if (element.Name.Namespace == W && !WordElements.Contains(element.Name.LocalName) ||
                             element.Name.Namespace != W && element.Name.Namespace != Wp && element.Name.Namespace != A && element.Name.Namespace != Pic)
-                            throw new MergeException("unsupported-merge-content", $"Unsupported content element '{element.Name.LocalName}'.", name);
+                            throw new MergeException(AssemblyDiagnosticCodes.UnsupportedMergeContent, $"Unsupported content element '{element.Name.LocalName}'.", name);
                         if (element.Name == W + "sdtPr" && element.Element(W + "text") is null)
-                            throw new MergeException("unsupported-merge-content-control", "Only plain-text content controls are supported.", name);
+                            throw new MergeException(AssemblyDiagnosticCodes.UnsupportedMergeContentControl, "Only plain-text content controls are supported.", name);
                         if (element.Name == W + "lvlPicBulletId" || element.Name == W + "printerSettings" || element.Name == W + "placeholder")
-                            throw new MergeException("unsupported-merge-content", $"Unsupported dependency '{element.Name.LocalName}'.", name);
+                            throw new MergeException(AssemblyDiagnosticCodes.UnsupportedMergeContent, $"Unsupported dependency '{element.Name.LocalName}'.", name);
                         if (element.Name == A + "graphicData" && (string?)element.Attribute("uri") != Pic.NamespaceName)
-                            throw new MergeException("unsupported-merge-content", "Only embedded raster picture drawings are supported.", name);
+                            throw new MergeException(AssemblyDiagnosticCodes.UnsupportedMergeContent, "Only embedded raster picture drawings are supported.", name);
                         foreach (var attribute in element.Attributes().Where(a => a.Name.Namespace == R))
                             if (!package.Relationships(name).Any(rel => (string?)rel.Attribute("Id") == attribute.Value))
-                                throw new MergeException("merge-unresolved-reference", "Content relationship is missing.", name);
+                                throw new MergeException(AssemblyDiagnosticCodes.MergeUnresolvedReference, "Content relationship is missing.", name);
                     }
                     ValidateFields(xml, name);
                 }
             }
         }
         var body = package.Xml(Main).Root?.Element(W + "body");
-        if (body is null) throw new MergeException("invalid-merge-package", "Missing document body.", Main);
+        if (body is null) throw new MergeException(AssemblyDiagnosticCodes.InvalidMergePackage, "Missing document body.", Main);
         if (package.Data.ContainsKey(Settings))
         {
             var settings = package.Xml(Settings);
             if (settings.Descendants().Any(e => e.Name.LocalName is "trackRevisions" or "documentProtection" or "mailMerge" or "attachedTemplate" or "saveThroughXslt"))
-                throw new MergeException("unsupported-merge-settings", "Review, protection, or external processing settings are unsupported.", Settings);
+                throw new MergeException(AssemblyDiagnosticCodes.UnsupportedMergeSettings, "Review, protection, or external processing settings are unsupported.", Settings);
         }
         // Validate each input before importing it, including schema ordering and references known to the SDK.
         ValidateSchema(package.Original!, cancellationToken);
@@ -477,7 +477,7 @@ internal static class WordDocumentAssembler
         static bool Allowed(string instruction) => new[] { "PAGE", "NUMPAGES", "SECTIONPAGES" }.Contains(instruction.Trim(), StringComparer.OrdinalIgnoreCase);
         foreach (var field in xml.Descendants(W + "fldSimple"))
             if (!Allowed((string?)field.Attribute(W + "instr") ?? ""))
-                throw new MergeException("unsupported-merge-field", "Only PAGE, NUMPAGES, and SECTIONPAGES fields without switches are supported.", part);
+                throw new MergeException(AssemblyDiagnosticCodes.UnsupportedMergeField, "Only PAGE, NUMPAGES, and SECTIONPAGES fields without switches are supported.", part);
         var stack = new Stack<StringBuilder>();
         foreach (var element in xml.Descendants())
         {
@@ -488,17 +488,17 @@ internal static class WordDocumentAssembler
                 else if (type == "separate" || type == "end")
                 {
                     if (stack.Count == 0 || !Allowed(stack.Peek().ToString()))
-                        throw new MergeException("unsupported-merge-field", "Unsupported or unbalanced field instruction.", part);
+                        throw new MergeException(AssemblyDiagnosticCodes.UnsupportedMergeField, "Unsupported or unbalanced field instruction.", part);
                     if (type == "end") stack.Pop();
                 }
             }
             else if (element.Name == W + "instrText")
             {
-                if (stack.Count == 0) throw new MergeException("unsupported-merge-field", "Unbalanced field instruction.", part);
+                if (stack.Count == 0) throw new MergeException(AssemblyDiagnosticCodes.UnsupportedMergeField, "Unbalanced field instruction.", part);
                 stack.Peek().Append(element.Value);
             }
         }
-        if (stack.Count != 0) throw new MergeException("unsupported-merge-field", "Unbalanced field instruction.", part);
+        if (stack.Count != 0) throw new MergeException(AssemblyDiagnosticCodes.UnsupportedMergeField, "Unbalanced field instruction.", part);
     }
 
     private static void CheckSharedFormatting(Package first, Package next)
@@ -515,11 +515,11 @@ internal static class WordDocumentAssembler
                 if (left is null) left = new XElement(W + "settings");
                 if (right is null) right = new XElement(W + "settings");
             }
-            if (!Equivalent(left, right)) throw new MergeException("merge-incompatible-formatting",
+            if (!Equivalent(left, right)) throw new MergeException(AssemblyDiagnosticCodes.MergeIncompatibleFormatting,
                 "Source themes, font tables, and layout-affecting settings must agree; normalize them explicitly before assembly.", name);
         }
         XElement? Defaults(Package p) => p.Data.ContainsKey(Styles) ? p.Xml(Styles).Root!.Element(W + "docDefaults") : null;
-        if (!Equivalent(Defaults(first), Defaults(next))) throw new MergeException("merge-incompatible-formatting", "Document defaults differ; assembly cannot promise source formatting preservation.", Styles);
+        if (!Equivalent(Defaults(first), Defaults(next))) throw new MergeException(AssemblyDiagnosticCodes.MergeIncompatibleFormatting, "Document defaults differ; assembly cannot promise source formatting preservation.", Styles);
     }
 
     private static bool Equivalent(XElement? left, XElement? right)
@@ -537,7 +537,7 @@ internal static class WordDocumentAssembler
         using var stream = new MemoryStream(bytes, writable: false);
         using var document = WordprocessingDocument.Open(stream, false);
         var error = new OpenXmlValidator(DocumentFormat.OpenXml.FileFormatVersions.Office2019).Validate(document).FirstOrDefault();
-        if (error is not null) throw new MergeException("invalid-merge-package", error.Description, error.Part?.Uri.ToString() ?? Main);
+        if (error is not null) throw new MergeException(AssemblyDiagnosticCodes.InvalidMergePackage, error.Description, error.Part?.Uri.ToString() ?? Main);
         cancellationToken.ThrowIfCancellationRequested();
     }
 
@@ -572,7 +572,7 @@ internal static class WordDocumentAssembler
     {
         var uri = new Uri(new Uri("http://package/" + owner), target);
         if (uri.Host != "package" || uri.Scheme != "http" || uri.Query.Length > 0 || uri.Fragment.Length > 0)
-            throw new MergeException("merge-unresolved-reference", "Invalid internal package URI.", owner);
+            throw new MergeException(AssemblyDiagnosticCodes.MergeUnresolvedReference, "Invalid internal package URI.", owner);
         return Uri.UnescapeDataString(uri.AbsolutePath.TrimStart('/'));
     }
     private static string Relative(string owner, string target) => new Uri("http://package/" + owner).MakeRelativeUri(new Uri("http://package/" + target)).ToString();
@@ -614,9 +614,9 @@ internal static class WordDocumentAssembler
             {
                 cancellationToken.ThrowIfCancellationRequested();
                 if (++parts > limits.MaximumParts || entry.Length > limits.MaximumExpandedBytes - expanded)
-                    throw new MergeException("merge-resource-limit", "Expanded package size or part count exceeds the host limit.", entry.FullName);
+                    throw new MergeException(AssemblyDiagnosticCodes.MergeResourceLimit, "Expanded package size or part count exceeds the host limit.", entry.FullName);
                 if (entry.FullName.StartsWith("/", StringComparison.Ordinal) || entry.FullName.Contains("\\") || entry.FullName.Split('/').Any(s => s is ".." or "." or "") || package.Data.ContainsKey(entry.FullName))
-                    throw new MergeException("invalid-merge-package", "Noncanonical or duplicate package entry.", entry.FullName);
+                    throw new MergeException(AssemblyDiagnosticCodes.InvalidMergePackage, "Noncanonical or duplicate package entry.", entry.FullName);
                 using var input = entry.Open();
                 using var output = new MemoryStream();
                 var buffer = new byte[81920];
@@ -625,7 +625,7 @@ internal static class WordDocumentAssembler
                 {
                     cancellationToken.ThrowIfCancellationRequested();
                     expanded += read;
-                    if (expanded > limits.MaximumExpandedBytes) throw new MergeException("merge-resource-limit", "Expanded input exceeds the host limit.", entry.FullName);
+                    if (expanded > limits.MaximumExpandedBytes) throw new MergeException(AssemblyDiagnosticCodes.MergeResourceLimit, "Expanded input exceeds the host limit.", entry.FullName);
                     output.Write(buffer, 0, read);
                 }
                 package.Data.Add(entry.FullName, output.ToArray());
@@ -643,7 +643,7 @@ internal static class WordDocumentAssembler
         public byte[] Write(DocumentMergeLimits limits, CancellationToken cancellationToken)
         {
             if (Data.Count + 1 > limits.MaximumParts || Data.Sum(p => p.Value.LongLength) > limits.MaximumExpandedBytes)
-                throw new MergeException("merge-resource-limit", "Assembled expanded content exceeds the host limit.", "package");
+                throw new MergeException(AssemblyDiagnosticCodes.MergeResourceLimit, "Assembled expanded content exceeds the host limit.", "package");
             var types = new XElement(Ct + "Types", Data.Keys.OrderBy(n => n, StringComparer.Ordinal).Select(name =>
                 new XElement(Ct + "Override", new XAttribute("PartName", "/" + name), new XAttribute("ContentType", Type(name)))));
             AddXml("[Content_Types].xml", new XDocument(types), "");
@@ -656,10 +656,10 @@ internal static class WordDocumentAssembler
                     var entry = zip.CreateEntry(item.Key);
                     entry.LastWriteTime = new DateTimeOffset(2000, 1, 1, 0, 0, 0, TimeSpan.Zero);
                     using (var output = entry.Open()) output.Write(item.Value, 0, item.Value.Length);
-                    if (stream.Length > limits.MaximumOutputBytes) throw new MergeException("merge-resource-limit", "Assembled output exceeds the host limit.", "package");
+                    if (stream.Length > limits.MaximumOutputBytes) throw new MergeException(AssemblyDiagnosticCodes.MergeResourceLimit, "Assembled output exceeds the host limit.", "package");
                 }
             }
-            if (stream.Length > limits.MaximumOutputBytes) throw new MergeException("merge-resource-limit", "Assembled output exceeds the host limit.", "package");
+            if (stream.Length > limits.MaximumOutputBytes) throw new MergeException(AssemblyDiagnosticCodes.MergeResourceLimit, "Assembled output exceeds the host limit.", "package");
             return stream.ToArray();
         }
     }

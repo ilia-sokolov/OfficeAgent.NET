@@ -137,7 +137,7 @@ public sealed class RenderResult
     {
         if (Succeeded) return;
         throw new RenderFailedException(
-            FailureCode ?? "renderer-failed", Message ?? "Rendering did not succeed.");
+            FailureCode ?? RenderFailureCodes.RendererFailed, Message ?? "Rendering did not succeed.");
     }
 
     /// <summary>

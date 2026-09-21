@@ -123,7 +123,7 @@ public sealed class PlanCompatibilityTests
         Assert.False(result.RootElement.GetProperty("committed").GetBoolean());
         Assert.Equal(
             ValidationErrorCodes.ContractMismatch,
-            result.RootElement.GetProperty("errors")[0].GetProperty("Code").GetString());
+            result.RootElement.GetProperty("errors")[0].GetProperty("code").GetString());
         Assert.Equal(1, store.Count);
         Assert.Equal(input, store.Read(reference.ItemId));
         Assert.Equal(reference.Version, store.Describe(reference.ItemId).Version);
@@ -150,7 +150,7 @@ public sealed class PlanCompatibilityTests
         Assert.False(result.RootElement.GetProperty("isValid").GetBoolean());
         Assert.Equal(
             "invalid-json",
-            result.RootElement.GetProperty("errors")[0].GetProperty("Code").GetString());
+            result.RootElement.GetProperty("errors")[0].GetProperty("code").GetString());
     }
 
     private static StreamHandle Handle(byte[] bytes) =>

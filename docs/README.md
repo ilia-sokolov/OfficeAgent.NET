@@ -37,6 +37,7 @@ this page to choose the shortest path for your scenario.
 | Bound what an untrusted document can spend | [Ingestion limits](ingestion-limits.md) | [Operations](operations.md) |
 | Find out what the server supports before planning | [Capability discovery](capability-discovery.md) | [Document plans](document-plans.md) |
 | Measure a candidate, or check for a regression | [Benchmarks](benchmarks.md) | [Word preservation evidence](word-preservation-evidence.md) |
+| Move an existing integration from 0.9 to 1.0 | [Upgrading to 1.0](upgrading-to-1.0.md) | [Wire contract](wire-contract.md) |
 
 ## Packages
 
@@ -101,6 +102,7 @@ and optimistic-concurrency conflicts instead of guessing.
 - [Adoption validation](adoption-validation.md) — fresh-user trials across the main Word, PowerPoint, and review paths before broad promotion.
 - [Agent selection evaluation](../evaluations/agent-selection/v0.9.0/README.md) - controlled recall, search/selection, and implementation protocol with explicit live evidence limits.
 - [Support and compatibility](../SUPPORT.md) — supported runtimes, version policy, release assurances, and help routes.
+- [Compatibility policy](compatibility.md) — what 1.x promises for the API, JSON, configuration and defaults, and what it excludes.
 - [Security policy](../SECURITY.md) — supported versions, private reporting, and the hosted security boundary.
 
 ### Reference

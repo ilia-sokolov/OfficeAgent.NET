@@ -101,19 +101,39 @@ public sealed class OfficeAgentTools
     private const string RegexTimeoutMessage =
         "The regular expression exceeded the search time limit. Use a simpler pattern or a literal search.";
 
-    private static readonly JsonSerializerOptions Json = new() { WriteIndented = false };
+    /// <summary>
+    /// Every tool response is camelCase. Before 1.0 this serializer had no naming policy, so
+    /// anonymous wrappers written in camelCase came out camelCase while the typed records nested
+    /// inside them came out PascalCase, and one inspect_document payload carried both. Casing is
+    /// now a property of the options rather than of how a payload happened to be built. Enums
+    /// are written as names for the same reason: a response that happens to carry a typed enum
+    /// must not report it as a number.
+    /// </summary>
+    private static readonly JsonSerializerOptions Json = new()
+    {
+        WriteIndented = false,
+        PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
+        Converters = { new JsonStringEnumConverter() }
+    };
 
     /// <summary>
     /// Discovery is read by a model, so its enums are written as names. A format reported
-    /// as <c>2</c> tells an agent nothing it can act on.
+    /// as <c>2</c> tells an agent nothing it can act on. Property names are camelCase, like
+    /// every other tool response.
     /// </summary>
     private static readonly JsonSerializerOptions CapabilityJson = new()
     {
         WriteIndented = false,
+        PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
         Converters = { new JsonStringEnumConverter() }
     };
 
-    private static readonly JsonSerializerOptions PlanJson = new()
+    /// <summary>
+    /// The one JSON reader for plans and workflow requests on every agent surface, MCP included.
+    /// Internal rather than private so the wire-contract baseline reads these exact options
+    /// instead of a copy that could drift from them.
+    /// </summary>
+    internal static readonly JsonSerializerOptions PlanJson = new()
     {
         PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
         PropertyNameCaseInsensitive = true,
@@ -1122,13 +1142,13 @@ public sealed class OfficeAgentTools
     {
         try { return await work().ConfigureAwait(false); }
         catch (OperationCanceledException) { return ContentError(name, "cancelled", "Operation was cancelled."); }
-        catch (ConnectionForbiddenException ex) { return ContentError(name, "connection-forbidden", ex.Message); }
-        catch (RegexMatchTimeoutException) { return ContentError(name, "regex-timeout", RegexTimeoutMessage); }
+        catch (ConnectionForbiddenException ex) { return ContentError(name, ToolErrorCodes.ConnectionForbidden, ex.Message); }
+        catch (RegexMatchTimeoutException) { return ContentError(name, ToolErrorCodes.RegexTimeout, RegexTimeoutMessage); }
         catch (OpenXmlIngestionLimitException ex) { return ContentError(name, OpenXmlIngestionLimitException.Code, ex.Message); }
         catch (OpenXmlPackageRejectedException ex) { return ContentError(name, OpenXmlPackageRejectedException.Code, ex.Message); }
-        catch (JsonException ex) { return ContentError(name, "invalid-json", ex.Message); }
-        catch (ArgumentException ex) { return ContentError(name, "invalid-argument", ex.Message); }
-        catch (Exception) { return ContentError(name, "internal-error", "An unexpected internal error occurred."); }
+        catch (JsonException ex) { return ContentError(name, ToolErrorCodes.InvalidJson, ex.Message); }
+        catch (ArgumentException ex) { return ContentError(name, ToolErrorCodes.InvalidArgument, ex.Message); }
+        catch (Exception) { return ContentError(name, ToolErrorCodes.InternalError, "An unexpected internal error occurred."); }
     }
 
     private static string ContentError(string? name, string code, string message) =>
@@ -1264,12 +1284,12 @@ public sealed class OfficeAgentTools
     {
         try { return await work().ConfigureAwait(false); }
         catch (OperationCanceledException) { return SerializeError("cancelled", "Operation was cancelled."); }
-        catch (ConnectionForbiddenException ex) { return SerializeError("connection-forbidden", ex.Message); }
-        catch (RegexMatchTimeoutException) { return SerializeError("regex-timeout", RegexTimeoutMessage); }
+        catch (ConnectionForbiddenException ex) { return SerializeError(ToolErrorCodes.ConnectionForbidden, ex.Message); }
+        catch (RegexMatchTimeoutException) { return SerializeError(ToolErrorCodes.RegexTimeout, RegexTimeoutMessage); }
         catch (OpenXmlIngestionLimitException ex) { return SerializeError(OpenXmlIngestionLimitException.Code, ex.Message); }
         catch (OpenXmlPackageRejectedException ex) { return SerializeError(OpenXmlPackageRejectedException.Code, ex.Message); }
-        catch (JsonException ex) { return SerializeError("invalid-json", ex.Message); }
-        catch (ArgumentException ex) { return SerializeError("invalid-argument", ex.Message); }
+        catch (JsonException ex) { return SerializeError(ToolErrorCodes.InvalidJson, ex.Message); }
+        catch (ArgumentException ex) { return SerializeError(ToolErrorCodes.InvalidArgument, ex.Message); }
         catch (DocumentProviderException ex)
         {
             return SerializeError(
@@ -1277,7 +1297,7 @@ public sealed class OfficeAgentTools
                 ProviderMessage(ex.Code),
                 ex.Provider, ex.ConnectionId, ex.ItemId);
         }
-        catch (Exception) { return SerializeError("internal-error", "An unexpected internal error occurred."); }
+        catch (Exception) { return SerializeError(ToolErrorCodes.InternalError, "An unexpected internal error occurred."); }
     }
 
     private async ValueTask DemandAccessAsync(
@@ -1355,16 +1375,16 @@ public sealed class OfficeAgentTools
 
     private static string ProviderCodeToWire(ProviderErrorCode code) => code switch
     {
-        ProviderErrorCode.NotFound => "not-found",
-        ProviderErrorCode.AccessDenied => "access-denied",
-        ProviderErrorCode.ContentTooLarge => "content-too-large",
-        ProviderErrorCode.ExtensionNotAllowed => "extension-not-allowed",
-        ProviderErrorCode.VersionConflict => "version-conflict",
-        ProviderErrorCode.InvalidArgument => "invalid-argument",
-        ProviderErrorCode.ConfigurationError => "configuration-error",
-        ProviderErrorCode.IO => "io-error",
-        ProviderErrorCode.AlreadyExists => "already-exists",
-        _ => "provider-error"
+        ProviderErrorCode.NotFound => ToolErrorCodes.NotFound,
+        ProviderErrorCode.AccessDenied => ToolErrorCodes.AccessDenied,
+        ProviderErrorCode.ContentTooLarge => ToolErrorCodes.ContentTooLarge,
+        ProviderErrorCode.ExtensionNotAllowed => ToolErrorCodes.ExtensionNotAllowed,
+        ProviderErrorCode.VersionConflict => ToolErrorCodes.VersionConflict,
+        ProviderErrorCode.InvalidArgument => ToolErrorCodes.InvalidArgument,
+        ProviderErrorCode.ConfigurationError => ToolErrorCodes.ConfigurationError,
+        ProviderErrorCode.IO => ToolErrorCodes.IOError,
+        ProviderErrorCode.AlreadyExists => ToolErrorCodes.AlreadyExists,
+        _ => ToolErrorCodes.ProviderError
     };
 
     /// <summary>

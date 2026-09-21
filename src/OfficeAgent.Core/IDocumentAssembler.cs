@@ -1,8 +1,10 @@
+using System.Diagnostics.CodeAnalysis;
 using OfficeAgent.Abstractions;
 
 namespace OfficeAgent.Core;
 
 /// <summary>Optional format-module capability for full document assembly.</summary>
+[Experimental(EngineExtensibility.DiagnosticId, UrlFormat = EngineExtensibility.UrlFormat)]
 public interface IDocumentAssembler
 {
     /// <summary>Builds and validates one assembled candidate from ordered exact source bytes.</summary>
@@ -11,6 +13,7 @@ public interface IDocumentAssembler
 }
 
 /// <summary>Validated candidate bytes, source coverage, or blocking diagnostics.</summary>
+[Experimental(EngineExtensibility.DiagnosticId, UrlFormat = EngineExtensibility.UrlFormat)]
 public sealed class DocumentAssemblyCandidate
 {
     /// <summary>Gets valid assembled bytes, or null when diagnostics block assembly.</summary>

@@ -29,8 +29,9 @@ A `DocumentPlan` is the wire contract between an agent and the engine. It is a J
 
 ## Contract compatibility
 
-The package version and wire versions are separate. OfficeAgent.NET 0.9 uses edit-plan
-contract `0.2`, merge-plan schema `1`, and receipt schema `1`.
+The package version and wire versions are separate. OfficeAgent.NET 1.0 uses edit-plan
+contract `0.2`, merge-plan schema `1`, and receipt schema `1`, as 0.9 did. The
+[compatibility policy](compatibility.md) says what each of these promises within 1.x.
 
 | Input | Outcome |
 | --- | --- |

@@ -38,7 +38,7 @@ public class EphemeralDocumentTests
         // Saving stabilises the paragraph ids, so the positional one the create plan used
         // is gone; this is the ordinary inspect-then-edit loop, done by id.
         var inspected = await Json(session.Tools.InspectDocument("session", documentId));
-        var headingId = inspected.GetProperty("paragraphs")[0].GetProperty("ParaId").GetString()!;
+        var headingId = inspected.GetProperty("paragraphs")[0].GetProperty("paraId").GetString()!;
 
         // Every edit after this names the id, never the bytes.
         for (var step = 0; step < 5; step++)

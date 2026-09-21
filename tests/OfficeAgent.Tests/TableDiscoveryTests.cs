@@ -28,10 +28,10 @@ public class TableDiscoveryTests
         using var report = JsonDocument.Parse(await tools.InspectDocument("workspace", added.ItemId));
 
         Assert.True(report.RootElement.TryGetProperty("nodes", out var nodes));
-        var tableNode = nodes.EnumerateArray().FirstOrDefault(n => n.GetProperty("Kind").GetString() == "table");
+        var tableNode = nodes.EnumerateArray().FirstOrDefault(n => n.GetProperty("kind").GetString() == "table");
         Assert.NotEqual(JsonValueKind.Undefined, tableNode.ValueKind);
-        Assert.Equal("table#0", tableNode.GetProperty("Path").GetString());
-        Assert.Contains("row", tableNode.GetProperty("Summary").GetString());
+        Assert.Equal("table#0", tableNode.GetProperty("path").GetString());
+        Assert.Contains("row", tableNode.GetProperty("summary").GetString());
     }
 
     private sealed class ToolsWorkspace : IDisposable

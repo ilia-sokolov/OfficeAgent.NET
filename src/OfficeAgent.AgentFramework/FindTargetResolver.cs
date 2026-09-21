@@ -97,7 +97,7 @@ internal sealed class FindTargetResolver
             var target = (JsonObject)node!["target"]!;
             if (!TryGetString(target, "find", out var pattern) || pattern.Length == 0)
             {
-                failures.Add(new Failure("invalid-argument",
+                failures.Add(new Failure(ToolErrorCodes.InvalidArgument,
                     $"Operation {index}: \"find\" must be a non-empty string."));
                 continue;
             }
@@ -134,7 +134,7 @@ internal sealed class FindTargetResolver
     {
         if (hits.Count == 0)
         {
-            failures.Add(new Failure("anchor-not-found",
+            failures.Add(new Failure(ValidationErrorCodes.AnchorNotFound,
                 $"Operation {operationIndex}: no text matching \"{pattern}\" is in the document. " +
                 "Check the wording against inspect_document rather than retrying the same text."));
             return null;
@@ -144,7 +144,7 @@ internal sealed class FindTargetResolver
         {
             if (index < 0 || index >= hits.Count)
             {
-                failures.Add(new Failure("anchor-not-found",
+                failures.Add(new Failure(ValidationErrorCodes.AnchorNotFound,
                     $"Operation {operationIndex}: \"match\": {index} is out of range - " +
                     $"\"{pattern}\" matches {hits.Count} time(s), so valid values are 0 to {hits.Count - 1}."));
                 return null;
@@ -155,7 +155,7 @@ internal sealed class FindTargetResolver
         if (hits.Count > 1)
         {
             var candidates = string.Join("; ", hits.Select((hit, i) => $"match {i}: …{hit.Context}…"));
-            failures.Add(new Failure("ambiguous-anchor",
+            failures.Add(new Failure(ValidationErrorCodes.AmbiguousAnchor,
                 $"Operation {operationIndex}: \"{pattern}\" matches {hits.Count} times, so it is unclear which one to edit. " +
                 $"Re-issue the operation with \"match\": <index>, or use more surrounding text. Candidates - {candidates}"));
             return null;

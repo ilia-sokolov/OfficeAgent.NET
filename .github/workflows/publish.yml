@@ -63,7 +63,7 @@ jobs:
         run: dotnet build OfficeAgent.NET.sln -c Release --no-restore
 
       - name: Verify generated C# API reference
-        run: dotnet run --project tools/OfficeAgent.ApiDocs --configuration Release --no-build -- --check docs/csharp-api.md
+        run: dotnet run --project tools/OfficeAgent.ApiDocs --configuration Release --no-build -- --check docs/csharp-api.md docs/wire-contract.md
 
       - name: Test (Release)
         run: dotnet test OfficeAgent.NET.sln -c Release --no-build

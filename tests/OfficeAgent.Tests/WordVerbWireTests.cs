@@ -540,8 +540,8 @@ public class WordVerbWireTests
             using var parsed = JsonDocument.Parse(json);
 
             return parsed.RootElement.GetProperty("nodes").EnumerateArray()
-                .Where(n => n.GetProperty("Kind").GetString() == kind)
-                .Select(n => (n.GetProperty("Path").GetString()!, n.GetProperty("Summary").GetString()!))
+                .Where(n => n.GetProperty("kind").GetString() == kind)
+                .Select(n => (n.GetProperty("path").GetString()!, n.GetProperty("summary").GetString()!))
                 .ToList();
         }
 
@@ -549,12 +549,12 @@ public class WordVerbWireTests
         public async Task<string> ParaIdIn(DocumentReference document, string location) =>
             (await Paragraphs(document))
                 .First(p => p.GetProperty("location").GetString() == location)
-                .GetProperty("ParaId").GetString()!;
+                .GetProperty("paraId").GetString()!;
 
         public async Task<string> ParaIdWithText(DocumentReference document, string text) =>
             (await Paragraphs(document))
-                .First(p => p.GetProperty("Text").GetString()?.Contains(text) == true)
-                .GetProperty("ParaId").GetString()!;
+                .First(p => p.GetProperty("text").GetString()?.Contains(text) == true)
+                .GetProperty("paraId").GetString()!;
 
         private async Task<IReadOnlyList<JsonElement>> Paragraphs(DocumentReference document)
         {

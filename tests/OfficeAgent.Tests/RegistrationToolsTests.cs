@@ -65,7 +65,7 @@ public class RegistrationToolsTests
         Assert.True(File.Exists(Path.Combine(workspace.Root, relativePath)));
 
         var error = JsonDocument.Parse(await tools.InspectDocument("workspace", documentId));
-        Assert.Equal("not-found", error.RootElement.GetProperty("errors")[0].GetProperty("Code").GetString());
+        Assert.Equal("not-found", error.RootElement.GetProperty("errors")[0].GetProperty("code").GetString());
     }
 
     [Fact]
@@ -76,7 +76,7 @@ public class RegistrationToolsTests
 
         var report = JsonDocument.Parse(await tools.RegisterDocument("nope", "contract.docx"));
         Assert.False(report.RootElement.GetProperty("isValid").GetBoolean());
-        Assert.Equal("configuration-error", report.RootElement.GetProperty("errors")[0].GetProperty("Code").GetString());
+        Assert.Equal("configuration-error", report.RootElement.GetProperty("errors")[0].GetProperty("code").GetString());
     }
 
     [Fact]
@@ -87,11 +87,11 @@ public class RegistrationToolsTests
 
         var report = JsonDocument.Parse(await tools.RegisterDocument("workspace", "../outside.docx"));
         Assert.False(report.RootElement.GetProperty("isValid").GetBoolean());
-        Assert.Equal("access-denied", report.RootElement.GetProperty("errors")[0].GetProperty("Code").GetString());
+        Assert.Equal("access-denied", report.RootElement.GetProperty("errors")[0].GetProperty("code").GetString());
         Assert.DoesNotContain(workspace.Root, report.RootElement.GetRawText());
 
         var missing = JsonDocument.Parse(await tools.RegisterDocument("workspace", "missing.docx"));
-        Assert.Equal("not-found", missing.RootElement.GetProperty("errors")[0].GetProperty("Code").GetString());
+        Assert.Equal("not-found", missing.RootElement.GetProperty("errors")[0].GetProperty("code").GetString());
         Assert.DoesNotContain(workspace.Root, missing.RootElement.GetRawText());
     }
 

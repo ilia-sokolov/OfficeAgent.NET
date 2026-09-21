@@ -39,7 +39,7 @@ public sealed partial class OfficeAgentClient
             .ToDictionary(group => group.Key, group => group.ToList(), StringComparer.Ordinal);
 
         foreach (var slot in slots.Where(slot => slot.Value.Count != 1))
-            diagnostics.Add(Diagnostic("ambiguous-template-slot",
+            diagnostics.Add(Diagnostic(TemplateDiagnosticCodes.AmbiguousTemplateSlot,
                 $"Template slot '{slot.Key}' occurs {slot.Value.Count} times; template tags must be unique.", slot.Key));
 
         foreach (var entry in binding.Values)
@@ -49,7 +49,7 @@ public sealed partial class OfficeAgentClient
             if (!slots.TryGetValue(name, out var matches))
             {
                 if (binding.RejectUnknownValues)
-                    diagnostics.Add(Diagnostic("unknown-template-value", $"No template slot is tagged '{name}'.", name));
+                    diagnostics.Add(Diagnostic(TemplateDiagnosticCodes.UnknownTemplateValue, $"No template slot is tagged '{name}'.", name));
                 continue;
             }
             if (matches.Count != 1)
@@ -71,7 +71,7 @@ public sealed partial class OfficeAgentClient
             if (matches.Count != 1) continue;
             if (binding.Values.ContainsKey(name)) continue;
             if (binding.MissingValueBehavior == MissingTemplateValueBehavior.Fail)
-                diagnostics.Add(Diagnostic("missing-template-value", $"No value was supplied for template slot '{name}'.", name));
+                diagnostics.Add(Diagnostic(TemplateDiagnosticCodes.MissingTemplateValue, $"No value was supplied for template slot '{name}'.", name));
             else if (binding.MissingValueBehavior == MissingTemplateValueBehavior.Empty && matches.Count == 1)
                 operations.Add(new FillOp
                 {
@@ -82,7 +82,7 @@ public sealed partial class OfficeAgentClient
         }
 
         if (binding.RepeatingTables.Count > 0 && inspect.Format != DocFormat.Word)
-            diagnostics.Add(Diagnostic("unsupported-template-feature",
+            diagnostics.Add(Diagnostic(TemplateDiagnosticCodes.UnsupportedTemplateFeature,
                 "Repeating table rows are currently supported only for Word templates.", "repeatingTables"));
 
         var tablePaths = new HashSet<string>(inspect.Nodes
@@ -92,7 +92,7 @@ public sealed partial class OfficeAgentClient
         {
             if (string.IsNullOrWhiteSpace(table.TablePath) || !tablePaths.Contains(table.TablePath))
             {
-                diagnostics.Add(Diagnostic("template-table-not-found",
+                diagnostics.Add(Diagnostic(TemplateDiagnosticCodes.TemplateTableNotFound,
                     $"No inspected table has path '{table.TablePath}'.", table.TablePath));
                 continue;
             }
@@ -163,7 +163,7 @@ public sealed partial class OfficeAgentClient
 
         if (expectedToken is not null && !Matches(expectedToken, preview.Token))
             return Refused(request,
-                "stale-batch-preview",
+                TemplateDiagnosticCodes.StaleBatchPreview,
                 "The template or the batch has changed since it was previewed, so this commit would " +
                 "apply intent nobody reviewed. Preview again and commit the new token.");
 
@@ -190,7 +190,7 @@ public sealed partial class OfficeAgentClient
                     Outcome = TemplateItemOutcome.Skipped,
                     Diagnostics = new[]
                     {
-                        Diagnostic("item-skipped",
+                        Diagnostic(TemplateDiagnosticCodes.ItemSkipped,
                             "An earlier item failed and this batch stops on error, so this output was " +
                             "never attempted and does not exist.", item.OutputName)
                     }
@@ -341,7 +341,7 @@ public sealed partial class OfficeAgentClient
             {
                 Diagnostics = new[]
                 {
-                    Diagnostic("comparison-input-limit-exceeded",
+                    Diagnostic(ComparisonDiagnosticCodes.ComparisonInputLimitExceeded,
                         $"Each comparison input must be at most {options.MaximumDocumentBytes} bytes.", "document")
                 }
             };
@@ -377,7 +377,7 @@ public sealed partial class OfficeAgentClient
         var diagnostics = new List<WorkflowDiagnostic>();
         if (original.LongLength > options.MaximumDocumentBytes || revised.LongLength > options.MaximumDocumentBytes)
         {
-            diagnostics.Add(Diagnostic("comparison-input-limit-exceeded",
+            diagnostics.Add(Diagnostic(ComparisonDiagnosticCodes.ComparisonInputLimitExceeded,
                 $"Each comparison input must be at most {options.MaximumDocumentBytes} bytes.", "document"));
             return ComparisonResult(original, revised, diagnostics: diagnostics);
         }
@@ -386,7 +386,7 @@ public sealed partial class OfficeAgentClient
         var after = Inspect(revised, InspectOptions.Default);
         if (before.Format != DocFormat.Word || after.Format != DocFormat.Word)
         {
-            diagnostics.Add(Diagnostic("unsupported-comparison-format",
+            diagnostics.Add(Diagnostic(ComparisonDiagnosticCodes.UnsupportedComparisonFormat,
                 "Two-document comparison currently requires two Word .docx packages.", "document"));
             return ComparisonResult(original, revised, diagnostics: diagnostics);
         }
@@ -394,24 +394,24 @@ public sealed partial class OfficeAgentClient
         var beforeBody = before.Paragraphs.Where(IsFreeBodyParagraph).ToList();
         var afterBody = after.Paragraphs.Where(IsFreeBodyParagraph).ToList();
         if (beforeBody.Count == 0 && afterBody.Count > 0)
-            diagnostics.Add(Diagnostic("comparison-anchor-unavailable",
+            diagnostics.Add(Diagnostic(ComparisonDiagnosticCodes.ComparisonAnchorUnavailable,
                 "The original has no free body paragraph that can anchor an inserted redline.", "body"));
         if (beforeBody.Count > options.MaximumParagraphs || afterBody.Count > options.MaximumParagraphs)
-            diagnostics.Add(Diagnostic("comparison-paragraph-limit-exceeded",
+            diagnostics.Add(Diagnostic(ComparisonDiagnosticCodes.ComparisonParagraphLimitExceeded,
                 $"Each document may contain at most {options.MaximumParagraphs} body paragraphs.", "body"));
 
         if (before.Nodes.Any(node => node.Kind == "revision") || after.Nodes.Any(node => node.Kind == "revision"))
-            diagnostics.Add(Diagnostic("unsupported-existing-revisions",
+            diagnostics.Add(Diagnostic(ComparisonDiagnosticCodes.UnsupportedExistingRevisions,
                 "Comparison inputs must have existing tracked revisions accepted or rejected first.", "revisions"));
 
         if (!SequenceEqual(UnsupportedParagraphs(before), UnsupportedParagraphs(after)))
-            diagnostics.Add(Diagnostic("unsupported-non-body-change",
+            diagnostics.Add(Diagnostic(ComparisonDiagnosticCodes.UnsupportedNonBodyChange,
                 "Tables, headers, footers, footnotes, or endnotes changed; this comparison covers free body paragraphs only.", "non-body"));
         if (!SequenceEqual(NodeSignature(before, "image"), NodeSignature(after, "image")))
-            diagnostics.Add(Diagnostic("unsupported-image-change",
+            diagnostics.Add(Diagnostic(ComparisonDiagnosticCodes.UnsupportedImageChange,
                 "Images changed; image comparison is outside this comparison's coverage.", "images"));
         if (!SequenceEqual(UnsupportedNodeSignature(before), UnsupportedNodeSignature(after)))
-            diagnostics.Add(Diagnostic("unsupported-node-change",
+            diagnostics.Add(Diagnostic(ComparisonDiagnosticCodes.UnsupportedNodeChange,
                 "Document nodes outside free body text changed, such as properties, fields, comments, sections, or table structure.", "nodes"));
         // Two different kinds of problem live in this list. A precondition means the diff
         // itself cannot run: there is no anchor, or there are more paragraphs than the
@@ -423,9 +423,9 @@ public sealed partial class OfficeAgentClient
         // safety property; withholding the findings as well was only a side effect of
         // stopping early, and it left a caller with nothing to act on by hand.
         var blocking = diagnostics
-            .Where(diagnostic => diagnostic.Code is "comparison-anchor-unavailable"
-                or "comparison-paragraph-limit-exceeded"
-                or "unsupported-existing-revisions")
+            .Where(diagnostic => diagnostic.Code is ComparisonDiagnosticCodes.ComparisonAnchorUnavailable
+                or ComparisonDiagnosticCodes.ComparisonParagraphLimitExceeded
+                or ComparisonDiagnosticCodes.UnsupportedExistingRevisions)
             .ToList();
         if (blocking.Count > 0)
             return ComparisonResult(original, revised, diagnostics: diagnostics);
@@ -452,7 +452,7 @@ public sealed partial class OfficeAgentClient
                 {
                     var expected = AddedParagraphMarkup(beforeMarkup[targetIndex], afterBody[i].StyleId);
                     if (!string.Equals(expected, afterMarkup[i], StringComparison.Ordinal))
-                        diagnostics.Add(Diagnostic("unsupported-paragraph-markup-change",
+                        diagnostics.Add(Diagnostic(ComparisonDiagnosticCodes.UnsupportedParagraphMarkupChange,
                             $"An added body paragraph at revised index {i} contains run structure or direct formatting the comparison plan cannot reproduce.",
                             afterBody[i].ParaId));
                 }
@@ -464,7 +464,7 @@ public sealed partial class OfficeAgentClient
                 CompareParagraphMarkup(beforeMarkup, afterMarkup, match.Old, match.New,
                     beforeBody[match.Old], diagnostics);
                 if (!string.Equals(beforeBody[match.Old].StyleId, afterBody[match.New].StyleId, StringComparison.Ordinal))
-                    diagnostics.Add(Diagnostic("unsupported-style-change",
+                    diagnostics.Add(Diagnostic(ComparisonDiagnosticCodes.UnsupportedStyleChange,
                         $"Paragraph style changed at original body paragraph {match.Old}.", beforeBody[match.Old].ParaId));
                 oldStart = match.Old + 1;
                 newStart = match.New + 1;
@@ -472,7 +472,7 @@ public sealed partial class OfficeAgentClient
         }
 
         if (totalDifferenceCount > options.MaximumDifferences)
-            diagnostics.Add(Diagnostic("comparison-difference-limit-exceeded",
+            diagnostics.Add(Diagnostic(ComparisonDiagnosticCodes.ComparisonDifferenceLimitExceeded,
                 $"The comparison reached the {options.MaximumDifferences}-difference limit.", "body"));
 
         var bodyDifferenceCount = differences.Count;
@@ -529,7 +529,7 @@ public sealed partial class OfficeAgentClient
             var oldParagraph = before[oldStart + i];
             var newParagraph = after[newStart + i];
             if (!string.Equals(oldParagraph.StyleId, newParagraph.StyleId, StringComparison.Ordinal))
-                diagnostics.Add(Diagnostic("unsupported-style-change",
+                diagnostics.Add(Diagnostic(ComparisonDiagnosticCodes.UnsupportedStyleChange,
                     $"Paragraph style changed at original body paragraph {oldStart + i}.", oldParagraph.ParaId));
             differences.Add(new DocumentDifference
             {
@@ -800,7 +800,7 @@ public sealed partial class OfficeAgentClient
         {
             // The signature said the shape matched, so a differing cell-paragraph count
             // means something this comparison does not model. Refuse rather than guess.
-            diagnostics.Add(Diagnostic("unsupported-table-change",
+            diagnostics.Add(Diagnostic(ComparisonDiagnosticCodes.UnsupportedTableChange,
                 "The tables have the same geometry but a different number of cell paragraphs, " +
                 "so cells cannot be aligned safely.", "tables"));
             return;
@@ -817,7 +817,7 @@ public sealed partial class OfficeAgentClient
 
             if (differences.Count >= options.MaximumDifferences)
             {
-                diagnostics.Add(Diagnostic("comparison-difference-limit-exceeded",
+                diagnostics.Add(Diagnostic(ComparisonDiagnosticCodes.ComparisonDifferenceLimitExceeded,
                     $"The comparison reached the {options.MaximumDifferences}-difference limit.", "tables"));
                 return;
             }
@@ -825,7 +825,7 @@ public sealed partial class OfficeAgentClient
             if (i >= markupBefore.Count || i >= markupAfter.Count ||
                 !string.Equals(markupBefore[i], markupAfter[i], StringComparison.Ordinal))
             {
-                diagnostics.Add(Diagnostic("unsupported-table-markup-change",
+                diagnostics.Add(Diagnostic(ComparisonDiagnosticCodes.UnsupportedTableMarkupChange,
                     $"Run structure or direct formatting changed in a cell of '{left.In}', so the " +
                     "text change cannot be reproduced without losing the formatting.", left.ParaId));
                 continue;
@@ -911,7 +911,7 @@ public sealed partial class OfficeAgentClient
     {
         if (oldIndex >= before.Count || newIndex >= after.Count ||
             string.Equals(before[oldIndex], after[newIndex], StringComparison.Ordinal)) return;
-        diagnostics.Add(Diagnostic("unsupported-paragraph-markup-change",
+        diagnostics.Add(Diagnostic(ComparisonDiagnosticCodes.UnsupportedParagraphMarkupChange,
             $"Run structure or direct formatting changed at original body paragraph {oldIndex}.", original.ParaId));
     }
 
@@ -946,13 +946,13 @@ public sealed partial class OfficeAgentClient
     private static readonly IReadOnlyDictionary<string, string> AreaCodes =
         new Dictionary<string, string>(StringComparer.Ordinal)
         {
-            ["tables"] = "unsupported-table-change",
-            ["images"] = "unsupported-image-change",
-            ["notes"] = "unsupported-note-change",
-            ["headersAndFooters"] = "unsupported-header-footer-change",
-            ["styles"] = "unsupported-style-definition-change",
-            ["numbering"] = "unsupported-numbering-change",
-            ["otherParts"] = "unsupported-package-change"
+            ["tables"] = ComparisonDiagnosticCodes.UnsupportedTableChange,
+            ["images"] = ComparisonDiagnosticCodes.UnsupportedImageChange,
+            ["notes"] = ComparisonDiagnosticCodes.UnsupportedNoteChange,
+            ["headersAndFooters"] = ComparisonDiagnosticCodes.UnsupportedHeaderFooterChange,
+            ["styles"] = ComparisonDiagnosticCodes.UnsupportedStyleDefinitionChange,
+            ["numbering"] = ComparisonDiagnosticCodes.UnsupportedNumberingChange,
+            ["otherParts"] = ComparisonDiagnosticCodes.UnsupportedPackageChange
         };
 
     private static readonly IReadOnlyDictionary<string, string> AreaMessages =
@@ -1127,13 +1127,13 @@ public sealed partial class OfficeAgentClient
         IReadOnlyDictionary<string, bool> areaChanges)
     {
         var bodyDiagnostic = diagnostics.FirstOrDefault(diagnostic =>
-            (diagnostic.Code is "comparison-difference-limit-exceeded"
-                or "comparison-paragraph-limit-exceeded"
-                or "unsupported-existing-revisions") &&
+            (diagnostic.Code is ComparisonDiagnosticCodes.ComparisonDifferenceLimitExceeded
+                or ComparisonDiagnosticCodes.ComparisonParagraphLimitExceeded
+                or ComparisonDiagnosticCodes.UnsupportedExistingRevisions) &&
             !string.Equals(diagnostic.Path, "tables", StringComparison.Ordinal));
         var tableDiagnostic = diagnostics.FirstOrDefault(diagnostic =>
-            diagnostic.Code is "unsupported-table-change" or "unsupported-table-markup-change" ||
-            (diagnostic.Code == "comparison-difference-limit-exceeded" &&
+            diagnostic.Code is ComparisonDiagnosticCodes.UnsupportedTableChange or ComparisonDiagnosticCodes.UnsupportedTableMarkupChange ||
+            (diagnostic.Code == ComparisonDiagnosticCodes.ComparisonDifferenceLimitExceeded &&
              string.Equals(diagnostic.Path, "tables", StringComparison.Ordinal)));
 
         var coverage = new List<ComparisonArea>
@@ -1150,13 +1150,13 @@ public sealed partial class OfficeAgentClient
             {
                 Name = "paragraphFormatting",
                 State = diagnostics.Any(diagnostic =>
-                            diagnostic.Code is "unsupported-style-change"
-                                or "unsupported-paragraph-markup-change")
+                            diagnostic.Code is ComparisonDiagnosticCodes.UnsupportedStyleChange
+                                or ComparisonDiagnosticCodes.UnsupportedParagraphMarkupChange)
                     ? ComparisonAreaState.Blocked
                     : ComparisonAreaState.Unchanged,
                 Code = diagnostics.FirstOrDefault(diagnostic =>
-                    diagnostic.Code is "unsupported-style-change"
-                        or "unsupported-paragraph-markup-change")?.Code
+                    diagnostic.Code is ComparisonDiagnosticCodes.UnsupportedStyleChange
+                        or ComparisonDiagnosticCodes.UnsupportedParagraphMarkupChange)?.Code
             },
             new()
             {

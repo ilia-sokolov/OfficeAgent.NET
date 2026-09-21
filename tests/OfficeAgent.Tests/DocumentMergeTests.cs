@@ -224,6 +224,28 @@ public sealed class DocumentMergeTests
     }
 
     [Fact]
+    public void Documents_the_library_creates_can_be_merged()
+    {
+        // The blank Word document gives its heading styles an outline level, and so do
+        // defineStyle and format, but the assembler did not list w:outlineLvl, so two documents
+        // create_document had just produced were refused as unsupported content.
+        var client = new OfficeAgentClient(new WordModule());
+        var inputs = new[] { client.CreateBlank("a.docx"), client.CreateBlank("b.docx") };
+        using (var blank = Open(inputs[0]))
+            Assert.NotEmpty(blank.MainDocumentPart!.StyleDefinitionsPart!.Styles!.Descendants<OutlineLevel>());
+
+        var preview = client.PreviewMerge(inputs);
+        Assert.True(preview.IsValid, Errors(preview.Diagnostics));
+        var result = client.CommitMerge(preview.Plan!, inputs);
+        Assert.True(result.Committed, Errors(result.Diagnostics));
+
+        using var merged = Open(result.Content!);
+        Assert.Empty(new OpenXmlValidator(FileFormatVersions.Office2019).Validate(merged));
+        Assert.Contains(merged.MainDocumentPart!.StyleDefinitionsPart!.Styles!.Elements<Style>(),
+            style => style.StyleParagraphProperties?.OutlineLevel?.Val?.Value == 0);
+    }
+
+    [Fact]
     public async Task Tool_round_trip_and_creation_gating()
     {
         var store = new MemoryDocumentProvider("docs");

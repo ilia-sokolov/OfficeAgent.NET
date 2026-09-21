@@ -1,3 +1,4 @@
+using System.Diagnostics.CodeAnalysis;
 using OfficeAgent.Abstractions;
 using DocFormat = OfficeAgent.Abstractions.DocumentFormat;
 
@@ -13,6 +14,7 @@ namespace OfficeAgent.Core;
 /// to run. A module states it here, and a reconciliation test proves the statement
 /// matches what validation actually does, so the declaration cannot drift into a claim.
 /// </remarks>
+[Experimental(EngineExtensibility.DiagnosticId, UrlFormat = EngineExtensibility.UrlFormat)]
 public interface ICapabilityDeclaringModule
 {
     /// <summary>Gets the change modes this format can honour.</summary>
@@ -27,6 +29,7 @@ public interface ICapabilityDeclaringModule
 /// Kept separate from <see cref="IDocumentService"/> so an existing implementation of that
 /// interface keeps compiling.
 /// </summary>
+[Experimental(EngineExtensibility.DiagnosticId, UrlFormat = EngineExtensibility.UrlFormat)]
 public interface ICapabilityReportingService
 {
     /// <summary>Describes the engine's registered formats, versions and ceilings.</summary>
@@ -42,6 +45,7 @@ public interface ICapabilityReportingService
 /// and ceilings come from the host's configured limits. A capability that cannot be
 /// derived is declared by the module that owns the rule and reconciled by a test.
 /// </remarks>
+[Experimental(EngineExtensibility.DiagnosticId, UrlFormat = EngineExtensibility.UrlFormat)]
 public static class CapabilityDiscovery
 {
     /// <summary>

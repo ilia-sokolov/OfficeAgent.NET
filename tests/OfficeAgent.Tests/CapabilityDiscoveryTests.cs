@@ -262,9 +262,9 @@ public sealed class CapabilityDiscoveryTests
         Assert.Contains("describe_capabilities", names);
 
         using var payload = JsonDocument.Parse(await tools.DescribeCapabilities());
-        Assert.True(payload.RootElement.TryGetProperty("Contracts", out _));
-        Assert.True(payload.RootElement.TryGetProperty("Formats", out _));
-        Assert.True(payload.RootElement.TryGetProperty("Limits", out _));
+        Assert.True(payload.RootElement.TryGetProperty("contracts", out _));
+        Assert.True(payload.RootElement.TryGetProperty("formats", out _));
+        Assert.True(payload.RootElement.TryGetProperty("limits", out _));
     }
 
     // ── Helpers ──────────────────────────────────────────────────────────

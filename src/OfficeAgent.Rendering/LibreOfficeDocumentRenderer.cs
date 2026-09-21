@@ -46,7 +46,7 @@ public sealed class LibreOfficeDocumentRenderer : IDocumentRenderer
         if (document is null) throw new ArgumentNullException(nameof(document));
         if (options is null) throw new ArgumentNullException(nameof(options));
         var invalid = Validate(options);
-        if (invalid is not null) return Failure("invalid-render-options", invalid);
+        if (invalid is not null) return Failure(RenderFailureCodes.InvalidRenderOptions, invalid);
 
         var root = Path.Combine(Path.GetTempPath(), "officeagent-render-" + Guid.NewGuid().ToString("N"));
         var inputDirectory = Path.Combine(root, "input");
@@ -62,7 +62,7 @@ public sealed class LibreOfficeDocumentRenderer : IDocumentRenderer
             var inputPath = Path.Combine(inputDirectory, fileName);
             var copied = await CopyBoundedAsync(
                 document, inputPath, options.MaximumInputBytes, cancellationToken).ConfigureAwait(false);
-            if (!copied) return Failure("input-limit-exceeded", "The document exceeded the configured input-size limit.");
+            if (!copied) return Failure(RenderFailureCodes.InputLimitExceeded, "The document exceeded the configured input-size limit.");
 
             var clock = Stopwatch.StartNew();
             var convertArguments = _renderer.LibreOfficePrefixArguments.Concat(new[]
@@ -79,7 +79,7 @@ public sealed class LibreOfficeDocumentRenderer : IDocumentRenderer
             var pdfPath = Directory.EnumerateFiles(outputDirectory, "*.pdf", SearchOption.TopDirectoryOnly)
                 .SingleOrDefault();
             if (pdfPath is null)
-                return Failure("renderer-output-missing", "LibreOffice completed without producing a PDF.");
+                return Failure(RenderFailureCodes.RendererOutputMissing, "LibreOffice completed without producing a PDF.");
 
             var pagePrefix = Path.Combine(outputDirectory, "page");
             var rasterArguments = _renderer.PdfToPpmPrefixArguments.Concat(new[]
@@ -94,9 +94,9 @@ public sealed class LibreOfficeDocumentRenderer : IDocumentRenderer
 
             var pageFiles = PageFiles(outputDirectory).ToArray();
             if (pageFiles.Length == 0)
-                return Failure("renderer-output-missing", "The rasterizer completed without producing page images.");
+                return Failure(RenderFailureCodes.RendererOutputMissing, "The rasterizer completed without producing page images.");
             if (pageFiles.Length > options.MaximumPages)
-                return Failure("page-limit-exceeded", "Rendering exceeded the configured page-count limit.");
+                return Failure(RenderFailureCodes.PageLimitExceeded, "Rendering exceeded the configured page-count limit.");
 
             var pages = new List<RenderedPage>(pageFiles.Length);
             long outputBytes = 0;
@@ -105,7 +105,7 @@ public sealed class LibreOfficeDocumentRenderer : IDocumentRenderer
                 var bytes = await File.ReadAllBytesAsync(pageFiles[index], cancellationToken).ConfigureAwait(false);
                 outputBytes += bytes.Length;
                 if (outputBytes > options.MaximumOutputBytes)
-                    return Failure("output-limit-exceeded", "Rendering exceeded the configured output-size limit.");
+                    return Failure(RenderFailureCodes.OutputLimitExceeded, "Rendering exceeded the configured output-size limit.");
                 pages.Add(new RenderedPage { PageNumber = index + 1, Content = bytes });
             }
 
@@ -179,11 +179,11 @@ public sealed class LibreOfficeDocumentRenderer : IDocumentRenderer
         try
         {
             if (!process.Start())
-                return Failure("renderer-unavailable", "The renderer process could not be started.");
+                return Failure(RenderFailureCodes.RendererUnavailable, "The renderer process could not be started.");
         }
         catch (Exception ex) when (ex is System.ComponentModel.Win32Exception or FileNotFoundException)
         {
-            return Failure("renderer-unavailable", "A configured renderer executable was not found.");
+            return Failure(RenderFailureCodes.RendererUnavailable, "A configured renderer executable was not found.");
         }
 
         using var drainDeadline = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
@@ -198,7 +198,7 @@ public sealed class LibreOfficeDocumentRenderer : IDocumentRenderer
                 cancellationToken.ThrowIfCancellationRequested();
                 if (clock.Elapsed > options.Timeout)
                     return await StopAndDrainAsync(
-                        process, stdout, stderr, drainDeadline, "render-timeout",
+                        process, stdout, stderr, drainDeadline, RenderFailureCodes.RenderTimeout,
                         "Rendering exceeded the configured time limit.").ConfigureAwait(false);
                 process.Refresh();
                 if (process.HasExited) break;
@@ -207,15 +207,15 @@ public sealed class LibreOfficeDocumentRenderer : IDocumentRenderer
                 catch (InvalidOperationException) { break; }
                 if (workingSet > options.MaximumWorkingSetBytes)
                     return await StopAndDrainAsync(
-                        process, stdout, stderr, drainDeadline, "memory-limit-exceeded",
+                        process, stdout, stderr, drainDeadline, RenderFailureCodes.MemoryLimitExceeded,
                         "A renderer process exceeded the configured memory limit.").ConfigureAwait(false);
                 if (OutputBytes(outputDirectory) > options.MaximumOutputBytes)
                     return await StopAndDrainAsync(
-                        process, stdout, stderr, drainDeadline, "output-limit-exceeded",
+                        process, stdout, stderr, drainDeadline, RenderFailureCodes.OutputLimitExceeded,
                         "Rendering exceeded the configured output-size limit.").ConfigureAwait(false);
                 if (countPages && PageFiles(outputDirectory).Take(options.MaximumPages + 1).Count() > options.MaximumPages)
                     return await StopAndDrainAsync(
-                        process, stdout, stderr, drainDeadline, "page-limit-exceeded",
+                        process, stdout, stderr, drainDeadline, RenderFailureCodes.PageLimitExceeded,
                         "Rendering exceeded the configured page-count limit.").ConfigureAwait(false);
                 await Task.Delay(50, cancellationToken).ConfigureAwait(false);
             }
@@ -223,7 +223,7 @@ public sealed class LibreOfficeDocumentRenderer : IDocumentRenderer
             try { await Task.WhenAll(stdout, stderr).ConfigureAwait(false); }
             catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
             {
-                return Failure("render-timeout", "Rendering exceeded the configured time limit.");
+                return Failure(RenderFailureCodes.RenderTimeout, "Rendering exceeded the configured time limit.");
             }
         }
         catch (OperationCanceledException)
@@ -235,13 +235,13 @@ public sealed class LibreOfficeDocumentRenderer : IDocumentRenderer
         }
 
         if (process.ExitCode != 0)
-            return Failure("renderer-failed", "A renderer process exited unsuccessfully.");
+            return Failure(RenderFailureCodes.RendererFailed, "A renderer process exited unsuccessfully.");
         if (clock.Elapsed > options.Timeout)
-            return Failure("render-timeout", "Rendering exceeded the configured time limit.");
+            return Failure(RenderFailureCodes.RenderTimeout, "Rendering exceeded the configured time limit.");
         if (OutputBytes(outputDirectory) > options.MaximumOutputBytes)
-            return Failure("output-limit-exceeded", "Rendering exceeded the configured output-size limit.");
+            return Failure(RenderFailureCodes.OutputLimitExceeded, "Rendering exceeded the configured output-size limit.");
         if (countPages && PageFiles(outputDirectory).Take(options.MaximumPages + 1).Count() > options.MaximumPages)
-            return Failure("page-limit-exceeded", "Rendering exceeded the configured page-count limit.");
+            return Failure(RenderFailureCodes.PageLimitExceeded, "Rendering exceeded the configured page-count limit.");
         return null;
     }
 

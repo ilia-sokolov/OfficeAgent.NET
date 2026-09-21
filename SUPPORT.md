@@ -17,10 +17,12 @@ commercial support are available from dotaction at
 
 ## Version policy
 
-OfficeAgent follows Semantic Versioning. While the project is below 1.0, a minor release may
-change a public API, JSON plan shape, configuration setting, or behavior. Patch releases should
-remain compatible within their minor line except where a security or correctness fix cannot be
-made safely without a behavior change. Such changes are called out in the changelog.
+OfficeAgent follows Semantic Versioning. From 1.0, a minor or patch release does not break the
+public .NET API, the JSON an agent or host exchanges, configuration keys, or documented defaults;
+breaking changes wait for the next major version. A security fix may tighten a check, never loosen
+one, and the changelog calls it out. Engine extensibility types marked `OFFICEAGENT001` are
+excluded. The [compatibility policy](docs/compatibility.md) defines each promise and how CI
+enforces it.
 
 The NuGet packages and MCP Registry entry are released as one versioned set. Do not mix
 OfficeAgent assemblies from different minor versions. Security fixes are provided for the

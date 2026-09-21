@@ -1,4 +1,3 @@
-using System.ComponentModel;
 using System.Globalization;
 using System.Text.RegularExpressions;
 using DocumentFormat.OpenXml;
@@ -12,8 +11,7 @@ namespace OfficeAgent.Core;
 /// Shared low-level spreadsheet helpers used by Excel editing and PowerPoint embedded
 /// chart workbooks. This is infrastructure rather than a formula calculation engine.
 /// </summary>
-[EditorBrowsable(EditorBrowsableState.Never)]
-public static class SpreadsheetPartUtility
+internal static class SpreadsheetPartUtility
 {
     private static readonly Regex CellReference = new(
         @"^\$?([A-Za-z]{1,3})\$?([1-9][0-9]*)$",

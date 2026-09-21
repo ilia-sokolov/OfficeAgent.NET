@@ -541,13 +541,13 @@ public sealed class ConcurrencyAndIsolationTests
     private static string? ErrorCode(string payload)
     {
         using var document = JsonDocument.Parse(payload);
-        return document.RootElement.GetProperty("errors")[0].GetProperty("Code").GetString();
+        return document.RootElement.GetProperty("errors")[0].GetProperty("code").GetString();
     }
 
     private static string ErrorMessage(string payload)
     {
         using var document = JsonDocument.Parse(payload);
-        return document.RootElement.GetProperty("errors")[0].GetProperty("Message").GetString() ?? string.Empty;
+        return document.RootElement.GetProperty("errors")[0].GetProperty("message").GetString() ?? string.Empty;
     }
 
     private sealed class SingleConnectionPolicy : IConnectionAccessPolicy

@@ -82,7 +82,7 @@ public sealed partial class OfficeAgentClient
             if (group.Count() != 1)
                 diagnostics.Add(new WorkflowDiagnostic
                 {
-                    Code = "ambiguous-template-slot",
+                    Code = TemplateDiagnosticCodes.AmbiguousTemplateSlot,
                     Message = $"Template slot '{group.Key}' occurs {group.Count()} times; " +
                               "template tags must be unique before this slot can be bound.",
                     Path = group.Key
@@ -146,7 +146,7 @@ public sealed partial class OfficeAgentClient
         if (request.Items.Count > limits.MaximumDocuments)
             batchDiagnostics.Add(new WorkflowDiagnostic
             {
-                Code = "batch-too-large",
+                Code = TemplateDiagnosticCodes.BatchTooLarge,
                 Message = $"The batch requests {request.Items.Count} outputs but the effective limit is " +
                           $"{limits.MaximumDocuments}. The effective limit is the stricter of the host budget " +
                           "and the request, so raising MaximumDocuments in the request cannot raise it.",
@@ -158,7 +158,7 @@ public sealed partial class OfficeAgentClient
                      .Where(group => group.Count() > 1))
             batchDiagnostics.Add(new WorkflowDiagnostic
             {
-                Code = "duplicate-output-name",
+                Code = TemplateDiagnosticCodes.DuplicateOutputName,
                 Message = $"Output name '{duplicate.Key}' is requested {duplicate.Count()} times. " +
                           "Names must be unique; nothing is overwritten.",
                 Path = duplicate.Key
@@ -177,7 +177,7 @@ public sealed partial class OfficeAgentClient
             if (string.IsNullOrWhiteSpace(item.OutputName))
                 diagnostics.Add(new WorkflowDiagnostic
                 {
-                    Code = "missing-output-name",
+                    Code = TemplateDiagnosticCodes.MissingOutputName,
                     Message = "Each batch item needs an output name.",
                     Path = null
                 });
@@ -188,7 +188,7 @@ public sealed partial class OfficeAgentClient
             if (rows > limits.MaximumRowsPerDocument)
                 diagnostics.Add(new WorkflowDiagnostic
                 {
-                    Code = "too-many-rows",
+                    Code = TemplateDiagnosticCodes.TooManyRows,
                     Message = $"This output would create {rows} repeating rows; the effective limit is " +
                               $"{limits.MaximumRowsPerDocument}.",
                     Path = item.OutputName
@@ -197,7 +197,7 @@ public sealed partial class OfficeAgentClient
             if (item.Binding.Values.Count > limits.MaximumFieldsPerDocument)
                 diagnostics.Add(new WorkflowDiagnostic
                 {
-                    Code = "too-many-fields",
+                    Code = TemplateDiagnosticCodes.TooManyFields,
                     Message = $"This output binds {item.Binding.Values.Count} scalar fields; the effective " +
                               $"limit is {limits.MaximumFieldsPerDocument}.",
                     Path = item.OutputName
@@ -207,7 +207,7 @@ public sealed partial class OfficeAgentClient
                          .Where(entry => (entry.Value?.Length ?? 0) > limits.MaximumValueLength))
                 diagnostics.Add(new WorkflowDiagnostic
                 {
-                    Code = "value-too-long",
+                    Code = TemplateDiagnosticCodes.ValueTooLong,
                     Message = $"The value bound to '{oversized.Key}' is {oversized.Value!.Length} characters; " +
                               $"the effective limit is {limits.MaximumValueLength}.",
                     Path = oversized.Key
@@ -245,7 +245,7 @@ public sealed partial class OfficeAgentClient
         if (totalImageBytes > limits.Media.MaximumTotalImageBytes)
             batchDiagnostics.Add(new WorkflowDiagnostic
             {
-                Code = "too-many-total-image-bytes",
+                Code = TemplateDiagnosticCodes.TooManyTotalImageBytes,
                 Message = $"The batch carries {totalImageBytes} image bytes across all outputs; the " +
                           $"effective limit is {limits.Media.MaximumTotalImageBytes}.",
                 Path = "items"
@@ -254,7 +254,7 @@ public sealed partial class OfficeAgentClient
         if (totalRows > limits.MaximumTotalRows)
             batchDiagnostics.Add(new WorkflowDiagnostic
             {
-                Code = "too-many-total-rows",
+                Code = TemplateDiagnosticCodes.TooManyTotalRows,
                 Message = $"The batch would create {totalRows} repeating rows across all outputs; the " +
                           $"effective limit is {limits.MaximumTotalRows}.",
                 Path = "items"
@@ -520,7 +520,7 @@ public sealed partial class OfficeAgentClient
 
             if (binding.Values.ContainsKey(name))
             {
-                diagnostics.Add(Diagnostic("duplicate-template-binding",
+                diagnostics.Add(Diagnostic(TemplateDiagnosticCodes.DuplicateTemplateBinding,
                     $"Slot '{name}' is bound both as a scalar value and as a typed value. " +
                     "Bind it once.", name));
                 continue;
@@ -531,7 +531,7 @@ public sealed partial class OfficeAgentClient
                 case TemplateTextValue text:
                     if (!textSlots.TryGetValue(name, out var textAnchor))
                     {
-                        diagnostics.Add(Diagnostic("unknown-template-value",
+                        diagnostics.Add(Diagnostic(TemplateDiagnosticCodes.UnknownTemplateValue,
                             $"No template slot is tagged '{name}'.", name));
                         break;
                     }
@@ -552,7 +552,7 @@ public sealed partial class OfficeAgentClient
                 {
                     if (!mediaSlots.TryGetValue(name, out var slot) || slot.MediaKind != "image")
                     {
-                        diagnostics.Add(Diagnostic("wrong-slot-kind",
+                        diagnostics.Add(Diagnostic(TemplateDiagnosticCodes.WrongSlotKind,
                             $"Slot '{name}' cannot hold an image. Bind an image only to a slot " +
                             "reported as an image slot by template discovery.", name));
                         break;
@@ -560,7 +560,7 @@ public sealed partial class OfficeAgentClient
 
                     if (slot.InRepeatingRow)
                     {
-                        diagnostics.Add(Diagnostic("media-in-repeating-row",
+                        diagnostics.Add(Diagnostic(TemplateDiagnosticCodes.MediaInRepeatingRow,
                             $"Slot '{name}' is inside a table row. Images in repeating rows are not " +
                             "supported, because every generated row would share one image. Move the " +
                             "image slot outside the table.", name));
@@ -569,7 +569,7 @@ public sealed partial class OfficeAgentClient
 
                     if (string.IsNullOrWhiteSpace(image.AltText))
                     {
-                        diagnostics.Add(Diagnostic("missing-alt-text",
+                        diagnostics.Add(Diagnostic(TemplateDiagnosticCodes.MissingAltText,
                             $"The image bound to '{name}' has no alt text. A template generates many " +
                             "documents, so a missing description is multiplied across all of them.",
                             name));
@@ -587,7 +587,7 @@ public sealed partial class OfficeAgentClient
                     var bytes = resolved.Bytes!;
                     if (bytes.LongLength > limits.MaximumImageBytes)
                     {
-                        diagnostics.Add(Diagnostic("image-too-large",
+                        diagnostics.Add(Diagnostic(TemplateDiagnosticCodes.ImageTooLarge,
                             $"The image bound to '{name}' is {bytes.LongLength} bytes; the effective " +
                             $"limit is {limits.MaximumImageBytes}.", name));
                         break;
@@ -595,7 +595,7 @@ public sealed partial class OfficeAgentClient
 
                     if (!SignatureMatches(bytes, image.ImageType))
                     {
-                        diagnostics.Add(Diagnostic("image-type-mismatch",
+                        diagnostics.Add(Diagnostic(TemplateDiagnosticCodes.ImageTypeMismatch,
                             $"The bytes bound to '{name}' are not a {image.ImageType} image. The declared " +
                             "type must match the actual content.", name));
                         break;
@@ -609,7 +609,7 @@ public sealed partial class OfficeAgentClient
                         ?? inspection.Paragraphs.FirstOrDefault();
                     if (host is null)
                     {
-                        diagnostics.Add(Diagnostic("template-anchor-not-found",
+                        diagnostics.Add(Diagnostic(TemplateDiagnosticCodes.TemplateAnchorNotFound,
                             $"No paragraph could host the image bound to '{name}'.", name));
                         break;
                     }
@@ -633,7 +633,7 @@ public sealed partial class OfficeAgentClient
                 {
                     if (inspection.Format != DocFormat.PowerPoint)
                     {
-                        diagnostics.Add(Diagnostic("unsupported-template-feature",
+                        diagnostics.Add(Diagnostic(TemplateDiagnosticCodes.UnsupportedTemplateFeature,
                             $"Chart bindings are PowerPoint only. This engine has no native Word chart " +
                             $"support, so '{name}' cannot be bound here.", name));
                         break;
@@ -641,7 +641,7 @@ public sealed partial class OfficeAgentClient
 
                     if (!mediaSlots.TryGetValue(name, out var slot) || slot.MediaKind != "chart")
                     {
-                        diagnostics.Add(Diagnostic("wrong-slot-kind",
+                        diagnostics.Add(Diagnostic(TemplateDiagnosticCodes.WrongSlotKind,
                             $"No native chart is at '{name}'. A chart binding updates a chart that is " +
                             "already in the template; it does not create one.", name));
                         break;
@@ -650,7 +650,7 @@ public sealed partial class OfficeAgentClient
                     int points = chart.Series.Sum(series => series.Values.Count);
                     if (points > limits.MaximumChartPoints)
                     {
-                        diagnostics.Add(Diagnostic("chart-too-large",
+                        diagnostics.Add(Diagnostic(TemplateDiagnosticCodes.ChartTooLarge,
                             $"The chart bound to '{name}' carries {points} data points; the effective " +
                             $"limit is {limits.MaximumChartPoints}.", name));
                         break;
@@ -672,14 +672,14 @@ public sealed partial class OfficeAgentClient
                 }
 
                 default:
-                    diagnostics.Add(Diagnostic("unsupported-template-feature",
+                    diagnostics.Add(Diagnostic(TemplateDiagnosticCodes.UnsupportedTemplateFeature,
                         $"The value bound to '{name}' is of an unsupported kind.", name));
                     break;
             }
         }
 
         if (images > limits.MaximumImagesPerDocument)
-            diagnostics.Add(Diagnostic("too-many-images",
+            diagnostics.Add(Diagnostic(TemplateDiagnosticCodes.TooManyImages,
                 $"This output binds {images} images; the effective limit is " +
                 $"{limits.MaximumImagesPerDocument}.", null));
 
@@ -693,7 +693,7 @@ public sealed partial class OfficeAgentClient
         bool hasReference = !string.IsNullOrWhiteSpace(image.ImageDocumentId);
 
         if (hasInline == hasReference)
-            return (null, Diagnostic("invalid-image-binding",
+            return (null, Diagnostic(TemplateDiagnosticCodes.InvalidImageBinding,
                 $"The image bound to '{name}' needs exactly one of inline bytes or a provider " +
                 "document id. There is no URL form: this engine does not fetch images.", name));
 
@@ -705,13 +705,13 @@ public sealed partial class OfficeAgentClient
             }
             catch (FormatException)
             {
-                return (null, Diagnostic("invalid-image-binding",
+                return (null, Diagnostic(TemplateDiagnosticCodes.InvalidImageBinding,
                     $"The inline bytes bound to '{name}' are not valid base64.", name));
             }
         }
 
         if (string.IsNullOrWhiteSpace(image.ImageConnectionId))
-            return (null, Diagnostic("invalid-image-binding",
+            return (null, Diagnostic(TemplateDiagnosticCodes.InvalidImageBinding,
                 $"The image bound to '{name}' names a document id without a connection id.", name));
 
         try
@@ -726,7 +726,7 @@ public sealed partial class OfficeAgentClient
         }
         catch (DocumentProviderException ex)
         {
-            return (null, Diagnostic("image-not-available",
+            return (null, Diagnostic(TemplateDiagnosticCodes.ImageNotAvailable,
                 $"The image bound to '{name}' could not be read: {ex.Message}", name));
         }
     }

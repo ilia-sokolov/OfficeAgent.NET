@@ -53,7 +53,7 @@ public class CompositeToolsTests
 
         Assert.False(escape.RootElement.GetProperty("isValid").GetBoolean());
         Assert.Equal("access-denied",
-            escape.RootElement.GetProperty("errors")[0].GetProperty("Code").GetString());
+            escape.RootElement.GetProperty("errors")[0].GetProperty("code").GetString());
     }
 
     [Fact]
@@ -102,9 +102,9 @@ public class CompositeToolsTests
         var error = refused.RootElement.GetProperty("errors")[0];
 
         Assert.False(refused.RootElement.GetProperty("committed").GetBoolean());
-        Assert.Equal("ambiguous-anchor", error.GetProperty("Code").GetString());
-        Assert.Contains("match 0:", error.GetProperty("Message").GetString());
-        Assert.Contains("\"match\"", error.GetProperty("Message").GetString());
+        Assert.Equal("ambiguous-anchor", error.GetProperty("code").GetString());
+        Assert.Contains("match 0:", error.GetProperty("message").GetString());
+        Assert.Contains("\"match\"", error.GetProperty("message").GetString());
 
         // A failed edit still leaves a usable handle rather than making the agent re-register.
         Assert.False(string.IsNullOrEmpty(
@@ -152,11 +152,11 @@ public class CompositeToolsTests
             """[ { "op": "changeText", "target": { "find": "Acme Corp", "match": 99 }, "with": "x" } ]"""));
 
         Assert.Equal("anchor-not-found",
-            missing.RootElement.GetProperty("errors")[0].GetProperty("Code").GetString());
+            missing.RootElement.GetProperty("errors")[0].GetProperty("code").GetString());
         Assert.Equal("anchor-not-found",
-            outOfRange.RootElement.GetProperty("errors")[0].GetProperty("Code").GetString());
+            outOfRange.RootElement.GetProperty("errors")[0].GetProperty("code").GetString());
         Assert.Contains("out of range",
-            outOfRange.RootElement.GetProperty("errors")[0].GetProperty("Message").GetString());
+            outOfRange.RootElement.GetProperty("errors")[0].GetProperty("message").GetString());
     }
 
     [Fact]
@@ -291,7 +291,7 @@ public class CompositeToolsTests
     {
         using var inspected = JsonDocument.Parse(await tools.InspectDocument("workspace", documentId));
         return string.Join(" ", inspected.RootElement.GetProperty("paragraphs").EnumerateArray()
-            .Select(p => p.GetProperty("Text").GetString()));
+            .Select(p => p.GetProperty("text").GetString()));
     }
 
     private sealed class CompositeWorkspace : IDisposable

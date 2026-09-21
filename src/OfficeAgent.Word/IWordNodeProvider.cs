@@ -1,3 +1,4 @@
+using System.Diagnostics.CodeAnalysis;
 using DocumentFormat.OpenXml;
 using DocumentFormat.OpenXml.Packaging;
 using OfficeAgent.Abstractions;
@@ -12,6 +13,7 @@ namespace OfficeAgent.Word;
 /// dependency injection - no new anchor class and, where an existing verb fits, no
 /// new verb.
 /// </summary>
+[Experimental(EngineExtensibility.DiagnosticId, UrlFormat = EngineExtensibility.UrlFormat)]
 public interface IWordNodeProvider
 {
     string Kind { get; }
@@ -24,6 +26,7 @@ public interface IWordNodeProvider
 }
 
 /// <summary>A lightweight view over an open Word package for providers and handlers.</summary>
+[Experimental(EngineExtensibility.DiagnosticId, UrlFormat = EngineExtensibility.UrlFormat)]
 public sealed class WordObjectMap
 {
     public IOpenXmlPackage Package { get; }
@@ -37,6 +40,7 @@ public sealed class WordObjectMap
 }
 
 /// <summary>A node re-located from its anchor: the live element(s) plus a current value.</summary>
+[Experimental(EngineExtensibility.DiagnosticId, UrlFormat = EngineExtensibility.UrlFormat)]
 public sealed class ResolvedNode
 {
     public string Kind { get; init; } = string.Empty;

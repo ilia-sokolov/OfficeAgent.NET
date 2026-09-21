@@ -134,7 +134,7 @@ public class FollowUpTests
 
         using var parsed = JsonDocument.Parse(report);
         Assert.False(parsed.RootElement.GetProperty("isValid").GetBoolean());
-        Assert.Equal("cancelled", parsed.RootElement.GetProperty("errors")[0].GetProperty("Code").GetString());
+        Assert.Equal("cancelled", parsed.RootElement.GetProperty("errors")[0].GetProperty("code").GetString());
     }
 
     [Fact]
@@ -199,7 +199,7 @@ public class FollowUpTests
         using var parsed = JsonDocument.Parse(report);
 
         Assert.False(parsed.RootElement.GetProperty("isValid").GetBoolean());
-        Assert.Equal("invalid-json", parsed.RootElement.GetProperty("errors")[0].GetProperty("Code").GetString());
+        Assert.Equal("invalid-json", parsed.RootElement.GetProperty("errors")[0].GetProperty("code").GetString());
     }
 
     private sealed class ToolsWorkspace : IDisposable

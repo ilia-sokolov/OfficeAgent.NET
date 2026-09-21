@@ -12,36 +12,40 @@ same decision, and a test reconciles them for every verb in the vocabulary.
 
 ## What comes back
 
+Property names are camelCase, like every tool response as of 1.0. Enum values such as `"Word"`
+and `"Tracked"` are written by member name. Before 1.0 this payload used PascalCase property
+names; see [upgrading to 1.0](upgrading-to-1.0.md).
+
 ```json
 {
-  "Contracts": { "EditPlan": "0.2", "ApplyReceipt": "1", "MergeReceipt": "1" },
-  "Formats": [
+  "contracts": { "editPlan": "0.2", "applyReceipt": "1", "mergeReceipt": "1" },
+  "formats": [
     {
-      "Format": "Word",
-      "Operations": ["changeText", "comment", "format", "..."],
-      "ChangeModes": ["Direct", "Tracked"],
-      "NodeKinds": ["comment", "docProperty", "image", "note", "revision", "table"]
+      "format": "Word",
+      "operations": ["changeText", "comment", "format", "..."],
+      "changeModes": ["Direct", "Tracked"],
+      "nodeKinds": ["comment", "docProperty", "image", "note", "revision", "table"]
     }
   ],
-  "Limits": { "MaximumCompressedBytes": 134217728, "MaximumParts": 4000, "...": 0 },
-  "RenderingAvailable": false,
-  "Connections": [
-    { "ConnectionId": "workspace", "Provider": "filesystem", "Allowed": ["Read", "Edit"] }
+  "limits": { "maximumCompressedBytes": 134217728, "maximumParts": 4000, "...": 0 },
+  "renderingAvailable": false,
+  "connections": [
+    { "connectionId": "workspace", "provider": "filesystem", "allowed": ["Read", "Edit"] }
   ],
-  "RequiresInspection": ["Anchor identifiers. …"]
+  "requiresInspection": ["Anchor identifiers. …"]
 }
 ```
 
 | Field | Meaning |
 | --- | --- |
-| `Contracts` | The only edit-plan version accepted, and the receipt schema versions emitted. A plan with any other `contractVersion` fails with `contract-mismatch` |
-| `Formats[].Operations` | The plan verbs at least one registered handler for that format accepts |
-| `Formats[].ChangeModes` | What the format can honour. PowerPoint and Excel are `Direct` only; a tracked request there is refused, not silently downgraded |
-| `Formats[].NodeKinds` | The node kinds that format's inspection surfaces, which are the `kind` values a `NodeAnchor` may use |
-| `Limits` | The host [ingestion ceilings](ingestion-limits.md) in force |
-| `RenderingAvailable` | Whether an optional page renderer is wired up. Rendering is not part of the core engine |
-| `Connections` | Only the connections the caller may use, each with only the capabilities they hold |
-| `RequiresInspection` | What discovery deliberately cannot answer |
+| `contracts` | The only edit-plan version accepted, and the receipt schema versions emitted. A plan with any other `contractVersion` fails with `contract-mismatch` |
+| `formats[].operations` | The plan verbs at least one registered handler for that format accepts |
+| `formats[].changeModes` | What the format can honour. PowerPoint and Excel are `Direct` only; a tracked request there is refused, not silently downgraded |
+| `formats[].nodeKinds` | The node kinds that format's inspection surfaces, which are the `kind` values a `NodeAnchor` may use |
+| `limits` | The host [ingestion ceilings](ingestion-limits.md) in force |
+| `renderingAvailable` | Whether an optional page renderer is wired up. Rendering is not part of the core engine |
+| `connections` | Only the connections the caller may use, each with only the capabilities they hold |
+| `requiresInspection` | What discovery deliberately cannot answer |
 
 ## Access is not bypassed
 

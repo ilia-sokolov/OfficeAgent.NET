@@ -744,7 +744,7 @@ public sealed class BoundedIngestionTests
         "<w:document xmlns:w=\"http://schemas.openxmlformats.org/wordprocessingml/2006/main\"><w:body/></w:document>";
 
     private static string? FirstErrorCode(JsonDocument result) =>
-        result.RootElement.GetProperty("errors")[0].GetProperty("Code").GetString();
+        result.RootElement.GetProperty("errors")[0].GetProperty("code").GetString();
 
     private static OfficeAgentClient Client() => new(new WordModule());
 

@@ -7,6 +7,13 @@
     <GenerateDocumentationFile>true</GenerateDocumentationFile>
   </PropertyGroup>
 
+  <!-- The engine seams are [Experimental] with OFFICEAGENT001 (docs/compatibility.md). The
+       engine, its tests and tools are built from them, so they suppress it. Samples do not:
+       a sample is host code, and a host that needs a seam has left the stable 1.x surface. -->
+  <PropertyGroup Condition="!$([MSBuild]::MakeRelative('$(MSBuildThisFileDirectory)', '$(MSBuildProjectDirectory)').StartsWith('samples'))">
+    <NoWarn>$(NoWarn);OFFICEAGENT001</NoWarn>
+  </PropertyGroup>
+
   <PropertyGroup>
     <Version>0.9.0</Version>
     <Authors>Ilia Sokolov</Authors>

@@ -147,7 +147,7 @@ public sealed class HostedGatewayTests
     {
         using var document = JsonDocument.Parse(json);
         Assert.Contains(document.RootElement.GetProperty("errors").EnumerateArray(),
-            error => error.GetProperty("Code").GetString() == expectedCode);
+            error => error.GetProperty("code").GetString() == expectedCode);
     }
 
     private static string Plan(string text) => $$"""

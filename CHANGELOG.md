@@ -3,6 +3,48 @@
 Notable changes per release. The body of each version section is also the text used for the
 corresponding GitHub release.
 
+## 1.0.0 — Unreleased
+
+### Breaking changes and migration
+
+- **Every tool response uses camelCase property names.** Before 1.0, casing depended on how a
+  payload was built: `describe_capabilities` was PascalCase, and `inspect_document` mixed both.
+  Requests are unaffected, since they have always been read case-insensitively. Migration: read
+  camelCase, or match names case-insensitively. A host that deserialises responses into the
+  library's own types should use `JsonSerializerDefaults.Web`. See
+  [upgrading to 1.0](docs/upgrading-to-1.0.md).
+
+- **Engine seams are marked `[Experimental("OFFICEAGENT001")]` and are outside the 1.x
+  promise.** Twenty-five public types that exist to build format modules and operation
+  handlers, including `IFormatModule`, `IOperationHandler` and `IDocumentService`, now produce
+  error `OFFICEAGENT001` where your code names them. Hosting the engine never needs them.
+  Migration: if you build a custom module, suppress `OFFICEAGENT001` and expect these types to
+  change in minor releases. See [compatibility](docs/compatibility.md#engine-extensibility).
+
+- **`SpreadsheetPartUtility` is internal.** It was public only so the Excel and PowerPoint
+  assemblies could share it, it was hidden from IntelliSense, and its documentation called it
+  infrastructure. Migration: none supported. It was never part of the documented surface.
+
+### Added
+
+- A [compatibility policy](docs/compatibility.md) covering versioning, unknown fields, nulls,
+  defaults, deprecation and what is excluded from the 1.x promise.
+- Public catalogues for every stable code: `ToolErrorCodes`, `TemplateDiagnosticCodes`,
+  `ComparisonDiagnosticCodes`, `AssemblyDiagnosticCodes` and `RenderFailureCodes`, beside
+  `ValidationErrorCodes`. Values are unchanged from 0.9.
+- A [wire contract](docs/wire-contract.md) baseline, gated in CI beside the C# API reference.
+  It records plan operations, anchors, the input schemas and response shapes of all 21 tools,
+  configuration keys, and the default of every member a caller constructs. The gate also checks
+  that the netstandard2.0 build exposes exactly the net8.0 surface.
+
+### Fixed
+
+- Documents OfficeAgent creates can be merged. The blank Word document's heading styles carry
+  an outline level, as do styles written by `defineStyle` and `format`, and merge refused
+  `w:outlineLvl` as unsupported content, so two documents `create_document` had just produced
+  failed `preview_document_merge` with `unsupported-merge-content`.
+- The ingestion-limits guide no longer shows an internal constructor that no host could call.
+
 ## 0.9.0 — 2026-09-20
 
 ### Breaking changes and migration

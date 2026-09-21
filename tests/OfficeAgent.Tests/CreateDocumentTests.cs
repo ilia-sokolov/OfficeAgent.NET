@@ -272,7 +272,7 @@ public class CreateDocumentTests
         var id = created.RootElement.GetProperty("outputDocumentId").GetString()!;
         using var inspected = JsonDocument.Parse(await tools.InspectDocument("workspace", id));
         Assert.Equal("Quarterly Report",
-            inspected.RootElement.GetProperty("paragraphs")[0].GetProperty("Text").GetString());
+            inspected.RootElement.GetProperty("paragraphs")[0].GetProperty("text").GetString());
     }
 
     [Fact]
@@ -292,15 +292,15 @@ public class CreateDocumentTests
             await tools.CreateDocument("workspace", "taken.docx"));
 
         Assert.Equal("invalid-json",
-            badPlan.RootElement.GetProperty("errors")[0].GetProperty("Code").GetString());
+            badPlan.RootElement.GetProperty("errors")[0].GetProperty("code").GetString());
         Assert.Equal("invalid-argument",
-            badName.RootElement.GetProperty("errors")[0].GetProperty("Code").GetString());
+            badName.RootElement.GetProperty("errors")[0].GetProperty("code").GetString());
         Assert.Equal("invalid-argument",
-            invalidCharacter.RootElement.GetProperty("errors")[0].GetProperty("Code").GetString());
+            invalidCharacter.RootElement.GetProperty("errors")[0].GetProperty("code").GetString());
         Assert.Equal("The document provider rejected an argument.",
-            invalidCharacter.RootElement.GetProperty("errors")[0].GetProperty("Message").GetString());
+            invalidCharacter.RootElement.GetProperty("errors")[0].GetProperty("message").GetString());
         Assert.Equal("already-exists",
-            duplicate.RootElement.GetProperty("errors")[0].GetProperty("Code").GetString());
+            duplicate.RootElement.GetProperty("errors")[0].GetProperty("code").GetString());
     }
 
     private static DocumentPlan InsertPlan(string text) => new()

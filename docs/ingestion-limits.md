@@ -41,12 +41,8 @@ services.AddWordFormat();
 services.AddOfficeAgent();
 ```
 
-Or pass them directly when composing the engine yourself:
-
-```csharp
-var client = new OfficeAgentClient(
-    new OfficeAgentEngine(new[] { new WordModule() }, limits: myLimits));
-```
+The engine reads the registered `OpenXmlIngestionLimits`; a client built without the container,
+such as `new OfficeAgentClient(new WordModule())`, uses the defaults.
 
 A caller may ask for something stricter with `limits.Restrict(requested)`, which takes
 the smaller of each pair. **A request can lower an effective limit; it can never raise a

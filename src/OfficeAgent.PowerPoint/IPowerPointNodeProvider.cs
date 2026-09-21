@@ -1,3 +1,4 @@
+using System.Diagnostics.CodeAnalysis;
 using DocumentFormat.OpenXml;
 using DocumentFormat.OpenXml.Packaging;
 using OfficeAgent.Abstractions;
@@ -21,10 +22,12 @@ namespace OfficeAgent.PowerPoint;
 /// so a Word-specific handler for a verb PowerPoint does not implement would be applied
 /// to decks. Contributing through this interface keeps a handler with its own format.
 /// </remarks>
+[Experimental(EngineExtensibility.DiagnosticId, UrlFormat = EngineExtensibility.UrlFormat)]
 public interface IPowerPointOperationHandler : IOperationHandler
 {
 }
 
+[Experimental(EngineExtensibility.DiagnosticId, UrlFormat = EngineExtensibility.UrlFormat)]
 public interface IPowerPointNodeProvider
 {
     /// <summary>The node kind this provider owns, as it appears in <c>inspect.nodes</c>.</summary>
@@ -38,6 +41,7 @@ public interface IPowerPointNodeProvider
 }
 
 /// <summary>A lightweight view over an open presentation for providers and handlers.</summary>
+[Experimental(EngineExtensibility.DiagnosticId, UrlFormat = EngineExtensibility.UrlFormat)]
 public sealed class PowerPointObjectMap
 {
     /// <summary>The open package.</summary>
@@ -60,6 +64,7 @@ public sealed class PowerPointObjectMap
 /// shape of the answer but not on what a node is, and coupling them would make either
 /// module's node vocabulary a breaking change for the other.
 /// </remarks>
+[Experimental(EngineExtensibility.DiagnosticId, UrlFormat = EngineExtensibility.UrlFormat)]
 public sealed class ResolvedNode
 {
     /// <summary>The node kind that resolved.</summary>

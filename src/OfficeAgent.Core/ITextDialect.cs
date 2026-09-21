@@ -1,3 +1,4 @@
+using System.Diagnostics.CodeAnalysis;
 using DocumentFormat.OpenXml;
 using DocumentFormat.OpenXml.Wordprocessing;
 using DocFormat = OfficeAgent.Abstractions.DocumentFormat;
@@ -9,6 +10,7 @@ namespace OfficeAgent.Core;
 /// vocabularies. Today only the Word dialect is registered; the seam is kept so
 /// future modules (e.g. PowerPoint DrawingML) can plug in without changing the engine.
 /// </summary>
+[Experimental(EngineExtensibility.DiagnosticId, UrlFormat = EngineExtensibility.UrlFormat)]
 public interface ITextDialect
 {
     DocFormat Format { get; }
@@ -25,6 +27,7 @@ public interface ITextDialect
 }
 
 /// <summary>WordprocessingML dialect: <c>w:r</c> runs carrying <c>w:t</c> text.</summary>
+[Experimental(EngineExtensibility.DiagnosticId, UrlFormat = EngineExtensibility.UrlFormat)]
 public sealed class WordmlDialect : ITextDialect
 {
     public DocFormat Format => DocFormat.Word;

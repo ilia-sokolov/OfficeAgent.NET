@@ -102,7 +102,7 @@ public class InlineContentToolsTests
         Assert.Equal("Word", parsed.RootElement.GetProperty("format").GetString());
         Assert.Contains(
             parsed.RootElement.GetProperty("paragraphs").EnumerateArray(),
-            p => p.GetProperty("Text").GetString()!.Contains("shall provide services"));
+            p => p.GetProperty("text").GetString()!.Contains("shall provide services"));
     }
 
     [Fact]

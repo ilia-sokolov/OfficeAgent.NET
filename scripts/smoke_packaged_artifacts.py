@@ -310,21 +310,23 @@ def verify_document_workflow(server: StdioServer, version: str) -> None:
     # the capability tool: the workflow below is chosen from the server's own answer
     # rather than from assumptions baked into this script.
     capabilities = server.call_tool("describe_capabilities", {})
-    contract = capabilities.get("Contracts", {}).get("EditPlan")
+    # Property names are camelCase as of 1.0. Enum values such as "Word" and "Tracked" are
+    # member names written by the enum converter and were never affected.
+    contract = capabilities.get("contracts", {}).get("editPlan")
     if not contract:
         raise SmokeError(f"discovery reported no edit-plan contract: {json.dumps(capabilities)[:400]}")
 
     word = next(
-        (fmt for fmt in capabilities.get("Formats", []) if fmt.get("Format") == "Word"), None)
+        (fmt for fmt in capabilities.get("formats", []) if fmt.get("format") == "Word"), None)
     if word is None:
         raise SmokeError("discovery reported no Word format on a server that offers Word tools")
-    if "changeText" not in word.get("Operations", []):
+    if "changeText" not in word.get("operations", []):
         raise SmokeError(f"discovery does not advertise changeText for Word: {json.dumps(word)[:400]}")
-    if "Tracked" not in word.get("ChangeModes", []):
+    if "Tracked" not in word.get("changeModes", []):
         raise SmokeError(f"discovery does not advertise Tracked for Word: {json.dumps(word)[:400]}")
-    if not capabilities.get("Limits", {}).get("MaximumCompressedBytes"):
+    if not capabilities.get("limits", {}).get("maximumCompressedBytes"):
         raise SmokeError("discovery reported no ingestion ceiling")
-    print(f"discovery=passed contract={contract} word-operations={len(word['Operations'])}")
+    print(f"discovery=passed contract={contract} word-operations={len(word['operations'])}")
 
     created = server.call_tool(
         "create_document",

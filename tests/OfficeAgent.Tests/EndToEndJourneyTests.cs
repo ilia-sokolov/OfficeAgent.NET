@@ -105,7 +105,7 @@ public class EndToEndJourneyTests
         Assert.False(preview.RootElement.GetProperty("isValid").GetBoolean());
         Assert.Contains(
             preview.RootElement.GetProperty("errors").EnumerateArray(),
-            error => error.GetProperty("Code").GetString() == "stale-snapshot");
+            error => error.GetProperty("code").GetString() == "stale-snapshot");
     }
 
     [Fact]
@@ -184,9 +184,9 @@ public class EndToEndJourneyTests
         using var inspected = Json(await tools.InspectDocument("workspace", deckId));
         Assert.Equal("PowerPoint", inspected.RootElement.GetProperty("format").GetString());
         var slidePath = inspected.RootElement.GetProperty("nodes").EnumerateArray()
-            .First(n => n.GetProperty("Kind").GetString() == "slide")
-            .GetProperty("Path").GetString()!;
-        var titleParaId = inspected.RootElement.GetProperty("paragraphs")[0].GetProperty("ParaId").GetString()!;
+            .First(n => n.GetProperty("kind").GetString() == "slide")
+            .GetProperty("path").GetString()!;
+        var titleParaId = inspected.RootElement.GetProperty("paragraphs")[0].GetProperty("paraId").GetString()!;
 
         // 3. Title the slide, add a table and a picture in one plan.
         var build = $$"""
@@ -211,7 +211,7 @@ public class EndToEndJourneyTests
         var finalId = built.RootElement.GetProperty("outputDocumentId").GetString()!;
         using var final = Json(await tools.InspectDocument("workspace", finalId));
         var kinds = final.RootElement.GetProperty("nodes").EnumerateArray()
-            .Select(n => n.GetProperty("Kind").GetString()).ToList();
+            .Select(n => n.GetProperty("kind").GetString()).ToList();
         Assert.Contains("table", kinds);
         Assert.Contains("image", kinds);
         Assert.Contains("Quarterly Review", await TextOf(tools, finalId));
@@ -232,8 +232,8 @@ public class EndToEndJourneyTests
         using var opened = Json(await tools.OpenDocument("workspace", "deck.pptx"));
         var deckId = opened.RootElement.GetProperty("documentId").GetString()!;
         var slidePath = opened.RootElement.GetProperty("nodes").EnumerateArray()
-            .First(n => n.GetProperty("Kind").GetString() == "slide")
-            .GetProperty("Path").GetString()!;
+            .First(n => n.GetProperty("kind").GetString() == "slide")
+            .GetProperty("path").GetString()!;
 
         // 2. Leave review feedback.
         using var commented = Json(await tools.ApplyPlan("workspace", deckId, $$"""
@@ -247,14 +247,14 @@ public class EndToEndJourneyTests
         // 3. Later, the comment is discoverable with its own path.
         using var reviewed = Json(await tools.InspectDocument("workspace", reviewedId));
         var comment = reviewed.RootElement.GetProperty("nodes").EnumerateArray()
-            .Single(n => n.GetProperty("Kind").GetString() == "comment");
-        Assert.Contains("Reviewer", comment.GetProperty("Summary").GetString());
-        Assert.DoesNotContain("(resolved)", comment.GetProperty("Summary").GetString());
+            .Single(n => n.GetProperty("kind").GetString() == "comment");
+        Assert.Contains("Reviewer", comment.GetProperty("summary").GetString());
+        Assert.DoesNotContain("(resolved)", comment.GetProperty("summary").GetString());
 
         // 4. Resolve it - the text survives, only the status changes.
         using var resolved = Json(await tools.ApplyPlan("workspace", reviewedId, $$"""
             [ { "op": "comment", "action": "Resolve",
-                "target": { "kind": "comment", "path": "{{comment.GetProperty("Path").GetString()}}" } } ]
+                "target": { "kind": "comment", "path": "{{comment.GetProperty("path").GetString()}}" } } ]
             """));
         Assert.True(resolved.RootElement.GetProperty("committed").GetBoolean(),
             resolved.RootElement.GetProperty("errors").ToString());
@@ -262,9 +262,9 @@ public class EndToEndJourneyTests
         using var after = Json(await tools.InspectDocument(
             "workspace", resolved.RootElement.GetProperty("outputDocumentId").GetString()!));
         var settled = after.RootElement.GetProperty("nodes").EnumerateArray()
-            .Single(n => n.GetProperty("Kind").GetString() == "comment");
-        Assert.Contains("(resolved)", settled.GetProperty("Summary").GetString());
-        Assert.Contains("Confirm the EMEA figure", settled.GetProperty("Summary").GetString());
+            .Single(n => n.GetProperty("kind").GetString() == "comment");
+        Assert.Contains("(resolved)", settled.GetProperty("summary").GetString());
+        Assert.Contains("Confirm the EMEA figure", settled.GetProperty("summary").GetString());
     }
 
     [Fact]
@@ -322,7 +322,7 @@ public class EndToEndJourneyTests
             """));
 
         Assert.False(refused.RootElement.GetProperty("committed").GetBoolean());
-        var message = refused.RootElement.GetProperty("errors")[0].GetProperty("Message").GetString()!;
+        var message = refused.RootElement.GetProperty("errors")[0].GetProperty("message").GetString()!;
         Assert.Contains("Direct", message);
     }
 
@@ -341,7 +341,7 @@ public class EndToEndJourneyTests
             """));
 
         Assert.Equal("ambiguous-anchor",
-            refused.RootElement.GetProperty("errors")[0].GetProperty("Code").GetString());
+            refused.RootElement.GetProperty("errors")[0].GetProperty("code").GetString());
         Assert.Equal(before, File.ReadAllBytes(Path.Combine(host.Root, "contract.docx")));
 
         // …and the retry the error tells the agent to make actually works.
@@ -364,8 +364,8 @@ public class EndToEndJourneyTests
 
         using var inspected = Json(await tools.InspectDocument("workspace", documentId));
         var slidePath = inspected.RootElement.GetProperty("nodes").EnumerateArray()
-            .First(n => n.GetProperty("Kind").GetString() == "slide").GetProperty("Path").GetString()!;
-        var paraId = inspected.RootElement.GetProperty("paragraphs")[0].GetProperty("ParaId").GetString()!;
+            .First(n => n.GetProperty("kind").GetString() == "slide").GetProperty("path").GetString()!;
+        var paraId = inspected.RootElement.GetProperty("paragraphs")[0].GetProperty("paraId").GetString()!;
 
         // A valid table insert paired with a verb PowerPoint does not implement: the good
         // half must not land on its own.
@@ -379,7 +379,7 @@ public class EndToEndJourneyTests
         Assert.False(refused.RootElement.GetProperty("committed").GetBoolean());
         using var unchanged = Json(await tools.InspectDocument("workspace", documentId));
         Assert.DoesNotContain(unchanged.RootElement.GetProperty("nodes").EnumerateArray(),
-            n => n.GetProperty("Kind").GetString() == "table");
+            n => n.GetProperty("kind").GetString() == "table");
     }
 
     // ── helpers ───────────────────────────────────────────────────────────────
@@ -405,7 +405,7 @@ public class EndToEndJourneyTests
         using var inspected = JsonDocument.Parse(
             await tools.InspectDocument("workspace", documentId, paragraphLimit: 1000));
         return string.Join(" ", inspected.RootElement.GetProperty("paragraphs").EnumerateArray()
-            .Select(p => p.GetProperty("Text").GetString()));
+            .Select(p => p.GetProperty("text").GetString()));
     }
 
     private static void AssertOpensAsWord(byte[] bytes)

@@ -1,3 +1,4 @@
+using System.Diagnostics.CodeAnalysis;
 using DocumentFormat.OpenXml;
 using DocumentFormat.OpenXml.Drawing;
 using OfficeAgent.Core;
@@ -15,6 +16,7 @@ namespace OfficeAgent.PowerPoint;
 /// and rewrites the minimum number of runs, so character formatting on the runs it does
 /// not touch survives untouched. The two dialects differ only in element vocabulary.
 /// </remarks>
+[Experimental(EngineExtensibility.DiagnosticId, UrlFormat = EngineExtensibility.UrlFormat)]
 public sealed class PresentationmlDialect : ITextDialect
 {
     /// <inheritdoc />

@@ -87,8 +87,8 @@ public class SaveModeDefaultTests
         var report = await ApplyTitle(tools, source.ItemId, "Typo", saveMode: "NewVerison");
 
         var error = report.GetProperty("errors")[0];
-        Assert.Equal("invalid-argument", error.GetProperty("Code").GetString());
-        Assert.Contains("NewVersion", error.GetProperty("Message").GetString());
+        Assert.Equal("invalid-argument", error.GetProperty("code").GetString());
+        Assert.Contains("NewVersion", error.GetProperty("message").GetString());
         Assert.False(report.GetProperty("committed").GetBoolean());
         // Nothing was written under either name.
         Assert.NotEqual("Typo", await TitleOf(workspace, source.ItemId));

@@ -90,7 +90,7 @@ public sealed class ConnectionAccessPolicyTests
     {
         using var document = JsonDocument.Parse(json);
         Assert.Contains(document.RootElement.GetProperty("errors").EnumerateArray(),
-            error => error.GetProperty("Code").GetString() == expectedCode);
+            error => error.GetProperty("code").GetString() == expectedCode);
     }
 
     private sealed class RecordingPolicy(Func<ConnectionCapability, bool> decision)

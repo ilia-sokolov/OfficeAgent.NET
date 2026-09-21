@@ -17,4 +17,9 @@
     <PackageReference Include="Microsoft.Extensions.AI.Abstractions" Version="10.6.0" />
   </ItemGroup>
 
+  <ItemGroup>
+    <!-- Lets the wire-contract baseline read the canonical plan serializer options. -->
+    <InternalsVisibleTo Include="OfficeAgent.ApiDocs" />
+  </ItemGroup>
+
 </Project>

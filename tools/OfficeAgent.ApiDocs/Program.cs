@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Reflection;
 using System.Text;
 using OfficeAgent.Abstractions;
@@ -9,35 +10,79 @@ using OfficeAgent.Rendering;
 using OfficeAgent.SharePoint;
 using OfficeAgent.Word;
 
-var check = args.Length == 2 && args[0] == "--check";
-var outputArgument = check ? args[1] : args.Length == 1 ? args[0] : null;
-if (outputArgument is null)
+var check = args.Length > 0 && args[0] == "--check";
+var paths = check ? args.Skip(1).ToArray() : args;
+if (paths.Length is < 1 or > 2)
 {
-    Console.Error.WriteLine("Usage: OfficeAgent.ApiDocs [--check] <output.md>");
+    Console.Error.WriteLine("Usage: OfficeAgent.ApiDocs [--check] <csharp-api.md> [<wire-contract.md>]");
     return 2;
 }
 
-var output = Path.GetFullPath(outputArgument);
-var content = Generate();
-if (check)
+// The wire baseline is optional so an existing single-argument invocation keeps working.
+var outputs = new List<(string Path, Func<string> Render, string Label)>
 {
-    if (!File.Exists(output) || File.ReadAllText(output) != content)
+    (Path.GetFullPath(paths[0]), ApiSurface.Generate, "API reference")
+};
+if (paths.Length == 2)
+    outputs.Add((Path.GetFullPath(paths[1]), WireContract.Generate, "wire contract"));
+
+var failed = false;
+foreach (var (output, render, label) in outputs)
+{
+    var content = render();
+    if (check)
     {
-        Console.Error.WriteLine($"Generated API reference is stale: {output}");
-        return 1;
+        // Line endings are not part of the contract. The generator emits LF, and a Windows
+        // checkout with core.autocrlf=true rewrites the committed file to CRLF while git reports
+        // it clean, so a byte comparison called every Windows checkout stale while Linux CI passed.
+        if (!File.Exists(output) || File.ReadAllText(output).Replace("\r\n", "\n") != content)
+        {
+            Console.Error.WriteLine($"Generated {label} is stale: {output}");
+            Console.Error.WriteLine("Regenerate it, review the diff as a contract change, and commit it with the change.");
+            failed = true;
+            continue;
+        }
+        Console.WriteLine($"Generated {label} is current: {output}");
+        continue;
     }
-    Console.WriteLine($"Generated API reference is current: {output}");
-    return 0;
+
+    Directory.CreateDirectory(Path.GetDirectoryName(output)!);
+    File.WriteAllText(output, content, new UTF8Encoding(encoderShouldEmitUTF8Identifier: false));
+    Console.WriteLine($"Generated {label}: {output}");
 }
 
-Directory.CreateDirectory(Path.GetDirectoryName(output)!);
-File.WriteAllText(output, content, new UTF8Encoding(encoderShouldEmitUTF8Identifier: false));
-Console.WriteLine($"Generated API reference: {output}");
-return 0;
+// The baseline is rendered from net8.0; a netstandard2.0 consumer compiles against the other
+// build, so the two must match or the baseline describes only half the consumers.
+var (types, divergence) = TargetParity.Compare();
+foreach (var difference in divergence)
+    Console.Error.WriteLine($"Target divergence: {difference}");
+if (divergence.Count > 0)
+    failed = true;
+else
+    Console.WriteLine($"netstandard2.0 and net8.0 expose the same public surface: {types} types compared");
+return failed ? 1 : 0;
 
-static string Generate()
+/// <summary>
+/// Renders the public surface of the library packages precisely enough to act as a
+/// compatibility baseline, not only as reference documentation.
+/// </summary>
+/// <remarks>
+/// The first version recorded names and shapes. Checked against five deliberate breaking
+/// changes with a passing control, it missed every one: a changed constant, renumbered enum
+/// members, a changed default argument, a settable property made init-only, and a
+/// non-nullable property made nullable. Each of those breaks a compiled or recompiled caller,
+/// so each is now part of the rendered text and any change to it fails the check.
+/// </remarks>
+internal static class ApiSurface
 {
-    var assemblies = new[]
+    private const string IsExternalInit = "System.Runtime.CompilerServices.IsExternalInit";
+    private const string RequiredMember = "System.Runtime.CompilerServices.RequiredMemberAttribute";
+    private const string ExperimentalMarker = "System.Diagnostics.CodeAnalysis.ExperimentalAttribute";
+
+    private static readonly NullabilityInfoContext Nullability = new();
+
+    /// <summary>The library assemblies whose public surface is the 1.x contract.</summary>
+    internal static readonly IReadOnlyList<Assembly> Shipped = new[]
     {
         typeof(DocumentPlan).Assembly,
         typeof(OfficeAgentTools).Assembly,
@@ -47,121 +92,321 @@ static string Generate()
         typeof(LibreOfficeDocumentRenderer).Assembly,
         typeof(SharePointDocumentProvider).Assembly,
         typeof(WordModule).Assembly,
-    }.Distinct().OrderBy(assembly => assembly.GetName().Name, StringComparer.Ordinal);
+    }.Distinct().OrderBy(assembly => assembly.GetName().Name, StringComparer.Ordinal).ToArray();
 
-    var builder = new StringBuilder();
-    var assemblyVersion = typeof(DocumentPlan).Assembly.GetName().Version
-        ?? throw new InvalidOperationException("OfficeAgent.Abstractions has no assembly version");
-    var version = $"{assemblyVersion.Major}.{assemblyVersion.Minor}.{assemblyVersion.Build}";
-    builder.AppendLine("<!-- Generated by tools/OfficeAgent.ApiDocs. Do not edit by hand. -->");
-    builder.AppendLine("# C# API reference");
-    builder.AppendLine();
-    builder.AppendLine($"This reference lists the public types and members in the OfficeAgent.NET library packages for v{version}. Regenerate it with:");
-    builder.AppendLine();
-    builder.AppendLine("```bash");
-    builder.AppendLine("dotnet run --project tools/OfficeAgent.ApiDocs -- docs/csharp-api.md");
-    builder.AppendLine("```");
-
-    foreach (var assembly in assemblies)
+    public static string Generate()
     {
+        var assemblies = Shipped;
+
+        var builder = new StringBuilder();
+        var assemblyVersion = typeof(DocumentPlan).Assembly.GetName().Version
+            ?? throw new InvalidOperationException("OfficeAgent.Abstractions has no assembly version");
+        var version = $"{assemblyVersion.Major}.{assemblyVersion.Minor}.{assemblyVersion.Build}";
+        builder.AppendLine("<!-- Generated by tools/OfficeAgent.ApiDocs. Do not edit by hand. -->");
+        builder.AppendLine("# C# API reference");
         builder.AppendLine();
-        builder.AppendLine($"## {assembly.GetName().Name}");
-        var types = assembly.ExportedTypes
-            .Where(type => type.Namespace?.StartsWith("OfficeAgent", StringComparison.Ordinal) == true)
-            .OrderBy(type => type.FullName, StringComparer.Ordinal);
-        foreach (var type in types)
+        builder.AppendLine($"This reference lists the public types and members in the OfficeAgent.NET library packages for v{version}. Regenerate it with:");
+        builder.AppendLine();
+        builder.AppendLine("```bash");
+        builder.AppendLine("dotnet run --project tools/OfficeAgent.ApiDocs -- docs/csharp-api.md");
+        builder.AppendLine("```");
+        builder.AppendLine();
+        builder.AppendLine("It is also the compatibility baseline. Constant values, enum values, default arguments,");
+        builder.AppendLine("`init` versus `set`, nullability, base types and protected members are all rendered,");
+        builder.AppendLine("because changing any of them breaks a compiled or recompiled caller.");
+        builder.AppendLine("A type marked `[Experimental]` is an engine seam, outside the 1.x stability promise; see");
+        builder.AppendLine("[compatibility.md](compatibility.md#engine-extensibility).");
+
+        foreach (var assembly in assemblies)
         {
             builder.AppendLine();
-            builder.AppendLine($"### `{DisplayType(type, includeNamespace: true)}`");
-            builder.AppendLine();
-            builder.AppendLine("```csharp");
-            builder.AppendLine(TypeDeclaration(type));
-
-            if (type.IsEnum)
+            builder.AppendLine($"## {assembly.GetName().Name}");
+            var types = assembly.ExportedTypes
+                .Where(type => type.Namespace?.StartsWith("OfficeAgent", StringComparison.Ordinal) == true)
+                .OrderBy(type => type.FullName, StringComparer.Ordinal);
+            foreach (var type in types)
             {
-                foreach (var name in Enum.GetNames(type))
-                    builder.AppendLine($"{name}");
+                builder.AppendLine();
+                builder.AppendLine($"### `{DisplayType(type, null, includeNamespace: true)}`");
+                builder.AppendLine();
+                builder.AppendLine("```csharp");
+                foreach (var line in RenderType(type))
+                    builder.AppendLine(line);
+                builder.AppendLine("```");
             }
-            else
-            {
-                foreach (var member in PublicMembers(type))
-                    builder.AppendLine(member);
-            }
-            builder.AppendLine("```");
         }
+        return builder.ToString().Replace("\r\n", "\n");
     }
-    return builder.ToString().Replace("\r\n", "\n");
-}
 
-static IEnumerable<string> PublicMembers(Type type)
-{
-    const BindingFlags flags = BindingFlags.Public | BindingFlags.Instance |
-                               BindingFlags.Static | BindingFlags.DeclaredOnly;
-    foreach (var constructor in type.GetConstructors(flags).OrderBy(Signature, StringComparer.Ordinal))
-        yield return Signature(constructor);
-    foreach (var field in type.GetFields(flags).Where(field => !field.IsSpecialName)
-                 .OrderBy(field => field.Name, StringComparer.Ordinal))
-        yield return $"public {(field.IsStatic ? "static " : "")}{DisplayType(field.FieldType)} {field.Name};";
-    foreach (var property in type.GetProperties(flags).OrderBy(property => property.Name, StringComparer.Ordinal))
+    /// <summary>The declaration and members of one type, one line each, as the baseline records them.</summary>
+    internal static IReadOnlyList<string> RenderType(Type type)
     {
-        var accessors = new[] { property.GetMethod is not null ? "get;" : null,
-                              property.SetMethod is not null ? "set;" : null }
-            .Where(value => value is not null);
-        yield return $"public {(IsStatic(property) ? "static " : "")}{DisplayType(property.PropertyType)} {property.Name} {{ {string.Join(" ", accessors)} }}";
+        var lines = new List<string>();
+        // A seam's stability class is part of the contract: dropping the attribute promises
+        // 1.x stability for it, and adding it withdraws a promise, so both must show in a diff.
+        var experimental = type.GetCustomAttributesData().FirstOrDefault(attribute =>
+            attribute.AttributeType.FullName == ExperimentalMarker);
+        if (experimental is not null)
+            lines.Add($"[Experimental(\"{experimental.ConstructorArguments[0].Value}\")]");
+        lines.Add(TypeDeclaration(type));
+        if (type.IsEnum)
+        {
+            var underlying = Enum.GetUnderlyingType(type);
+            lines.AddRange(type.GetFields(BindingFlags.Public | BindingFlags.Static)
+                .OrderBy(field => Convert.ToDecimal(field.GetRawConstantValue(), CultureInfo.InvariantCulture))
+                .ThenBy(field => field.Name, StringComparer.Ordinal)
+                .Select(field =>
+                    $"{field.Name} = {Convert.ToString(field.GetRawConstantValue(), CultureInfo.InvariantCulture)}"));
+            if (underlying != typeof(int))
+                lines.Add($"// underlying type: {DisplayType(underlying, null)}");
+        }
+        else
+        {
+            lines.AddRange(Members(type));
+        }
+        return lines;
     }
-    foreach (var method in type.GetMethods(flags).Where(method => !method.IsSpecialName)
-                 .OrderBy(Signature, StringComparer.Ordinal))
-        yield return Signature(method);
-    foreach (var eventInfo in type.GetEvents(flags).OrderBy(eventInfo => eventInfo.Name, StringComparer.Ordinal))
-        yield return $"public event {DisplayType(eventInfo.EventHandlerType!)} {eventInfo.Name};";
-}
 
-static bool IsStatic(PropertyInfo property) =>
-    (property.GetMethod ?? property.SetMethod)?.IsStatic == true;
-
-static string Signature(MethodBase method)
-{
-    var name = method.IsConstructor ? method.DeclaringType!.Name.Split('`')[0] : method.Name;
-    if (method is MethodInfo info && info.IsGenericMethodDefinition)
-        name += $"<{string.Join(", ", info.GetGenericArguments().Select(argument => argument.Name))}>";
-    var parameters = string.Join(", ", method.GetParameters().Select(parameter =>
-        $"{(parameter.IsOut ? "out " : parameter.ParameterType.IsByRef ? "ref " : "")}{DisplayType(parameter.ParameterType)} {parameter.Name}"));
-    var modifiers = method.IsStatic ? "static " : "";
-    var returnType = method is MethodInfo methodInfo ? DisplayType(methodInfo.ReturnType) + " " : "";
-    return $"public {modifiers}{returnType}{name}({parameters});";
-}
-
-static string TypeDeclaration(Type type)
-{
-    var kind = type.IsInterface ? "interface" : type.IsEnum ? "enum" :
-        typeof(MulticastDelegate).IsAssignableFrom(type.BaseType) ? "delegate" :
-        type.IsValueType ? "struct" : type.IsAbstract && type.IsSealed ? "static class" :
-        type.IsAbstract ? "abstract class" : type.IsSealed ? "sealed class" : "class";
-    return $"public {kind} {DisplayType(type)}";
-}
-
-static string DisplayType(Type type, bool includeNamespace = false)
-{
-    if (type.IsByRef)
-        type = type.GetElementType()!;
-    if (type.IsArray)
-        return $"{DisplayType(type.GetElementType()!, includeNamespace)}[]";
-    if (type.IsGenericParameter)
-        return type.Name;
-    var nullable = Nullable.GetUnderlyingType(type);
-    if (nullable is not null)
-        return $"{DisplayType(nullable, includeNamespace)}?";
-    var aliases = new Dictionary<Type, string>
+    private static IEnumerable<string> Members(Type type)
     {
-        [typeof(void)] = "void", [typeof(bool)] = "bool", [typeof(byte)] = "byte",
-        [typeof(int)] = "int", [typeof(long)] = "long", [typeof(double)] = "double",
-        [typeof(decimal)] = "decimal", [typeof(string)] = "string", [typeof(object)] = "object",
+        const BindingFlags flags = BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance |
+                                   BindingFlags.Static | BindingFlags.DeclaredOnly;
+
+        foreach (var constructor in type.GetConstructors(flags).Where(Visible)
+                     .Select(Signature).OrderBy(text => text, StringComparer.Ordinal))
+            yield return constructor;
+
+        foreach (var field in type.GetFields(flags).Where(field => !field.IsSpecialName && Visible(field))
+                     .OrderBy(field => field.Name, StringComparer.Ordinal))
+            yield return Field(field);
+
+        foreach (var property in type.GetProperties(flags).Where(Visible)
+                     .OrderBy(property => property.Name, StringComparer.Ordinal)
+                     .ThenBy(property => property.GetIndexParameters().Length))
+            yield return Property(property);
+
+        foreach (var method in type.GetMethods(flags).Where(method => !method.IsSpecialName && Visible(method))
+                     .Select(Signature).OrderBy(text => text, StringComparer.Ordinal))
+            yield return method;
+
+        foreach (var eventInfo in type.GetEvents(flags)
+                     .Where(eventInfo => eventInfo.AddMethod is { } add && Visible(add))
+                     .OrderBy(eventInfo => eventInfo.Name, StringComparer.Ordinal))
+            yield return $"{Access(eventInfo.AddMethod!)} event {DisplayType(eventInfo.EventHandlerType!, Nullability.Create(eventInfo))} {eventInfo.Name};";
+    }
+
+    /// <summary>
+    /// Public members, and protected members of types a caller can derive from. A protected
+    /// member of an unsealed public type is part of the contract with every subclass.
+    /// </summary>
+    private static bool Visible(MemberInfo member) => member switch
+    {
+        MethodBase method => method.IsPublic ||
+                             ((method.IsFamily || method.IsFamilyOrAssembly) && Inheritable(method.DeclaringType)),
+        FieldInfo field => field.IsPublic ||
+                           ((field.IsFamily || field.IsFamilyOrAssembly) && Inheritable(field.DeclaringType)),
+        PropertyInfo property => new[] { property.GetMethod, property.SetMethod }
+            .Any(accessor => accessor is not null && Visible(accessor)),
+        _ => false
     };
-    if (aliases.TryGetValue(type, out var alias))
-        return alias;
-    var prefix = includeNamespace && !string.IsNullOrEmpty(type.Namespace) ? type.Namespace + "." : "";
-    var name = type.Name.Split('`')[0];
-    return type.IsGenericType
-        ? $"{prefix}{name}<{string.Join(", ", type.GetGenericArguments().Select(argument => DisplayType(argument, includeNamespace)))}>"
-        : prefix + name;
+
+    private static bool Inheritable(Type? type) => type is not null && !type.IsSealed && !type.IsValueType;
+
+    private static string Access(MethodBase method) =>
+        method.IsPublic ? "public" : "protected";
+
+    private static string Field(FieldInfo field)
+    {
+        var access = field.IsPublic ? "public" : "protected";
+        var type = DisplayType(field.FieldType, Nullability.Create(field));
+        if (field.IsLiteral)
+            return $"{access} const {type} {field.Name} = {Literal(field.GetRawConstantValue(), field.FieldType)};";
+        var modifiers = (field.IsStatic ? "static " : "") + (field.IsInitOnly ? "readonly " : "");
+        return $"{access} {modifiers}{type} {field.Name};";
+    }
+
+    private static string Property(PropertyInfo property)
+    {
+        var getter = property.GetMethod is { } get && Visible(get) ? get : null;
+        var setter = property.SetMethod is { } set && Visible(set) ? set : null;
+        var anchor = (MethodBase)(getter ?? setter)!;
+
+        var accessors = new List<string>();
+        if (getter is not null)
+            accessors.Add(getter.IsPublic || anchor == getter ? "get;" : $"{Access(getter)} get;");
+        if (setter is not null)
+        {
+            var word = IsInitOnly(setter) ? "init;" : "set;";
+            accessors.Add(setter.IsPublic == anchor.IsPublic ? word : $"{Access(setter)} {word}");
+        }
+
+        var required = property.GetCustomAttributesData()
+            .Any(attribute => attribute.AttributeType.FullName == RequiredMember) ? "required " : "";
+        var name = property.GetIndexParameters() is { Length: > 0 } index
+            ? $"this[{string.Join(", ", index.Select(Parameter))}]"
+            : property.Name;
+
+        return $"{Access(anchor)} {Modifiers(anchor)}{required}{DisplayType(property.PropertyType, Nullability.Create(property))} {name} {{ {string.Join(" ", accessors)} }}";
+    }
+
+    /// <summary>
+    /// An init-only setter carries a required custom modifier naming IsExternalInit. Matched by
+    /// name, because the netstandard2.0 build defines its own internal polyfill of that type.
+    /// </summary>
+    private static bool IsInitOnly(MethodInfo setter) =>
+        setter.ReturnParameter.GetRequiredCustomModifiers()
+            .Any(modifier => modifier.FullName == IsExternalInit);
+
+    private static string Signature(MethodBase method)
+    {
+        var name = method.IsConstructor ? method.DeclaringType!.Name.Split('`')[0] : method.Name;
+        if (method is MethodInfo info && info.IsGenericMethodDefinition)
+            name += $"<{string.Join(", ", info.GetGenericArguments().Select(argument => argument.Name))}>";
+
+        var parameters = string.Join(", ", method.GetParameters().Select(Parameter));
+        var returnType = method is MethodInfo methodInfo
+            ? DisplayType(methodInfo.ReturnType, Nullability.Create(methodInfo.ReturnParameter)) + " "
+            : "";
+        var constraints = method is MethodInfo generic && generic.IsGenericMethodDefinition
+            ? Constraints(generic.GetGenericArguments())
+            : "";
+        return $"{Access(method)} {Modifiers(method)}{returnType}{name}({parameters}){constraints};";
+    }
+
+    private static string Modifiers(MethodBase method)
+    {
+        if (method.IsStatic) return "static ";
+        if (method.IsConstructor || method.DeclaringType?.IsInterface == true) return "";
+        if (method.IsAbstract) return "abstract ";
+        if (method is MethodInfo info && info.GetBaseDefinition().DeclaringType != info.DeclaringType)
+            return info.IsFinal ? "sealed override " : "override ";
+        if (method.IsVirtual && !method.IsFinal) return "virtual ";
+        return "";
+    }
+
+    private static string Parameter(ParameterInfo parameter)
+    {
+        var prefix = parameter.IsOut ? "out " : parameter.ParameterType.IsByRef
+            ? parameter.IsIn ? "in " : "ref "
+            : parameter.GetCustomAttributesData().Any(a => a.AttributeType == typeof(ParamArrayAttribute)) ? "params " : "";
+        var text = $"{prefix}{DisplayType(parameter.ParameterType, Nullability.Create(parameter))} {parameter.Name}";
+        if (parameter.HasDefaultValue)
+            text += $" = {Literal(parameter.RawDefaultValue, parameter.ParameterType)}";
+        return text;
+    }
+
+    private static string Literal(object? value, Type type)
+    {
+        var target = Nullable.GetUnderlyingType(type) ?? type;
+        if (value is null || value is DBNull || value == Missing.Value)
+            return target.IsValueType ? "default" : "null";
+        if (target.IsEnum)
+        {
+            var name = Enum.GetName(target, value);
+            return name is null
+                ? $"({DisplayType(target, null)}){Convert.ToString(value, CultureInfo.InvariantCulture)}"
+                : $"{DisplayType(target, null)}.{name}";
+        }
+        return value switch
+        {
+            string text => "\"" + text.Replace("\\", "\\\\").Replace("\"", "\\\"") + "\"",
+            char character => $"'{character}'",
+            bool flag => flag ? "true" : "false",
+            IFormattable number => number.ToString(null, CultureInfo.InvariantCulture),
+            _ => value.ToString() ?? "null"
+        };
+    }
+
+    private static string TypeDeclaration(Type type)
+    {
+        var kind = type.IsInterface ? "interface" : type.IsEnum ? "enum" :
+            typeof(MulticastDelegate).IsAssignableFrom(type.BaseType) ? "delegate" :
+            type.IsValueType ? "struct" : type.IsAbstract && type.IsSealed ? "static class" :
+            type.IsAbstract ? "abstract class" : type.IsSealed ? "sealed class" : "class";
+
+        var bases = new List<string>();
+        if (type.BaseType is { } baseType && !type.IsValueType && !type.IsEnum &&
+            baseType != typeof(object) && !typeof(MulticastDelegate).IsAssignableFrom(type.BaseType))
+            bases.Add(DisplayType(baseType, null, includeNamespace: true));
+        bases.AddRange(type.GetInterfaces()
+            .Where(contract => contract.IsPublic || contract.IsNestedPublic)
+            .Select(contract => DisplayType(contract, null, includeNamespace: true))
+            .OrderBy(text => text, StringComparer.Ordinal));
+
+        var declaration = $"public {kind} {DisplayType(type, null)}";
+        if (bases.Count > 0) declaration += " : " + string.Join(", ", bases);
+        if (type.IsGenericTypeDefinition) declaration += Constraints(type.GetGenericArguments());
+        return declaration;
+    }
+
+    private static string Constraints(Type[] arguments)
+    {
+        var clauses = new List<string>();
+        foreach (var argument in arguments)
+        {
+            var parts = new List<string>();
+            var attributes = argument.GenericParameterAttributes;
+            if (attributes.HasFlag(GenericParameterAttributes.ReferenceTypeConstraint)) parts.Add("class");
+            if (attributes.HasFlag(GenericParameterAttributes.NotNullableValueTypeConstraint)) parts.Add("struct");
+            parts.AddRange(argument.GetGenericParameterConstraints()
+                .Where(constraint => constraint != typeof(ValueType))
+                .Select(constraint => DisplayType(constraint, null))
+                .OrderBy(text => text, StringComparer.Ordinal));
+            if (attributes.HasFlag(GenericParameterAttributes.DefaultConstructorConstraint) &&
+                !attributes.HasFlag(GenericParameterAttributes.NotNullableValueTypeConstraint))
+                parts.Add("new()");
+            if (parts.Count > 0) clauses.Add($" where {argument.Name} : {string.Join(", ", parts)}");
+        }
+        return string.Concat(clauses);
+    }
+
+    private static string DisplayType(Type type, NullabilityInfo? info, bool includeNamespace = false)
+    {
+        if (type.IsByRef)
+            type = type.GetElementType()!;
+        if (type.IsArray)
+            return $"{DisplayType(type.GetElementType()!, info?.ElementType, includeNamespace)}[]{Mark(type, info)}";
+        if (type.IsGenericParameter)
+            return type.Name + Mark(type, info);
+
+        var nullable = Nullable.GetUnderlyingType(type);
+        if (nullable is not null)
+            return $"{DisplayType(nullable, null, includeNamespace)}?";
+
+        var aliases = new Dictionary<Type, string>
+        {
+            [typeof(void)] = "void", [typeof(bool)] = "bool", [typeof(byte)] = "byte",
+            [typeof(sbyte)] = "sbyte", [typeof(short)] = "short", [typeof(ushort)] = "ushort",
+            [typeof(int)] = "int", [typeof(uint)] = "uint", [typeof(long)] = "long",
+            [typeof(ulong)] = "ulong", [typeof(float)] = "float", [typeof(double)] = "double",
+            [typeof(decimal)] = "decimal", [typeof(char)] = "char", [typeof(string)] = "string",
+            [typeof(object)] = "object",
+        };
+        if (aliases.TryGetValue(type, out var alias))
+            return alias + Mark(type, info);
+
+        var prefix = includeNamespace && !string.IsNullOrEmpty(type.Namespace) ? type.Namespace + "." : "";
+        var name = type.Name.Split('`')[0];
+        if (!type.IsGenericType)
+            return prefix + name + Mark(type, info);
+
+        var arguments = type.GetGenericArguments();
+        var argumentInfo = info?.GenericTypeArguments;
+        var rendered = arguments.Select((argument, index) => DisplayType(
+            argument,
+            argumentInfo is not null && index < argumentInfo.Length ? argumentInfo[index] : null,
+            includeNamespace));
+        return $"{prefix}{name}<{string.Join(", ", rendered)}>{Mark(type, info)}";
+    }
+
+    /// <summary>
+    /// The nullable-reference annotation. Read state wins, because that is what a caller
+    /// observes; write state is used only where nothing can be read, such as a set-only member.
+    /// </summary>
+    private static string Mark(Type type, NullabilityInfo? info)
+    {
+        if (info is null || type.IsValueType) return "";
+        var state = info.ReadState != NullabilityState.Unknown ? info.ReadState : info.WriteState;
+        return state == NullabilityState.Nullable ? "?" : "";
+    }
 }

@@ -130,7 +130,7 @@ public class SharePointProviderTests
         Assert.DoesNotContain(FakeGraphDrive.FolderId, payload);
         using var json = JsonDocument.Parse(payload);
         Assert.Equal("not-found",
-            json.RootElement.GetProperty("errors")[0].GetProperty("Code").GetString());
+            json.RootElement.GetProperty("errors")[0].GetProperty("code").GetString());
     }
 
     [Fact]

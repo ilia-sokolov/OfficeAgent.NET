@@ -40,7 +40,7 @@ public sealed class RegexSafetyTests
 
         using var parsed = JsonDocument.Parse(json);
         var error = Assert.Single(parsed.RootElement.GetProperty("errors").EnumerateArray());
-        Assert.Equal("regex-timeout", error.GetProperty("Code").GetString());
+        Assert.Equal("regex-timeout", error.GetProperty("code").GetString());
         Assert.True(stopwatch.Elapsed < TimeSpan.FromSeconds(10), $"search took {stopwatch.Elapsed}");
     }
 

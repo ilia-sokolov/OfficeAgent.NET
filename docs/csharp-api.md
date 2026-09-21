@@ -7,59 +7,66 @@ This reference lists the public types and members in the OfficeAgent.NET library
 dotnet run --project tools/OfficeAgent.ApiDocs -- docs/csharp-api.md
 ```
 
+It is also the compatibility baseline. Constant values, enum values, default arguments,
+`init` versus `set`, nullability, base types and protected members are all rendered,
+because changing any of them breaks a compiled or recompiled caller.
+A type marked `[Experimental]` is an engine seam, outside the 1.x stability promise; see
+[compatibility.md](compatibility.md#engine-extensibility).
+
 ## OfficeAgent.Abstractions
 
 ### `OfficeAgent.Abstractions.Anchor`
 
 ```csharp
 public abstract class Anchor
-public string Id { get; set; }
+protected Anchor();
+public string Id { get; init; }
 ```
 
 ### `OfficeAgent.Abstractions.AnchorJsonConverter`
 
 ```csharp
-public sealed class AnchorJsonConverter
+public sealed class AnchorJsonConverter : System.Text.Json.Serialization.JsonConverter<OfficeAgent.Abstractions.Anchor>
 public AnchorJsonConverter();
-public Anchor Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options);
-public void Write(Utf8JsonWriter writer, Anchor value, JsonSerializerOptions options);
+public override Anchor? Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options);
+public override void Write(Utf8JsonWriter writer, Anchor value, JsonSerializerOptions options);
 ```
 
 ### `OfficeAgent.Abstractions.AnimateOp`
 
 ```csharp
-public sealed class AnimateOp
+public sealed class AnimateOp : OfficeAgent.Abstractions.PlanOperation
 public AnimateOp();
-public int? DelayMs { get; set; }
-public int? DurationMs { get; set; }
-public string Effect { get; set; }
-public AnimationKind Kind { get; set; }
-public AnimationTrigger Trigger { get; set; }
+public int? DelayMs { get; init; }
+public int? DurationMs { get; init; }
+public string Effect { get; init; }
+public AnimationKind Kind { get; init; }
+public AnimationTrigger Trigger { get; init; }
 ```
 
 ### `OfficeAgent.Abstractions.AnimationKind`
 
 ```csharp
-public enum AnimationKind
-Entrance
-Exit
+public enum AnimationKind : System.IComparable, System.IConvertible, System.IFormattable, System.ISpanFormattable
+Entrance = 0
+Exit = 1
 ```
 
 ### `OfficeAgent.Abstractions.AnimationTrigger`
 
 ```csharp
-public enum AnimationTrigger
-OnClick
-WithPrevious
-AfterPrevious
+public enum AnimationTrigger : System.IComparable, System.IConvertible, System.IFormattable, System.ISpanFormattable
+OnClick = 0
+WithPrevious = 1
+AfterPrevious = 2
 ```
 
 ### `OfficeAgent.Abstractions.AppendTableRowsOp`
 
 ```csharp
-public sealed class AppendTableRowsOp
+public sealed class AppendTableRowsOp : OfficeAgent.Abstractions.PlanOperation
 public AppendTableRowsOp();
-public IReadOnlyList<IReadOnlyList<string>> Rows { get; set; }
+public IReadOnlyList<IReadOnlyList<string>> Rows { get; init; }
 ```
 
 ### `OfficeAgent.Abstractions.ApplyOptions`
@@ -67,19 +74,19 @@ public IReadOnlyList<IReadOnlyList<string>> Rows { get; set; }
 ```csharp
 public sealed class ApplyOptions
 public ApplyOptions();
-public AuditActor Actor { get; set; }
+public AuditActor? Actor { get; init; }
 public static ApplyOptions Commit { get; }
-public bool DryRun { get; set; }
+public bool DryRun { get; init; }
 public static ApplyOptions Preview { get; }
 ```
 
 ### `OfficeAgent.Abstractions.ApplyOutcome`
 
 ```csharp
-public enum ApplyOutcome
-Previewed
-Rejected
-Committed
+public enum ApplyOutcome : System.IComparable, System.IConvertible, System.IFormattable, System.ISpanFormattable
+Previewed = 0
+Rejected = 1
+Committed = 2
 ```
 
 ### `OfficeAgent.Abstractions.ApplyReceipt`
@@ -87,31 +94,51 @@ Committed
 ```csharp
 public sealed class ApplyReceipt
 public ApplyReceipt();
-public static string CurrentReceiptVersion;
-public AuditActor Actor { get; set; }
-public string InputSha256 { get; set; }
-public ApplyOutcome Outcome { get; set; }
-public DocumentReference OutputDocument { get; set; }
-public string OutputSha256 { get; set; }
-public string PlanSha256 { get; set; }
-public string ReceiptVersion { get; set; }
-public RevisionMetadata Revision { get; set; }
-public DateTimeOffset TimestampUtc { get; set; }
+public const string CurrentReceiptVersion = "1";
+public AuditActor? Actor { get; init; }
+public string InputSha256 { get; init; }
+public ApplyOutcome Outcome { get; init; }
+public DocumentReference? OutputDocument { get; init; }
+public string? OutputSha256 { get; init; }
+public string PlanSha256 { get; init; }
+public string ReceiptVersion { get; init; }
+public RevisionMetadata Revision { get; init; }
+public DateTimeOffset TimestampUtc { get; init; }
 ```
 
 ### `OfficeAgent.Abstractions.ApplyResult`
 
 ```csharp
-public sealed class ApplyResult
+public sealed class ApplyResult : System.IDisposable
 public ApplyResult();
-public bool Committed { get; set; }
-public DocumentHandle Output { get; set; }
-public ApplyReceipt Receipt { get; set; }
-public ChangeReport Report { get; set; }
-public Task SaveAsync(string path, CancellationToken cancellationToken);
+public bool Committed { get; init; }
+public DocumentHandle? Output { get; init; }
+public ApplyReceipt? Receipt { get; init; }
+public ChangeReport Report { get; init; }
+public Task SaveAsync(string path, CancellationToken cancellationToken = default);
 public byte[] ToBytes();
 public void Dispose();
 public void Save(string path);
+```
+
+### `OfficeAgent.Abstractions.AssemblyDiagnosticCodes`
+
+```csharp
+public static class AssemblyDiagnosticCodes
+public const string InvalidMergePackage = "invalid-merge-package";
+public const string MergeIncompatibleFormatting = "merge-incompatible-formatting";
+public const string MergeResourceLimit = "merge-resource-limit";
+public const string MergeUnresolvedReference = "merge-unresolved-reference";
+public const string StaleMergeSource = "stale-merge-source";
+public const string UnsupportedMergeContent = "unsupported-merge-content";
+public const string UnsupportedMergeContentControl = "unsupported-merge-content-control";
+public const string UnsupportedMergeExternalContent = "unsupported-merge-external-content";
+public const string UnsupportedMergeField = "unsupported-merge-field";
+public const string UnsupportedMergeFormat = "unsupported-merge-format";
+public const string UnsupportedMergePart = "unsupported-merge-part";
+public const string UnsupportedMergePartLayout = "unsupported-merge-part-layout";
+public const string UnsupportedMergeRelationship = "unsupported-merge-relationship";
+public const string UnsupportedMergeSettings = "unsupported-merge-settings";
 ```
 
 ### `OfficeAgent.Abstractions.AuditActor`
@@ -119,52 +146,52 @@ public void Save(string path);
 ```csharp
 public sealed class AuditActor
 public AuditActor();
-public string DisplayName { get; set; }
-public string Issuer { get; set; }
-public string Subject { get; set; }
+public string? DisplayName { get; init; }
+public string? Issuer { get; init; }
+public string Subject { get; init; }
 ```
 
 ### `OfficeAgent.Abstractions.BackgroundImageOp`
 
 ```csharp
-public sealed class BackgroundImageOp
+public sealed class BackgroundImageOp : OfficeAgent.Abstractions.PlanOperation
 public BackgroundImageOp();
-public string Base64Bytes { get; set; }
-public string ImageConnectionId { get; set; }
-public string ImageDocumentId { get; set; }
-public string ImageType { get; set; }
-public double? Opacity { get; set; }
-public string Scope { get; set; }
+public string? Base64Bytes { get; init; }
+public string? ImageConnectionId { get; init; }
+public string? ImageDocumentId { get; init; }
+public string ImageType { get; init; }
+public double? Opacity { get; init; }
+public string? Scope { get; init; }
 ```
 
 ### `OfficeAgent.Abstractions.BreakKind`
 
 ```csharp
-public enum BreakKind
-Page
-Column
-SectionNextPage
-SectionContinuous
-SectionEvenPage
-SectionOddPage
+public enum BreakKind : System.IComparable, System.IConvertible, System.IFormattable, System.ISpanFormattable
+Page = 0
+Column = 1
+SectionNextPage = 2
+SectionContinuous = 3
+SectionEvenPage = 4
+SectionOddPage = 5
 ```
 
 ### `OfficeAgent.Abstractions.Capability`
 
 ```csharp
-public enum Capability
-Deterministic
-DeferredToWordOnOpen
-NeedsRenderer
+public enum Capability : System.IComparable, System.IConvertible, System.IFormattable, System.ISpanFormattable
+Deterministic = 0
+DeferredToWordOnOpen = 1
+NeedsRenderer = 2
 ```
 
 ### `OfficeAgent.Abstractions.CellAnchor`
 
 ```csharp
-public sealed class CellAnchor
+public sealed class CellAnchor : OfficeAgent.Abstractions.Anchor
 public CellAnchor();
-public string Address { get; set; }
-public UInt32 SheetId { get; set; }
+public string Address { get; init; }
+public uint SheetId { get; init; }
 ```
 
 ### `OfficeAgent.Abstractions.CellInfo`
@@ -172,18 +199,18 @@ public UInt32 SheetId { get; set; }
 ```csharp
 public sealed class CellInfo
 public CellInfo();
-public CellAnchor Anchor { get; set; }
-public string DisplayValue { get; set; }
-public string Formula { get; set; }
-public string RawValue { get; set; }
+public CellAnchor Anchor { get; init; }
+public string? DisplayValue { get; init; }
+public string? Formula { get; init; }
+public string? RawValue { get; init; }
 ```
 
 ### `OfficeAgent.Abstractions.ChangeMode`
 
 ```csharp
-public enum ChangeMode
-Tracked
-Direct
+public enum ChangeMode : System.IComparable, System.IConvertible, System.IFormattable, System.ISpanFormattable
+Tracked = 0
+Direct = 1
 ```
 
 ### `OfficeAgent.Abstractions.ChangeReport`
@@ -191,29 +218,29 @@ Direct
 ```csharp
 public sealed class ChangeReport
 public ChangeReport();
-public IReadOnlyList<ProposedChange> Changes { get; set; }
-public IReadOnlyList<ValidationError> Errors { get; set; }
-public bool IsValid { get; set; }
-public static ChangeReport Invalid(ValidationError[] errors);
+public IReadOnlyList<ProposedChange> Changes { get; init; }
+public IReadOnlyList<ValidationError> Errors { get; init; }
+public bool IsValid { get; init; }
+public static ChangeReport Invalid(params ValidationError[] errors);
 ```
 
 ### `OfficeAgent.Abstractions.ChangeTextOp`
 
 ```csharp
-public sealed class ChangeTextOp
+public sealed class ChangeTextOp : OfficeAgent.Abstractions.PlanOperation, OfficeAgent.Abstractions.ITrackedOperation
 public ChangeTextOp();
-public ChangeMode Mode { get; set; }
-public string With { get; set; }
+public ChangeMode Mode { get; init; }
+public string With { get; init; }
 ```
 
 ### `OfficeAgent.Abstractions.ChartKind`
 
 ```csharp
-public enum ChartKind
-ClusteredColumn
-Bar
-Line
-Pie
+public enum ChartKind : System.IComparable, System.IConvertible, System.IFormattable, System.ISpanFormattable
+ClusteredColumn = 0
+Bar = 1
+Line = 2
+Pie = 3
 ```
 
 ### `OfficeAgent.Abstractions.ChartSeries`
@@ -221,37 +248,37 @@ Pie
 ```csharp
 public sealed class ChartSeries
 public ChartSeries();
-public string Name { get; set; }
-public IReadOnlyList<double?> Values { get; set; }
+public string Name { get; init; }
+public IReadOnlyList<double?> Values { get; init; }
 ```
 
 ### `OfficeAgent.Abstractions.ClearStylesOp`
 
 ```csharp
-public sealed class ClearStylesOp
+public sealed class ClearStylesOp : OfficeAgent.Abstractions.PlanOperation
 public ClearStylesOp();
-public string Scope { get; set; }
+public string Scope { get; init; }
 ```
 
 ### `OfficeAgent.Abstractions.CommentAction`
 
 ```csharp
-public enum CommentAction
-Add
-Resolve
-Reply
-Remove
+public enum CommentAction : System.IComparable, System.IConvertible, System.IFormattable, System.ISpanFormattable
+Add = 0
+Resolve = 1
+Reply = 2
+Remove = 3
 ```
 
 ### `OfficeAgent.Abstractions.CommentOp`
 
 ```csharp
-public sealed class CommentOp
+public sealed class CommentOp : OfficeAgent.Abstractions.PlanOperation
 public CommentOp();
-public CommentAction Action { get; set; }
-public string Author { get; set; }
-public string Initials { get; set; }
-public string Text { get; set; }
+public CommentAction Action { get; init; }
+public string Author { get; init; }
+public string Initials { get; init; }
+public string Text { get; init; }
 ```
 
 ### `OfficeAgent.Abstractions.ComparisonArea`
@@ -259,20 +286,44 @@ public string Text { get; set; }
 ```csharp
 public sealed class ComparisonArea
 public ComparisonArea();
-public string Code { get; set; }
-public string Detail { get; set; }
-public string Name { get; set; }
-public ComparisonAreaState State { get; set; }
+public string? Code { get; init; }
+public string? Detail { get; init; }
+public string Name { get; init; }
+public ComparisonAreaState State { get; init; }
 ```
 
 ### `OfficeAgent.Abstractions.ComparisonAreaState`
 
 ```csharp
-public enum ComparisonAreaState
-Unchanged
-Changed
-Blocked
-NotCompared
+public enum ComparisonAreaState : System.IComparable, System.IConvertible, System.IFormattable, System.ISpanFormattable
+Unchanged = 0
+Changed = 1
+Blocked = 2
+NotCompared = 3
+```
+
+### `OfficeAgent.Abstractions.ComparisonDiagnosticCodes`
+
+```csharp
+public static class ComparisonDiagnosticCodes
+public const string ComparisonAnchorUnavailable = "comparison-anchor-unavailable";
+public const string ComparisonDifferenceLimitExceeded = "comparison-difference-limit-exceeded";
+public const string ComparisonInputLimitExceeded = "comparison-input-limit-exceeded";
+public const string ComparisonParagraphLimitExceeded = "comparison-paragraph-limit-exceeded";
+public const string UnsupportedComparisonFormat = "unsupported-comparison-format";
+public const string UnsupportedExistingRevisions = "unsupported-existing-revisions";
+public const string UnsupportedHeaderFooterChange = "unsupported-header-footer-change";
+public const string UnsupportedImageChange = "unsupported-image-change";
+public const string UnsupportedNodeChange = "unsupported-node-change";
+public const string UnsupportedNonBodyChange = "unsupported-non-body-change";
+public const string UnsupportedNoteChange = "unsupported-note-change";
+public const string UnsupportedNumberingChange = "unsupported-numbering-change";
+public const string UnsupportedPackageChange = "unsupported-package-change";
+public const string UnsupportedParagraphMarkupChange = "unsupported-paragraph-markup-change";
+public const string UnsupportedStyleChange = "unsupported-style-change";
+public const string UnsupportedStyleDefinitionChange = "unsupported-style-definition-change";
+public const string UnsupportedTableChange = "unsupported-table-change";
+public const string UnsupportedTableMarkupChange = "unsupported-table-markup-change";
 ```
 
 ### `OfficeAgent.Abstractions.ConnectionCapabilities`
@@ -280,9 +331,9 @@ NotCompared
 ```csharp
 public sealed class ConnectionCapabilities
 public ConnectionCapabilities();
-public IReadOnlyList<string> Allowed { get; set; }
-public string ConnectionId { get; set; }
-public string Provider { get; set; }
+public IReadOnlyList<string> Allowed { get; init; }
+public string ConnectionId { get; init; }
+public string Provider { get; init; }
 ```
 
 ### `OfficeAgent.Abstractions.ContractVersions`
@@ -290,49 +341,49 @@ public string Provider { get; set; }
 ```csharp
 public sealed class ContractVersions
 public ContractVersions();
-public string ApplyReceipt { get; set; }
-public string EditPlan { get; set; }
-public string MergeReceipt { get; set; }
+public string ApplyReceipt { get; init; }
+public string EditPlan { get; init; }
+public string MergeReceipt { get; init; }
 ```
 
 ### `OfficeAgent.Abstractions.CopyStylesOp`
 
 ```csharp
-public sealed class CopyStylesOp
+public sealed class CopyStylesOp : OfficeAgent.Abstractions.PlanOperation
 public CopyStylesOp();
-public string Scope { get; set; }
-public Anchor Source { get; set; }
+public string Scope { get; init; }
+public Anchor Source { get; init; }
 ```
 
 ### `OfficeAgent.Abstractions.DefineStyleOp`
 
 ```csharp
-public sealed class DefineStyleOp
+public sealed class DefineStyleOp : OfficeAgent.Abstractions.PlanOperation, OfficeAgent.Abstractions.ITextFormat
 public DefineStyleOp();
-public string Alignment { get; set; }
-public string BasedOn { get; set; }
-public bool? Bold { get; set; }
-public string BorderColor { get; set; }
-public string BorderEdges { get; set; }
-public int? BorderSizeEighths { get; set; }
-public string BorderStyle { get; set; }
-public string Color { get; set; }
-public string FontFamily { get; set; }
-public string Highlight { get; set; }
-public int? IndentFirstLineTwips { get; set; }
-public int? IndentLeftTwips { get; set; }
-public int? IndentRightTwips { get; set; }
-public bool? Italic { get; set; }
-public string Name { get; set; }
-public string Next { get; set; }
-public int? OutlineLevel { get; set; }
-public bool Quick { get; set; }
-public int? SizeHalfPoints { get; set; }
-public int? SpacingAfterTwips { get; set; }
-public int? SpacingBeforeTwips { get; set; }
-public string StyleId { get; set; }
-public string Type { get; set; }
-public bool? Underline { get; set; }
+public string? Alignment { get; init; }
+public string? BasedOn { get; init; }
+public bool? Bold { get; init; }
+public string? BorderColor { get; init; }
+public string? BorderEdges { get; init; }
+public int? BorderSizeEighths { get; init; }
+public string? BorderStyle { get; init; }
+public string? Color { get; init; }
+public string? FontFamily { get; init; }
+public string? Highlight { get; init; }
+public int? IndentFirstLineTwips { get; init; }
+public int? IndentLeftTwips { get; init; }
+public int? IndentRightTwips { get; init; }
+public bool? Italic { get; init; }
+public string? Name { get; init; }
+public string? Next { get; init; }
+public int? OutlineLevel { get; init; }
+public bool Quick { get; init; }
+public int? SizeHalfPoints { get; init; }
+public int? SpacingAfterTwips { get; init; }
+public int? SpacingBeforeTwips { get; init; }
+public string StyleId { get; init; }
+public string Type { get; init; }
+public bool? Underline { get; init; }
 ```
 
 ### `OfficeAgent.Abstractions.DocumentComparisonOptions`
@@ -340,10 +391,10 @@ public bool? Underline { get; set; }
 ```csharp
 public sealed class DocumentComparisonOptions
 public DocumentComparisonOptions();
-public int MaximumDifferences { get; set; }
-public long MaximumDocumentBytes { get; set; }
-public int MaximumParagraphs { get; set; }
-public RevisionMetadata Revision { get; set; }
+public int MaximumDifferences { get; init; }
+public long MaximumDocumentBytes { get; init; }
+public int MaximumParagraphs { get; init; }
+public RevisionMetadata? Revision { get; init; }
 ```
 
 ### `OfficeAgent.Abstractions.DocumentComparisonResult`
@@ -351,13 +402,13 @@ public RevisionMetadata Revision { get; set; }
 ```csharp
 public sealed class DocumentComparisonResult
 public DocumentComparisonResult();
-public IReadOnlyList<ComparisonArea> Coverage { get; set; }
-public IReadOnlyList<WorkflowDiagnostic> Diagnostics { get; set; }
-public IReadOnlyList<DocumentDifference> Differences { get; set; }
+public IReadOnlyList<ComparisonArea> Coverage { get; init; }
+public IReadOnlyList<WorkflowDiagnostic> Diagnostics { get; init; }
+public IReadOnlyList<DocumentDifference> Differences { get; init; }
 public bool IsComplete { get; }
-public string OriginalSha256 { get; set; }
-public DocumentPlan Plan { get; set; }
-public string RevisedSha256 { get; set; }
+public string OriginalSha256 { get; init; }
+public DocumentPlan? Plan { get; init; }
+public string RevisedSha256 { get; init; }
 ```
 
 ### `OfficeAgent.Abstractions.DocumentDifference`
@@ -365,36 +416,37 @@ public string RevisedSha256 { get; set; }
 ```csharp
 public sealed class DocumentDifference
 public DocumentDifference();
-public string After { get; set; }
-public string Before { get; set; }
-public DocumentDifferenceKind Kind { get; set; }
-public int? OriginalIndex { get; set; }
-public int? RevisedIndex { get; set; }
+public string? After { get; init; }
+public string? Before { get; init; }
+public DocumentDifferenceKind Kind { get; init; }
+public int? OriginalIndex { get; init; }
+public int? RevisedIndex { get; init; }
 ```
 
 ### `OfficeAgent.Abstractions.DocumentDifferenceKind`
 
 ```csharp
-public enum DocumentDifferenceKind
-Added
-Removed
-Changed
+public enum DocumentDifferenceKind : System.IComparable, System.IConvertible, System.IFormattable, System.ISpanFormattable
+Added = 0
+Removed = 1
+Changed = 2
 ```
 
 ### `OfficeAgent.Abstractions.DocumentFormat`
 
 ```csharp
-public enum DocumentFormat
-Word
-Excel
-PowerPoint
-Unspecified
+public enum DocumentFormat : System.IComparable, System.IConvertible, System.IFormattable, System.ISpanFormattable
+Word = 0
+Excel = 1
+PowerPoint = 2
+Unspecified = 3
 ```
 
 ### `OfficeAgent.Abstractions.DocumentHandle`
 
 ```csharp
 public abstract class DocumentHandle
+protected DocumentHandle();
 ```
 
 ### `OfficeAgent.Abstractions.DocumentMergeInput`
@@ -402,9 +454,9 @@ public abstract class DocumentHandle
 ```csharp
 public sealed class DocumentMergeInput
 public DocumentMergeInput();
-public DocumentReference Document { get; set; }
-public int Index { get; set; }
-public string Sha256 { get; set; }
+public DocumentReference? Document { get; init; }
+public int Index { get; init; }
+public string Sha256 { get; init; }
 ```
 
 ### `OfficeAgent.Abstractions.DocumentMergeLimits`
@@ -412,12 +464,12 @@ public string Sha256 { get; set; }
 ```csharp
 public sealed class DocumentMergeLimits
 public DocumentMergeLimits();
-public long MaximumExpandedBytes { get; set; }
-public long MaximumInputBytes { get; set; }
-public long MaximumOutputBytes { get; set; }
-public int MaximumParts { get; set; }
-public int MaximumSources { get; set; }
-public long MaximumTotalInputBytes { get; set; }
+public long MaximumExpandedBytes { get; init; }
+public long MaximumInputBytes { get; init; }
+public long MaximumOutputBytes { get; init; }
+public int MaximumParts { get; init; }
+public int MaximumSources { get; init; }
+public long MaximumTotalInputBytes { get; init; }
 ```
 
 ### `OfficeAgent.Abstractions.DocumentMergeOptions`
@@ -425,8 +477,8 @@ public long MaximumTotalInputBytes { get; set; }
 ```csharp
 public sealed class DocumentMergeOptions
 public DocumentMergeOptions();
-public string Author { get; set; }
-public string Title { get; set; }
+public string? Author { get; init; }
+public string? Title { get; init; }
 ```
 
 ### `OfficeAgent.Abstractions.DocumentMergePlan`
@@ -434,11 +486,11 @@ public string Title { get; set; }
 ```csharp
 public sealed class DocumentMergePlan
 public DocumentMergePlan();
-public static string CurrentVersion;
-public IReadOnlyList<DocumentMergeInput> Inputs { get; set; }
-public DocumentMergeOptions Options { get; set; }
-public string PlanSha256 { get; set; }
-public string Version { get; set; }
+public const string CurrentVersion = "1";
+public IReadOnlyList<DocumentMergeInput> Inputs { get; init; }
+public DocumentMergeOptions Options { get; init; }
+public string PlanSha256 { get; init; }
+public string Version { get; init; }
 ```
 
 ### `OfficeAgent.Abstractions.DocumentMergePreview`
@@ -446,10 +498,10 @@ public string Version { get; set; }
 ```csharp
 public sealed class DocumentMergePreview
 public DocumentMergePreview();
-public IReadOnlyList<WorkflowDiagnostic> Diagnostics { get; set; }
+public IReadOnlyList<WorkflowDiagnostic> Diagnostics { get; init; }
 public bool IsValid { get; }
-public DocumentMergePlan Plan { get; set; }
-public IReadOnlyList<DocumentMergeSourceReport> Sources { get; set; }
+public DocumentMergePlan? Plan { get; init; }
+public IReadOnlyList<DocumentMergeSourceReport> Sources { get; init; }
 ```
 
 ### `OfficeAgent.Abstractions.DocumentMergeReceipt`
@@ -457,14 +509,14 @@ public IReadOnlyList<DocumentMergeSourceReport> Sources { get; set; }
 ```csharp
 public sealed class DocumentMergeReceipt
 public DocumentMergeReceipt();
-public static string CurrentReceiptVersion;
-public AuditActor Actor { get; set; }
-public IReadOnlyList<DocumentMergeInput> Inputs { get; set; }
-public DocumentReference OutputDocument { get; set; }
-public string OutputSha256 { get; set; }
-public string PlanSha256 { get; set; }
-public string ReceiptVersion { get; set; }
-public DateTimeOffset TimestampUtc { get; set; }
+public const string CurrentReceiptVersion = "1";
+public AuditActor? Actor { get; init; }
+public IReadOnlyList<DocumentMergeInput> Inputs { get; init; }
+public DocumentReference? OutputDocument { get; init; }
+public string OutputSha256 { get; init; }
+public string PlanSha256 { get; init; }
+public string ReceiptVersion { get; init; }
+public DateTimeOffset TimestampUtc { get; init; }
 ```
 
 ### `OfficeAgent.Abstractions.DocumentMergeRequest`
@@ -472,8 +524,8 @@ public DateTimeOffset TimestampUtc { get; set; }
 ```csharp
 public sealed class DocumentMergeRequest
 public DocumentMergeRequest();
-public DocumentMergeOptions Options { get; set; }
-public IReadOnlyList<DocumentReference> Sources { get; set; }
+public DocumentMergeOptions Options { get; init; }
+public IReadOnlyList<DocumentReference> Sources { get; init; }
 ```
 
 ### `OfficeAgent.Abstractions.DocumentMergeResult`
@@ -481,11 +533,11 @@ public IReadOnlyList<DocumentReference> Sources { get; set; }
 ```csharp
 public sealed class DocumentMergeResult
 public DocumentMergeResult();
-public bool Committed { get; set; }
-public byte[] Content { get; set; }
-public IReadOnlyList<WorkflowDiagnostic> Diagnostics { get; set; }
-public DocumentReference Document { get; set; }
-public DocumentMergeReceipt Receipt { get; set; }
+public bool Committed { get; init; }
+public byte[]? Content { get; init; }
+public IReadOnlyList<WorkflowDiagnostic> Diagnostics { get; init; }
+public DocumentReference? Document { get; init; }
+public DocumentMergeReceipt? Receipt { get; init; }
 ```
 
 ### `OfficeAgent.Abstractions.DocumentMergeSourceReport`
@@ -493,12 +545,12 @@ public DocumentMergeReceipt Receipt { get; set; }
 ```csharp
 public sealed class DocumentMergeSourceReport
 public DocumentMergeSourceReport();
-public IReadOnlyList<string> Decisions { get; set; }
-public int Images { get; set; }
-public int Index { get; set; }
-public int Paragraphs { get; set; }
-public int Sections { get; set; }
-public int Tables { get; set; }
+public IReadOnlyList<string> Decisions { get; init; }
+public int Images { get; init; }
+public int Index { get; init; }
+public int Paragraphs { get; init; }
+public int Sections { get; init; }
+public int Tables { get; init; }
 ```
 
 ### `OfficeAgent.Abstractions.DocumentPlan`
@@ -506,12 +558,12 @@ public int Tables { get; set; }
 ```csharp
 public sealed class DocumentPlan
 public DocumentPlan();
-public static string CurrentContractVersion;
-public string ContractVersion { get; set; }
-public DocumentFormat Format { get; set; }
-public IReadOnlyList<PlanOperation> Operations { get; set; }
-public RevisionMetadata Revision { get; set; }
-public SnapshotToken Snapshot { get; set; }
+public const string CurrentContractVersion = "0.2";
+public string ContractVersion { get; init; }
+public DocumentFormat Format { get; init; }
+public IReadOnlyList<PlanOperation> Operations { get; init; }
+public RevisionMetadata? Revision { get; init; }
+public SnapshotToken? Snapshot { get; init; }
 ```
 
 ### `OfficeAgent.Abstractions.DocumentReference`
@@ -519,23 +571,23 @@ public SnapshotToken Snapshot { get; set; }
 ```csharp
 public sealed class DocumentReference
 public DocumentReference();
-public string ConnectionId { get; set; }
-public string ContentType { get; set; }
-public string ItemId { get; set; }
-public string Name { get; set; }
-public string Provider { get; set; }
-public string Version { get; set; }
-public static DocumentReference For(string provider, string connectionId, string itemId, string version);
-public static DocumentReference ForFileSystem(string connectionId, string itemId, string version);
+public string ConnectionId { get; init; }
+public string? ContentType { get; init; }
+public string ItemId { get; init; }
+public string? Name { get; init; }
+public string Provider { get; init; }
+public string? Version { get; init; }
+public static DocumentReference For(string provider, string connectionId, string itemId, string? version = null);
+public static DocumentReference ForFileSystem(string connectionId, string itemId, string? version = null);
 ```
 
 ### `OfficeAgent.Abstractions.DuplicateSlideOp`
 
 ```csharp
-public sealed class DuplicateSlideOp
+public sealed class DuplicateSlideOp : OfficeAgent.Abstractions.PlanOperation
 public DuplicateSlideOp();
-public SlidePosition Position { get; set; }
-public string RelativeTo { get; set; }
+public SlidePosition Position { get; init; }
+public string? RelativeTo { get; init; }
 ```
 
 ### `OfficeAgent.Abstractions.EngineCapabilities`
@@ -543,39 +595,39 @@ public string RelativeTo { get; set; }
 ```csharp
 public sealed class EngineCapabilities
 public EngineCapabilities();
-public IReadOnlyList<ConnectionCapabilities> Connections { get; set; }
-public ContractVersions Contracts { get; set; }
-public IReadOnlyList<FormatCapabilities> Formats { get; set; }
-public OpenXmlIngestionLimits Limits { get; set; }
-public bool RenderingAvailable { get; set; }
-public IReadOnlyList<string> RequiresInspection { get; set; }
+public IReadOnlyList<ConnectionCapabilities> Connections { get; init; }
+public ContractVersions Contracts { get; init; }
+public IReadOnlyList<FormatCapabilities> Formats { get; init; }
+public OpenXmlIngestionLimits Limits { get; init; }
+public bool RenderingAvailable { get; init; }
+public IReadOnlyList<string> RequiresInspection { get; init; }
 ```
 
 ### `OfficeAgent.Abstractions.Fidelity`
 
 ```csharp
-public enum Fidelity
-Outline
-Structure
-Content
+public enum Fidelity : System.IComparable, System.IConvertible, System.IFormattable, System.ISpanFormattable
+Outline = 0
+Structure = 1
+Content = 2
 ```
 
 ### `OfficeAgent.Abstractions.FileHandle`
 
 ```csharp
-public sealed class FileHandle
+public sealed class FileHandle : OfficeAgent.Abstractions.DocumentHandle
 public FileHandle(string path);
 public string Path { get; }
-public string ToString();
+public override string ToString();
 ```
 
 ### `OfficeAgent.Abstractions.FillOp`
 
 ```csharp
-public sealed class FillOp
+public sealed class FillOp : OfficeAgent.Abstractions.PlanOperation, OfficeAgent.Abstractions.ITrackedOperation
 public FillOp();
-public ChangeMode? Mode { get; set; }
-public string Value { get; set; }
+public ChangeMode? Mode { get; init; }
+public string Value { get; init; }
 ```
 
 ### `OfficeAgent.Abstractions.FindHit`
@@ -583,10 +635,10 @@ public string Value { get; set; }
 ```csharp
 public sealed class FindHit
 public FindHit();
-public Anchor Anchor { get; set; }
-public string Context { get; set; }
-public string Location { get; set; }
-public string Text { get; set; }
+public Anchor Anchor { get; init; }
+public string Context { get; init; }
+public string? Location { get; init; }
+public string Text { get; init; }
 ```
 
 ### `OfficeAgent.Abstractions.FindQuery`
@@ -595,8 +647,8 @@ public string Text { get; set; }
 public sealed class FindQuery
 public FindQuery();
 public FindQuery(string pattern);
-public MatchOptions Options { get; set; }
-public string Pattern { get; set; }
+public MatchOptions Options { get; init; }
+public string Pattern { get; init; }
 ```
 
 ### `OfficeAgent.Abstractions.FormatCapabilities`
@@ -604,88 +656,88 @@ public string Pattern { get; set; }
 ```csharp
 public sealed class FormatCapabilities
 public FormatCapabilities();
-public IReadOnlyList<ChangeMode> ChangeModes { get; set; }
-public DocumentFormat Format { get; set; }
-public IReadOnlyList<string> NodeKinds { get; set; }
-public IReadOnlyList<string> Operations { get; set; }
+public IReadOnlyList<ChangeMode> ChangeModes { get; init; }
+public DocumentFormat Format { get; init; }
+public IReadOnlyList<string> NodeKinds { get; init; }
+public IReadOnlyList<string> Operations { get; init; }
 ```
 
 ### `OfficeAgent.Abstractions.FormatOp`
 
 ```csharp
-public sealed class FormatOp
+public sealed class FormatOp : OfficeAgent.Abstractions.PlanOperation, OfficeAgent.Abstractions.ITextFormat, OfficeAgent.Abstractions.ITrackedOperation
 public FormatOp();
-public string Alignment { get; set; }
-public bool? Bold { get; set; }
-public string BorderColor { get; set; }
-public string BorderEdges { get; set; }
-public int? BorderSizeEighths { get; set; }
-public string BorderStyle { get; set; }
-public string Color { get; set; }
-public IReadOnlyList<int> ColumnWidthsPx { get; set; }
-public string FillColor { get; set; }
-public string FontFamily { get; set; }
-public int? HeightPx { get; set; }
-public string Highlight { get; set; }
-public int? IndentFirstLineTwips { get; set; }
-public int? IndentLeftTwips { get; set; }
-public int? IndentRightTwips { get; set; }
-public bool? Italic { get; set; }
-public string LineColor { get; set; }
-public int? LineWidthPx { get; set; }
-public int? ListId { get; set; }
-public int? ListLevel { get; set; }
-public string ListStyle { get; set; }
-public ChangeMode? Mode { get; set; }
-public bool? PageBreakBefore { get; set; }
-public int? SizeHalfPoints { get; set; }
-public int? SpacingAfterTwips { get; set; }
-public int? SpacingBeforeTwips { get; set; }
-public string StyleId { get; set; }
-public bool? Underline { get; set; }
-public string VerticalAlignment { get; set; }
-public int? WidthPx { get; set; }
-public int? XPx { get; set; }
-public int? YPx { get; set; }
+public string? Alignment { get; init; }
+public bool? Bold { get; init; }
+public string? BorderColor { get; init; }
+public string? BorderEdges { get; init; }
+public int? BorderSizeEighths { get; init; }
+public string? BorderStyle { get; init; }
+public string? Color { get; init; }
+public IReadOnlyList<int>? ColumnWidthsPx { get; init; }
+public string? FillColor { get; init; }
+public string? FontFamily { get; init; }
+public int? HeightPx { get; init; }
+public string? Highlight { get; init; }
+public int? IndentFirstLineTwips { get; init; }
+public int? IndentLeftTwips { get; init; }
+public int? IndentRightTwips { get; init; }
+public bool? Italic { get; init; }
+public string? LineColor { get; init; }
+public int? LineWidthPx { get; init; }
+public int? ListId { get; init; }
+public int? ListLevel { get; init; }
+public string? ListStyle { get; init; }
+public ChangeMode? Mode { get; init; }
+public bool? PageBreakBefore { get; init; }
+public int? SizeHalfPoints { get; init; }
+public int? SpacingAfterTwips { get; init; }
+public int? SpacingBeforeTwips { get; init; }
+public string? StyleId { get; init; }
+public bool? Underline { get; init; }
+public string? VerticalAlignment { get; init; }
+public int? WidthPx { get; init; }
+public int? XPx { get; init; }
+public int? YPx { get; init; }
 ```
 
 ### `OfficeAgent.Abstractions.HeaderFooterOp`
 
 ```csharp
-public sealed class HeaderFooterOp
+public sealed class HeaderFooterOp : OfficeAgent.Abstractions.PlanOperation
 public HeaderFooterOp();
-public string Alignment { get; set; }
-public string DateTime { get; set; }
-public bool? DifferentFirstPage { get; set; }
-public string Footer { get; set; }
-public string Header { get; set; }
-public string Scope { get; set; }
-public bool? ShowDateTime { get; set; }
-public bool? ShowFooter { get; set; }
-public bool? ShowPageNumber { get; set; }
-public bool? ShowSlideNumber { get; set; }
+public string? Alignment { get; init; }
+public string? DateTime { get; init; }
+public bool? DifferentFirstPage { get; init; }
+public string? Footer { get; init; }
+public string? Header { get; init; }
+public string? Scope { get; init; }
+public bool? ShowDateTime { get; init; }
+public bool? ShowFooter { get; init; }
+public bool? ShowPageNumber { get; init; }
+public bool? ShowSlideNumber { get; init; }
 ```
 
 ### `OfficeAgent.Abstractions.IDocumentRenderer`
 
 ```csharp
 public interface IDocumentRenderer
-public Task<RenderResult> RenderAsync(Stream document, RenderOptions options, CancellationToken cancellationToken);
+public Task<RenderResult> RenderAsync(Stream document, RenderOptions options, CancellationToken cancellationToken = default);
 ```
 
 ### `OfficeAgent.Abstractions.ITextFormat`
 
 ```csharp
 public interface ITextFormat
-public string Alignment { get; }
+public string? Alignment { get; }
 public bool? Bold { get; }
-public string BorderColor { get; }
-public string BorderEdges { get; }
+public string? BorderColor { get; }
+public string? BorderEdges { get; }
 public int? BorderSizeEighths { get; }
-public string BorderStyle { get; }
-public string Color { get; }
-public string FontFamily { get; }
-public string Highlight { get; }
+public string? BorderStyle { get; }
+public string? Color { get; }
+public string? FontFamily { get; }
+public string? Highlight { get; }
 public int? IndentFirstLineTwips { get; }
 public int? IndentLeftTwips { get; }
 public int? IndentRightTwips { get; }
@@ -706,145 +758,145 @@ public ChangeMode? Mode { get; }
 ### `OfficeAgent.Abstractions.InsertBreakOp`
 
 ```csharp
-public sealed class InsertBreakOp
+public sealed class InsertBreakOp : OfficeAgent.Abstractions.PlanOperation, OfficeAgent.Abstractions.ITrackedOperation
 public InsertBreakOp();
-public BreakKind Kind { get; set; }
-public ChangeMode? Mode { get; set; }
-public InsertPosition Position { get; set; }
+public BreakKind Kind { get; init; }
+public ChangeMode? Mode { get; init; }
+public InsertPosition Position { get; init; }
 ```
 
 ### `OfficeAgent.Abstractions.InsertChartOp`
 
 ```csharp
-public sealed class InsertChartOp
+public sealed class InsertChartOp : OfficeAgent.Abstractions.PlanOperation
 public InsertChartOp();
-public IReadOnlyList<string> Categories { get; set; }
-public string Description { get; set; }
-public int HeightPx { get; set; }
-public ChartKind Kind { get; set; }
-public IReadOnlyList<ChartSeries> Series { get; set; }
-public bool ShowLegend { get; set; }
-public string Title { get; set; }
-public int WidthPx { get; set; }
-public int XPx { get; set; }
-public int YPx { get; set; }
+public IReadOnlyList<string> Categories { get; init; }
+public string Description { get; init; }
+public int HeightPx { get; init; }
+public ChartKind Kind { get; init; }
+public IReadOnlyList<ChartSeries> Series { get; init; }
+public bool ShowLegend { get; init; }
+public string? Title { get; init; }
+public int WidthPx { get; init; }
+public int XPx { get; init; }
+public int YPx { get; init; }
 ```
 
 ### `OfficeAgent.Abstractions.InsertImageOp`
 
 ```csharp
-public sealed class InsertImageOp
+public sealed class InsertImageOp : OfficeAgent.Abstractions.PlanOperation, OfficeAgent.Abstractions.ITrackedOperation
 public InsertImageOp();
-public string AltText { get; set; }
-public string Base64Bytes { get; set; }
-public int HeightPx { get; set; }
-public string ImageConnectionId { get; set; }
-public string ImageDocumentId { get; set; }
-public string ImageType { get; set; }
-public ChangeMode? Mode { get; set; }
-public InsertPosition Position { get; set; }
-public int WidthPx { get; set; }
+public string? AltText { get; init; }
+public string? Base64Bytes { get; init; }
+public int HeightPx { get; init; }
+public string? ImageConnectionId { get; init; }
+public string? ImageDocumentId { get; init; }
+public string ImageType { get; init; }
+public ChangeMode? Mode { get; init; }
+public InsertPosition Position { get; init; }
+public int WidthPx { get; init; }
 ```
 
 ### `OfficeAgent.Abstractions.InsertMediaOp`
 
 ```csharp
-public sealed class InsertMediaOp
+public sealed class InsertMediaOp : OfficeAgent.Abstractions.PlanOperation
 public InsertMediaOp();
-public string AltText { get; set; }
-public string Base64Bytes { get; set; }
-public int HeightPx { get; set; }
-public MediaKind Kind { get; set; }
-public string MediaConnectionId { get; set; }
-public string MediaDocumentId { get; set; }
-public string MediaType { get; set; }
-public string PosterBase64 { get; set; }
-public int WidthPx { get; set; }
-public int? XPx { get; set; }
-public int? YPx { get; set; }
+public string? AltText { get; init; }
+public string? Base64Bytes { get; init; }
+public int HeightPx { get; init; }
+public MediaKind Kind { get; init; }
+public string? MediaConnectionId { get; init; }
+public string? MediaDocumentId { get; init; }
+public string MediaType { get; init; }
+public string? PosterBase64 { get; init; }
+public int WidthPx { get; init; }
+public int? XPx { get; init; }
+public int? YPx { get; init; }
 ```
 
 ### `OfficeAgent.Abstractions.InsertOp`
 
 ```csharp
-public sealed class InsertOp
+public sealed class InsertOp : OfficeAgent.Abstractions.PlanOperation, OfficeAgent.Abstractions.ITrackedOperation
 public InsertOp();
-public int? Level { get; set; }
-public ChangeMode? Mode { get; set; }
-public InsertPosition Position { get; set; }
-public string StyleId { get; set; }
-public string Text { get; set; }
+public int? Level { get; init; }
+public ChangeMode? Mode { get; init; }
+public InsertPosition Position { get; init; }
+public string? StyleId { get; init; }
+public string? Text { get; init; }
 ```
 
 ### `OfficeAgent.Abstractions.InsertParagraphsOp`
 
 ```csharp
-public sealed class InsertParagraphsOp
+public sealed class InsertParagraphsOp : OfficeAgent.Abstractions.PlanOperation, OfficeAgent.Abstractions.ITrackedOperation
 public InsertParagraphsOp();
-public ChangeMode? Mode { get; set; }
-public IReadOnlyList<ParagraphData> Paragraphs { get; set; }
-public InsertPosition Position { get; set; }
+public ChangeMode? Mode { get; init; }
+public IReadOnlyList<ParagraphData> Paragraphs { get; init; }
+public InsertPosition Position { get; init; }
 ```
 
 ### `OfficeAgent.Abstractions.InsertPosition`
 
 ```csharp
-public enum InsertPosition
-Before
-After
+public enum InsertPosition : System.IComparable, System.IConvertible, System.IFormattable, System.ISpanFormattable
+Before = 0
+After = 1
 ```
 
 ### `OfficeAgent.Abstractions.InsertShapeOp`
 
 ```csharp
-public sealed class InsertShapeOp
+public sealed class InsertShapeOp : OfficeAgent.Abstractions.PlanOperation
 public InsertShapeOp();
-public int HeightPx { get; set; }
-public IReadOnlyList<string> Text { get; set; }
-public int WidthPx { get; set; }
-public int? XPx { get; set; }
-public int? YPx { get; set; }
+public int HeightPx { get; init; }
+public IReadOnlyList<string> Text { get; init; }
+public int WidthPx { get; init; }
+public int? XPx { get; init; }
+public int? YPx { get; init; }
 ```
 
 ### `OfficeAgent.Abstractions.InsertSlideOp`
 
 ```csharp
-public sealed class InsertSlideOp
+public sealed class InsertSlideOp : OfficeAgent.Abstractions.PlanOperation
 public InsertSlideOp();
-public SlidePosition Position { get; set; }
-public SlideData Slide { get; set; }
+public SlidePosition Position { get; init; }
+public SlideData Slide { get; init; }
 ```
 
 ### `OfficeAgent.Abstractions.InsertTableColumnsOp`
 
 ```csharp
-public sealed class InsertTableColumnsOp
+public sealed class InsertTableColumnsOp : OfficeAgent.Abstractions.PlanOperation, OfficeAgent.Abstractions.ITrackedOperation
 public InsertTableColumnsOp();
-public int ColumnIndex { get; set; }
-public IReadOnlyList<IReadOnlyList<string>> Columns { get; set; }
-public ChangeMode? Mode { get; set; }
-public TablePosition Position { get; set; }
+public int ColumnIndex { get; init; }
+public IReadOnlyList<IReadOnlyList<string>> Columns { get; init; }
+public ChangeMode? Mode { get; init; }
+public TablePosition Position { get; init; }
 ```
 
 ### `OfficeAgent.Abstractions.InsertTableOp`
 
 ```csharp
-public sealed class InsertTableOp
+public sealed class InsertTableOp : OfficeAgent.Abstractions.PlanOperation, OfficeAgent.Abstractions.ITrackedOperation
 public InsertTableOp();
-public ChangeMode? Mode { get; set; }
-public InsertPosition Position { get; set; }
-public TableData Table { get; set; }
+public ChangeMode? Mode { get; init; }
+public InsertPosition Position { get; init; }
+public TableData Table { get; init; }
 ```
 
 ### `OfficeAgent.Abstractions.InsertTableRowsOp`
 
 ```csharp
-public sealed class InsertTableRowsOp
+public sealed class InsertTableRowsOp : OfficeAgent.Abstractions.PlanOperation, OfficeAgent.Abstractions.ITrackedOperation
 public InsertTableRowsOp();
-public ChangeMode? Mode { get; set; }
-public TablePosition Position { get; set; }
-public int RowIndex { get; set; }
-public IReadOnlyList<IReadOnlyList<string>> Rows { get; set; }
+public ChangeMode? Mode { get; init; }
+public TablePosition Position { get; init; }
+public int RowIndex { get; init; }
+public IReadOnlyList<IReadOnlyList<string>> Rows { get; init; }
 ```
 
 ### `OfficeAgent.Abstractions.InspectOptions`
@@ -853,10 +905,10 @@ public IReadOnlyList<IReadOnlyList<string>> Rows { get; set; }
 public sealed class InspectOptions
 public InspectOptions();
 public static InspectOptions Default { get; }
-public Fidelity Fidelity { get; set; }
-public int MaximumCells { get; set; }
-public string Range { get; set; }
-public UInt32? SheetId { get; set; }
+public Fidelity Fidelity { get; init; }
+public int MaximumCells { get; init; }
+public string? Range { get; init; }
+public uint? SheetId { get; init; }
 ```
 
 ### `OfficeAgent.Abstractions.InspectResult`
@@ -864,16 +916,16 @@ public UInt32? SheetId { get; set; }
 ```csharp
 public sealed class InspectResult
 public InspectResult();
-public IReadOnlyList<Anchor> Anchors { get; set; }
-public IReadOnlyList<CellInfo> Cells { get; set; }
-public DocumentFormat Format { get; set; }
-public IReadOnlyList<NodeInfo> Nodes { get; set; }
-public IReadOnlyList<OutlineNode> Outline { get; set; }
-public IReadOnlyList<ParagraphInfo> Paragraphs { get; set; }
-public SnapshotToken Snapshot { get; set; }
-public IReadOnlyList<StructuralAnchor> StructuralAnchors { get; set; }
-public StyleCatalog Styles { get; set; }
-public IReadOnlyList<WorksheetInfo> Worksheets { get; set; }
+public IReadOnlyList<Anchor> Anchors { get; init; }
+public IReadOnlyList<CellInfo> Cells { get; init; }
+public DocumentFormat Format { get; init; }
+public IReadOnlyList<NodeInfo> Nodes { get; init; }
+public IReadOnlyList<OutlineNode> Outline { get; init; }
+public IReadOnlyList<ParagraphInfo> Paragraphs { get; init; }
+public SnapshotToken Snapshot { get; init; }
+public IReadOnlyList<StructuralAnchor> StructuralAnchors { get; init; }
+public StyleCatalog Styles { get; init; }
+public IReadOnlyList<WorksheetInfo> Worksheets { get; init; }
 ```
 
 ### `OfficeAgent.Abstractions.MatchOptions`
@@ -881,48 +933,48 @@ public IReadOnlyList<WorksheetInfo> Worksheets { get; set; }
 ```csharp
 public sealed class MatchOptions
 public MatchOptions();
-public bool CaseSensitive { get; set; }
-public bool Regex { get; set; }
-public SpreadsheetValueView SpreadsheetValueView { get; set; }
-public bool WholeWord { get; set; }
+public bool CaseSensitive { get; init; }
+public bool Regex { get; init; }
+public SpreadsheetValueView SpreadsheetValueView { get; init; }
+public bool WholeWord { get; init; }
 ```
 
 ### `OfficeAgent.Abstractions.MediaKind`
 
 ```csharp
-public enum MediaKind
-Video
-Audio
+public enum MediaKind : System.IComparable, System.IConvertible, System.IFormattable, System.ISpanFormattable
+Video = 0
+Audio = 1
 ```
 
 ### `OfficeAgent.Abstractions.MissingTemplateValueBehavior`
 
 ```csharp
-public enum MissingTemplateValueBehavior
-Fail
-Ignore
-Empty
+public enum MissingTemplateValueBehavior : System.IComparable, System.IConvertible, System.IFormattable, System.ISpanFormattable
+Fail = 0
+Ignore = 1
+Empty = 2
 ```
 
 ### `OfficeAgent.Abstractions.MoveSlideOp`
 
 ```csharp
-public sealed class MoveSlideOp
+public sealed class MoveSlideOp : OfficeAgent.Abstractions.PlanOperation
 public MoveSlideOp();
-public SlidePosition Position { get; set; }
-public string RelativeTo { get; set; }
+public SlidePosition Position { get; init; }
+public string? RelativeTo { get; init; }
 ```
 
 ### `OfficeAgent.Abstractions.NodeAnchor`
 
 ```csharp
-public sealed class NodeAnchor
+public sealed class NodeAnchor : OfficeAgent.Abstractions.Anchor
 public NodeAnchor();
-public string Expect { get; set; }
-public string Kind { get; set; }
-public int Occurrence { get; set; }
-public string Path { get; set; }
-public IReadOnlyDictionary<string, string> Props { get; set; }
+public string? Expect { get; init; }
+public string Kind { get; init; }
+public int Occurrence { get; init; }
+public string Path { get; init; }
+public IReadOnlyDictionary<string, string>? Props { get; init; }
 ```
 
 ### `OfficeAgent.Abstractions.NodeInfo`
@@ -930,47 +982,47 @@ public IReadOnlyDictionary<string, string> Props { get; set; }
 ```csharp
 public sealed class NodeInfo
 public NodeInfo();
-public NodeAnchor Anchor { get; set; }
-public string Kind { get; set; }
-public string Path { get; set; }
-public string Summary { get; set; }
+public NodeAnchor? Anchor { get; init; }
+public string Kind { get; init; }
+public string Path { get; init; }
+public string Summary { get; init; }
 ```
 
 ### `OfficeAgent.Abstractions.NoteAction`
 
 ```csharp
-public enum NoteAction
-Add
-Update
-Remove
+public enum NoteAction : System.IComparable, System.IConvertible, System.IFormattable, System.ISpanFormattable
+Add = 0
+Update = 1
+Remove = 2
 ```
 
 ### `OfficeAgent.Abstractions.NoteKind`
 
 ```csharp
-public enum NoteKind
-Footnote
-Endnote
+public enum NoteKind : System.IComparable, System.IConvertible, System.IFormattable, System.ISpanFormattable
+Footnote = 0
+Endnote = 1
 ```
 
 ### `OfficeAgent.Abstractions.NoteOp`
 
 ```csharp
-public sealed class NoteOp
+public sealed class NoteOp : OfficeAgent.Abstractions.PlanOperation, OfficeAgent.Abstractions.ITrackedOperation
 public NoteOp();
-public NoteAction Action { get; set; }
-public NoteKind Kind { get; set; }
-public ChangeMode? Mode { get; set; }
-public string StyleId { get; set; }
-public string Text { get; set; }
+public NoteAction Action { get; init; }
+public NoteKind Kind { get; init; }
+public ChangeMode? Mode { get; init; }
+public string? StyleId { get; init; }
+public string Text { get; init; }
 ```
 
 ### `OfficeAgent.Abstractions.OpenXmlIngestionLimitException`
 
 ```csharp
-public sealed class OpenXmlIngestionLimitException
-public OpenXmlIngestionLimitException(string limit, long allowed, long observed, string detail);
-public static string Code;
+public sealed class OpenXmlIngestionLimitException : System.Exception, System.Runtime.Serialization.ISerializable
+public OpenXmlIngestionLimitException(string limit, long allowed, long observed, string? detail = null);
+public const string Code = "input-too-large";
 public long Allowed { get; }
 public string Limit { get; }
 public long Observed { get; }
@@ -982,24 +1034,24 @@ public long Observed { get; }
 public sealed class OpenXmlIngestionLimits
 public OpenXmlIngestionLimits();
 public static OpenXmlIngestionLimits Default { get; }
-public long MaximumCompressedBytes { get; set; }
-public long MaximumExpandedBytes { get; set; }
-public int MaximumExpansionRatio { get; set; }
-public long MaximumPartBytes { get; set; }
-public int MaximumParts { get; set; }
-public long MaximumXmlCharacters { get; set; }
-public int MaximumXmlDepth { get; set; }
-public OpenXmlIngestionLimits Restrict(OpenXmlIngestionLimits requested);
+public long MaximumCompressedBytes { get; init; }
+public long MaximumExpandedBytes { get; init; }
+public int MaximumExpansionRatio { get; init; }
+public long MaximumPartBytes { get; init; }
+public int MaximumParts { get; init; }
+public long MaximumXmlCharacters { get; init; }
+public int MaximumXmlDepth { get; init; }
+public OpenXmlIngestionLimits Restrict(OpenXmlIngestionLimits? requested);
 public void Validate();
 ```
 
 ### `OfficeAgent.Abstractions.OpenXmlPackageRejectedException`
 
 ```csharp
-public sealed class OpenXmlPackageRejectedException
+public sealed class OpenXmlPackageRejectedException : System.Exception, System.Runtime.Serialization.ISerializable
 public OpenXmlPackageRejectedException(string message);
 public OpenXmlPackageRejectedException(string message, Exception inner);
-public static string Code;
+public const string Code = "malformed-package";
 ```
 
 ### `OfficeAgent.Abstractions.OutlineNode`
@@ -1007,36 +1059,36 @@ public static string Code;
 ```csharp
 public sealed class OutlineNode
 public OutlineNode();
-public Anchor Anchor { get; set; }
-public IReadOnlyList<OutlineNode> Children { get; set; }
-public int Level { get; set; }
-public string Text { get; set; }
+public Anchor? Anchor { get; init; }
+public IReadOnlyList<OutlineNode> Children { get; init; }
+public int Level { get; init; }
+public string Text { get; init; }
 ```
 
 ### `OfficeAgent.Abstractions.PageOrientation`
 
 ```csharp
-public enum PageOrientation
-Portrait
-Landscape
+public enum PageOrientation : System.IComparable, System.IConvertible, System.IFormattable, System.ISpanFormattable
+Portrait = 0
+Landscape = 1
 ```
 
 ### `OfficeAgent.Abstractions.PageSetupOp`
 
 ```csharp
-public sealed class PageSetupOp
+public sealed class PageSetupOp : OfficeAgent.Abstractions.PlanOperation
 public PageSetupOp();
-public int? FooterDistanceTwips { get; set; }
-public int? GutterTwips { get; set; }
-public int? HeaderDistanceTwips { get; set; }
-public int? MarginBottomTwips { get; set; }
-public int? MarginLeftTwips { get; set; }
-public int? MarginRightTwips { get; set; }
-public int? MarginTopTwips { get; set; }
-public PageOrientation? Orientation { get; set; }
-public int? PageHeightTwips { get; set; }
-public int? PageWidthTwips { get; set; }
-public string PaperSize { get; set; }
+public int? FooterDistanceTwips { get; init; }
+public int? GutterTwips { get; init; }
+public int? HeaderDistanceTwips { get; init; }
+public int? MarginBottomTwips { get; init; }
+public int? MarginLeftTwips { get; init; }
+public int? MarginRightTwips { get; init; }
+public int? MarginTopTwips { get; init; }
+public PageOrientation? Orientation { get; init; }
+public int? PageHeightTwips { get; init; }
+public int? PageWidthTwips { get; init; }
+public string? PaperSize { get; init; }
 ```
 
 ### `OfficeAgent.Abstractions.ParagraphData`
@@ -1044,8 +1096,8 @@ public string PaperSize { get; set; }
 ```csharp
 public sealed class ParagraphData
 public ParagraphData();
-public string StyleId { get; set; }
-public string Text { get; set; }
+public string? StyleId { get; init; }
+public string Text { get; init; }
 ```
 
 ### `OfficeAgent.Abstractions.ParagraphInfo`
@@ -1053,28 +1105,29 @@ public string Text { get; set; }
 ```csharp
 public sealed class ParagraphInfo
 public ParagraphInfo();
-public string In { get; set; }
-public string Location { get; set; }
-public string ParaId { get; set; }
-public string StyleId { get; set; }
-public string Text { get; set; }
+public string? In { get; init; }
+public string Location { get; init; }
+public string ParaId { get; init; }
+public string? StyleId { get; init; }
+public string Text { get; init; }
 ```
 
 ### `OfficeAgent.Abstractions.PlanOperation`
 
 ```csharp
 public abstract class PlanOperation
-public Anchor Target { get; set; }
+protected PlanOperation();
+public Anchor Target { get; init; }
 ```
 
 ### `OfficeAgent.Abstractions.PlanOperationJsonConverter`
 
 ```csharp
-public sealed class PlanOperationJsonConverter
+public sealed class PlanOperationJsonConverter : System.Text.Json.Serialization.JsonConverter<OfficeAgent.Abstractions.PlanOperation>
 public PlanOperationJsonConverter();
-public static IReadOnlyDictionary<string, Type> ByVerb;
-public PlanOperation Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options);
-public void Write(Utf8JsonWriter writer, PlanOperation value, JsonSerializerOptions options);
+public static readonly IReadOnlyDictionary<string, Type> ByVerb;
+public override PlanOperation? Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options);
+public override void Write(Utf8JsonWriter writer, PlanOperation value, JsonSerializerOptions options);
 ```
 
 ### `OfficeAgent.Abstractions.ProposedChange`
@@ -1082,78 +1135,93 @@ public void Write(Utf8JsonWriter writer, PlanOperation value, JsonSerializerOpti
 ```csharp
 public sealed class ProposedChange
 public ProposedChange();
-public string After { get; set; }
-public string Before { get; set; }
-public int BlastRadius { get; set; }
-public Capability Capability { get; set; }
-public string Context { get; set; }
-public Anchor Target { get; set; }
-public string Verb { get; set; }
+public string After { get; init; }
+public string Before { get; init; }
+public int BlastRadius { get; init; }
+public Capability Capability { get; init; }
+public string Context { get; init; }
+public Anchor? Target { get; init; }
+public string Verb { get; init; }
 ```
 
 ### `OfficeAgent.Abstractions.RemoveImageOp`
 
 ```csharp
-public sealed class RemoveImageOp
+public sealed class RemoveImageOp : OfficeAgent.Abstractions.PlanOperation, OfficeAgent.Abstractions.ITrackedOperation
 public RemoveImageOp();
-public ChangeMode? Mode { get; set; }
+public ChangeMode? Mode { get; init; }
 ```
 
 ### `OfficeAgent.Abstractions.RemoveParagraphOp`
 
 ```csharp
-public sealed class RemoveParagraphOp
+public sealed class RemoveParagraphOp : OfficeAgent.Abstractions.PlanOperation, OfficeAgent.Abstractions.ITrackedOperation
 public RemoveParagraphOp();
-public ChangeMode? Mode { get; set; }
+public ChangeMode? Mode { get; init; }
 ```
 
 ### `OfficeAgent.Abstractions.RemoveShapeOp`
 
 ```csharp
-public sealed class RemoveShapeOp
+public sealed class RemoveShapeOp : OfficeAgent.Abstractions.PlanOperation
 public RemoveShapeOp();
 ```
 
 ### `OfficeAgent.Abstractions.RemoveSlideOp`
 
 ```csharp
-public sealed class RemoveSlideOp
+public sealed class RemoveSlideOp : OfficeAgent.Abstractions.PlanOperation
 public RemoveSlideOp();
 ```
 
 ### `OfficeAgent.Abstractions.RemoveTableColumnsOp`
 
 ```csharp
-public sealed class RemoveTableColumnsOp
+public sealed class RemoveTableColumnsOp : OfficeAgent.Abstractions.PlanOperation, OfficeAgent.Abstractions.ITrackedOperation
 public RemoveTableColumnsOp();
-public IReadOnlyList<int> ColumnIndices { get; set; }
-public ChangeMode? Mode { get; set; }
+public IReadOnlyList<int> ColumnIndices { get; init; }
+public ChangeMode? Mode { get; init; }
 ```
 
 ### `OfficeAgent.Abstractions.RemoveTableOp`
 
 ```csharp
-public sealed class RemoveTableOp
+public sealed class RemoveTableOp : OfficeAgent.Abstractions.PlanOperation, OfficeAgent.Abstractions.ITrackedOperation
 public RemoveTableOp();
-public ChangeMode? Mode { get; set; }
+public ChangeMode? Mode { get; init; }
 ```
 
 ### `OfficeAgent.Abstractions.RemoveTableRowsOp`
 
 ```csharp
-public sealed class RemoveTableRowsOp
+public sealed class RemoveTableRowsOp : OfficeAgent.Abstractions.PlanOperation, OfficeAgent.Abstractions.ITrackedOperation
 public RemoveTableRowsOp();
-public ChangeMode? Mode { get; set; }
-public bool OnlyIfEmpty { get; set; }
-public IReadOnlyList<int> RowIndices { get; set; }
+public ChangeMode? Mode { get; init; }
+public bool OnlyIfEmpty { get; init; }
+public IReadOnlyList<int> RowIndices { get; init; }
 ```
 
 ### `OfficeAgent.Abstractions.RenderFailedException`
 
 ```csharp
-public sealed class RenderFailedException
+public sealed class RenderFailedException : System.Exception, System.Runtime.Serialization.ISerializable
 public RenderFailedException(string failureCode, string message);
 public string FailureCode { get; }
+```
+
+### `OfficeAgent.Abstractions.RenderFailureCodes`
+
+```csharp
+public static class RenderFailureCodes
+public const string InputLimitExceeded = "input-limit-exceeded";
+public const string InvalidRenderOptions = "invalid-render-options";
+public const string MemoryLimitExceeded = "memory-limit-exceeded";
+public const string OutputLimitExceeded = "output-limit-exceeded";
+public const string PageLimitExceeded = "page-limit-exceeded";
+public const string RenderTimeout = "render-timeout";
+public const string RendererFailed = "renderer-failed";
+public const string RendererOutputMissing = "renderer-output-missing";
+public const string RendererUnavailable = "renderer-unavailable";
 ```
 
 ### `OfficeAgent.Abstractions.RenderOptions`
@@ -1161,21 +1229,21 @@ public string FailureCode { get; }
 ```csharp
 public sealed class RenderOptions
 public RenderOptions();
-public int Dpi { get; set; }
-public string FileName { get; set; }
-public long MaximumInputBytes { get; set; }
-public long MaximumOutputBytes { get; set; }
-public int MaximumPages { get; set; }
-public long MaximumWorkingSetBytes { get; set; }
-public TimeSpan Timeout { get; set; }
+public int Dpi { get; init; }
+public string FileName { get; init; }
+public long MaximumInputBytes { get; init; }
+public long MaximumOutputBytes { get; init; }
+public int MaximumPages { get; init; }
+public long MaximumWorkingSetBytes { get; init; }
+public TimeSpan Timeout { get; init; }
 ```
 
 ### `OfficeAgent.Abstractions.RenderResult`
 
 ```csharp
 public sealed class RenderResult
-public string FailureCode { get; }
-public string Message { get; }
+public string? FailureCode { get; }
+public string? Message { get; }
 public int PageCount { get; }
 public IReadOnlyList<RenderedPage> Pages { get; }
 public bool Succeeded { get; }
@@ -1190,21 +1258,21 @@ public void EnsureSucceeded();
 ```csharp
 public sealed class RenderedPage
 public RenderedPage();
-public byte[] Content { get; set; }
-public string ContentType { get; set; }
-public int PageNumber { get; set; }
+public byte[] Content { get; init; }
+public string ContentType { get; init; }
+public int PageNumber { get; init; }
 ```
 
 ### `OfficeAgent.Abstractions.RepeatTableRowOp`
 
 ```csharp
-public sealed class RepeatTableRowOp
+public sealed class RepeatTableRowOp : OfficeAgent.Abstractions.PlanOperation, OfficeAgent.Abstractions.ITrackedOperation
 public RepeatTableRowOp();
-public MissingTemplateValueBehavior MissingValueBehavior { get; set; }
-public ChangeMode? Mode { get; set; }
-public IReadOnlyList<IReadOnlyDictionary<string, string>> Records { get; set; }
-public bool RejectUnknownValues { get; set; }
-public int TemplateRowIndex { get; set; }
+public MissingTemplateValueBehavior MissingValueBehavior { get; init; }
+public ChangeMode? Mode { get; init; }
+public IReadOnlyList<IReadOnlyDictionary<string, string?>> Records { get; init; }
+public bool RejectUnknownValues { get; init; }
+public int TemplateRowIndex { get; init; }
 ```
 
 ### `OfficeAgent.Abstractions.RepeatingRowCandidate`
@@ -1212,11 +1280,11 @@ public int TemplateRowIndex { get; set; }
 ```csharp
 public sealed class RepeatingRowCandidate
 public RepeatingRowCandidate();
-public bool Confirmed { get; set; }
-public IReadOnlyList<string> Fields { get; set; }
-public string TablePath { get; set; }
-public int TableRowCount { get; set; }
-public int TemplateRowIndex { get; set; }
+public bool Confirmed { get; init; }
+public IReadOnlyList<string> Fields { get; init; }
+public string TablePath { get; init; }
+public int TableRowCount { get; init; }
+public int TemplateRowIndex { get; init; }
 ```
 
 ### `OfficeAgent.Abstractions.RepeatingTableBinding`
@@ -1224,17 +1292,17 @@ public int TemplateRowIndex { get; set; }
 ```csharp
 public sealed class RepeatingTableBinding
 public RepeatingTableBinding();
-public IReadOnlyList<IReadOnlyDictionary<string, string>> Records { get; set; }
-public string TablePath { get; set; }
-public int TemplateRowIndex { get; set; }
+public IReadOnlyList<IReadOnlyDictionary<string, string?>> Records { get; init; }
+public string TablePath { get; init; }
+public int TemplateRowIndex { get; init; }
 ```
 
 ### `OfficeAgent.Abstractions.RevisionAction`
 
 ```csharp
-public enum RevisionAction
-Accept
-Reject
+public enum RevisionAction : System.IComparable, System.IConvertible, System.IFormattable, System.ISpanFormattable
+Accept = 0
+Reject = 1
 ```
 
 ### `OfficeAgent.Abstractions.RevisionMetadata`
@@ -1242,16 +1310,16 @@ Reject
 ```csharp
 public sealed class RevisionMetadata
 public RevisionMetadata();
-public string Author { get; set; }
-public DateTimeOffset? TimestampUtc { get; set; }
+public string Author { get; init; }
+public DateTimeOffset? TimestampUtc { get; init; }
 ```
 
 ### `OfficeAgent.Abstractions.RevisionOp`
 
 ```csharp
-public sealed class RevisionOp
+public sealed class RevisionOp : OfficeAgent.Abstractions.PlanOperation
 public RevisionOp();
-public RevisionAction Action { get; set; }
+public RevisionAction Action { get; init; }
 ```
 
 ### `OfficeAgent.Abstractions.SaveDocumentOptions`
@@ -1259,66 +1327,66 @@ public RevisionAction Action { get; set; }
 ```csharp
 public sealed class SaveDocumentOptions
 public SaveDocumentOptions();
-public AuditActor Actor { get; set; }
-public string DestinationItemId { get; set; }
-public string ExpectedVersion { get; set; }
-public SaveMode Mode { get; set; }
-public string NewName { get; set; }
+public AuditActor? Actor { get; init; }
+public string? DestinationItemId { get; init; }
+public string? ExpectedVersion { get; init; }
+public SaveMode Mode { get; init; }
+public string? NewName { get; init; }
 ```
 
 ### `OfficeAgent.Abstractions.SaveMode`
 
 ```csharp
-public enum SaveMode
-NewVersion
-NewDocument
-Replace
+public enum SaveMode : System.IComparable, System.IConvertible, System.IFormattable, System.ISpanFormattable
+NewVersion = 0
+NewDocument = 1
+Replace = 2
 ```
 
 ### `OfficeAgent.Abstractions.SectionAction`
 
 ```csharp
-public enum SectionAction
-Add
-Rename
-Remove
+public enum SectionAction : System.IComparable, System.IConvertible, System.IFormattable, System.ISpanFormattable
+Add = 0
+Rename = 1
+Remove = 2
 ```
 
 ### `OfficeAgent.Abstractions.SectionOp`
 
 ```csharp
-public sealed class SectionOp
+public sealed class SectionOp : OfficeAgent.Abstractions.PlanOperation
 public SectionOp();
-public SectionAction Action { get; set; }
-public string Name { get; set; }
+public SectionAction Action { get; init; }
+public string Name { get; init; }
 ```
 
 ### `OfficeAgent.Abstractions.SetCellOp`
 
 ```csharp
-public sealed class SetCellOp
+public sealed class SetCellOp : OfficeAgent.Abstractions.PlanOperation
 public SetCellOp();
-public string Formula { get; set; }
-public string Value { get; set; }
-public SpreadsheetCellValueKind ValueKind { get; set; }
+public string? Formula { get; init; }
+public string? Value { get; init; }
+public SpreadsheetCellValueKind ValueKind { get; init; }
 ```
 
 ### `OfficeAgent.Abstractions.SetPropertyOp`
 
 ```csharp
-public sealed class SetPropertyOp
+public sealed class SetPropertyOp : OfficeAgent.Abstractions.PlanOperation
 public SetPropertyOp();
-public string Name { get; set; }
-public string Value { get; set; }
+public string Name { get; init; }
+public string? Value { get; init; }
 ```
 
 ### `OfficeAgent.Abstractions.ShapeAnchor`
 
 ```csharp
-public sealed class ShapeAnchor
+public sealed class ShapeAnchor : OfficeAgent.Abstractions.Anchor
 public ShapeAnchor();
-public string ShapeId { get; set; }
-public string SlideId { get; set; }
+public string ShapeId { get; init; }
+public string SlideId { get; init; }
 ```
 
 ### `OfficeAgent.Abstractions.SlideData`
@@ -1326,20 +1394,20 @@ public string SlideId { get; set; }
 ```csharp
 public sealed class SlideData
 public SlideData();
-public IReadOnlyList<string> Body { get; set; }
-public string Layout { get; set; }
-public string Notes { get; set; }
-public string Title { get; set; }
+public IReadOnlyList<string> Body { get; init; }
+public string? Layout { get; init; }
+public string? Notes { get; init; }
+public string? Title { get; init; }
 ```
 
 ### `OfficeAgent.Abstractions.SlidePosition`
 
 ```csharp
-public enum SlidePosition
-Start
-End
-Before
-After
+public enum SlidePosition : System.IComparable, System.IConvertible, System.IFormattable, System.ISpanFormattable
+Start = 0
+End = 1
+Before = 2
+After = 3
 ```
 
 ### `OfficeAgent.Abstractions.SnapshotToken`
@@ -1348,17 +1416,17 @@ After
 public sealed class SnapshotToken
 public SnapshotToken();
 public SnapshotToken(string etag);
-public string ETag { get; set; }
+public string ETag { get; init; }
 ```
 
 ### `OfficeAgent.Abstractions.SpreadsheetCellValueKind`
 
 ```csharp
-public enum SpreadsheetCellValueKind
-Auto
-String
-Number
-Boolean
+public enum SpreadsheetCellValueKind : System.IComparable, System.IConvertible, System.IFormattable, System.ISpanFormattable
+Auto = 0
+String = 1
+Number = 2
+Boolean = 3
 ```
 
 ### `OfficeAgent.Abstractions.SpreadsheetTableInfo`
@@ -1366,45 +1434,45 @@ Boolean
 ```csharp
 public sealed class SpreadsheetTableInfo
 public SpreadsheetTableInfo();
-public string DisplayName { get; set; }
-public string Name { get; set; }
-public string Reference { get; set; }
+public string DisplayName { get; init; }
+public string Name { get; init; }
+public string Reference { get; init; }
 ```
 
 ### `OfficeAgent.Abstractions.SpreadsheetValueView`
 
 ```csharp
-public enum SpreadsheetValueView
-Both
-Displayed
-Raw
+public enum SpreadsheetValueView : System.IComparable, System.IConvertible, System.IFormattable, System.ISpanFormattable
+Both = 0
+Displayed = 1
+Raw = 2
 ```
 
 ### `OfficeAgent.Abstractions.StreamHandle`
 
 ```csharp
-public sealed class StreamHandle
-public StreamHandle(Stream stream, string name);
-public string Name { get; }
+public sealed class StreamHandle : OfficeAgent.Abstractions.DocumentHandle
+public StreamHandle(Stream stream, string? name = null);
+public string? Name { get; }
 public Stream Stream { get; }
-public string ToString();
+public override string ToString();
 ```
 
 ### `OfficeAgent.Abstractions.StructuralAnchor`
 
 ```csharp
-public sealed class StructuralAnchor
+public sealed class StructuralAnchor : OfficeAgent.Abstractions.Anchor
 public StructuralAnchor();
-public string Kind { get; set; }
-public string Tag { get; set; }
+public string Kind { get; init; }
+public string Tag { get; init; }
 ```
 
 ### `OfficeAgent.Abstractions.StyleAnchor`
 
 ```csharp
-public sealed class StyleAnchor
+public sealed class StyleAnchor : OfficeAgent.Abstractions.Anchor
 public StyleAnchor();
-public string StyleId { get; set; }
+public string StyleId { get; init; }
 ```
 
 ### `OfficeAgent.Abstractions.StyleCatalog`
@@ -1412,7 +1480,7 @@ public string StyleId { get; set; }
 ```csharp
 public sealed class StyleCatalog
 public StyleCatalog();
-public IReadOnlyList<StyleInfo> Styles { get; set; }
+public IReadOnlyList<StyleInfo> Styles { get; init; }
 ```
 
 ### `OfficeAgent.Abstractions.StyleInfo`
@@ -1420,11 +1488,11 @@ public IReadOnlyList<StyleInfo> Styles { get; set; }
 ```csharp
 public sealed class StyleInfo
 public StyleInfo();
-public string BasedOn { get; set; }
-public string Id { get; set; }
-public int InUseCount { get; set; }
-public bool IsCustom { get; set; }
-public string Name { get; set; }
+public string? BasedOn { get; init; }
+public string Id { get; init; }
+public int InUseCount { get; init; }
+public bool IsCustom { get; init; }
+public string Name { get; init; }
 ```
 
 ### `OfficeAgent.Abstractions.TableData`
@@ -1432,19 +1500,19 @@ public string Name { get; set; }
 ```csharp
 public sealed class TableData
 public TableData();
-public IReadOnlyList<string> Headers { get; set; }
-public IReadOnlyList<IReadOnlyList<string>> Rows { get; set; }
-public string StyleId { get; set; }
+public IReadOnlyList<string> Headers { get; init; }
+public IReadOnlyList<IReadOnlyList<string>> Rows { get; init; }
+public string? StyleId { get; init; }
 ```
 
 ### `OfficeAgent.Abstractions.TablePosition`
 
 ```csharp
-public enum TablePosition
-End
-Start
-Before
-After
+public enum TablePosition : System.IComparable, System.IConvertible, System.IFormattable, System.ISpanFormattable
+End = 0
+Start = 1
+Before = 2
+After = 3
 ```
 
 ### `OfficeAgent.Abstractions.TemplateBatchItem`
@@ -1452,8 +1520,8 @@ After
 ```csharp
 public sealed class TemplateBatchItem
 public TemplateBatchItem();
-public TemplateBinding Binding { get; set; }
-public string OutputName { get; set; }
+public TemplateBinding Binding { get; init; }
+public string OutputName { get; init; }
 ```
 
 ### `OfficeAgent.Abstractions.TemplateBatchItemResult`
@@ -1461,13 +1529,13 @@ public string OutputName { get; set; }
 ```csharp
 public sealed class TemplateBatchItemResult
 public TemplateBatchItemResult();
-public bool Committed { get; set; }
-public IReadOnlyList<WorkflowDiagnostic> Diagnostics { get; set; }
-public DocumentReference Document { get; set; }
-public TemplateItemOutcome Outcome { get; set; }
-public string OutputName { get; set; }
-public ApplyReceipt Receipt { get; set; }
-public ChangeReport Report { get; set; }
+public bool Committed { get; init; }
+public IReadOnlyList<WorkflowDiagnostic> Diagnostics { get; init; }
+public DocumentReference? Document { get; init; }
+public TemplateItemOutcome Outcome { get; init; }
+public string OutputName { get; init; }
+public ApplyReceipt? Receipt { get; init; }
+public ChangeReport? Report { get; init; }
 ```
 
 ### `OfficeAgent.Abstractions.TemplateBatchLimits`
@@ -1476,14 +1544,14 @@ public ChangeReport Report { get; set; }
 public sealed class TemplateBatchLimits
 public TemplateBatchLimits();
 public static TemplateBatchLimits Default { get; }
-public int MaximumDiagnosticsPerItem { get; set; }
-public int MaximumDocuments { get; set; }
-public int MaximumFieldsPerDocument { get; set; }
-public int MaximumRowsPerDocument { get; set; }
-public int MaximumTotalRows { get; set; }
-public int MaximumValueLength { get; set; }
-public TemplateMediaLimits Media { get; set; }
-public TemplateBatchLimits Restrict(TemplateBatchLimits requested);
+public int MaximumDiagnosticsPerItem { get; init; }
+public int MaximumDocuments { get; init; }
+public int MaximumFieldsPerDocument { get; init; }
+public int MaximumRowsPerDocument { get; init; }
+public int MaximumTotalRows { get; init; }
+public int MaximumValueLength { get; init; }
+public TemplateMediaLimits Media { get; init; }
+public TemplateBatchLimits Restrict(TemplateBatchLimits? requested);
 public void Validate();
 ```
 
@@ -1492,11 +1560,11 @@ public void Validate();
 ```csharp
 public sealed class TemplateBatchPreview
 public TemplateBatchPreview();
-public IReadOnlyList<WorkflowDiagnostic> Diagnostics { get; set; }
-public bool IsValid { get; set; }
-public IReadOnlyList<TemplateBatchPreviewItem> Items { get; set; }
-public TemplateBatchLimits Limits { get; set; }
-public TemplateBatchToken Token { get; set; }
+public IReadOnlyList<WorkflowDiagnostic> Diagnostics { get; init; }
+public bool IsValid { get; init; }
+public IReadOnlyList<TemplateBatchPreviewItem> Items { get; init; }
+public TemplateBatchLimits Limits { get; init; }
+public TemplateBatchToken Token { get; init; }
 ```
 
 ### `OfficeAgent.Abstractions.TemplateBatchPreviewItem`
@@ -1504,14 +1572,14 @@ public TemplateBatchToken Token { get; set; }
 ```csharp
 public sealed class TemplateBatchPreviewItem
 public TemplateBatchPreviewItem();
-public IReadOnlyList<WorkflowDiagnostic> Diagnostics { get; set; }
-public bool DiagnosticsTruncated { get; set; }
-public long ImageBytes { get; set; }
-public int ImageCount { get; set; }
-public bool IsValid { get; set; }
-public int OperationCount { get; set; }
-public string OutputName { get; set; }
-public int RowCount { get; set; }
+public IReadOnlyList<WorkflowDiagnostic> Diagnostics { get; init; }
+public bool DiagnosticsTruncated { get; init; }
+public long ImageBytes { get; init; }
+public int ImageCount { get; init; }
+public bool IsValid { get; init; }
+public int OperationCount { get; init; }
+public string OutputName { get; init; }
+public int RowCount { get; init; }
 ```
 
 ### `OfficeAgent.Abstractions.TemplateBatchRequest`
@@ -1519,10 +1587,10 @@ public int RowCount { get; set; }
 ```csharp
 public sealed class TemplateBatchRequest
 public TemplateBatchRequest();
-public bool ContinueOnError { get; set; }
-public IReadOnlyList<TemplateBatchItem> Items { get; set; }
-public TemplateBatchLimits Limits { get; set; }
-public int MaximumDocuments { get; set; }
+public bool ContinueOnError { get; init; }
+public IReadOnlyList<TemplateBatchItem> Items { get; init; }
+public TemplateBatchLimits? Limits { get; init; }
+public int MaximumDocuments { get; init; }
 ```
 
 ### `OfficeAgent.Abstractions.TemplateBatchResult`
@@ -1531,7 +1599,7 @@ public int MaximumDocuments { get; set; }
 public sealed class TemplateBatchResult
 public TemplateBatchResult();
 public bool Committed { get; }
-public IReadOnlyList<TemplateBatchItemResult> Items { get; set; }
+public IReadOnlyList<TemplateBatchItemResult> Items { get; init; }
 ```
 
 ### `OfficeAgent.Abstractions.TemplateBatchToken`
@@ -1539,9 +1607,9 @@ public IReadOnlyList<TemplateBatchItemResult> Items { get; set; }
 ```csharp
 public sealed class TemplateBatchToken
 public TemplateBatchToken();
-public string BatchSha256 { get; set; }
-public string MediaSha256 { get; set; }
-public string TemplateSha256 { get; set; }
+public string BatchSha256 { get; init; }
+public string MediaSha256 { get; init; }
+public string TemplateSha256 { get; init; }
 ```
 
 ### `OfficeAgent.Abstractions.TemplateBinding`
@@ -1549,26 +1617,58 @@ public string TemplateSha256 { get; set; }
 ```csharp
 public sealed class TemplateBinding
 public TemplateBinding();
-public MissingTemplateValueBehavior MissingValueBehavior { get; set; }
-public ChangeMode Mode { get; set; }
-public bool RejectUnknownValues { get; set; }
-public IReadOnlyList<RepeatingTableBinding> RepeatingTables { get; set; }
-public RevisionMetadata Revision { get; set; }
-public IReadOnlyDictionary<string, TemplateValue> TypedValues { get; set; }
-public IReadOnlyDictionary<string, string> Values { get; set; }
+public MissingTemplateValueBehavior MissingValueBehavior { get; init; }
+public ChangeMode Mode { get; init; }
+public bool RejectUnknownValues { get; init; }
+public IReadOnlyList<RepeatingTableBinding> RepeatingTables { get; init; }
+public RevisionMetadata? Revision { get; init; }
+public IReadOnlyDictionary<string, TemplateValue> TypedValues { get; init; }
+public IReadOnlyDictionary<string, string?> Values { get; init; }
 ```
 
 ### `OfficeAgent.Abstractions.TemplateChartValue`
 
 ```csharp
-public sealed class TemplateChartValue
+public sealed class TemplateChartValue : OfficeAgent.Abstractions.TemplateValue
 public TemplateChartValue();
-public IReadOnlyList<string> Categories { get; set; }
-public ChartKind Kind { get; set; }
-public string RequiredSlotKind { get; }
-public IReadOnlyList<ChartSeries> Series { get; set; }
-public bool ShowLegend { get; set; }
-public string Title { get; set; }
+public IReadOnlyList<string> Categories { get; init; }
+public ChartKind Kind { get; init; }
+public override string RequiredSlotKind { get; }
+public IReadOnlyList<ChartSeries> Series { get; init; }
+public bool ShowLegend { get; init; }
+public string? Title { get; init; }
+```
+
+### `OfficeAgent.Abstractions.TemplateDiagnosticCodes`
+
+```csharp
+public static class TemplateDiagnosticCodes
+public const string AmbiguousTemplateSlot = "ambiguous-template-slot";
+public const string BatchTooLarge = "batch-too-large";
+public const string ChartTooLarge = "chart-too-large";
+public const string DuplicateOutputName = "duplicate-output-name";
+public const string DuplicateTemplateBinding = "duplicate-template-binding";
+public const string ImageNotAvailable = "image-not-available";
+public const string ImageTooLarge = "image-too-large";
+public const string ImageTypeMismatch = "image-type-mismatch";
+public const string InvalidImageBinding = "invalid-image-binding";
+public const string ItemSkipped = "item-skipped";
+public const string MediaInRepeatingRow = "media-in-repeating-row";
+public const string MissingAltText = "missing-alt-text";
+public const string MissingOutputName = "missing-output-name";
+public const string MissingTemplateValue = "missing-template-value";
+public const string StaleBatchPreview = "stale-batch-preview";
+public const string TemplateAnchorNotFound = "template-anchor-not-found";
+public const string TemplateTableNotFound = "template-table-not-found";
+public const string TooManyFields = "too-many-fields";
+public const string TooManyImages = "too-many-images";
+public const string TooManyRows = "too-many-rows";
+public const string TooManyTotalImageBytes = "too-many-total-image-bytes";
+public const string TooManyTotalRows = "too-many-total-rows";
+public const string UnknownTemplateValue = "unknown-template-value";
+public const string UnsupportedTemplateFeature = "unsupported-template-feature";
+public const string ValueTooLong = "value-too-long";
+public const string WrongSlotKind = "wrong-slot-kind";
 ```
 
 ### `OfficeAgent.Abstractions.TemplateDiscoveryResult`
@@ -1576,37 +1676,37 @@ public string Title { get; set; }
 ```csharp
 public sealed class TemplateDiscoveryResult
 public TemplateDiscoveryResult();
-public IReadOnlyList<WorkflowDiagnostic> Diagnostics { get; set; }
-public IReadOnlyList<TemplateMediaSlot> MediaSlots { get; set; }
-public IReadOnlyList<RepeatingRowCandidate> RepeatingRows { get; set; }
-public IReadOnlyList<TemplateSlot> Slots { get; set; }
-public string TemplateSha256 { get; set; }
+public IReadOnlyList<WorkflowDiagnostic> Diagnostics { get; init; }
+public IReadOnlyList<TemplateMediaSlot> MediaSlots { get; init; }
+public IReadOnlyList<RepeatingRowCandidate> RepeatingRows { get; init; }
+public IReadOnlyList<TemplateSlot> Slots { get; init; }
+public string TemplateSha256 { get; init; }
 ```
 
 ### `OfficeAgent.Abstractions.TemplateImageValue`
 
 ```csharp
-public sealed class TemplateImageValue
+public sealed class TemplateImageValue : OfficeAgent.Abstractions.TemplateValue
 public TemplateImageValue();
-public string AltText { get; set; }
-public string Base64Bytes { get; set; }
-public int HeightPx { get; set; }
-public string ImageConnectionId { get; set; }
-public string ImageDocumentId { get; set; }
-public string ImageType { get; set; }
-public string RequiredSlotKind { get; }
-public int WidthPx { get; set; }
+public string? AltText { get; init; }
+public string? Base64Bytes { get; init; }
+public int HeightPx { get; init; }
+public string? ImageConnectionId { get; init; }
+public string? ImageDocumentId { get; init; }
+public string ImageType { get; init; }
+public override string RequiredSlotKind { get; }
+public int WidthPx { get; init; }
 ```
 
 ### `OfficeAgent.Abstractions.TemplateItemOutcome`
 
 ```csharp
-public enum TemplateItemOutcome
-Previewed
-Failed
-Skipped
-Committed
-Uncertain
+public enum TemplateItemOutcome : System.IComparable, System.IConvertible, System.IFormattable, System.ISpanFormattable
+Previewed = 0
+Failed = 1
+Skipped = 2
+Committed = 3
+Uncertain = 4
 ```
 
 ### `OfficeAgent.Abstractions.TemplateMediaLimits`
@@ -1615,11 +1715,11 @@ Uncertain
 public sealed class TemplateMediaLimits
 public TemplateMediaLimits();
 public static TemplateMediaLimits Default { get; }
-public int MaximumChartPoints { get; set; }
-public long MaximumImageBytes { get; set; }
-public int MaximumImagesPerDocument { get; set; }
-public long MaximumTotalImageBytes { get; set; }
-public TemplateMediaLimits Restrict(TemplateMediaLimits requested);
+public int MaximumChartPoints { get; init; }
+public long MaximumImageBytes { get; init; }
+public int MaximumImagesPerDocument { get; init; }
+public long MaximumTotalImageBytes { get; init; }
+public TemplateMediaLimits Restrict(TemplateMediaLimits? requested);
 public void Validate();
 ```
 
@@ -1628,10 +1728,10 @@ public void Validate();
 ```csharp
 public sealed class TemplateMediaSlot
 public TemplateMediaSlot();
-public bool InRepeatingRow { get; set; }
-public string MediaKind { get; set; }
-public string Name { get; set; }
-public string Path { get; set; }
+public bool InRepeatingRow { get; init; }
+public string MediaKind { get; init; }
+public string Name { get; init; }
+public string Path { get; init; }
 ```
 
 ### `OfficeAgent.Abstractions.TemplatePlanResult`
@@ -1639,9 +1739,9 @@ public string Path { get; set; }
 ```csharp
 public sealed class TemplatePlanResult
 public TemplatePlanResult();
-public IReadOnlyList<WorkflowDiagnostic> Diagnostics { get; set; }
+public IReadOnlyList<WorkflowDiagnostic> Diagnostics { get; init; }
 public bool IsValid { get; }
-public DocumentPlan Plan { get; set; }
+public DocumentPlan? Plan { get; init; }
 ```
 
 ### `OfficeAgent.Abstractions.TemplateSlot`
@@ -1650,61 +1750,82 @@ public DocumentPlan Plan { get; set; }
 public sealed class TemplateSlot
 public TemplateSlot();
 public bool Bindable { get; }
-public string CurrentText { get; set; }
-public string Kind { get; set; }
-public string Name { get; set; }
-public int Occurrences { get; set; }
+public string? CurrentText { get; init; }
+public string Kind { get; init; }
+public string Name { get; init; }
+public int Occurrences { get; init; }
 ```
 
 ### `OfficeAgent.Abstractions.TemplateTextValue`
 
 ```csharp
-public sealed class TemplateTextValue
-public TemplateTextValue(string text);
-public string RequiredSlotKind { get; }
-public string Text { get; }
+public sealed class TemplateTextValue : OfficeAgent.Abstractions.TemplateValue
+public TemplateTextValue(string? text);
+public override string RequiredSlotKind { get; }
+public string? Text { get; }
 ```
 
 ### `OfficeAgent.Abstractions.TemplateValue`
 
 ```csharp
 public abstract class TemplateValue
-public string RequiredSlotKind { get; }
+protected TemplateValue();
+public abstract string RequiredSlotKind { get; }
 ```
 
 ### `OfficeAgent.Abstractions.TextSpanAnchor`
 
 ```csharp
-public sealed class TextSpanAnchor
+public sealed class TextSpanAnchor : OfficeAgent.Abstractions.Anchor
 public TextSpanAnchor();
-public string Expect { get; set; }
-public int Occurrence { get; set; }
-public string ParaId { get; set; }
+public string Expect { get; init; }
+public int Occurrence { get; init; }
+public string ParaId { get; init; }
+```
+
+### `OfficeAgent.Abstractions.ToolErrorCodes`
+
+```csharp
+public static class ToolErrorCodes
+public const string AccessDenied = "access-denied";
+public const string AlreadyExists = "already-exists";
+public const string ConfigurationError = "configuration-error";
+public const string ConnectionForbidden = "connection-forbidden";
+public const string ContentTooLarge = "content-too-large";
+public const string ExtensionNotAllowed = "extension-not-allowed";
+public const string IOError = "io-error";
+public const string InternalError = "internal-error";
+public const string InvalidArgument = "invalid-argument";
+public const string InvalidJson = "invalid-json";
+public const string NotFound = "not-found";
+public const string ProviderError = "provider-error";
+public const string RegexTimeout = "regex-timeout";
+public const string VersionConflict = "version-conflict";
 ```
 
 ### `OfficeAgent.Abstractions.TransitionOp`
 
 ```csharp
-public sealed class TransitionOp
+public sealed class TransitionOp : OfficeAgent.Abstractions.PlanOperation
 public TransitionOp();
-public int? AdvanceAfterMs { get; set; }
-public bool? AdvanceOnClick { get; set; }
-public string Direction { get; set; }
-public int? DurationMs { get; set; }
-public string Effect { get; set; }
+public int? AdvanceAfterMs { get; init; }
+public bool? AdvanceOnClick { get; init; }
+public string? Direction { get; init; }
+public int? DurationMs { get; init; }
+public string Effect { get; init; }
 ```
 
 ### `OfficeAgent.Abstractions.UpdateChartOp`
 
 ```csharp
-public sealed class UpdateChartOp
+public sealed class UpdateChartOp : OfficeAgent.Abstractions.PlanOperation
 public UpdateChartOp();
-public IReadOnlyList<string> Categories { get; set; }
-public string Description { get; set; }
-public ChartKind Kind { get; set; }
-public IReadOnlyList<ChartSeries> Series { get; set; }
-public bool ShowLegend { get; set; }
-public string Title { get; set; }
+public IReadOnlyList<string> Categories { get; init; }
+public string Description { get; init; }
+public ChartKind Kind { get; init; }
+public IReadOnlyList<ChartSeries> Series { get; init; }
+public bool ShowLegend { get; init; }
+public string? Title { get; init; }
 ```
 
 ### `OfficeAgent.Abstractions.ValidationError`
@@ -1712,45 +1833,45 @@ public string Title { get; set; }
 ```csharp
 public sealed class ValidationError
 public ValidationError();
-public ValidationError(ValidationErrorCode code, string message, Anchor target);
-public ValidationError(string code, string message, Anchor target);
-public string Code { get; set; }
+public ValidationError(ValidationErrorCode code, string message, Anchor? target = null);
+public ValidationError(string code, string message, Anchor? target = null);
+public string Code { get; init; }
 public ValidationErrorCode CodeKind { get; }
-public string Message { get; set; }
-public Anchor Target { get; set; }
+public string Message { get; init; }
+public Anchor? Target { get; init; }
 ```
 
 ### `OfficeAgent.Abstractions.ValidationErrorCode`
 
 ```csharp
-public enum ValidationErrorCode
-Unknown
-StaleSnapshot
-AnchorNotFound
-ExpectMismatch
-AmbiguousAnchor
-UnsupportedOperation
-ContractMismatch
-InvalidOperation
-RequiresRenderer
-OperationConflict
-RevisionOverlap
+public enum ValidationErrorCode : System.IComparable, System.IConvertible, System.IFormattable, System.ISpanFormattable
+Unknown = 0
+StaleSnapshot = 1
+AnchorNotFound = 2
+ExpectMismatch = 3
+AmbiguousAnchor = 4
+UnsupportedOperation = 5
+ContractMismatch = 6
+InvalidOperation = 7
+RequiresRenderer = 8
+OperationConflict = 9
+RevisionOverlap = 10
 ```
 
 ### `OfficeAgent.Abstractions.ValidationErrorCodes`
 
 ```csharp
 public static class ValidationErrorCodes
-public static string AmbiguousAnchor;
-public static string AnchorNotFound;
-public static string ContractMismatch;
-public static string ExpectMismatch;
-public static string InvalidOperation;
-public static string OperationConflict;
-public static string RequiresRenderer;
-public static string RevisionOverlap;
-public static string StaleSnapshot;
-public static string UnsupportedOperation;
+public const string AmbiguousAnchor = "ambiguous-anchor";
+public const string AnchorNotFound = "anchor-not-found";
+public const string ContractMismatch = "contract-mismatch";
+public const string ExpectMismatch = "expect-mismatch";
+public const string InvalidOperation = "invalid-operation";
+public const string OperationConflict = "operation-conflict";
+public const string RequiresRenderer = "requires-renderer";
+public const string RevisionOverlap = "revision-overlap";
+public const string StaleSnapshot = "stale-snapshot";
+public const string UnsupportedOperation = "unsupported-operation";
 public static ValidationErrorCode Parse(string code);
 public static string ToWireCode(ValidationErrorCode code);
 ```
@@ -1760,9 +1881,9 @@ public static string ToWireCode(ValidationErrorCode code);
 ```csharp
 public sealed class WorkflowDiagnostic
 public WorkflowDiagnostic();
-public string Code { get; set; }
-public string Message { get; set; }
-public string Path { get; set; }
+public string Code { get; init; }
+public string Message { get; init; }
+public string? Path { get; init; }
 ```
 
 ### `OfficeAgent.Abstractions.WorksheetInfo`
@@ -1770,10 +1891,10 @@ public string Path { get; set; }
 ```csharp
 public sealed class WorksheetInfo
 public WorksheetInfo();
-public string Dimension { get; set; }
-public string Name { get; set; }
-public UInt32 SheetId { get; set; }
-public IReadOnlyList<SpreadsheetTableInfo> Tables { get; set; }
+public string? Dimension { get; init; }
+public string Name { get; init; }
+public uint SheetId { get; init; }
+public IReadOnlyList<SpreadsheetTableInfo> Tables { get; init; }
 ```
 
 ## OfficeAgent.AgentFramework
@@ -1781,15 +1902,15 @@ public IReadOnlyList<SpreadsheetTableInfo> Tables { get; set; }
 ### `OfficeAgent.AgentFramework.AllowAllConnectionAccessPolicy`
 
 ```csharp
-public sealed class AllowAllConnectionAccessPolicy
+public sealed class AllowAllConnectionAccessPolicy : OfficeAgent.AgentFramework.IConnectionAccessPolicy
 public AllowAllConnectionAccessPolicy();
-public ValueTask<bool> IsAllowedAsync(ClaimsPrincipal principal, string connectionId, ConnectionCapability capability, CancellationToken cancellationToken);
+public ValueTask<bool> IsAllowedAsync(ClaimsPrincipal principal, string connectionId, ConnectionCapability capability, CancellationToken cancellationToken = default);
 ```
 
 ### `OfficeAgent.AgentFramework.AnonymousPrincipalAccessor`
 
 ```csharp
-public sealed class AnonymousPrincipalAccessor
+public sealed class AnonymousPrincipalAccessor : OfficeAgent.AgentFramework.ITrustedPrincipalAccessor
 public AnonymousPrincipalAccessor();
 public ClaimsPrincipal Principal { get; }
 ```
@@ -1797,19 +1918,19 @@ public ClaimsPrincipal Principal { get; }
 ### `OfficeAgent.AgentFramework.ConnectionCapability`
 
 ```csharp
-public enum ConnectionCapability
-Read
-Register
-Create
-Edit
-Delete
+public enum ConnectionCapability : System.IComparable, System.IConvertible, System.IFormattable, System.ISpanFormattable
+Read = 0
+Register = 1
+Create = 2
+Edit = 3
+Delete = 4
 ```
 
 ### `OfficeAgent.AgentFramework.IConnectionAccessPolicy`
 
 ```csharp
 public interface IConnectionAccessPolicy
-public ValueTask<bool> IsAllowedAsync(ClaimsPrincipal principal, string connectionId, ConnectionCapability capability, CancellationToken cancellationToken);
+public ValueTask<bool> IsAllowedAsync(ClaimsPrincipal principal, string connectionId, ConnectionCapability capability, CancellationToken cancellationToken = default);
 ```
 
 ### `OfficeAgent.AgentFramework.ITrustedPrincipalAccessor`
@@ -1823,38 +1944,191 @@ public ClaimsPrincipal Principal { get; }
 
 ```csharp
 public sealed class OfficeAgentTools
-public OfficeAgentTools(OfficeAgentClient client, IConnectionAccessPolicy connectionAccess, ITrustedPrincipalAccessor principalAccessor);
-public static string CreationPromptGuidance;
-public static string EphemeralPromptGuidance;
-public static string InlineContentPromptGuidance;
-public static string PlanOperations;
-public static string RegistrationPromptGuidance;
-public static string SystemPromptGuidance;
+public OfficeAgentTools(OfficeAgentClient client, IConnectionAccessPolicy? connectionAccess = null, ITrustedPrincipalAccessor? principalAccessor = null);
+public const string CreationPromptGuidance = "
+Creating a document
+- create_document(connectionId, name, planJson) creates and registers a new document and returns outputDocumentId. name is a bare file name, never a path; an existing name is not overwritten. The extension picks the format: .docx makes Word, .pptx PowerPoint, and .xlsx Excel.
+- populate_template_batch(connectionId, documentId, requestJson) creates bounded, independent outputs from one registered template. Use unique content-control tags or PowerPoint shape names for scalar values; repeating {{Field}} rows are Word-only. Each item returns its own receipt and diagnostics.
+- Pass \"\" for an empty document. An initial plan is applied in memory before storage. The empty starting anchor differs by format: a Word document has one empty paragraph at { \"paraId\": \"auto-0000\", \"expect\": \"\" }; a deck has one empty title placeholder at { \"paraId\": \"slide256/shape2/p0\", \"expect\": \"\" }. When unsure, create with planJson \"\" and then inspect_document.
+- planJson accepts a bare operations array [ … ] as well as { \"operations\": [ … ] }.
+- Plan-validation errors mean nothing was written. A provider or cancellation error can occur after storage accepted the file, so do not retry the same name; report the possibly unregistered file name to the host/operator for recovery.";
+public const string EphemeralPromptGuidance = "
+Session documents (a connection whose documents this server holds for you)
+- A session connection behaves like any other: create_document makes a document in it, and inspect_document / find_in_document / preview_plan / apply_plan address it by (connectionId, documentId). The difference is that the bytes never leave the server, so the id is all you ever pass.
+- import_document_content(connectionId, name, contentBase64) puts a document you were given into the session and returns its documentId. export_document_content(connectionId, documentId) hands the finished bytes back for the host to save.
+- PREFER this over the _content tools whenever more than one edit is coming, and whenever the document is more than a page or two. Passing a document back as base64 means reproducing every character of it exactly; on anything sizeable that fails, and it fails as content that is no longer a readable package rather than as an obvious mistake. An id cannot be got wrong.
+- Import once, edit as many times as you need, export once. Do not export between edits: each export spends the whole document in context for nothing.
+- Documents in a session connection are gone when the server stops, and are written to no storage. Export before you finish, or tell the user the result was not saved anywhere.";
+public const string InlineContentPromptGuidance = "
+Working on documents passed in as content
+- create_document_content(name, planJson), inspect_document_content(contentBase64), and edit_document_content(contentBase64, planJson) work on a document you hold the bytes of. They take NO connectionId and NO documentId, and nothing is stored: the base64 they return is the only copy of the result.
+- This is the exception to \"never put document bytes in the conversation\". It applies to THESE tools only: when a connection-addressed tool would do, use it instead, because it does not spend context on the file.
+- The loop is: create_document_content or the caller's own base64 -> (optional) inspect_document_content for anchors -> edit_document_content -> hand the returned contentBase64 to the host. Keep the newest contentBase64 and pass that one to the next edit; an earlier one is a stale document and editing it silently discards the work in between.
+- Batch the work. Every call spends the whole file twice - once going in, once coming back - so put the operations you know about into one plan rather than one call per edit.
+- Targets may name text directly - { \"find\": \"Acme Corp\" } - so inspecting first is optional. Text matching more than once fails with \"ambiguous-anchor\" and lists the candidates; re-issue with { \"find\": \"Acme Corp\", \"match\": 2 } (zero-based). On a large document prefer fidelity \"outline\" or \"structure\" when you do inspect.
+- preview=true on edit_document_content validates a plan and returns contentBase64 null. Use it when a plan is speculative; on a plan you are confident of, skip it, because a preview costs another full copy of the file.
+- contentBase64 comes back null whenever there is no document to hand back - a preview, or a plan that failed. Null means nothing was produced: report the errors rather than looking for a document.
+- Tell the user the document is ready and let the host deliver it. Do not paste contentBase64 into your reply to the user; it is for the host, not for reading.";
+public const string PlanOperations = "Each operation is one object. Concrete examples:
+
+// Replace text:
+{ \"op\": \"changeText\", \"target\": { \"paraId\": \"w14:...\", \"expect\": \"Acme Corp\", \"occurrence\": 0 }, \"with\": \"Globex Inc.\", \"mode\": \"Tracked\" }
+
+// Unified formatting (paragraph/run/table/row/cell/image):
+{ \"op\": \"format\", \"target\": { \"paraId\": \"w14:...\", \"expect\": \"important\", \"occurrence\": 0 }, \"highlight\": \"yellow\", \"bold\": true, \"color\": \"FF0000\" }
+{ \"op\": \"format\", \"target\": { \"kind\": \"table\",     \"path\": \"table#0\" }, \"styleId\": \"TableGrid\", \"borderStyle\": \"single\" }
+{ \"op\": \"format\", \"target\": { \"kind\": \"image\",     \"path\": \"image#0\" }, \"widthPx\": 320, \"heightPx\": 200 }
+
+// Fill / comment / insert paragraph / setProperty:
+{ \"op\": \"fill\", \"target\": { \"tag\": \"ClientName\" }, \"value\": \"Globex\" }
+{ \"op\": \"comment\", \"target\": { \"paraId\": \"w14:...\", \"expect\": \"...\" }, \"text\": \"Confirm this.\" }
+{ \"op\": \"insert\", \"target\": { \"paraId\": \"w14:...\", \"expect\": \"...\" }, \"position\": \"After\", \"text\": \"New paragraph.\" }
+{ \"op\": \"insertParagraphs\", \"target\": { \"paraId\": \"w14:...\", \"expect\": \"...\" }, \"position\": \"After\", \"paragraphs\": [{ \"text\": \"First\" }, { \"text\": \"Second\" }] }
+{ \"op\": \"removeParagraph\", \"target\": { \"paraId\": \"w14:...\", \"expect\": \"Complete paragraph text\" } }
+{ \"op\": \"setProperty\", \"target\": { \"kind\": \"docProperty\", \"path\": \"core/title\" }, \"value\": \"My Title\" }
+
+// Every verb above that changes Word content also takes \"mode\": \"Tracked\" (the default - the edit lands as a redline a reviewer accepts or rejects) or \"Direct\". A deck refuses \"Tracked\": PresentationML has no revision markup.
+
+// Review an existing redline. Revision paths come from inspect_document.nodes (kind \"revision\"): 'ins#7', 'del#7', 'markIns#7', 'rowIns#7', 'cellDel#7', 'runFormat#7', 'paraFormat#7'. 'all' takes every one; 'author:<name>' takes one person's. An edit that spans a pending revision is refused with revision-overlap; resolve it here first, then re-inspect:
+{ \"op\": \"revision\", \"target\": { \"kind\": \"revision\", \"path\": \"all\" }, \"action\": \"Accept\" }
+{ \"op\": \"revision\", \"target\": { \"kind\": \"revision\", \"path\": \"author:Jane Doe\" }, \"action\": \"Reject\" }
+
+// Reply to, resolve, or delete an existing comment (comment paths from inspect_document.nodes, kind \"comment\"):
+{ \"op\": \"comment\", \"target\": { \"kind\": \"comment\", \"path\": \"comment#1\" }, \"action\": \"Reply\", \"text\": \"Forty-five, per the MSA.\" }
+{ \"op\": \"comment\", \"target\": { \"kind\": \"comment\", \"path\": \"comment#1\" }, \"action\": \"Resolve\" }
+{ \"op\": \"comment\", \"target\": { \"kind\": \"comment\", \"path\": \"comment#1\" }, \"action\": \"Remove\" }
+
+// Define a style once instead of repeating direct formatting on every paragraph. Word only.
+// Define it first, then apply it with format's styleId - both can sit in the same plan:
+{ \"op\": \"defineStyle\", \"styleId\": \"Quote\", \"name\": \"Pull Quote\", \"basedOn\": \"Normal\", \"next\": \"Normal\",
+  \"fontFamily\": \"Georgia\", \"sizeHalfPoints\": 24, \"italic\": true, \"color\": \"444444\",
+  \"alignment\": \"center\", \"indentLeftTwips\": 720, \"spacingBeforeTwips\": 240 }
+{ \"op\": \"format\", \"target\": { \"paraId\": \"w14:...\", \"expect\": \"\" }, \"styleId\": \"Quote\" }
+// type is paragraph (default), character or table. outlineLevel 1-9 puts a heading in the outline.
+// Defining a style that exists updates it; properties you leave out keep their values. Styles are
+// never deleted. A style cannot carry a highlight - w:highlight belongs to a run, so use color here.
+
+// Word page geometry, breaks, and notes. All measurements are twips (1440 to the inch). Word only:
+{ \"op\": \"pageSetup\", \"paperSize\": \"A4\", \"orientation\": \"Landscape\", \"marginTopTwips\": 720, \"marginLeftTwips\": 1080 }
+{ \"op\": \"insertBreak\", \"target\": { \"paraId\": \"w14:...\", \"expect\": \"...\" }, \"kind\": \"Page\", \"position\": \"After\" }
+{ \"op\": \"insertBreak\", \"target\": { \"paraId\": \"w14:...\", \"expect\": \"...\" }, \"kind\": \"SectionNextPage\" }   // then pageSetup with a target inside the new section
+{ \"op\": \"note\", \"target\": { \"paraId\": \"w14:...\", \"expect\": \"thirty days\" }, \"kind\": \"Footnote\", \"text\": \"Subject to clause 8.2.\" }
+{ \"op\": \"note\", \"target\": { \"kind\": \"note\", \"path\": \"footnote#1\" }, \"action\": \"Update\", \"text\": \"Revised wording.\" }
+{ \"op\": \"note\", \"target\": { \"kind\": \"note\", \"path\": \"footnote#1\" }, \"action\": \"Remove\" }
+
+// Insert a whole new table after a paragraph, or remove an entire table (table path from inspect_document.nodes):
+{ \"op\": \"insertTable\", \"target\": { \"paraId\": \"w14:...\", \"expect\": \"...\" }, \"position\": \"After\", \"table\": { \"headers\": [\"Region\", \"Q1\"], \"rows\": [[\"NL\", \"41850\"]] } }
+{ \"op\": \"removeTable\",  \"target\": { \"kind\": \"table\", \"path\": \"table#0\" } }
+
+// Add or remove table rows / columns; insert or remove image; copy or clear styles. Paths come from inspect_document.nodes:
+{ \"op\": \"insertTableRows\", \"target\": { \"kind\": \"table\", \"path\": \"table#0\" }, \"rows\": [[\"NL\",\"17\",\"41850\"]], \"position\": \"End\" }
+{ \"op\": \"repeatTableRow\", \"target\": { \"kind\": \"table\", \"path\": \"table#0\" }, \"templateRowIndex\": 1, \"records\": [{ \"Description\": \"Consulting\", \"Amount\": \"1200.00\" }] }
+{ \"op\": \"removeTableRows\", \"target\": { \"kind\": \"table\", \"path\": \"table#0\" }, \"onlyIfEmpty\": true }
+{ \"op\": \"insertImage\", \"target\": { \"paraId\": \"w14:...\", \"expect\": \"...\" }, \"base64Bytes\": \"iVBORw0KGgo...\", \"imageType\": \"png\", \"widthPx\": 200, \"heightPx\": 80 }
+{ \"op\": \"insertImage\", \"target\": { \"paraId\": \"w14:...\", \"expect\": \"...\" }, \"imageConnectionId\": \"images\", \"imageDocumentId\": \"<opaque id from a prior add>\", \"imageType\": \"png\", \"widthPx\": 200, \"heightPx\": 80 }
+{ \"op\": \"removeImage\", \"target\": { \"kind\": \"image\", \"path\": \"image#0\" } }
+{ \"op\": \"backgroundImage\", \"base64Bytes\": \"iVBORw0KGgo...\", \"imageType\": \"png\", \"opacity\": 0.2 }
+{ \"op\": \"backgroundImage\", \"target\": { \"kind\": \"slide\", \"path\": \"slide#256\" }, \"base64Bytes\": \"iVBORw0KGgo...\", \"opacity\": 0.15 }
+{ \"op\": \"headerFooter\", \"header\": \"Northwind Traders\", \"footer\": \"Confidential\", \"showPageNumber\": true, \"alignment\": \"edges\", \"differentFirstPage\": true }
+
+// Native PowerPoint chart with an editable embedded workbook:
+{ \"op\": \"insertChart\", \"target\": { \"kind\": \"slide\", \"path\": \"slide#256\" }, \"kind\": \"ClusteredColumn\", \"categories\": [\"Q1\",\"Q2\"], \"series\": [{ \"name\": \"Revenue\", \"values\": [10,12] }], \"title\": \"Revenue\", \"description\": \"Quarterly revenue\" }
+
+// Excel cells and table rows; sheet ids and table paths come from inspection:
+{ \"op\": \"setCell\", \"target\": { \"sheetId\": 7, \"address\": \"B2\" }, \"formula\": \"SUM(B3:B8)\" }
+{ \"op\": \"appendTableRows\", \"target\": { \"kind\": \"spreadsheetTable\", \"path\": \"table#7/Sales\" }, \"rows\": [[\"APAC\",\"15\"]] }";
+public const string RegistrationPromptGuidance = "
+Document registration
+- register_document(connectionId, source) registers an existing document with a host-configured connection and returns its opaque documentId. The source is connection-specific: a path under a filesystem connection's root, or - for a SharePoint connection - the document's SharePoint/OneDrive URL or a \"driveId/itemId\" pair. Never pass credentials.
+- remove_document(connectionId, documentId) removes the registration only - the underlying file is never deleted. Remove temporary registrations you made with register_document once the work is done, but keep the final document's output registration until the host has delivered it.
+- Register a document only when the user names a file the host has not already given you an id for; otherwise use the ids you were given.
+
+Working from a source in one call
+- open_document(connectionId, source) = register_document + inspect_document. Prefer it when the user names a file you have no id for and you need to see the document.
+- edit_document(connectionId, source, planJson) = register_document + find + apply_plan. Prefer it when you already know the text to change; it returns sourceDocumentId for follow-up work.
+- In edit_document a target may name text directly - { \"find\": \"Acme Corp\" } - instead of a paraId, so no lookup call is needed. Text matching more than once fails with \"ambiguous-anchor\" and lists the candidates: re-issue with { \"find\": \"Acme Corp\", \"match\": 2 } (zero-based) or use more surrounding text. Never guess a match index; use the one the error listed.
+- Reach for the single-purpose tools when the composites do not fit: an id you already hold, a plan you want to preview before applying, or targets that need regex or case-sensitive search (find_in_document, then paraId targets).";
+public const string SystemPromptGuidance = "You are editing Microsoft Office documents through the OfficeAgent tools - a Word document (.docx), PowerPoint deck (.pptx), or Excel workbook (.xlsx). inspect_document reports which format it found.
+
+Document addressing
+- Storage connections are host-configured and so is each document's registration. The host gives you an OPAQUE, provider-assigned documentId for every document you are allowed to work with; the connection-addressed document tools address it as (connectionId, documentId). Never invent a documentId, and never pass a filename or path as one. Do not ask the user to paste file bytes into the conversation; if a tool whose name ends in _content is available, that tool - and only that tool - takes the document as base64, and its own section below says how.
+- The connectionId and documentId are already in your instructions or in the conversation context. NEVER ask the user for them - the user does not know or manage these values. If a request mentions \"the document\", it means the current document you were given; start working with it immediately.
+- apply_plan returns outputDocumentId, outputName, and outputContentType for the saved revision. Use outputDocumentId as the next call's documentId if you keep editing. When the work is complete, tell the user the document is ready; the host retrieves its bytes and presents the download or attachment. Do not place document base64 in the final response.
+- Saving edits the document in place (saveMode \"Replace\", the default), so outputDocumentId is the same id you passed in. If the user wants the original kept, pass saveMode \"NewVersion\" to write a sibling revision instead, and tell them where the result landed.
+
+Plan shape, anchors, safety loop
+- Plan body is { \"snapshot\": { \"eTag\": \"<snapshot from inspect_document>\" }, \"operations\": [ ... ] }. Copy the scalar snapshot string returned by inspect_document into snapshot.eTag to detect drift in Word body/header/footer/footnote/endnote XML or PowerPoint slide/notes XML. It does not cover properties, comments, sections, media/image bytes, masters, or layouts; their anchors and provider version checks still apply. Omit snapshot only deliberately. Omit contractVersion for legacy 0.2 behavior, or set it to exactly \"0.2\". Other values fail with contract-mismatch.
+- Available operations (the JSON shape of each is in the preview_plan description): Word and PowerPoint use the document operations below; decks additionally support insertChart/updateChart; workbooks support setCell, appendTableRows, and comment Add/Remove on a cell. These are plan operations inside preview_plan/apply_plan, not separate tools.
+- populate_template_batch resolves named slots and repeating Word rows into plans and saves one independent output per item. compare_documents reads two Word documents and returns a snapshot-bound redline plan only when every detected change is covered; preview that plan before applying it to the original.
+- preview_document_merge assembles ordered whole Word documents in memory and returns a separate merge plan plus compatibility diagnostics. Pass that complete plan to merge_documents when available. A merge creates a new document and never edits its sources. It does not reconcile independently edited versions. Respect unsupported-content diagnostics and do not substitute a text-only copy.
+- Call inspect_document or find_in_document before building a plan to obtain anchor ids; never invent paragraph ids, occurrence numbers, content-control tags, or node paths.
+- Tables and images only appear in inspect_document.nodes, never in the paragraphs list. Copy the path from there rather than composing one: Word uses \"table#N\"/\"image#N\", a deck uses \"table#{slideId}/{shapeId}\"/\"image#{slideId}/{shapeId}\". To recognise table content, look for paragraphs whose `in` field matches a table path.
+- Preview before you apply. If preview reports stale-snapshot, re-inspect and rebuild. If preview reports expect-mismatch, the document drifted - re-inspect/find that operation. If preview reports revision-overlap, the edit spans somebody else's pending tracked change: resolve that revision first with a revision operation, re-inspect, then reissue the edit, or target a narrower span that lies wholly inside or wholly outside it.
+- Change mode: in a Word document default to \"Tracked\" unless the user explicitly approves direct edits. \"mode\" is not only for changeText - it belongs on every verb that changes content (insert, insertParagraphs, removeParagraph, insertTable, removeTable, the table row/column verbs including repeatTableRow, insertImage, removeImage, format, fill, insertBreak, note), and Word tracks all of them when it is omitted. A tracked structural edit is a real redline: an added paragraph and its paragraph mark come back as insertions, a removed row stays in place struck through until someone accepts it, and a format records what it replaced. A PowerPoint deck has no tracked-changes representation and REFUSES mode \"Tracked\" on any of these, so use \"Direct\" there and say that edits to a deck cannot be redlined; add a comment if the change needs to be flagged for review.
+- Reviewing an existing Word redline: inspect_document.nodes lists every revision (kind \"revision\") with its author and date, under paths like \"ins#7\", \"del#7\", \"markIns#7\" (a paragraph split), \"rowIns#7\"/\"rowDel#7\", \"cellIns#7\"/\"cellDel#7\", and \"runFormat#7\"/\"paraFormat#7\" (formatting changes). Resolve them with { \"op\": \"revision\", \"target\": { \"kind\": \"revision\", \"path\": \"…\" }, \"action\": \"Accept\" | \"Reject\" } - \"all\" takes every revision in the document and \"author:<name>\" takes one person's.
+- Editing a document that already has tracked changes: inspect_document and find_in_document show the text as it would read if every pending change were accepted, so pending insertions are visible and pending deletions are not. An edit clear of the existing revisions, or wholly inside one pending insertion, is applied normally. An edit that spans a pending deletion, or reaches out of one revision into ordinary text, is refused with revision-overlap and nothing is written, because the resulting redline would no longer reject back to the original text. Resolving somebody else's revision is always an explicit revision operation, never a side effect of an edit.
+- Word comments are a conversation, not a write-only log: inspect_document.nodes lists each one (kind \"comment\") with its author, its text, whether it is resolved, and which comment it replies to. Answer one with action \"Reply\", close it with \"Resolve\", delete it with \"Remove\". Read the open comments before editing a document under review - they usually say what the edit should be.
+- Reject operations that need a renderer (pagination, field recalculation); explain the limitation instead.
+- An image behind the content is backgroundImage, not insertImage: { \"op\": \"backgroundImage\", \"base64Bytes\": \"iVBORw0KGgo...\", \"imageType\": \"png\", \"opacity\": 0.2 }. On a deck a slide target paints one slide and no target paints every slide; in Word there is no target and the image repeats on every page. ALWAYS set opacity for a photograph behind text - at full strength almost any image destroys the contrast the text needs, and 0.1-0.3 is the usable range. Supply no image at all to take an existing background away. A flat colour is format with fillColor instead, and a picture IN the text is still insertImage.
+- Real list numbering (Word only): { \"op\": \"format\", \"target\": {…}, \"listStyle\": \"clause\", \"listLevel\": 0, \"listId\": 0 }. listStyle is bullet, decimal (1./a./i.), clause (1./1.1/1.1.1) or none. listLevel is 0-8. NEVER type the number into the text as well - Word draws it, and a paragraph reading \"1. Connect the drive\" in a numbered list comes out as \"1. 1. Connect the drive\". Paragraphs sharing a listStyle AND a listId are one running sequence; a different listId starts a separate one, which is how a second chapter restarts its steps at 1. This is what makes an inserted clause renumber the rest.
+- Word page geometry: { \"op\": \"pageSetup\", \"paperSize\": \"A4\", \"orientation\": \"Landscape\", \"marginTopTwips\": 720 }. Measurements are twips - 1440 to the inch - matching the indents and spacing on format. paperSize is A3, A4, A5, Letter, Legal, Tabloid or Executive; give pageWidthTwips/pageHeightTwips instead for anything else, never both. No target sets the document's final section - the whole document until something splits it; a paragraph target sets the section that paragraph belongs to. Margins you do not name keep their current value.
+- Word breaks: { \"op\": \"insertBreak\", \"target\": {…}, \"kind\": \"Page\", \"position\": \"After\" }. kind is Page, Column, SectionNextPage, SectionContinuous, SectionEvenPage or SectionOddPage. The break lands in a paragraph of its own, so removing it later is removing one paragraph. A landscape run of pages in the middle of a portrait report is insertBreak twice and then pageSetup targeting a paragraph between them. Use format's pageBreakBefore instead when the page must keep starting at a given paragraph however the text above it changes.
+- Word footnotes and endnotes: { \"op\": \"note\", \"target\": { \"paraId\": \"w14:…\", \"expect\": \"thirty days\" }, \"kind\": \"Footnote\", \"text\": \"Subject to clause 8.2.\" } puts the reference right after that text, or at the end of the paragraph when expect is empty. Word owns the numbering, so a note added in the middle renumbers the rest - never type a superscript number into the text yourself. Existing notes appear in inspect_document.nodes as kind \"note\" with paths \"footnote#1\"/\"endnote#1\"; rewrite one with action \"Update\" or delete it with action \"Remove\". A note's body is also an ordinary paragraph (location \"footnote\"/\"endnote\"), so changeText and format edit it in place.
+- Word running heads: { \"op\": \"headerFooter\", \"header\": \"Northwind Traders\", \"footer\": \"Confidential\", \"showPageNumber\": true, \"alignment\": \"edges\" }. alignment \"edges\" puts the text left and the page number right on one line; otherwise left/center/right. The page number is a field, so it stays right as the document grows. differentFirstPage:true gives the first page its own header and footer, which is how a cover page keeps the running head off it - then write that page's own with scope \"firstPage\" (scope is default, firstPage or evenPage). Clear either with an empty string. showSlideNumber/showFooter/dateTime are deck-only and are REFUSED here.
+
+Working with a PowerPoint deck
+- Each slide is one outline entry. Paragraph ids read \"slide{slideId}/shape{shapeId}/p{n}\", with \"notes/...\" for speaker notes and \".../r{row}c{col}/...\" inside a table cell.
+- A slide has no text flow, so insertTable, insertImage, and an added comment target the SLIDE - { \"kind\": \"slide\", \"path\": \"slide#256\" } - not a paragraph. Resolve a comment with { \"op\": \"comment\", \"action\": \"Resolve\", \"target\": { \"kind\": \"comment\", \"path\": \"comment#256/{id}\" } }.
+- Only these verbs work on a deck: changeText, insert, format, fill, copyStyles, clearStyles, insertTable, removeTable, insertTableRows, removeTableRows, insertTableColumns, removeTableColumns, insertImage, removeImage, backgroundImage, insertShape, removeShape, insertMedia, insertChart, updateChart, comment, section, headerFooter, transition, animate, insertSlide, removeSlide, moveSlide, duplicateSlide.
+- Native charts: insertChart targets a slide and takes kind ClusteredColumn, Bar, Line, or Pie, categories, numeric series, title, showLegend, description, and pixel placement. It creates an editable chart with an embedded workbook. updateChart targets a chart node and only edits charts OfficeAgent created.
+- Slide transitions: { \"op\": \"transition\", \"effect\": \"push\", \"direction\": \"up\", \"durationMs\": 700 }. No target applies it to every slide, which is PowerPoint's \"Apply To All\"; a slide target sets just that one. effect \"none\" removes it. Set advanceAfterMs for a self-running deck and advanceOnClick:false to stop clicks skipping ahead.
+- Shape animations target a SHAPE node: { \"op\": \"animate\", \"target\": { \"kind\": \"shape\", \"path\": \"shape#257/2\" }, \"effect\": \"fade\", \"kind\": \"Entrance\", \"trigger\": \"OnClick\", \"durationMs\": 600 }. trigger is OnClick, WithPrevious or AfterPrevious and decides where the effect lands in the slide's sequence - a new click step, alongside the previous effect, or straight after it. Effects play in the order you send the operations. effect \"none\" removes that shape's animations.
+- Available animations: appear, fade, wipe, blinds, checkerboard, circle, diamond, dissolve, plus, randomBar, split, wedge, wheel, box. Fly-in, zoom, grow and motion paths are NOT available - they need interpolated properties rather than a filter - and are refused rather than approximated. Say so plainly if the user asks for one.
+- Footer, slide number and date: { \"op\": \"headerFooter\", \"footer\": \"Confidential\", \"showSlideNumber\": true, \"showDateTime\": true }. No target applies it to every slide, which is PowerPoint's \"Apply to All\"; a slide target changes just that one, which is how you keep the title slide clean. showFooter:false removes the placeholder rather than blanking it. Omitting dateTime gives an auto-updating date; supplying a string pins it. A slide has NO header - PresentationML puts headers on notes and handout pages only, which is why PowerPoint greys that box out on the Slide tab.
+- Embedded video and audio: { \"op\": \"insertMedia\", \"target\": { \"kind\": \"slide\", \"path\": \"slide#257\" }, \"kind\": \"Video\", \"base64Bytes\": \"...\", \"mediaType\": \"mp4\", \"widthPx\": 480, \"heightPx\": 270 }. mediaType is mp4/m4v/mov/wmv/avi for video and mp3/m4a/wav/wma for audio, and must agree with \"kind\" or the operation is refused. The bytes travel inside the deck so it still plays when mailed on. posterBase64 sets the frame shown before playback. Clips appear in inspect_document.nodes as kind \"media\"; remove one with removeShape on the matching shape path.
+- Template slots: a deck has no content controls, so a fillable slot is the SHAPE NAME a template sets (PowerPoint's Selection Pane shows them). They arrive in inspect_document.contentControls with kind \"shapeName\". Fill one by name: { \"op\": \"fill\", \"target\": { \"tag\": \"ClientName\" }, \"value\": \"Northwind Traders\" }. A name used on more than one slide comes back as ambiguous-anchor; qualify it as \"slide256/ClientName\".
+- copyStyles makes one line look like another and clearStyles strips direct formatting so the layout's own styling shows again: { \"op\": \"clearStyles\", \"target\": { \"paraId\": \"slide257/shape3/p0\", \"expect\": \"\" }, \"scope\": \"all\" }. scope is \"run\", \"paragraph\" or \"all\". Only direct a:pPr/a:rPr travel - the layout and master are never touched.
+- Sections are the named slide groups in the thumbnail pane: { \"op\": \"section\", \"action\": \"Add\", \"name\": \"Financials\", \"target\": { \"kind\": \"slide\", \"path\": \"slide#257\" } } starts one at that slide. \"Rename\" and \"Remove\" target a section node from inspect_document.nodes; removing a section keeps its slides. Sections follow the deck automatically as slides are added, moved, copied and removed - you never maintain them by hand.
+- Slides: insertSlide adds one, and several in one plan is how you author a whole deck. { \"op\": \"insertSlide\", \"slide\": { \"layout\": \"titleAndContent\", \"title\": \"FY27 Priorities\", \"body\": [\"Finish the migration\", \"Rebuild the pipeline\"], \"notes\": \"Do not commit to a date.\" } }. Layouts are title, titleAndContent, sectionHeader, titleOnly, blank; omit \"layout\" and one is chosen from what you supply. Position defaults to the end of the deck - use \"position\": \"Start\"/\"Before\"/\"After\" with a slide target to place it elsewhere.
+- removeSlide, moveSlide and duplicateSlide take a slide target: { \"op\": \"moveSlide\", \"target\": { \"kind\": \"slide\", \"path\": \"slide#259\" }, \"position\": \"After\", \"relativeTo\": \"slide#256\" }. duplicateSlide defaults to landing right after the original. Removing the deck's only slide is refused, because PowerPoint cannot open a deck with none.
+- A slide added in one plan cannot be edited by a later operation in that SAME plan - its id does not exist until the plan is applied. Set its text through insertSlide's own title/body/notes, or apply, re-inspect, then edit.
+- format on a deck covers bold, italic, underline, sizeHalfPoints, fontFamily, color, highlight and alignment on text; widthPx/heightPx on an image; xPx/yPx/widthPx/heightPx, fillColor, lineColor, lineWidthPx and verticalAlignment on a shape; and fillColor on a slide. Word-only measures (styleId, indents, spacing, borders) are refused rather than ignored. Anchor the span you want styled, or use an empty \"expect\" to style a whole paragraph.
+- To write into an empty placeholder - the state a newly created deck's title is in - use changeText with an empty expect: { \"op\": \"changeText\", \"target\": { \"paraId\": \"slide256/shape2/p0\", \"expect\": \"\" }, \"with\": \"Quarterly Review\", \"mode\": \"Direct\" }. That still verifies the paragraph is blank, so it fails rather than overwriting text that drifted in.
+- Add a bullet or line to text that is already there with insert, targeting the paragraph it goes next to: { \"op\": \"insert\", \"target\": { \"paraId\": \"slide257/shape3/p1\", \"expect\": \"Rebuild the pipeline\" }, \"position\": \"After\", \"text\": \"Hold headcount flat\", \"level\": 1 }. It inherits the neighbour's bullet and run styling; \"level\" (0-8) makes it a sub-bullet. styleId is Word-only and refused here.
+- IMPORTANT: a slide paragraph id is positional, so inserting renumbers every later paragraph in the SAME shape. A plan that inserts and then addresses that shape at the same or a higher p-index is refused with operation-conflict. Apply the insert, re-inspect, then send the rest as a second plan. Earlier paragraphs, other shapes and other slides are unaffected.
+- Shapes: insertShape adds a free-standing text box to a slide - { \"op\": \"insertShape\", \"target\": { \"kind\": \"slide\", \"path\": \"slide#257\" }, \"text\": [\"Draft\"], \"xPx\": 40, \"yPx\": 620, \"widthPx\": 420, \"heightPx\": 50 }. Text belonging in the title or body should go through the placeholders instead. removeShape deletes any shape by its { \"kind\": \"shape\", \"path\": \"shape#{slideId}/{shapeId}\" } node; removing a placeholder is refused because the layout would re-offer it empty and the slide would look unchanged.
+- Move, resize or paint ANY shape - text box, table, picture - with format on its shape node: { \"op\": \"format\", \"target\": { \"kind\": \"shape\", \"path\": \"shape#257/4\" }, \"xPx\": 120, \"yPx\": 560, \"widthPx\": 700, \"heightPx\": 44, \"fillColor\": \"FFF2CC\", \"lineColor\": \"7F6000\" }. Shape formatting does not style the text inside it; target a paragraph for that.
+
+Working with an Excel workbook
+- inspect_document returns worksheets and up to maximumCells populated cells. Each cell anchor carries a durable sheetId plus an A1 address. Pass sheetId and range to inspect only the needed rectangle.
+- setCell writes a scalar or a formula: { \"op\": \"setCell\", \"target\": { \"sheetId\": 7, \"address\": \"B2\" }, \"value\": \"42\" } or use \"formula\": \"SUM(B2:B8)\". OfficeAgent clears the cached result and asks Excel to recalculate on open; it does not calculate formulas.
+- appendTableRows targets a spreadsheetTable node from inspection and requires one value per table column. It refuses to overwrite populated cells below the table and preserves other worksheet content.
+- Excel comments are legacy cell notes. Add one with a cell target and action Add; remove one with the cellComment node returned by inspection and action Remove.";
 public AIFunction[] AsAIFunctions();
 public AIFunction[] AsAIFunctions(OfficeAgentToolsOptions options);
-public Task<EngineCapabilities> DescribeCapabilitiesAsync(CancellationToken cancellationToken);
-public Task<string> ApplyPlan(string connectionId, string documentId, string planJson, string saveMode, string newName, CancellationToken cancellationToken);
-public Task<string> CompareDocuments(string originalConnectionId, string originalDocumentId, string revisedConnectionId, string revisedDocumentId, string revisionAuthor, CancellationToken cancellationToken);
-public Task<string> CreateDocument(string connectionId, string name, string planJson, CancellationToken cancellationToken);
-public Task<string> CreateDocumentContent(string name, string planJson, CancellationToken cancellationToken);
-public Task<string> DescribeCapabilities(CancellationToken cancellationToken);
-public Task<string> DiscoverTemplate(string connectionId, string documentId, CancellationToken cancellationToken);
-public Task<string> EditDocument(string connectionId, string source, string planJson, string saveMode, string newName, CancellationToken cancellationToken);
-public Task<string> EditDocumentContent(string contentBase64, string planJson, bool preview, CancellationToken cancellationToken);
-public Task<string> ExportDocumentContent(string connectionId, string documentId, CancellationToken cancellationToken);
-public Task<string> FindInDocument(string connectionId, string documentId, string pattern, bool regex, bool wholeWord, bool caseSensitive, string spreadsheetValueView, CancellationToken cancellationToken);
-public Task<string> ImportDocumentContent(string connectionId, string name, string contentBase64, CancellationToken cancellationToken);
-public Task<string> InspectDocument(string connectionId, string documentId, string fidelity, int paragraphOffset, int paragraphLimit, UInt32 sheetId, string range, int maximumCells, CancellationToken cancellationToken);
-public Task<string> InspectDocumentContent(string contentBase64, string fidelity, int paragraphOffset, int paragraphLimit, UInt32 sheetId, string range, int maximumCells, CancellationToken cancellationToken);
-public Task<string> MergeDocuments(string planJson, string destinationConnectionId, string outputName, CancellationToken cancellationToken);
-public Task<string> OpenDocument(string connectionId, string source, string fidelity, int paragraphOffset, int paragraphLimit, UInt32 sheetId, string range, int maximumCells, CancellationToken cancellationToken);
-public Task<string> PopulateTemplateBatch(string connectionId, string documentId, string requestJson, string expectedTokenJson, CancellationToken cancellationToken);
-public Task<string> PreviewDocumentMerge(string requestJson, CancellationToken cancellationToken);
-public Task<string> PreviewPlan(string connectionId, string documentId, string planJson, CancellationToken cancellationToken);
-public Task<string> PreviewTemplateBatch(string connectionId, string documentId, string requestJson, CancellationToken cancellationToken);
-public Task<string> RegisterDocument(string connectionId, string source, CancellationToken cancellationToken);
-public Task<string> RemoveDocument(string connectionId, string documentId, CancellationToken cancellationToken);
-public ValueTask<bool> CanAccessConnectionAsync(string connectionId, ConnectionCapability capability, CancellationToken cancellationToken);
+public Task<EngineCapabilities> DescribeCapabilitiesAsync(CancellationToken cancellationToken = default);
+public Task<string> ApplyPlan(string connectionId, string documentId, string planJson, string saveMode = "Replace", string newName = "", CancellationToken cancellationToken = default);
+public Task<string> CompareDocuments(string originalConnectionId, string originalDocumentId, string revisedConnectionId, string revisedDocumentId, string revisionAuthor = "OfficeAgent Compare", CancellationToken cancellationToken = default);
+public Task<string> CreateDocument(string connectionId, string name, string planJson = "", CancellationToken cancellationToken = default);
+public Task<string> CreateDocumentContent(string name, string planJson = "", CancellationToken cancellationToken = default);
+public Task<string> DescribeCapabilities(CancellationToken cancellationToken = default);
+public Task<string> DiscoverTemplate(string connectionId, string documentId, CancellationToken cancellationToken = default);
+public Task<string> EditDocument(string connectionId, string source, string planJson, string saveMode = "Replace", string newName = "", CancellationToken cancellationToken = default);
+public Task<string> EditDocumentContent(string contentBase64, string planJson, bool preview = false, CancellationToken cancellationToken = default);
+public Task<string> ExportDocumentContent(string connectionId, string documentId, CancellationToken cancellationToken = default);
+public Task<string> FindInDocument(string connectionId, string documentId, string pattern, bool regex = false, bool wholeWord = false, bool caseSensitive = false, string spreadsheetValueView = "both", CancellationToken cancellationToken = default);
+public Task<string> ImportDocumentContent(string connectionId, string name, string contentBase64, CancellationToken cancellationToken = default);
+public Task<string> InspectDocument(string connectionId, string documentId, string fidelity = "content", int paragraphOffset = 0, int paragraphLimit = 200, uint sheetId = 0, string range = "", int maximumCells = 1000, CancellationToken cancellationToken = default);
+public Task<string> InspectDocumentContent(string contentBase64, string fidelity = "content", int paragraphOffset = 0, int paragraphLimit = 200, uint sheetId = 0, string range = "", int maximumCells = 1000, CancellationToken cancellationToken = default);
+public Task<string> MergeDocuments(string planJson, string destinationConnectionId, string outputName, CancellationToken cancellationToken = default);
+public Task<string> OpenDocument(string connectionId, string source, string fidelity = "content", int paragraphOffset = 0, int paragraphLimit = 200, uint sheetId = 0, string range = "", int maximumCells = 1000, CancellationToken cancellationToken = default);
+public Task<string> PopulateTemplateBatch(string connectionId, string documentId, string requestJson, string expectedTokenJson = "", CancellationToken cancellationToken = default);
+public Task<string> PreviewDocumentMerge(string requestJson, CancellationToken cancellationToken = default);
+public Task<string> PreviewPlan(string connectionId, string documentId, string planJson, CancellationToken cancellationToken = default);
+public Task<string> PreviewTemplateBatch(string connectionId, string documentId, string requestJson, CancellationToken cancellationToken = default);
+public Task<string> RegisterDocument(string connectionId, string source, CancellationToken cancellationToken = default);
+public Task<string> RemoveDocument(string connectionId, string documentId, CancellationToken cancellationToken = default);
+public ValueTask<bool> CanAccessConnectionAsync(string connectionId, ConnectionCapability capability, CancellationToken cancellationToken = default);
 ```
 
 ### `OfficeAgent.AgentFramework.OfficeAgentToolsOptions`
@@ -1862,11 +2136,11 @@ public ValueTask<bool> CanAccessConnectionAsync(string connectionId, ConnectionC
 ```csharp
 public sealed class OfficeAgentToolsOptions
 public OfficeAgentToolsOptions();
-public bool AllowConnectionAddressing { get; set; }
-public bool AllowCreation { get; set; }
-public bool AllowEphemeralDocuments { get; set; }
-public bool AllowInlineContent { get; set; }
-public bool AllowRegistration { get; set; }
+public bool AllowConnectionAddressing { get; init; }
+public bool AllowCreation { get; init; }
+public bool AllowEphemeralDocuments { get; init; }
+public bool AllowInlineContent { get; init; }
+public bool AllowRegistration { get; init; }
 ```
 
 ## OfficeAgent.Core
@@ -1874,8 +2148,9 @@ public bool AllowRegistration { get; set; }
 ### `OfficeAgent.Core.ApplyContext`
 
 ```csharp
+[Experimental("OFFICEAGENT001")]
 public sealed class ApplyContext
-public ApplyContext(IOpenXmlPackage package, InspectResult inspection, IReadOnlyDictionary<string, string> aliases, RevisionMetadata revision);
+public ApplyContext(IOpenXmlPackage package, InspectResult inspection, IReadOnlyDictionary<string, string>? aliases = null, RevisionMetadata? revision = null);
 public InspectResult Inspection { get; }
 public IOpenXmlPackage Package { get; }
 public RevisionMetadata Revision { get; }
@@ -1885,24 +2160,26 @@ public string ResolveAlias(string anchorId);
 ### `OfficeAgent.Core.CapabilityDiscovery`
 
 ```csharp
+[Experimental("OFFICEAGENT001")]
 public static class CapabilityDiscovery
-public static EngineCapabilities Describe(IEnumerable<IFormatModule> modules, OpenXmlIngestionLimits limits, bool renderingAvailable);
+public static EngineCapabilities Describe(IEnumerable<IFormatModule> modules, OpenXmlIngestionLimits? limits = null, bool renderingAvailable = false);
 ```
 
 ### `OfficeAgent.Core.DocumentAssemblyCandidate`
 
 ```csharp
+[Experimental("OFFICEAGENT001")]
 public sealed class DocumentAssemblyCandidate
 public DocumentAssemblyCandidate();
-public byte[] Content { get; set; }
-public IReadOnlyList<WorkflowDiagnostic> Diagnostics { get; set; }
-public IReadOnlyList<DocumentMergeSourceReport> Sources { get; set; }
+public byte[]? Content { get; init; }
+public IReadOnlyList<WorkflowDiagnostic> Diagnostics { get; init; }
+public IReadOnlyList<DocumentMergeSourceReport> Sources { get; init; }
 ```
 
 ### `OfficeAgent.Core.DocumentProviders.DocumentContent`
 
 ```csharp
-public sealed class DocumentContent
+public sealed class DocumentContent : System.IDisposable
 public DocumentContent(DocumentReference reference, Stream stream);
 public DocumentReference Reference { get; }
 public Stream Stream { get; }
@@ -1912,11 +2189,11 @@ public void Dispose();
 ### `OfficeAgent.Core.DocumentProviders.DocumentProviderException`
 
 ```csharp
-public class DocumentProviderException
-public DocumentProviderException(ProviderErrorCode code, string message, string provider, string connectionId, string itemId, Exception innerException);
+public class DocumentProviderException : System.Exception, System.Runtime.Serialization.ISerializable
+public DocumentProviderException(ProviderErrorCode code, string message, string provider = "", string connectionId = "", string? itemId = null, Exception? innerException = null);
 public ProviderErrorCode Code { get; }
 public string ConnectionId { get; }
-public string ItemId { get; }
+public string? ItemId { get; }
 public string Provider { get; }
 ```
 
@@ -1936,9 +2213,9 @@ public bool Contains(string provider, string connectionId);
 ### `OfficeAgent.Core.DocumentProviders.DocumentVersionConflictException`
 
 ```csharp
-public sealed class DocumentVersionConflictException
+public sealed class DocumentVersionConflictException : OfficeAgent.Core.DocumentProviders.DocumentProviderException, System.Runtime.Serialization.ISerializable
 public DocumentVersionConflictException(string expectedVersion, string actualVersion);
-public DocumentVersionConflictException(string expectedVersion, string actualVersion, string provider, string connectionId, string itemId);
+public DocumentVersionConflictException(string expectedVersion, string actualVersion, string provider, string connectionId, string? itemId);
 public string ActualVersion { get; }
 public string ExpectedVersion { get; }
 ```
@@ -1946,17 +2223,17 @@ public string ExpectedVersion { get; }
 ### `OfficeAgent.Core.DocumentProviders.FileSystemDocumentProvider`
 
 ```csharp
-public sealed class FileSystemDocumentProvider
+public sealed class FileSystemDocumentProvider : OfficeAgent.Core.DocumentProviders.IConnectionEditingDefaults, OfficeAgent.Core.DocumentProviders.IDocumentCreatingProvider, OfficeAgent.Core.DocumentProviders.IDocumentProvider
 public FileSystemDocumentProvider(FileSystemDocumentProviderOptions options);
-public static string ProviderName;
+public const string ProviderName = "filesystem";
 public string ConnectionId { get; }
 public ChangeMode DefaultChangeMode { get; }
 public string Provider { get; }
-public Task RemoveAsync(DocumentReference reference, CancellationToken cancellationToken);
-public Task<DocumentContent> OpenReadAsync(DocumentReference reference, CancellationToken cancellationToken);
-public Task<DocumentReference> CreateAsync(string name, Stream content, CancellationToken cancellationToken);
-public Task<DocumentReference> RegisterAsync(string source, CancellationToken cancellationToken);
-public Task<DocumentReference> SaveAsync(DocumentReference source, Stream content, SaveDocumentOptions options, CancellationToken cancellationToken);
+public Task RemoveAsync(DocumentReference reference, CancellationToken cancellationToken = default);
+public Task<DocumentContent> OpenReadAsync(DocumentReference reference, CancellationToken cancellationToken = default);
+public Task<DocumentReference> CreateAsync(string name, Stream content, CancellationToken cancellationToken = default);
+public Task<DocumentReference> RegisterAsync(string source, CancellationToken cancellationToken = default);
+public Task<DocumentReference> SaveAsync(DocumentReference source, Stream content, SaveDocumentOptions options, CancellationToken cancellationToken = default);
 ```
 
 ### `OfficeAgent.Core.DocumentProviders.FileSystemDocumentProviderOptions`
@@ -1981,8 +2258,8 @@ public ChangeMode DefaultChangeMode { get; }
 ### `OfficeAgent.Core.DocumentProviders.IDocumentCreatingProvider`
 
 ```csharp
-public interface IDocumentCreatingProvider
-public Task<DocumentReference> CreateAsync(string name, Stream content, CancellationToken cancellationToken);
+public interface IDocumentCreatingProvider : OfficeAgent.Core.DocumentProviders.IDocumentProvider
+public Task<DocumentReference> CreateAsync(string name, Stream content, CancellationToken cancellationToken = default);
 ```
 
 ### `OfficeAgent.Core.DocumentProviders.IDocumentProvider`
@@ -1991,18 +2268,18 @@ public Task<DocumentReference> CreateAsync(string name, Stream content, Cancella
 public interface IDocumentProvider
 public string ConnectionId { get; }
 public string Provider { get; }
-public Task RemoveAsync(DocumentReference reference, CancellationToken cancellationToken);
-public Task<DocumentContent> OpenReadAsync(DocumentReference reference, CancellationToken cancellationToken);
-public Task<DocumentReference> RegisterAsync(string source, CancellationToken cancellationToken);
-public Task<DocumentReference> SaveAsync(DocumentReference source, Stream content, SaveDocumentOptions options, CancellationToken cancellationToken);
+public Task RemoveAsync(DocumentReference reference, CancellationToken cancellationToken = default);
+public Task<DocumentContent> OpenReadAsync(DocumentReference reference, CancellationToken cancellationToken = default);
+public Task<DocumentReference> RegisterAsync(string source, CancellationToken cancellationToken = default);
+public Task<DocumentReference> SaveAsync(DocumentReference source, Stream content, SaveDocumentOptions options, CancellationToken cancellationToken = default);
 ```
 
 ### `OfficeAgent.Core.DocumentProviders.MemoryDocumentProvider`
 
 ```csharp
-public sealed class MemoryDocumentProvider
-public MemoryDocumentProvider(string connectionId, MemoryDocumentProviderOptions options);
-public static string ProviderName;
+public sealed class MemoryDocumentProvider : OfficeAgent.Core.DocumentProviders.IConnectionEditingDefaults, OfficeAgent.Core.DocumentProviders.IDocumentCreatingProvider, OfficeAgent.Core.DocumentProviders.IDocumentProvider
+public MemoryDocumentProvider(string connectionId, MemoryDocumentProviderOptions? options = null);
+public const string ProviderName = "memory";
 public string ConnectionId { get; }
 public int Count { get; }
 public ChangeMode DefaultChangeMode { get; }
@@ -2011,11 +2288,11 @@ public long TotalBytes { get; }
 public DocumentReference Add(string name, byte[] content);
 public DocumentReference Describe(string itemId);
 public IReadOnlyList<DocumentReference> List();
-public Task RemoveAsync(DocumentReference reference, CancellationToken cancellationToken);
-public Task<DocumentContent> OpenReadAsync(DocumentReference reference, CancellationToken cancellationToken);
-public Task<DocumentReference> CreateAsync(string name, Stream content, CancellationToken cancellationToken);
-public Task<DocumentReference> RegisterAsync(string source, CancellationToken cancellationToken);
-public Task<DocumentReference> SaveAsync(DocumentReference source, Stream content, SaveDocumentOptions options, CancellationToken cancellationToken);
+public Task RemoveAsync(DocumentReference reference, CancellationToken cancellationToken = default);
+public Task<DocumentContent> OpenReadAsync(DocumentReference reference, CancellationToken cancellationToken = default);
+public Task<DocumentReference> CreateAsync(string name, Stream content, CancellationToken cancellationToken = default);
+public Task<DocumentReference> RegisterAsync(string source, CancellationToken cancellationToken = default);
+public Task<DocumentReference> SaveAsync(DocumentReference source, Stream content, SaveDocumentOptions options, CancellationToken cancellationToken = default);
 public byte[] Read(string itemId);
 ```
 
@@ -2035,39 +2312,40 @@ public long MaximumTotalBytes { get; set; }
 ```csharp
 public sealed class ProviderApplyResult
 public ProviderApplyResult();
-public bool Committed { get; set; }
-public DocumentReference Document { get; set; }
-public ApplyReceipt Receipt { get; set; }
-public ChangeReport Report { get; set; }
+public bool Committed { get; init; }
+public DocumentReference? Document { get; init; }
+public ApplyReceipt? Receipt { get; init; }
+public ChangeReport Report { get; init; }
 ```
 
 ### `OfficeAgent.Core.DocumentProviders.ProviderErrorCode`
 
 ```csharp
-public enum ProviderErrorCode
-Unknown
-NotFound
-AccessDenied
-ContentTooLarge
-ExtensionNotAllowed
-VersionConflict
-InvalidArgument
-ConfigurationError
-IO
-AlreadyExists
+public enum ProviderErrorCode : System.IComparable, System.IConvertible, System.IFormattable, System.ISpanFormattable
+Unknown = 0
+NotFound = 1
+AccessDenied = 2
+ContentTooLarge = 3
+ExtensionNotAllowed = 4
+VersionConflict = 5
+InvalidArgument = 6
+ConfigurationError = 7
+IO = 8
+AlreadyExists = 9
 ```
 
 ### `OfficeAgent.Core.DocumentProviders.ServiceCollectionExtensions`
 
 ```csharp
 public static class ServiceCollectionExtensions
-public static IServiceCollection AddFileSystemDocumentProvider(IServiceCollection services, string connectionId, string rootPath, Action<FileSystemDocumentProviderOptions> configure);
-public static IServiceCollection AddMemoryDocumentProvider(IServiceCollection services, string connectionId, Action<MemoryDocumentProviderOptions> configure);
+public static IServiceCollection AddFileSystemDocumentProvider(IServiceCollection services, string connectionId, string rootPath, Action<FileSystemDocumentProviderOptions>? configure = null);
+public static IServiceCollection AddMemoryDocumentProvider(IServiceCollection services, string connectionId, Action<MemoryDocumentProviderOptions>? configure = null);
 ```
 
 ### `OfficeAgent.Core.IApplyTimeProvider`
 
 ```csharp
+[Experimental("OFFICEAGENT001")]
 public interface IApplyTimeProvider
 public TimeProvider Clock { get; }
 ```
@@ -2076,12 +2354,13 @@ public TimeProvider Clock { get; }
 
 ```csharp
 public interface IAuditActorProvider
-public AuditActor GetCurrentActor();
+public AuditActor? GetCurrentActor();
 ```
 
 ### `OfficeAgent.Core.IBlankDocumentFactory`
 
 ```csharp
+[Experimental("OFFICEAGENT001")]
 public interface IBlankDocumentFactory
 public string Extension { get; }
 public byte[] CreateBlank();
@@ -2090,6 +2369,7 @@ public byte[] CreateBlank();
 ### `OfficeAgent.Core.ICapabilityDeclaringModule`
 
 ```csharp
+[Experimental("OFFICEAGENT001")]
 public interface ICapabilityDeclaringModule
 public IReadOnlyList<string> NodeKinds { get; }
 public IReadOnlyList<ChangeMode> SupportedChangeModes { get; }
@@ -2098,6 +2378,7 @@ public IReadOnlyList<ChangeMode> SupportedChangeModes { get; }
 ### `OfficeAgent.Core.ICapabilityReportingService`
 
 ```csharp
+[Experimental("OFFICEAGENT001")]
 public interface ICapabilityReportingService
 public EngineCapabilities Describe();
 ```
@@ -2105,6 +2386,7 @@ public EngineCapabilities Describe();
 ### `OfficeAgent.Core.IDocumentAssembler`
 
 ```csharp
+[Experimental("OFFICEAGENT001")]
 public interface IDocumentAssembler
 public DocumentAssemblyCandidate Assemble(IReadOnlyList<byte[]> sources, DocumentMergeOptions options, DocumentMergeLimits limits, CancellationToken cancellationToken);
 ```
@@ -2112,20 +2394,22 @@ public DocumentAssemblyCandidate Assemble(IReadOnlyList<byte[]> sources, Documen
 ### `OfficeAgent.Core.IDocumentService`
 
 ```csharp
+[Experimental("OFFICEAGENT001")]
 public interface IDocumentService
 public ApplyResult Apply(DocumentHandle handle, DocumentPlan plan, ApplyOptions options);
 public ChangeReport Validate(DocumentHandle handle, DocumentPlan plan);
 public IReadOnlyList<FindHit> Find(DocumentHandle handle, FindQuery query);
 public InspectResult Inspect(DocumentHandle handle, InspectOptions options);
-public Task<ApplyResult> ApplyAsync(DocumentHandle handle, DocumentPlan plan, ApplyOptions options, CancellationToken cancellationToken);
-public Task<ChangeReport> ValidateAsync(DocumentHandle handle, DocumentPlan plan, CancellationToken cancellationToken);
-public Task<IReadOnlyList<FindHit>> FindAsync(DocumentHandle handle, FindQuery query, CancellationToken cancellationToken);
-public Task<InspectResult> InspectAsync(DocumentHandle handle, InspectOptions options, CancellationToken cancellationToken);
+public Task<ApplyResult> ApplyAsync(DocumentHandle handle, DocumentPlan plan, ApplyOptions options, CancellationToken cancellationToken = default);
+public Task<ChangeReport> ValidateAsync(DocumentHandle handle, DocumentPlan plan, CancellationToken cancellationToken = default);
+public Task<IReadOnlyList<FindHit>> FindAsync(DocumentHandle handle, FindQuery query, CancellationToken cancellationToken = default);
+public Task<InspectResult> InspectAsync(DocumentHandle handle, InspectOptions options, CancellationToken cancellationToken = default);
 ```
 
 ### `OfficeAgent.Core.IFormatModule`
 
 ```csharp
+[Experimental("OFFICEAGENT001")]
 public interface IFormatModule
 public DocumentFormat Format { get; }
 public IReadOnlyList<IOperationHandler> Handlers { get; }
@@ -2138,6 +2422,7 @@ public bool CanHandle(IOpenXmlPackage package);
 ### `OfficeAgent.Core.IHandleResolver`
 
 ```csharp
+[Experimental("OFFICEAGENT001")]
 public interface IHandleResolver
 public Stream Resolve(DocumentHandle handle);
 public bool CanResolve(DocumentHandle handle);
@@ -2146,7 +2431,8 @@ public bool CanResolve(DocumentHandle handle);
 ### `OfficeAgent.Core.IOpenXmlPackage`
 
 ```csharp
-public interface IOpenXmlPackage
+[Experimental("OFFICEAGENT001")]
+public interface IOpenXmlPackage : System.IDisposable
 public DocumentFormat Format { get; }
 public bool IsEditable { get; }
 public string MainPartContentType { get; }
@@ -2157,6 +2443,7 @@ public byte[] ToBytes();
 ### `OfficeAgent.Core.IOperationHandler`
 
 ```csharp
+[Experimental("OFFICEAGENT001")]
 public interface IOperationHandler
 public OperationPreview Preview(ApplyContext context, PlanOperation operation);
 public bool CanHandle(PlanOperation operation);
@@ -2166,6 +2453,7 @@ public void Apply(ApplyContext context, PlanOperation operation);
 ### `OfficeAgent.Core.IPlanValidatingModule`
 
 ```csharp
+[Experimental("OFFICEAGENT001")]
 public interface IPlanValidatingModule
 public IEnumerable<ValidationError> ValidatePlan(DocumentPlan plan, ApplyContext context);
 ```
@@ -2173,6 +2461,7 @@ public IEnumerable<ValidationError> ValidatePlan(DocumentPlan plan, ApplyContext
 ### `OfficeAgent.Core.ITextDialect`
 
 ```csharp
+[Experimental("OFFICEAGENT001")]
 public interface ITextDialect
 public DocumentFormat Format { get; }
 public IReadOnlyList<OpenXmlElement> GetRuns(OpenXmlElement paragraph);
@@ -2186,62 +2475,62 @@ public void SetRunText(OpenXmlElement run, string text);
 
 ```csharp
 public sealed class OfficeAgentClient
-public OfficeAgentClient(DocumentProviderRegistry providers, IFormatModule[] modules);
+public OfficeAgentClient(DocumentProviderRegistry providers, params IFormatModule[] modules);
 public OfficeAgentClient(IDocumentService service);
-public OfficeAgentClient(IDocumentService service, DocumentProviderRegistry providers, ILoggerFactory loggerFactory);
-public OfficeAgentClient(IDocumentService service, DocumentProviderRegistry providers, ILoggerFactory loggerFactory, IEnumerable<IBlankDocumentFactory> blankDocumentFactories, IAuditActorProvider auditActorProvider);
-public OfficeAgentClient(IFormatModule[] modules);
+public OfficeAgentClient(IDocumentService service, DocumentProviderRegistry providers, ILoggerFactory? loggerFactory = null);
+public OfficeAgentClient(IDocumentService service, DocumentProviderRegistry providers, ILoggerFactory? loggerFactory, IEnumerable<IBlankDocumentFactory> blankDocumentFactories, IAuditActorProvider? auditActorProvider = null);
+public OfficeAgentClient(params IFormatModule[] modules);
 public IReadOnlyList<string> CreatableExtensions { get; }
-public DocumentMergeLimits MergeLimits { get; set; }
+public DocumentMergeLimits MergeLimits { get; init; }
 public TemplateBatchLimits TemplateLimits { get; }
-public ApplyResult Apply(DocumentHandle handle, DocumentPlan plan, ApplyOptions options);
+public ApplyResult Apply(DocumentHandle handle, DocumentPlan plan, ApplyOptions? options = null);
 public ApplyResult Commit(DocumentHandle handle, DocumentPlan plan);
 public ChangeMode DefaultChangeModeFor(string connectionId);
 public ChangeReport Preview(DocumentHandle handle, DocumentPlan plan);
-public DocumentComparisonResult CompareDocuments(byte[] original, byte[] revised, DocumentComparisonOptions options, CancellationToken cancellationToken);
-public DocumentMergePreview PreviewMerge(IReadOnlyList<byte[]> sources, DocumentMergeOptions options, CancellationToken cancellationToken);
-public DocumentMergeResult CommitMerge(DocumentMergePlan plan, IReadOnlyList<byte[]> sources, CancellationToken cancellationToken);
+public DocumentComparisonResult CompareDocuments(byte[] original, byte[] revised, DocumentComparisonOptions? options = null, CancellationToken cancellationToken = default);
+public DocumentMergePreview PreviewMerge(IReadOnlyList<byte[]> sources, DocumentMergeOptions? options = null, CancellationToken cancellationToken = default);
+public DocumentMergeResult CommitMerge(DocumentMergePlan plan, IReadOnlyList<byte[]> sources, CancellationToken cancellationToken = default);
 public EngineCapabilities DescribeCapabilities();
 public IReadOnlyList<FindHit> Find(DocumentHandle handle, FindQuery query);
-public InspectResult Inspect(DocumentHandle handle, InspectOptions options);
-public InspectResult Inspect(byte[] document, InspectOptions options);
-public MemoryDocumentProvider EphemeralConnection(string connectionId);
+public InspectResult Inspect(DocumentHandle handle, InspectOptions? options = null);
+public InspectResult Inspect(byte[] document, InspectOptions? options = null);
+public MemoryDocumentProvider? EphemeralConnection(string connectionId);
 public OfficeAgentClient WithTemplateLimits(TemplateBatchLimits limits);
-public Task RemoveAsync(DocumentReference reference, CancellationToken cancellationToken);
-public Task RemoveAsync(string connectionId, string documentId, CancellationToken cancellationToken);
-public Task<ApplyResult> ApplyAsync(DocumentHandle handle, DocumentPlan plan, ApplyOptions options, CancellationToken cancellationToken);
-public Task<ApplyResult> CommitAsync(DocumentHandle handle, DocumentPlan plan, CancellationToken cancellationToken);
-public Task<ApplyResult> PreviewWithReceiptAsync(DocumentReference reference, DocumentPlan plan, CancellationToken cancellationToken);
-public Task<ApplyResult> PreviewWithReceiptAsync(string connectionId, string documentId, DocumentPlan plan, CancellationToken cancellationToken);
-public Task<ChangeReport> PreviewAsync(DocumentHandle handle, DocumentPlan plan, CancellationToken cancellationToken);
-public Task<ChangeReport> PreviewAsync(DocumentReference reference, DocumentPlan plan, CancellationToken cancellationToken);
-public Task<ChangeReport> PreviewAsync(string connectionId, string documentId, DocumentPlan plan, CancellationToken cancellationToken);
-public Task<DocumentComparisonResult> CompareDocumentsAsync(DocumentReference original, DocumentReference revised, DocumentComparisonOptions options, CancellationToken cancellationToken);
-public Task<DocumentComparisonResult> CompareDocumentsAsync(string originalConnectionId, string originalDocumentId, string revisedConnectionId, string revisedDocumentId, DocumentComparisonOptions options, CancellationToken cancellationToken);
-public Task<DocumentContent> OpenReadAsync(DocumentReference reference, CancellationToken cancellationToken);
-public Task<DocumentContent> OpenReadAsync(string connectionId, string documentId, CancellationToken cancellationToken);
-public Task<DocumentMergePreview> PreviewMergeAsync(DocumentMergeRequest request, CancellationToken cancellationToken);
-public Task<DocumentMergeResult> CommitMergeAsync(DocumentMergePlan plan, string destinationConnectionId, string outputName, CancellationToken cancellationToken);
-public Task<DocumentReference> RegisterAsync(string connectionId, string source, CancellationToken cancellationToken);
-public Task<IReadOnlyList<FindHit>> FindAsync(DocumentHandle handle, FindQuery query, CancellationToken cancellationToken);
-public Task<IReadOnlyList<FindHit>> FindAsync(DocumentReference reference, FindQuery query, CancellationToken cancellationToken);
-public Task<IReadOnlyList<FindHit>> FindAsync(string connectionId, string documentId, FindQuery query, CancellationToken cancellationToken);
-public Task<InspectResult> InspectAsync(DocumentHandle handle, InspectOptions options, CancellationToken cancellationToken);
-public Task<InspectResult> InspectAsync(DocumentReference reference, InspectOptions options, CancellationToken cancellationToken);
-public Task<InspectResult> InspectAsync(string connectionId, string documentId, InspectOptions options, CancellationToken cancellationToken);
-public Task<ProviderApplyResult> CommitAsync(DocumentReference reference, DocumentPlan plan, SaveDocumentOptions options, CancellationToken cancellationToken);
-public Task<ProviderApplyResult> CommitAsync(string connectionId, string documentId, DocumentPlan plan, SaveDocumentOptions options, CancellationToken cancellationToken);
-public Task<ProviderApplyResult> CreateAsync(string connectionId, string name, DocumentPlan plan, CancellationToken cancellationToken);
-public Task<TemplateBatchPreview> PreviewTemplateBatchAsync(DocumentReference template, TemplateBatchRequest request, CancellationToken cancellationToken);
-public Task<TemplateBatchPreview> PreviewTemplateBatchAsync(string connectionId, string documentId, TemplateBatchRequest request, CancellationToken cancellationToken);
-public Task<TemplateBatchResult> PopulateTemplateBatchAsync(DocumentReference template, TemplateBatchRequest request, CancellationToken cancellationToken);
-public Task<TemplateBatchResult> PopulateTemplateBatchAsync(DocumentReference template, TemplateBatchRequest request, TemplateBatchToken expectedToken, CancellationToken cancellationToken);
-public Task<TemplateBatchResult> PopulateTemplateBatchAsync(string connectionId, string documentId, TemplateBatchRequest request, CancellationToken cancellationToken);
-public Task<TemplateBatchResult> PopulateTemplateBatchAsync(string connectionId, string documentId, TemplateBatchRequest request, TemplateBatchToken expectedToken, CancellationToken cancellationToken);
-public Task<TemplateDiscoveryResult> DiscoverTemplateAsync(DocumentReference template, CancellationToken cancellationToken);
-public Task<TemplateDiscoveryResult> DiscoverTemplateAsync(string connectionId, string documentId, CancellationToken cancellationToken);
-public Task<TemplatePlanResult> BuildTemplatePlanAsync(DocumentReference template, TemplateBinding binding, CancellationToken cancellationToken);
-public Task<TemplatePlanResult> BuildTemplatePlanAsync(string connectionId, string documentId, TemplateBinding binding, CancellationToken cancellationToken);
+public Task RemoveAsync(DocumentReference reference, CancellationToken cancellationToken = default);
+public Task RemoveAsync(string connectionId, string documentId, CancellationToken cancellationToken = default);
+public Task<ApplyResult> ApplyAsync(DocumentHandle handle, DocumentPlan plan, ApplyOptions? options = null, CancellationToken cancellationToken = default);
+public Task<ApplyResult> CommitAsync(DocumentHandle handle, DocumentPlan plan, CancellationToken cancellationToken = default);
+public Task<ApplyResult> PreviewWithReceiptAsync(DocumentReference reference, DocumentPlan plan, CancellationToken cancellationToken = default);
+public Task<ApplyResult> PreviewWithReceiptAsync(string connectionId, string documentId, DocumentPlan plan, CancellationToken cancellationToken = default);
+public Task<ChangeReport> PreviewAsync(DocumentHandle handle, DocumentPlan plan, CancellationToken cancellationToken = default);
+public Task<ChangeReport> PreviewAsync(DocumentReference reference, DocumentPlan plan, CancellationToken cancellationToken = default);
+public Task<ChangeReport> PreviewAsync(string connectionId, string documentId, DocumentPlan plan, CancellationToken cancellationToken = default);
+public Task<DocumentComparisonResult> CompareDocumentsAsync(DocumentReference original, DocumentReference revised, DocumentComparisonOptions? options = null, CancellationToken cancellationToken = default);
+public Task<DocumentComparisonResult> CompareDocumentsAsync(string originalConnectionId, string originalDocumentId, string revisedConnectionId, string revisedDocumentId, DocumentComparisonOptions? options = null, CancellationToken cancellationToken = default);
+public Task<DocumentContent> OpenReadAsync(DocumentReference reference, CancellationToken cancellationToken = default);
+public Task<DocumentContent> OpenReadAsync(string connectionId, string documentId, CancellationToken cancellationToken = default);
+public Task<DocumentMergePreview> PreviewMergeAsync(DocumentMergeRequest request, CancellationToken cancellationToken = default);
+public Task<DocumentMergeResult> CommitMergeAsync(DocumentMergePlan plan, string destinationConnectionId, string outputName, CancellationToken cancellationToken = default);
+public Task<DocumentReference> RegisterAsync(string connectionId, string source, CancellationToken cancellationToken = default);
+public Task<IReadOnlyList<FindHit>> FindAsync(DocumentHandle handle, FindQuery query, CancellationToken cancellationToken = default);
+public Task<IReadOnlyList<FindHit>> FindAsync(DocumentReference reference, FindQuery query, CancellationToken cancellationToken = default);
+public Task<IReadOnlyList<FindHit>> FindAsync(string connectionId, string documentId, FindQuery query, CancellationToken cancellationToken = default);
+public Task<InspectResult> InspectAsync(DocumentHandle handle, InspectOptions? options = null, CancellationToken cancellationToken = default);
+public Task<InspectResult> InspectAsync(DocumentReference reference, InspectOptions? options = null, CancellationToken cancellationToken = default);
+public Task<InspectResult> InspectAsync(string connectionId, string documentId, InspectOptions? options = null, CancellationToken cancellationToken = default);
+public Task<ProviderApplyResult> CommitAsync(DocumentReference reference, DocumentPlan plan, SaveDocumentOptions? options = null, CancellationToken cancellationToken = default);
+public Task<ProviderApplyResult> CommitAsync(string connectionId, string documentId, DocumentPlan plan, SaveDocumentOptions? options = null, CancellationToken cancellationToken = default);
+public Task<ProviderApplyResult> CreateAsync(string connectionId, string name, DocumentPlan? plan = null, CancellationToken cancellationToken = default);
+public Task<TemplateBatchPreview> PreviewTemplateBatchAsync(DocumentReference template, TemplateBatchRequest request, CancellationToken cancellationToken = default);
+public Task<TemplateBatchPreview> PreviewTemplateBatchAsync(string connectionId, string documentId, TemplateBatchRequest request, CancellationToken cancellationToken = default);
+public Task<TemplateBatchResult> PopulateTemplateBatchAsync(DocumentReference template, TemplateBatchRequest request, CancellationToken cancellationToken = default);
+public Task<TemplateBatchResult> PopulateTemplateBatchAsync(DocumentReference template, TemplateBatchRequest request, TemplateBatchToken? expectedToken, CancellationToken cancellationToken = default);
+public Task<TemplateBatchResult> PopulateTemplateBatchAsync(string connectionId, string documentId, TemplateBatchRequest request, CancellationToken cancellationToken = default);
+public Task<TemplateBatchResult> PopulateTemplateBatchAsync(string connectionId, string documentId, TemplateBatchRequest request, TemplateBatchToken? expectedToken, CancellationToken cancellationToken = default);
+public Task<TemplateDiscoveryResult> DiscoverTemplateAsync(DocumentReference template, CancellationToken cancellationToken = default);
+public Task<TemplateDiscoveryResult> DiscoverTemplateAsync(string connectionId, string documentId, CancellationToken cancellationToken = default);
+public Task<TemplatePlanResult> BuildTemplatePlanAsync(DocumentReference template, TemplateBinding binding, CancellationToken cancellationToken = default);
+public Task<TemplatePlanResult> BuildTemplatePlanAsync(string connectionId, string documentId, TemplateBinding binding, CancellationToken cancellationToken = default);
 public TemplateBatchLimits EffectiveLimits(TemplateBatchRequest request);
 public byte[] CreateBlank(string name);
 public static byte[] ToBytes(ApplyResult result);
@@ -2252,18 +2541,19 @@ public static void Save(ApplyResult result, string path);
 
 ```csharp
 public static class OfficeAgentTelemetry
-public static ActivitySource ActivitySource;
-public static string ActivitySourceName;
-public static string LogCategory;
+public static readonly ActivitySource ActivitySource;
+public const string ActivitySourceName = "OfficeAgent";
+public const string LogCategory = "OfficeAgent";
 ```
 
 ### `OfficeAgent.Core.OperationPreview`
 
 ```csharp
+[Experimental("OFFICEAGENT001")]
 public sealed class OperationPreview
 public OperationPreview();
-public ProposedChange Change { get; set; }
-public ValidationError Error { get; set; }
+public ProposedChange? Change { get; init; }
+public ValidationError? Error { get; init; }
 public static OperationPreview Fail(ValidationError error);
 public static OperationPreview Ok(ProposedChange change);
 ```
@@ -2275,25 +2565,11 @@ public static class ServiceCollectionExtensions
 public static IServiceCollection AddOfficeAgent(IServiceCollection services);
 ```
 
-### `OfficeAgent.Core.SpreadsheetPartUtility`
-
-```csharp
-public static class SpreadsheetPartUtility
-public static Cell Cell(WorksheetPart part, string address, bool create);
-public static ValueTuple<Sheet, WorksheetPart>? ResolveSheet(SpreadsheetDocument document, UInt32 sheetId);
-public static bool TryParseCell(string address, out int column, out UInt32 row);
-public static bool TryParseRange(string address, out int left, out UInt32 top, out int right, out UInt32 bottom);
-public static byte[] CreateChartWorkbook(IReadOnlyList<string> categories, IReadOnlyList<ChartSeries> series);
-public static string ColumnName(int column);
-public static string DisplayValue(SpreadsheetDocument document, Cell cell);
-public static void RecalculateOnOpen(SpreadsheetDocument document);
-public static void WriteValue(Cell cell, string value, SpreadsheetCellValueKind kind);
-```
-
 ### `OfficeAgent.Core.WordmlDialect`
 
 ```csharp
-public sealed class WordmlDialect
+[Experimental("OFFICEAGENT001")]
+public sealed class WordmlDialect : OfficeAgent.Core.ITextDialect
 public WordmlDialect();
 public DocumentFormat Format { get; }
 public IReadOnlyList<OpenXmlElement> GetRuns(OpenXmlElement paragraph);
@@ -2308,7 +2584,7 @@ public void SetRunText(OpenXmlElement run, string text);
 ### `OfficeAgent.Excel.ExcelModule`
 
 ```csharp
-public sealed class ExcelModule
+public sealed class ExcelModule : OfficeAgent.Core.IApplyTimeProvider, OfficeAgent.Core.IBlankDocumentFactory, OfficeAgent.Core.ICapabilityDeclaringModule, OfficeAgent.Core.IFormatModule
 public ExcelModule();
 public ExcelModule(TimeProvider clock);
 public TimeProvider Clock { get; }
@@ -2336,24 +2612,26 @@ public static IServiceCollection AddExcelFormat(IServiceCollection services);
 ### `OfficeAgent.PowerPoint.IPowerPointNodeProvider`
 
 ```csharp
+[Experimental("OFFICEAGENT001")]
 public interface IPowerPointNodeProvider
 public string Kind { get; }
 public IEnumerable<NodeInfo> Enumerate(PowerPointObjectMap map);
-public ResolvedNode Resolve(NodeAnchor anchor, PowerPointObjectMap map);
+public ResolvedNode? Resolve(NodeAnchor anchor, PowerPointObjectMap map);
 ```
 
 ### `OfficeAgent.PowerPoint.IPowerPointOperationHandler`
 
 ```csharp
-public interface IPowerPointOperationHandler
+[Experimental("OFFICEAGENT001")]
+public interface IPowerPointOperationHandler : OfficeAgent.Core.IOperationHandler
 ```
 
 ### `OfficeAgent.PowerPoint.PowerPointModule`
 
 ```csharp
-public sealed class PowerPointModule
+public sealed class PowerPointModule : OfficeAgent.Core.IApplyTimeProvider, OfficeAgent.Core.IBlankDocumentFactory, OfficeAgent.Core.ICapabilityDeclaringModule, OfficeAgent.Core.IFormatModule, OfficeAgent.Core.IPlanValidatingModule
 public PowerPointModule();
-public PowerPointModule(TimeProvider clock, IEnumerable<IOperationHandler> extraHandlers, IEnumerable<IPowerPointNodeProvider> extraProviders);
+public PowerPointModule(TimeProvider clock, IEnumerable<IOperationHandler>? extraHandlers = null, IEnumerable<IPowerPointNodeProvider>? extraProviders = null);
 public TimeProvider Clock { get; }
 public string Extension { get; }
 public DocumentFormat Format { get; }
@@ -2371,6 +2649,7 @@ public byte[] CreateBlank();
 ### `OfficeAgent.PowerPoint.PowerPointObjectMap`
 
 ```csharp
+[Experimental("OFFICEAGENT001")]
 public sealed class PowerPointObjectMap
 public PowerPointObjectMap(IOpenXmlPackage package);
 public PresentationDocument Doc { get; }
@@ -2381,7 +2660,8 @@ public IOpenXmlPackage Package { get; }
 ### `OfficeAgent.PowerPoint.PresentationmlDialect`
 
 ```csharp
-public sealed class PresentationmlDialect
+[Experimental("OFFICEAGENT001")]
+public sealed class PresentationmlDialect : OfficeAgent.Core.ITextDialect
 public PresentationmlDialect();
 public DocumentFormat Format { get; }
 public IReadOnlyList<OpenXmlElement> GetRuns(OpenXmlElement paragraph);
@@ -2394,11 +2674,12 @@ public void SetRunText(OpenXmlElement run, string text);
 ### `OfficeAgent.PowerPoint.ResolvedNode`
 
 ```csharp
+[Experimental("OFFICEAGENT001")]
 public sealed class ResolvedNode
 public ResolvedNode();
-public IReadOnlyList<OpenXmlElement> Elements { get; set; }
-public string Kind { get; set; }
-public string Value { get; set; }
+public IReadOnlyList<OpenXmlElement> Elements { get; init; }
+public string Kind { get; init; }
+public string? Value { get; init; }
 ```
 
 ### `OfficeAgent.PowerPoint.ServiceCollectionExtensions`
@@ -2413,9 +2694,9 @@ public static IServiceCollection AddPowerPointFormat(IServiceCollection services
 ### `OfficeAgent.Rendering.LibreOfficeDocumentRenderer`
 
 ```csharp
-public sealed class LibreOfficeDocumentRenderer
-public LibreOfficeDocumentRenderer(LibreOfficeRendererOptions options);
-public Task<RenderResult> RenderAsync(Stream document, RenderOptions options, CancellationToken cancellationToken);
+public sealed class LibreOfficeDocumentRenderer : OfficeAgent.Abstractions.IDocumentRenderer
+public LibreOfficeDocumentRenderer(LibreOfficeRendererOptions? options = null);
+public Task<RenderResult> RenderAsync(Stream document, RenderOptions options, CancellationToken cancellationToken = default);
 ```
 
 ### `OfficeAgent.Rendering.LibreOfficeRendererOptions`
@@ -2434,9 +2715,9 @@ public IList<string> PdfToPpmPrefixArguments { get; set; }
 ### `OfficeAgent.SharePoint.AppOnlyAccessTokenProvider`
 
 ```csharp
-public sealed class AppOnlyAccessTokenProvider
+public sealed class AppOnlyAccessTokenProvider : OfficeAgent.SharePoint.IAccessTokenProvider
 public AppOnlyAccessTokenProvider(AppOnlyOptions options, HttpClient httpClient);
-public Task<string> GetAccessTokenAsync(CancellationToken cancellationToken);
+public Task<string> GetAccessTokenAsync(CancellationToken cancellationToken = default);
 ```
 
 ### `OfficeAgent.SharePoint.AppOnlyOptions`
@@ -2455,53 +2736,53 @@ public string TenantId { get; set; }
 
 ```csharp
 public static class GraphUserContext
-public static string CurrentUserAccessToken { get; }
-public static IDisposable Push(string userAccessToken);
+public static string? CurrentUserAccessToken { get; }
+public static IDisposable Push(string? userAccessToken);
 ```
 
 ### `OfficeAgent.SharePoint.IAccessTokenProvider`
 
 ```csharp
 public interface IAccessTokenProvider
-public Task<string> GetAccessTokenAsync(CancellationToken cancellationToken);
+public Task<string> GetAccessTokenAsync(CancellationToken cancellationToken = default);
 ```
 
 ### `OfficeAgent.SharePoint.ISharePointRegistrationStore`
 
 ```csharp
 public interface ISharePointRegistrationStore
-public Task<SharePointItemRef?> ResolveAsync(string registrationId, CancellationToken cancellationToken);
-public Task<bool> RemoveAsync(string registrationId, CancellationToken cancellationToken);
-public Task<string> AddAsync(SharePointItemRef item, CancellationToken cancellationToken);
+public Task<SharePointItemRef?> ResolveAsync(string registrationId, CancellationToken cancellationToken = default);
+public Task<bool> RemoveAsync(string registrationId, CancellationToken cancellationToken = default);
+public Task<string> AddAsync(SharePointItemRef item, CancellationToken cancellationToken = default);
 ```
 
 ### `OfficeAgent.SharePoint.InMemoryRegistrationStore`
 
 ```csharp
-public sealed class InMemoryRegistrationStore
+public sealed class InMemoryRegistrationStore : OfficeAgent.SharePoint.ISharePointRegistrationStore
 public InMemoryRegistrationStore();
-public Task<SharePointItemRef?> ResolveAsync(string registrationId, CancellationToken cancellationToken);
-public Task<bool> RemoveAsync(string registrationId, CancellationToken cancellationToken);
-public Task<string> AddAsync(SharePointItemRef item, CancellationToken cancellationToken);
+public Task<SharePointItemRef?> ResolveAsync(string registrationId, CancellationToken cancellationToken = default);
+public Task<bool> RemoveAsync(string registrationId, CancellationToken cancellationToken = default);
+public Task<string> AddAsync(SharePointItemRef item, CancellationToken cancellationToken = default);
 ```
 
 ### `OfficeAgent.SharePoint.JsonFileRegistrationStore`
 
 ```csharp
-public sealed class JsonFileRegistrationStore
+public sealed class JsonFileRegistrationStore : OfficeAgent.SharePoint.ISharePointRegistrationStore
 public JsonFileRegistrationStore(string path);
-public Task<SharePointItemRef?> ResolveAsync(string registrationId, CancellationToken cancellationToken);
-public Task<bool> RemoveAsync(string registrationId, CancellationToken cancellationToken);
-public Task<string> AddAsync(SharePointItemRef item, CancellationToken cancellationToken);
+public Task<SharePointItemRef?> ResolveAsync(string registrationId, CancellationToken cancellationToken = default);
+public Task<bool> RemoveAsync(string registrationId, CancellationToken cancellationToken = default);
+public Task<string> AddAsync(SharePointItemRef item, CancellationToken cancellationToken = default);
 ```
 
 ### `OfficeAgent.SharePoint.OnBehalfOfAccessTokenProvider`
 
 ```csharp
-public sealed class OnBehalfOfAccessTokenProvider
+public sealed class OnBehalfOfAccessTokenProvider : OfficeAgent.SharePoint.IAccessTokenProvider
 public OnBehalfOfAccessTokenProvider(OnBehalfOfOptions options, HttpClient httpClient);
-public OnBehalfOfAccessTokenProvider(OnBehalfOfOptions options, HttpClient httpClient, Func<string> userTokenAccessor);
-public Task<string> GetAccessTokenAsync(CancellationToken cancellationToken);
+public OnBehalfOfAccessTokenProvider(OnBehalfOfOptions options, HttpClient httpClient, Func<string?> userTokenAccessor);
+public Task<string> GetAccessTokenAsync(CancellationToken cancellationToken = default);
 ```
 
 ### `OfficeAgent.SharePoint.OnBehalfOfOptions`
@@ -2520,24 +2801,24 @@ public string TenantId { get; set; }
 
 ```csharp
 public static class ServiceCollectionExtensions
-public static IServiceCollection AddSharePointDocumentProvider(IServiceCollection services, string connectionId, Action<SharePointDocumentProviderOptions> configure);
+public static IServiceCollection AddSharePointDocumentProvider(IServiceCollection services, string connectionId, Action<SharePointDocumentProviderOptions>? configure = null);
 public static IServiceCollection AddSharePointOnBehalfOfAuthentication(IServiceCollection services, Action<OnBehalfOfOptions> configure);
 ```
 
 ### `OfficeAgent.SharePoint.SharePointDocumentProvider`
 
 ```csharp
-public sealed class SharePointDocumentProvider
-public SharePointDocumentProvider(SharePointDocumentProviderOptions options, HttpClient httpClient, IAccessTokenProvider tokenProvider, ISharePointRegistrationStore registrationStore);
-public static string ProviderName;
+public sealed class SharePointDocumentProvider : OfficeAgent.Core.DocumentProviders.IConnectionEditingDefaults, OfficeAgent.Core.DocumentProviders.IDocumentCreatingProvider, OfficeAgent.Core.DocumentProviders.IDocumentProvider
+public SharePointDocumentProvider(SharePointDocumentProviderOptions options, HttpClient httpClient, IAccessTokenProvider tokenProvider, ISharePointRegistrationStore? registrationStore = null);
+public const string ProviderName = "sharepoint";
 public string ConnectionId { get; }
 public ChangeMode DefaultChangeMode { get; }
 public string Provider { get; }
-public Task RemoveAsync(DocumentReference reference, CancellationToken cancellationToken);
-public Task<DocumentContent> OpenReadAsync(DocumentReference reference, CancellationToken cancellationToken);
-public Task<DocumentReference> CreateAsync(string name, Stream content, CancellationToken cancellationToken);
-public Task<DocumentReference> RegisterAsync(string source, CancellationToken cancellationToken);
-public Task<DocumentReference> SaveAsync(DocumentReference source, Stream content, SaveDocumentOptions options, CancellationToken cancellationToken);
+public Task RemoveAsync(DocumentReference reference, CancellationToken cancellationToken = default);
+public Task<DocumentContent> OpenReadAsync(DocumentReference reference, CancellationToken cancellationToken = default);
+public Task<DocumentReference> CreateAsync(string name, Stream content, CancellationToken cancellationToken = default);
+public Task<DocumentReference> RegisterAsync(string source, CancellationToken cancellationToken = default);
+public Task<DocumentReference> SaveAsync(DocumentReference source, Stream content, SaveDocumentOptions options, CancellationToken cancellationToken = default);
 ```
 
 ### `OfficeAgent.SharePoint.SharePointDocumentProviderOptions`
@@ -2557,14 +2838,14 @@ public long MaximumBytes { get; set; }
 ### `OfficeAgent.SharePoint.SharePointItemRef`
 
 ```csharp
-public struct SharePointItemRef
+public struct SharePointItemRef : System.IEquatable<OfficeAgent.SharePoint.SharePointItemRef>
 public SharePointItemRef(string DriveId, string ItemId);
-public string DriveId { get; set; }
-public string ItemId { get; set; }
+public string DriveId { get; init; }
+public string ItemId { get; init; }
 public bool Equals(SharePointItemRef other);
-public bool Equals(object obj);
-public int GetHashCode();
-public string ToString();
+public override bool Equals(object obj);
+public override int GetHashCode();
+public override string ToString();
 public void Deconstruct(out string DriveId, out string ItemId);
 ```
 
@@ -2573,20 +2854,22 @@ public void Deconstruct(out string DriveId, out string ItemId);
 ### `OfficeAgent.Word.IWordNodeProvider`
 
 ```csharp
+[Experimental("OFFICEAGENT001")]
 public interface IWordNodeProvider
 public string Kind { get; }
 public IEnumerable<NodeInfo> Enumerate(WordObjectMap map);
-public ResolvedNode Resolve(NodeAnchor anchor, WordObjectMap map);
+public ResolvedNode? Resolve(NodeAnchor anchor, WordObjectMap map);
 ```
 
 ### `OfficeAgent.Word.ResolvedNode`
 
 ```csharp
+[Experimental("OFFICEAGENT001")]
 public sealed class ResolvedNode
 public ResolvedNode();
-public IReadOnlyList<OpenXmlElement> Elements { get; set; }
-public string Kind { get; set; }
-public string Value { get; set; }
+public IReadOnlyList<OpenXmlElement> Elements { get; init; }
+public string Kind { get; init; }
+public string? Value { get; init; }
 ```
 
 ### `OfficeAgent.Word.ServiceCollectionExtensions`
@@ -2599,9 +2882,9 @@ public static IServiceCollection AddWordFormat(IServiceCollection services);
 ### `OfficeAgent.Word.WordModule`
 
 ```csharp
-public sealed class WordModule
+public sealed class WordModule : OfficeAgent.Core.IApplyTimeProvider, OfficeAgent.Core.IBlankDocumentFactory, OfficeAgent.Core.ICapabilityDeclaringModule, OfficeAgent.Core.IDocumentAssembler, OfficeAgent.Core.IFormatModule, OfficeAgent.Core.IPlanValidatingModule
 public WordModule();
-public WordModule(TimeProvider clock, IEnumerable<IOperationHandler> extraHandlers, IEnumerable<IWordNodeProvider> extraProviders);
+public WordModule(TimeProvider clock, IEnumerable<IOperationHandler>? extraHandlers = null, IEnumerable<IWordNodeProvider>? extraProviders = null);
 public TimeProvider Clock { get; }
 public string Extension { get; }
 public DocumentFormat Format { get; }
@@ -2620,6 +2903,7 @@ public byte[] CreateBlank();
 ### `OfficeAgent.Word.WordObjectMap`
 
 ```csharp
+[Experimental("OFFICEAGENT001")]
 public sealed class WordObjectMap
 public WordObjectMap(IOpenXmlPackage package);
 public WordprocessingDocument Doc { get; }
