@@ -159,6 +159,28 @@ public class EphemeralDocumentTests
         Assert.Contains("not-found", exported);
     }
 
+    /// <summary>
+    /// Removing an id the session does not hold fails as it does on every other provider.
+    /// It used to report <c>removed: true</c>, telling an agent it had removed something that
+    /// was never there, while the filesystem and SharePoint providers refused the same call.
+    /// </summary>
+    [Fact]
+    public async Task Removing_an_unknown_session_document_is_not_reported_as_removed()
+    {
+        using var session = new Session();
+        var documentId = await session.Import(DocxFactory.Contract(), "contract.docx");
+        await session.Tools.RemoveDocument("session", documentId);
+
+        using var again = JsonDocument.Parse(await session.Tools.RemoveDocument("session", documentId));
+        using var invented = JsonDocument.Parse(await session.Tools.RemoveDocument("session", "no-such-document"));
+
+        foreach (var result in new[] { again, invented })
+        {
+            Assert.False(result.RootElement.TryGetProperty("removed", out _), result.RootElement.ToString());
+            Assert.Equal("not-found", result.RootElement.GetProperty("errors")[0].GetProperty("code").GetString());
+        }
+    }
+
     [Fact]
     public async Task Export_is_refused_for_a_connection_backed_by_real_storage()
     {

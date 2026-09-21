@@ -109,7 +109,7 @@ public sealed class OfficeAgentTools
     /// are written as names for the same reason: a response that happens to carry a typed enum
     /// must not report it as a number.
     /// </summary>
-    private static readonly JsonSerializerOptions Json = new()
+    internal static readonly JsonSerializerOptions Json = new()
     {
         WriteIndented = false,
         PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
@@ -121,7 +121,7 @@ public sealed class OfficeAgentTools
     /// as <c>2</c> tells an agent nothing it can act on. Property names are camelCase, like
     /// every other tool response.
     /// </summary>
-    private static readonly JsonSerializerOptions CapabilityJson = new()
+    internal static readonly JsonSerializerOptions CapabilityJson = new()
     {
         WriteIndented = false,
         PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
@@ -1141,7 +1141,7 @@ public sealed class OfficeAgentTools
     private static async Task<string> SafeContentAsync(string? name, Func<Task<string>> work)
     {
         try { return await work().ConfigureAwait(false); }
-        catch (OperationCanceledException) { return ContentError(name, "cancelled", "Operation was cancelled."); }
+        catch (OperationCanceledException) { return ContentError(name, ToolErrorCodes.Cancelled, "Operation was cancelled."); }
         catch (ConnectionForbiddenException ex) { return ContentError(name, ToolErrorCodes.ConnectionForbidden, ex.Message); }
         catch (RegexMatchTimeoutException) { return ContentError(name, ToolErrorCodes.RegexTimeout, RegexTimeoutMessage); }
         catch (OpenXmlIngestionLimitException ex) { return ContentError(name, OpenXmlIngestionLimitException.Code, ex.Message); }
@@ -1283,7 +1283,7 @@ public sealed class OfficeAgentTools
     private static async Task<string> SafeAsync(Func<Task<string>> work)
     {
         try { return await work().ConfigureAwait(false); }
-        catch (OperationCanceledException) { return SerializeError("cancelled", "Operation was cancelled."); }
+        catch (OperationCanceledException) { return SerializeError(ToolErrorCodes.Cancelled, "Operation was cancelled."); }
         catch (ConnectionForbiddenException ex) { return SerializeError(ToolErrorCodes.ConnectionForbidden, ex.Message); }
         catch (RegexMatchTimeoutException) { return SerializeError(ToolErrorCodes.RegexTimeout, RegexTimeoutMessage); }
         catch (OpenXmlIngestionLimitException ex) { return SerializeError(OpenXmlIngestionLimitException.Code, ex.Message); }
@@ -1595,7 +1595,7 @@ public sealed class OfficeAgentTools
             })
         }, Json);
 
-    private static object? SummariseAnchor(Anchor? anchor) => anchor switch
+    internal static object? SummariseAnchor(Anchor? anchor) => anchor switch
     {
         null => null,
         TextSpanAnchor t => new { kind = "textSpan", paraId = t.ParaId, expect = t.Expect, occurrence = t.Occurrence },
@@ -1605,7 +1605,7 @@ public sealed class OfficeAgentTools
         _ => new { kind = anchor.GetType().Name, anchor.Id }
     };
 
-    private static object? ReceiptPayload(ApplyReceipt? receipt) => receipt is null
+    internal static object? ReceiptPayload(ApplyReceipt? receipt) => receipt is null
         ? null
         : new
         {

@@ -188,13 +188,20 @@ public sealed class MemoryDocumentProvider : IDocumentProvider, IDocumentCreatin
     /// <remarks>
     /// Unlike a provider over external storage, removing here really does discard the
     /// content: the store is the only copy. That is the point of an ephemeral connection,
-    /// and it is what lets an agent clear a working document it is finished with.
+    /// and it is what lets an agent clear a working document it is finished with. An unknown
+    /// id fails with <see cref="ProviderErrorCode.NotFound"/>, as it does for every other
+    /// provider: reporting success would tell an agent it removed something that was never there.
     /// </remarks>
     public Task RemoveAsync(DocumentReference reference, CancellationToken cancellationToken = default)
     {
         if (reference is null) throw new ArgumentNullException(nameof(reference));
         lock (_mutationGate)
-            _documents.TryRemove(reference.ItemId, out _);
+        {
+            if (!_documents.TryRemove(reference.ItemId, out _))
+                throw Error(ProviderErrorCode.NotFound,
+                    $"No document with id '{reference.ItemId}' is open in this connection.",
+                    reference.ItemId);
+        }
         return Task.CompletedTask;
     }
 

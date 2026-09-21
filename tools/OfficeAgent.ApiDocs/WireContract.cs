@@ -3,6 +3,7 @@ using System.Reflection;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
+using Microsoft.Extensions.AI;
 using OfficeAgent.Abstractions;
 using OfficeAgent.AgentFramework;
 using OfficeAgent.Core;
@@ -11,9 +12,6 @@ using OfficeAgent.Excel;
 using OfficeAgent.Mcp;
 using OfficeAgent.PowerPoint;
 using OfficeAgent.Word;
-using DocumentFormat.OpenXml;
-using DocumentFormat.OpenXml.Packaging;
-using W = DocumentFormat.OpenXml.Wordprocessing;
 
 /// <summary>
 /// Renders the JSON contracts an agent or host depends on, as a baseline the check compares
@@ -130,11 +128,13 @@ internal static class WireContract
         builder.AppendLine();
         builder.AppendLine("## Tools");
         builder.AppendLine();
-        builder.AppendLine("Every tool the Agent Framework surface can publish, with every opt-in enabled. The MCP server");
-        builder.AppendLine("publishes the same functions. Parameter schemas are shown without descriptions.");
+        builder.AppendLine("Every tool the Agent Framework surface can publish with every opt-in enabled, then the tools only");
+        builder.AppendLine("the MCP server adds. Generation fails if the MCP server publishes a shared tool with a different");
+        builder.AppendLine("schema. Parameter schemas are shown without descriptions.");
 
         var client = new OfficeAgentClient(new WordModule(), new PowerPointModule(), new ExcelModule());
-        var functions = new OfficeAgentTools(client).AsAIFunctions(new OfficeAgentToolsOptions
+        var tools = new OfficeAgentTools(client);
+        var functions = tools.AsAIFunctions(new OfficeAgentToolsOptions
         {
             AllowRegistration = true,
             AllowCreation = true,
@@ -142,32 +142,46 @@ internal static class WireContract
             AllowConnectionAddressing = true,
             AllowEphemeralDocuments = true
         });
+        var schemas = functions.ToDictionary(
+            function => function.Name,
+            function => Canonical(JsonNode.Parse(function.JsonSchema.GetRawText())),
+            StringComparer.Ordinal);
 
-        foreach (var function in functions.OrderBy(function => function.Name, StringComparer.Ordinal))
+        var mcp = OfficeAgentMcpServer.CreateTools(tools, new OfficeAgentMcpOptions
         {
-            var schema = Canonical(JsonNode.Parse(function.JsonSchema.GetRawText()));
-            builder.AppendLine();
-            builder.AppendLine($"### `{function.Name}`");
-            builder.AppendLine();
-            builder.AppendLine("```json");
-            builder.AppendLine(schema?.ToJsonString(new JsonSerializerOptions { WriteIndented = true })
-                .Replace("\r\n", "\n") ?? "null");
-            builder.AppendLine("```");
+            AllowRegistration = true,
+            AllowCreation = true,
+            AllowInlineContent = true,
+            EphemeralConnectionId = "session",
+            FileSystemConnections = { new FileSystemConnectionOptions { ConnectionId = "workspace", RootPath = Path.GetTempPath() } }
+        });
+        var mcpOnly = new SortedDictionary<string, JsonNode?>(StringComparer.Ordinal);
+        foreach (var tool in mcp)
+        {
+            var schema = Canonical(JsonNode.Parse(tool.ProtocolTool.InputSchema.GetRawText()));
+            if (!schemas.TryGetValue(tool.ProtocolTool.Name, out var shared))
+                mcpOnly[tool.ProtocolTool.Name] = schema;
+            else if (!JsonNode.DeepEquals(shared, schema))
+                throw new InvalidOperationException($"The MCP server publishes {tool.ProtocolTool.Name} with a different schema.");
         }
+
+        foreach (var (name, schema) in schemas.OrderBy(pair => pair.Key, StringComparer.Ordinal))
+            AppendSchema(builder, $"`{name}`", schema);
+        foreach (var (name, schema) in mcpOnly)
+            AppendSchema(builder, $"`{name}` (MCP server only)", schema);
     }
 
+    private static void AppendSchema(StringBuilder builder, string heading, JsonNode? schema)
+    {
+        builder.AppendLine();
+        builder.AppendLine($"### {heading}");
+        builder.AppendLine();
+        builder.AppendLine("```json");
+        builder.AppendLine(schema?.ToJsonString(new JsonSerializerOptions { WriteIndented = true })
+            .Replace("\r\n", "\n") ?? "null");
+        builder.AppendLine("```");
+    }
 
-    /// <summary>
-    /// The shape of what representative tools return, as property paths and value kinds.
-    /// </summary>
-    /// <remarks>
-    /// Inputs are not the whole contract. A host that reads a response depends on the fields in
-    /// it, and responses the adapter builds from anonymous objects appear in no C# signature, so
-    /// removing <c>paraId</c> from a find hit, or <c>code</c> from an error entry, would otherwise
-    /// pass every gate. Values are excluded because identifiers, hashes and timestamps vary
-    /// between runs; paths and kinds do not, given the same fixture. Array elements are merged
-    /// under <c>[]</c>, so a path records every shape an element of that array took.
-    /// </remarks>
     private static void Configuration(StringBuilder builder)
     {
         builder.AppendLine();
@@ -297,173 +311,209 @@ internal static class WireContract
         _ => JsonSerializer.Serialize(value, value.GetType(), LiteralJson)
     };
 
+    // Copies, for the same reason as PlanJson above.
+    private static readonly JsonSerializerOptions ResponseJson = new(OfficeAgentTools.Json)
+    {
+        TypeInfoResolver = new System.Text.Json.Serialization.Metadata.DefaultJsonTypeInfoResolver()
+    };
+
+    private static readonly JsonSerializerOptions CapabilityJson = new(OfficeAgentTools.CapabilityJson)
+    {
+        TypeInfoResolver = new System.Text.Json.Serialization.Metadata.DefaultJsonTypeInfoResolver()
+    };
+
+    /// <summary>
+    /// Tools whose success response is one typed record, and the options it is written with.
+    /// Their shape is derived from the type, so it covers every member in every state; the
+    /// execution states below then prove each real response stays inside that schema.
+    /// </summary>
+    private static readonly (string Tool, Type Type, JsonSerializerOptions Options)[] TypedResponses =
+    {
+        ("compare_documents", typeof(DocumentComparisonResult), PlanJson),
+        ("describe_capabilities", typeof(EngineCapabilities), CapabilityJson),
+        ("discover_template", typeof(TemplateDiscoveryResult), PlanJson),
+        ("merge_documents", typeof(DocumentMergeResult), PlanJson),
+        ("populate_template_batch", typeof(TemplateBatchResult), PlanJson),
+        ("preview_document_merge", typeof(DocumentMergePreview), PlanJson),
+        ("preview_template_batch", typeof(TemplateBatchPreview), PlanJson),
+    };
+
     private static void Outputs(StringBuilder builder)
     {
+        var states = ResponseStates.Generate().GetAwaiter().GetResult();
+
         builder.AppendLine();
         builder.AppendLine("## Tool responses");
         builder.AppendLine();
-        builder.AppendLine("The structure of representative responses, produced by calling each tool against a document");
-        builder.AppendLine("built in memory for the purpose. Each line is a property path and the JSON kinds seen there.");
-        builder.AppendLine("Values are omitted because identifiers, hashes and timestamps vary between runs.");
+        builder.AppendLine("Responses are frozen in three layers. Each says exactly what it covers; a response state not");
+        builder.AppendLine("listed under a tool is not frozen by this file.");
+        builder.AppendLine();
+        builder.AppendLine("1. **Typed results** are derived from the result type, so every member, its nullability and every");
+        builder.AppendLine("   enum value are covered whatever state produced the response.");
+        builder.AppendLine("2. **Shared parts** that anonymous envelopes embed are enumerated: the change-target summary of");
+        builder.AppendLine("   every anchor type, and the receipt payload with its optional members absent and present.");
+        builder.AppendLine("3. **Response states** run each tool into a named state, and generation fails unless the");
+        builder.AppendLine("   response is in that state. Each is recorded as property paths and the JSON kinds seen;");
+        builder.AppendLine("   values are omitted because ids, hashes and timestamps vary. An empty array records no");
+        builder.AppendLine("   element paths, which is why empty and populated collections are separate states.");
 
-        foreach (var (name, json) in RepresentativeResponses().GetAwaiter().GetResult())
+        TypedSchemas(builder, states);
+        SharedParts(builder);
+
+        builder.AppendLine();
+        builder.AppendLine("### Response states");
+        foreach (var group in states.GroupBy(state => state.Tool).OrderBy(group => group.Key, StringComparer.Ordinal))
         {
-            var shape = new SortedDictionary<string, SortedSet<string>>(StringComparer.Ordinal);
-            Shape(JsonNode.Parse(json), "$", shape);
             builder.AppendLine();
-            builder.AppendLine($"### {name}");
+            builder.AppendLine($"#### `{group.Key}`");
+            foreach (var state in group)
+            {
+                builder.AppendLine();
+                builder.AppendLine($"State: {state.Name}");
+                builder.AppendLine();
+                AppendShape(builder, JsonNode.Parse(state.Json));
+            }
+        }
+    }
+
+    private static void TypedSchemas(StringBuilder builder, IReadOnlyList<ResponseStates.State> states)
+    {
+        builder.AppendLine();
+        builder.AppendLine("### Typed results");
+        builder.AppendLine();
+        builder.AppendLine("A failure these tools report by exception comes back in the error envelope instead, which is");
+        builder.AppendLine("frozen among the response states. A member whose schema is `true` has a custom converter; every");
+        builder.AppendLine("such member is an anchor, written exactly as the Anchors section above records.");
+
+        foreach (var (tool, type, options) in TypedResponses)
+        {
+            var schema = Canonical(JsonNode.Parse(AIJsonUtilities.CreateJsonSchema(type, serializerOptions: options).GetRawText()));
+            var declared = new HashSet<string>(StringComparer.Ordinal);
+            var open = new List<string>();
+            SchemaPaths(schema, schema, "$", declared, open, depth: 0);
+
+            // The drift guard: a typed tool that starts returning another type, or a member the
+            // schema does not declare, fails here rather than passing with a stale schema.
+            foreach (var state in states.Where(state => state.Tool == tool))
+            {
+                var shape = new SortedDictionary<string, SortedSet<string>>(StringComparer.Ordinal);
+                Shape(JsonNode.Parse(state.Json), "$", shape);
+                if (shape.ContainsKey("$.errors") && !declared.Contains("$.errors"))
+                    continue; // the error envelope
+                var undeclared = shape.Keys.Where(path => !declared.Contains(path) &&
+                    !open.Any(prefix => path.StartsWith(prefix, StringComparison.Ordinal))).ToList();
+                if (undeclared.Count > 0)
+                    throw new InvalidOperationException(
+                        $"{tool} / {state.Name} returned paths its {type.Name} schema does not declare: {string.Join(", ", undeclared)}");
+            }
+
             builder.AppendLine();
-            builder.AppendLine("```text");
-            foreach (var (path, kinds) in shape)
-                builder.AppendLine($"{path}: {string.Join(" | ", kinds)}");
+            builder.AppendLine($"#### `{tool}`");
+            builder.AppendLine();
+            builder.AppendLine($"Type: `{type.FullName}`");
+            builder.AppendLine();
+            builder.AppendLine("```json");
+            builder.AppendLine(schema?.ToJsonString(new JsonSerializerOptions { WriteIndented = true }).Replace("\r\n", "\n") ?? "null");
             builder.AppendLine("```");
         }
     }
 
-    private static async Task<IReadOnlyList<(string Name, string Json)>> RepresentativeResponses()
+    /// <summary>Every property path a schema declares; subtrees it leaves open are collected apart.</summary>
+    private static void SchemaPaths(JsonNode? root, JsonNode? node, string path, HashSet<string> declared, List<string> open, int depth)
     {
-        // Path-addressed tools (register, open, edit) need a provider over real paths, so a
-        // throwaway folder backs a second connection. Every other tool runs in memory.
-        var folder = Path.Combine(Path.GetTempPath(), $"officeagent-wire-{Guid.NewGuid():N}");
-        Directory.CreateDirectory(folder);
-        try
+        if (node is JsonValue value && value.GetValueKind() == JsonValueKind.True)
         {
-            return await RepresentativeResponses(folder);
+            // `true` accepts any value: a member with a custom converter, such as an anchor.
+            declared.Add(path);
+            open.Add(path);
+            return;
         }
-        finally
+        if (node is not JsonObject obj || depth > 40) return;
+        declared.Add(path);
+        if (obj["$ref"]?.GetValue<string>() is { } reference)
         {
-            Directory.Delete(folder, recursive: true);
+            var target = reference.TrimStart('#').Split('/', StringSplitOptions.RemoveEmptyEntries)
+                .Aggregate(root, (current, segment) => current?[segment.Replace("~1", "/").Replace("~0", "~")]);
+            SchemaPaths(root, target, path, declared, open, depth + 1);
+            return;
         }
+        var constrained = false;
+        if (obj["properties"] is JsonObject properties)
+        {
+            constrained = true;
+            foreach (var (name, child) in properties)
+                SchemaPaths(root, child, $"{path}.{name}", declared, open, depth + 1);
+        }
+        if (obj["items"] is { } items)
+        {
+            constrained = true;
+            SchemaPaths(root, items, $"{path}[]", declared, open, depth + 1);
+        }
+        foreach (var keyword in new[] { "anyOf", "oneOf", "allOf" })
+            if (obj[keyword] is JsonArray alternatives)
+            {
+                constrained = true;
+                foreach (var alternative in alternatives)
+                    SchemaPaths(root, alternative, path, declared, open, depth + 1);
+            }
+        if (!constrained && obj["type"] is null)
+            open.Add(path); // a member with a custom converter: the schema says nothing about its inside
     }
 
-    private static async Task<IReadOnlyList<(string Name, string Json)>> RepresentativeResponses(string folder)
+    private static void SharedParts(StringBuilder builder)
     {
-        var memory = new MemoryDocumentProvider("memory");
-        var workspace = new FileSystemDocumentProvider(new FileSystemDocumentProviderOptions
+        builder.AppendLine();
+        builder.AppendLine("### Shared parts");
+        builder.AppendLine();
+        builder.AppendLine("Change and error targets are summarised per anchor type. Every concrete anchor type is");
+        builder.AppendLine("enumerated from the abstractions assembly, so a new anchor type appears here when it ships.");
+
+        var anchors = typeof(Anchor).Assembly.ExportedTypes
+            .Where(type => typeof(Anchor).IsAssignableFrom(type) && !type.IsAbstract && type.GetConstructor(Type.EmptyTypes) is not null)
+            .OrderBy(type => type.FullName, StringComparer.Ordinal);
+        foreach (var type in anchors)
         {
-            ConnectionId = "workspace",
-            RootPath = folder
-        });
-        var client = new OfficeAgentClient(
-            new DocumentProviderRegistry(new IDocumentProvider[] { memory, workspace }),
-            new WordModule(), new PowerPointModule(), new ExcelModule());
-        var tools = new OfficeAgentTools(client);
+            builder.AppendLine();
+            builder.AppendLine($"Target summary: `{type.Name}`");
+            builder.AppendLine();
+            AppendShape(builder, JsonNode.Parse(JsonSerializer.Serialize(
+                OfficeAgentTools.SummariseAnchor((Anchor)Activator.CreateInstance(type)!), ResponseJson)));
+        }
 
-        var createPlan = "{\"operations\":[{\"op\":\"changeText\",\"target\":{\"paraId\":\"auto-0000\",\"expect\":\"\"}," +
-                         "\"with\":\"Prepared for Northwind Labs.\"}]}";
-        var created = await tools.CreateDocument("memory", "fixture.docx", createPlan);
-        var documentId = Field(JsonNode.Parse(created)!, "outputDocumentId").GetValue<string>();
-        // Merge refuses pending revisions, and a created document is tracked by default, so the
-        // merge sources are written directly.
-        var directPlan = createPlan.Replace("\"with\":", "\"mode\":\"Direct\",\"with\":");
-        var mergeLeft = Field(JsonNode.Parse(await tools.CreateDocument("memory", "left.docx", directPlan))!,
-            "outputDocumentId").GetValue<string>();
-        var second = Field(JsonNode.Parse(await tools.CreateDocument("memory", "second.docx", directPlan))!,
-            "outputDocumentId").GetValue<string>();
-
-        // The fixture reads responses case-insensitively, so the generator can describe any
-        // release, including 0.9, whose inspect records were PascalCase.
-        var inspect = await tools.InspectDocument("memory", documentId);
-        var editPlan = EditPlanFor(inspect);
-
-        var exported = await tools.ExportDocumentContent("memory", documentId);
-        var content = Field(JsonNode.Parse(exported)!, "contentBase64").GetValue<string>();
-        File.WriteAllBytes(Path.Combine(folder, "fixture.docx"), Convert.FromBase64String(content));
-        var registered = await tools.RegisterDocument("workspace", "fixture.docx");
-        var opened = await tools.OpenDocument("workspace", "fixture.docx");
-        var inlineCreated = await tools.CreateDocumentContent("inline.docx", createPlan);
-        var inlineContent = Field(JsonNode.Parse(inlineCreated)!, "contentBase64").GetValue<string>();
-        var inlineInspect = await tools.InspectDocumentContent(inlineContent);
-
-        var imported = await tools.ImportDocumentContent("memory", "quote.docx",
-            Convert.ToBase64String(QuoteTemplate()));
-        var templateId = Field(JsonNode.Parse(imported)!, "documentId").GetValue<string>();
-        const string batch = "{\"items\":[{\"outputName\":\"quote-a.docx\",\"binding\":{" +
-                             "\"values\":{\"CustomerName\":\"Fabrikam\"},\"missingValueBehavior\":\"Ignore\"}}]}";
-        var batchPreview = await tools.PreviewTemplateBatch("memory", templateId, batch);
-        var token = Field(JsonNode.Parse(batchPreview)!, "token").ToJsonString();
-
-        var mergePreview = await tools.PreviewDocumentMerge(
-            "{\"sources\":[{\"connectionId\":\"memory\",\"documentId\":\"" + mergeLeft + "\"}," +
-            "{\"connectionId\":\"memory\",\"documentId\":\"" + second + "\"}]}");
-        var mergePlan = Field(JsonNode.Parse(mergePreview)!, "plan").ToJsonString();
-
-        return new List<(string, string)>
+        var minimal = new ApplyReceipt { Outcome = ApplyOutcome.Rejected };
+        var full = new ApplyReceipt
         {
-            ("`describe_capabilities`", await tools.DescribeCapabilities()),
-            ("`create_document`", created),
-            ("`inspect_document`", inspect),
-            ("`find_in_document`", await tools.FindInDocument("memory", documentId, "Northwind")),
-            ("`preview_plan`", await tools.PreviewPlan("memory", documentId, editPlan)),
-            ("`compare_documents`", await tools.CompareDocuments("memory", documentId, "memory", documentId)),
-            ("`apply_plan`", await tools.ApplyPlan("memory", documentId, editPlan)),
-            ("`export_document_content`", exported),
-            ("`import_document_content`", imported),
-            ("`register_document`", registered),
-            ("`open_document`", opened),
-            ("`edit_document`", await tools.EditDocument("workspace", "fixture.docx", EditPlanFor(opened))),
-            ("`create_document_content`", inlineCreated),
-            ("`inspect_document_content`", inlineInspect),
-            ("`edit_document_content`", await tools.EditDocumentContent(inlineContent, EditPlanFor(inlineInspect))),
-            ("`discover_template`", await tools.DiscoverTemplate("memory", templateId)),
-            ("`preview_template_batch`", batchPreview),
-            ("`populate_template_batch`", await tools.PopulateTemplateBatch("memory", templateId, batch, token)),
-            ("`preview_document_merge`", mergePreview),
-            ("`merge_documents`", await tools.MergeDocuments(mergePlan, "memory", "packet.docx")),
-            ("`remove_document`", await tools.RemoveDocument("memory", second)),
-            ("Error envelope: unreadable plan JSON", await tools.PreviewPlan("memory", documentId, "{\"bogus\":1}")),
-            ("Error envelope: unknown document", await tools.ApplyPlan("memory", "no-such-document", editPlan)),
+            Outcome = ApplyOutcome.Committed,
+            PlanSha256 = "plan",
+            InputSha256 = "input",
+            OutputSha256 = "output",
+            TimestampUtc = DateTimeOffset.UnixEpoch,
+            Revision = new RevisionMetadata { Author = "Author", TimestampUtc = DateTimeOffset.UnixEpoch },
+            Actor = new AuditActor { Subject = "subject", Issuer = "issuer", DisplayName = "name" },
+            OutputDocument = new DocumentReference
+            {
+                Provider = "provider", ConnectionId = "connection", ItemId = "item", Version = "version",
+                Name = "name.docx", ContentType = "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+            }
         };
-    }
-
-    /// <summary>A one-operation plan that edits the first non-empty paragraph an inspection reported.</summary>
-    private static string EditPlanFor(string inspection)
-    {
-        var root = JsonNode.Parse(inspection)!;
-        // Some tools nest the inspection in a wrapper; inspect_document returns it at the root.
-        var inspected = root.AsObject().Any(pair => string.Equals(pair.Key, "paragraphs", StringComparison.OrdinalIgnoreCase))
-            ? root
-            : Field(root, "inspection");
-        var paragraph = Field(inspected, "paragraphs").AsArray()
-            .First(item => (Field(item!, "text").GetValue<string>() ?? "").Length > 0)!;
-        return "{\"operations\":[{\"op\":\"changeText\",\"target\":{\"paraId\":\"" +
-               Field(paragraph, "paraId").GetValue<string>() + "\",\"expect\":\"" +
-               Field(paragraph, "text").GetValue<string>() + "\"},\"with\":\"Revised for Contoso.\"}]}";
-    }
-
-    /// <summary>A template with one content-control slot and one repeating table row.</summary>
-    private static byte[] QuoteTemplate()
-    {
-        static W.TableRow Row(params string[] values) => new(values.Select(value =>
-            new W.TableCell(new W.Paragraph(new W.Run(new W.Text(value))))));
-
-        using var stream = new MemoryStream();
-        using (var document = WordprocessingDocument.Create(stream, WordprocessingDocumentType.Document))
+        foreach (var (name, receipt) in new[] { ("optional members absent", minimal), ("optional members present", full) })
         {
-            var main = document.AddMainDocumentPart();
-            main.Document = new W.Document(new W.Body(
-                new W.Paragraph(
-                    new W.Run(new W.Text("Quote for ")),
-                    new W.SdtRun(
-                        new W.SdtProperties(new W.Tag { Val = "CustomerName" }, new W.SdtId { Val = 11 }),
-                        new W.SdtContentRun(new W.Run(new W.Text("CUSTOMER"))))),
-                new W.Table(
-                    new W.TableGrid(new W.GridColumn { Width = "3600" }, new W.GridColumn { Width = "1200" }),
-                    Row("Description", "Quantity"),
-                    Row("{{Description}}", "{{Quantity}}")),
-                new W.Paragraph()));
-            main.Document.Save();
+            builder.AppendLine();
+            builder.AppendLine($"Receipt payload: {name}");
+            builder.AppendLine();
+            AppendShape(builder, JsonNode.Parse(JsonSerializer.Serialize(OfficeAgentTools.ReceiptPayload(receipt), ResponseJson)));
         }
-        return stream.ToArray();
     }
 
-    /// <summary>
-    /// Reads one fixture field. A missing field means a fixture call failed, so the response is
-    /// reported rather than surfacing later as a null reference far from its cause.
-    /// </summary>
-    private static JsonNode Field(JsonNode node, string name) =>
-        node.AsObject().FirstOrDefault(pair => string.Equals(pair.Key, name, StringComparison.OrdinalIgnoreCase)).Value
-        ?? throw new InvalidOperationException($"Fixture response has no '{name}': {node.ToJsonString()}");
+    private static void AppendShape(StringBuilder builder, JsonNode? node)
+    {
+        var shape = new SortedDictionary<string, SortedSet<string>>(StringComparer.Ordinal);
+        Shape(node, "$", shape);
+        builder.AppendLine("```text");
+        foreach (var (path, kinds) in shape)
+            builder.AppendLine($"{path}: {string.Join(" | ", kinds)}");
+        builder.AppendLine("```");
+    }
 
     private static void Shape(JsonNode? node, string path, SortedDictionary<string, SortedSet<string>> shape)
     {
@@ -522,7 +572,12 @@ internal static class WireContract
     }
 
     /// <summary>Sorted keys, descriptions removed, so the text changes only when the contract does.</summary>
-    private static JsonNode? Canonical(JsonNode? node)
+    /// <remarks>
+    /// Annotations are removed only where they are schema keywords. Inside a <c>properties</c>
+    /// map the keys are member names, and a member called <c>title</c> or <c>description</c> is
+    /// contract: stripping every such key once dropped <c>DocumentMergeOptions.Title</c>.
+    /// </remarks>
+    private static JsonNode? Canonical(JsonNode? node, bool memberNames = false)
     {
         switch (node)
         {
@@ -530,8 +585,9 @@ internal static class WireContract
                 var sorted = new JsonObject();
                 foreach (var pair in obj.OrderBy(pair => pair.Key, StringComparer.Ordinal))
                 {
-                    if (pair.Key is "description" or "title") continue;
-                    sorted[pair.Key] = Canonical(pair.Value?.DeepClone());
+                    if (!memberNames && pair.Key is "description" or "title") continue;
+                    sorted[pair.Key] = Canonical(pair.Value?.DeepClone(),
+                        memberNames: !memberNames && pair.Key is "properties" or "$defs" or "definitions");
                 }
                 return sorted;
             case JsonArray array:

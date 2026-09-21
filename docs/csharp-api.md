@@ -1789,6 +1789,7 @@ public string ParaId { get; init; }
 public static class ToolErrorCodes
 public const string AccessDenied = "access-denied";
 public const string AlreadyExists = "already-exists";
+public const string Cancelled = "cancelled";
 public const string ConfigurationError = "configuration-error";
 public const string ConnectionForbidden = "connection-forbidden";
 public const string ContentTooLarge = "content-too-large";

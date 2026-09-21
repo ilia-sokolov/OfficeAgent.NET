@@ -49,8 +49,10 @@ public sealed class ErrorCodeCatalogTests
     [Fact]
     public void Every_code_is_lowercase_kebab_case()
     {
+        // A single word is a valid code. Requiring a hyphen once kept "cancelled" out of the
+        // catalogue even though every tool emitted it.
         var malformed = Codes()
-            .Where(code => !Regex.IsMatch(code.Value, "^[a-z]+(-[a-z0-9]+)+$"))
+            .Where(code => !Regex.IsMatch(code.Value, "^[a-z]+(-[a-z0-9]+)*$"))
             .Select(code => $"{code.Catalogue}.{code.Name} = {code.Value}");
         Assert.Empty(malformed);
     }

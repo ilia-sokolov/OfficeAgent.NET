@@ -603,8 +603,9 @@ paraId: String
 
 ## Tools
 
-Every tool the Agent Framework surface can publish, with every opt-in enabled. The MCP server
-publishes the same functions. Parameter schemas are shown without descriptions.
+Every tool the Agent Framework surface can publish with every opt-in enabled, then the tools only
+the MCP server adds. Generation fails if the MCP server publishes a shared tool with a different
+schema. Parameter schemas are shown without descriptions.
 
 ### `apply_plan`
 
@@ -1220,13 +1221,1917 @@ publishes the same functions. Parameter schemas are shown without descriptions.
 }
 ```
 
+### `list_connections` (MCP server only)
+
+```json
+{
+  "properties": {},
+  "type": "object"
+}
+```
+
 ## Tool responses
 
-The structure of representative responses, produced by calling each tool against a document
-built in memory for the purpose. Each line is a property path and the JSON kinds seen there.
-Values are omitted because identifiers, hashes and timestamps vary between runs.
+Responses are frozen in three layers. Each says exactly what it covers; a response state not
+listed under a tool is not frozen by this file.
 
-### `describe_capabilities`
+1. **Typed results** are derived from the result type, so every member, its nullability and every
+   enum value are covered whatever state produced the response.
+2. **Shared parts** that anonymous envelopes embed are enumerated: the change-target summary of
+   every anchor type, and the receipt payload with its optional members absent and present.
+3. **Response states** run each tool into a named state, and generation fails unless the
+   response is in that state. Each is recorded as property paths and the JSON kinds seen;
+   values are omitted because ids, hashes and timestamps vary. An empty array records no
+   element paths, which is why empty and populated collections are separate states.
+
+### Typed results
+
+A failure these tools report by exception comes back in the error envelope instead, which is
+frozen among the response states. A member whose schema is `true` has a custom converter; every
+such member is an anchor, written exactly as the Anchors section above records.
+
+#### `compare_documents`
+
+Type: `OfficeAgent.Abstractions.DocumentComparisonResult`
+
+```json
+{
+  "additionalProperties": false,
+  "properties": {
+    "coverage": {
+      "items": {
+        "additionalProperties": false,
+        "properties": {
+          "code": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "detail": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "name": {
+            "type": "string"
+          },
+          "state": {
+            "enum": [
+              "Unchanged",
+              "Changed",
+              "Blocked",
+              "NotCompared"
+            ],
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "type": "array"
+    },
+    "diagnostics": {
+      "items": {
+        "additionalProperties": false,
+        "properties": {
+          "code": {
+            "type": "string"
+          },
+          "message": {
+            "type": "string"
+          },
+          "path": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "type": "object"
+      },
+      "type": "array"
+    },
+    "differences": {
+      "items": {
+        "additionalProperties": false,
+        "properties": {
+          "after": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "before": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "kind": {
+            "enum": [
+              "Added",
+              "Removed",
+              "Changed"
+            ],
+            "type": "string"
+          },
+          "originalIndex": {
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "revisedIndex": {
+            "type": [
+              "integer",
+              "null"
+            ]
+          }
+        },
+        "type": "object"
+      },
+      "type": "array"
+    },
+    "isComplete": {
+      "type": "boolean"
+    },
+    "originalSha256": {
+      "type": "string"
+    },
+    "plan": {
+      "additionalProperties": false,
+      "properties": {
+        "contractVersion": {
+          "type": "string"
+        },
+        "format": {
+          "enum": [
+            "Word",
+            "Excel",
+            "PowerPoint",
+            "Unspecified"
+          ],
+          "type": "string"
+        },
+        "operations": {
+          "items": {},
+          "type": "array"
+        },
+        "revision": {
+          "additionalProperties": false,
+          "properties": {
+            "author": {
+              "type": "string"
+            },
+            "timestampUtc": {
+              "format": "date-time",
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          },
+          "type": [
+            "object",
+            "null"
+          ]
+        },
+        "snapshot": {
+          "additionalProperties": false,
+          "properties": {
+            "eTag": {
+              "type": "string"
+            }
+          },
+          "type": [
+            "object",
+            "null"
+          ]
+        }
+      },
+      "type": [
+        "object",
+        "null"
+      ]
+    },
+    "revisedSha256": {
+      "type": "string"
+    }
+  },
+  "type": "object"
+}
+```
+
+#### `describe_capabilities`
+
+Type: `OfficeAgent.Abstractions.EngineCapabilities`
+
+```json
+{
+  "properties": {
+    "connections": {
+      "items": {
+        "properties": {
+          "allowed": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "connectionId": {
+            "type": "string"
+          },
+          "provider": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "type": "array"
+    },
+    "contracts": {
+      "properties": {
+        "applyReceipt": {
+          "type": "string"
+        },
+        "editPlan": {
+          "type": "string"
+        },
+        "mergeReceipt": {
+          "type": "string"
+        }
+      },
+      "type": "object"
+    },
+    "formats": {
+      "items": {
+        "properties": {
+          "changeModes": {
+            "items": {
+              "enum": [
+                "Tracked",
+                "Direct"
+              ],
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "format": {
+            "enum": [
+              "Word",
+              "Excel",
+              "PowerPoint",
+              "Unspecified"
+            ],
+            "type": "string"
+          },
+          "nodeKinds": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "operations": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "type": "object"
+      },
+      "type": "array"
+    },
+    "limits": {
+      "properties": {
+        "maximumCompressedBytes": {
+          "type": "integer"
+        },
+        "maximumExpandedBytes": {
+          "type": "integer"
+        },
+        "maximumExpansionRatio": {
+          "type": "integer"
+        },
+        "maximumPartBytes": {
+          "type": "integer"
+        },
+        "maximumParts": {
+          "type": "integer"
+        },
+        "maximumXmlCharacters": {
+          "type": "integer"
+        },
+        "maximumXmlDepth": {
+          "type": "integer"
+        }
+      },
+      "type": "object"
+    },
+    "renderingAvailable": {
+      "type": "boolean"
+    },
+    "requiresInspection": {
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    }
+  },
+  "type": "object"
+}
+```
+
+#### `discover_template`
+
+Type: `OfficeAgent.Abstractions.TemplateDiscoveryResult`
+
+```json
+{
+  "additionalProperties": false,
+  "properties": {
+    "diagnostics": {
+      "items": {
+        "additionalProperties": false,
+        "properties": {
+          "code": {
+            "type": "string"
+          },
+          "message": {
+            "type": "string"
+          },
+          "path": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "type": "object"
+      },
+      "type": "array"
+    },
+    "mediaSlots": {
+      "items": {
+        "additionalProperties": false,
+        "properties": {
+          "inRepeatingRow": {
+            "type": "boolean"
+          },
+          "mediaKind": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "path": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "type": "array"
+    },
+    "repeatingRows": {
+      "items": {
+        "additionalProperties": false,
+        "properties": {
+          "confirmed": {
+            "type": "boolean"
+          },
+          "fields": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "tablePath": {
+            "type": "string"
+          },
+          "tableRowCount": {
+            "type": "integer"
+          },
+          "templateRowIndex": {
+            "type": "integer"
+          }
+        },
+        "type": "object"
+      },
+      "type": "array"
+    },
+    "slots": {
+      "items": {
+        "additionalProperties": false,
+        "properties": {
+          "bindable": {
+            "type": "boolean"
+          },
+          "currentText": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "kind": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "occurrences": {
+            "type": "integer"
+          }
+        },
+        "type": "object"
+      },
+      "type": "array"
+    },
+    "templateSha256": {
+      "type": "string"
+    }
+  },
+  "type": "object"
+}
+```
+
+#### `merge_documents`
+
+Type: `OfficeAgent.Abstractions.DocumentMergeResult`
+
+```json
+{
+  "additionalProperties": false,
+  "properties": {
+    "committed": {
+      "type": "boolean"
+    },
+    "content": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "diagnostics": {
+      "items": {
+        "additionalProperties": false,
+        "properties": {
+          "code": {
+            "type": "string"
+          },
+          "message": {
+            "type": "string"
+          },
+          "path": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "type": "object"
+      },
+      "type": "array"
+    },
+    "document": {
+      "additionalProperties": false,
+      "properties": {
+        "connectionId": {
+          "type": "string"
+        },
+        "contentType": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "itemId": {
+          "type": "string"
+        },
+        "name": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "provider": {
+          "type": "string"
+        },
+        "version": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "type": [
+        "object",
+        "null"
+      ]
+    },
+    "receipt": {
+      "additionalProperties": false,
+      "properties": {
+        "actor": {
+          "additionalProperties": false,
+          "properties": {
+            "displayName": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "issuer": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "subject": {
+              "type": "string"
+            }
+          },
+          "type": [
+            "object",
+            "null"
+          ]
+        },
+        "inputs": {
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "document": {
+                "additionalProperties": false,
+                "properties": {
+                  "connectionId": {
+                    "type": "string"
+                  },
+                  "contentType": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "itemId": {
+                    "type": "string"
+                  },
+                  "name": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "provider": {
+                    "type": "string"
+                  },
+                  "version": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  }
+                },
+                "type": [
+                  "object",
+                  "null"
+                ]
+              },
+              "index": {
+                "type": "integer"
+              },
+              "sha256": {
+                "type": "string"
+              }
+            },
+            "type": "object"
+          },
+          "type": "array"
+        },
+        "outputDocument": {
+          "additionalProperties": false,
+          "properties": {
+            "connectionId": {
+              "type": "string"
+            },
+            "contentType": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "itemId": {
+              "type": "string"
+            },
+            "name": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "provider": {
+              "type": "string"
+            },
+            "version": {
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          },
+          "type": [
+            "object",
+            "null"
+          ]
+        },
+        "outputSha256": {
+          "type": "string"
+        },
+        "planSha256": {
+          "type": "string"
+        },
+        "receiptVersion": {
+          "type": "string"
+        },
+        "timestampUtc": {
+          "format": "date-time",
+          "type": "string"
+        }
+      },
+      "type": [
+        "object",
+        "null"
+      ]
+    }
+  },
+  "type": "object"
+}
+```
+
+#### `populate_template_batch`
+
+Type: `OfficeAgent.Abstractions.TemplateBatchResult`
+
+```json
+{
+  "additionalProperties": false,
+  "properties": {
+    "committed": {
+      "type": "boolean"
+    },
+    "items": {
+      "items": {
+        "additionalProperties": false,
+        "properties": {
+          "committed": {
+            "type": "boolean"
+          },
+          "diagnostics": {
+            "items": {
+              "additionalProperties": false,
+              "properties": {
+                "code": {
+                  "type": "string"
+                },
+                "message": {
+                  "type": "string"
+                },
+                "path": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                }
+              },
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "document": {
+            "additionalProperties": false,
+            "properties": {
+              "connectionId": {
+                "type": "string"
+              },
+              "contentType": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "itemId": {
+                "type": "string"
+              },
+              "name": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "provider": {
+                "type": "string"
+              },
+              "version": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              }
+            },
+            "type": [
+              "object",
+              "null"
+            ]
+          },
+          "outcome": {
+            "enum": [
+              "Previewed",
+              "Failed",
+              "Skipped",
+              "Committed",
+              "Uncertain"
+            ],
+            "type": "string"
+          },
+          "outputName": {
+            "type": "string"
+          },
+          "receipt": {
+            "additionalProperties": false,
+            "properties": {
+              "actor": {
+                "additionalProperties": false,
+                "properties": {
+                  "displayName": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "issuer": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "subject": {
+                    "type": "string"
+                  }
+                },
+                "type": [
+                  "object",
+                  "null"
+                ]
+              },
+              "inputSha256": {
+                "type": "string"
+              },
+              "outcome": {
+                "enum": [
+                  "Previewed",
+                  "Rejected",
+                  "Committed"
+                ],
+                "type": "string"
+              },
+              "outputDocument": {
+                "additionalProperties": false,
+                "properties": {
+                  "connectionId": {
+                    "type": "string"
+                  },
+                  "contentType": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "itemId": {
+                    "type": "string"
+                  },
+                  "name": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "provider": {
+                    "type": "string"
+                  },
+                  "version": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  }
+                },
+                "type": [
+                  "object",
+                  "null"
+                ]
+              },
+              "outputSha256": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "planSha256": {
+                "type": "string"
+              },
+              "receiptVersion": {
+                "type": "string"
+              },
+              "revision": {
+                "additionalProperties": false,
+                "properties": {
+                  "author": {
+                    "type": "string"
+                  },
+                  "timestampUtc": {
+                    "format": "date-time",
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  }
+                },
+                "type": "object"
+              },
+              "timestampUtc": {
+                "format": "date-time",
+                "type": "string"
+              }
+            },
+            "type": [
+              "object",
+              "null"
+            ]
+          },
+          "report": {
+            "additionalProperties": false,
+            "properties": {
+              "changes": {
+                "items": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "after": {
+                      "type": "string"
+                    },
+                    "before": {
+                      "type": "string"
+                    },
+                    "blastRadius": {
+                      "type": "integer"
+                    },
+                    "capability": {
+                      "enum": [
+                        "Deterministic",
+                        "DeferredToWordOnOpen",
+                        "NeedsRenderer"
+                      ],
+                      "type": "string"
+                    },
+                    "context": {
+                      "type": "string"
+                    },
+                    "target": true,
+                    "verb": {
+                      "type": "string"
+                    }
+                  },
+                  "type": "object"
+                },
+                "type": "array"
+              },
+              "errors": {
+                "items": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "code": {
+                      "type": "string"
+                    },
+                    "codeKind": {
+                      "enum": [
+                        "Unknown",
+                        "StaleSnapshot",
+                        "AnchorNotFound",
+                        "ExpectMismatch",
+                        "AmbiguousAnchor",
+                        "UnsupportedOperation",
+                        "ContractMismatch",
+                        "InvalidOperation",
+                        "RequiresRenderer",
+                        "OperationConflict",
+                        "RevisionOverlap"
+                      ],
+                      "type": "string"
+                    },
+                    "message": {
+                      "type": "string"
+                    },
+                    "target": true
+                  },
+                  "type": "object"
+                },
+                "type": "array"
+              },
+              "isValid": {
+                "type": "boolean"
+              }
+            },
+            "type": [
+              "object",
+              "null"
+            ]
+          }
+        },
+        "type": "object"
+      },
+      "type": "array"
+    }
+  },
+  "type": "object"
+}
+```
+
+#### `preview_document_merge`
+
+Type: `OfficeAgent.Abstractions.DocumentMergePreview`
+
+```json
+{
+  "additionalProperties": false,
+  "properties": {
+    "diagnostics": {
+      "items": {
+        "additionalProperties": false,
+        "properties": {
+          "code": {
+            "type": "string"
+          },
+          "message": {
+            "type": "string"
+          },
+          "path": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "type": "object"
+      },
+      "type": "array"
+    },
+    "isValid": {
+      "type": "boolean"
+    },
+    "plan": {
+      "additionalProperties": false,
+      "properties": {
+        "inputs": {
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "document": {
+                "additionalProperties": false,
+                "properties": {
+                  "connectionId": {
+                    "type": "string"
+                  },
+                  "contentType": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "itemId": {
+                    "type": "string"
+                  },
+                  "name": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "provider": {
+                    "type": "string"
+                  },
+                  "version": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  }
+                },
+                "type": [
+                  "object",
+                  "null"
+                ]
+              },
+              "index": {
+                "type": "integer"
+              },
+              "sha256": {
+                "type": "string"
+              }
+            },
+            "type": "object"
+          },
+          "type": "array"
+        },
+        "options": {
+          "additionalProperties": false,
+          "properties": {
+            "author": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "title": {
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          },
+          "type": "object"
+        },
+        "planSha256": {
+          "type": "string"
+        },
+        "version": {
+          "type": "string"
+        }
+      },
+      "type": [
+        "object",
+        "null"
+      ]
+    },
+    "sources": {
+      "items": {
+        "additionalProperties": false,
+        "properties": {
+          "decisions": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "images": {
+            "type": "integer"
+          },
+          "index": {
+            "type": "integer"
+          },
+          "paragraphs": {
+            "type": "integer"
+          },
+          "sections": {
+            "type": "integer"
+          },
+          "tables": {
+            "type": "integer"
+          }
+        },
+        "type": "object"
+      },
+      "type": "array"
+    }
+  },
+  "type": "object"
+}
+```
+
+#### `preview_template_batch`
+
+Type: `OfficeAgent.Abstractions.TemplateBatchPreview`
+
+```json
+{
+  "additionalProperties": false,
+  "properties": {
+    "diagnostics": {
+      "items": {
+        "$ref": "#/properties/items/items/properties/diagnostics/items"
+      },
+      "type": "array"
+    },
+    "isValid": {
+      "type": "boolean"
+    },
+    "items": {
+      "items": {
+        "additionalProperties": false,
+        "properties": {
+          "diagnostics": {
+            "items": {
+              "additionalProperties": false,
+              "properties": {
+                "code": {
+                  "type": "string"
+                },
+                "message": {
+                  "type": "string"
+                },
+                "path": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                }
+              },
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "diagnosticsTruncated": {
+            "type": "boolean"
+          },
+          "imageBytes": {
+            "type": "integer"
+          },
+          "imageCount": {
+            "type": "integer"
+          },
+          "isValid": {
+            "type": "boolean"
+          },
+          "operationCount": {
+            "type": "integer"
+          },
+          "outputName": {
+            "type": "string"
+          },
+          "rowCount": {
+            "type": "integer"
+          }
+        },
+        "type": "object"
+      },
+      "type": "array"
+    },
+    "limits": {
+      "additionalProperties": false,
+      "properties": {
+        "maximumDiagnosticsPerItem": {
+          "type": "integer"
+        },
+        "maximumDocuments": {
+          "type": "integer"
+        },
+        "maximumFieldsPerDocument": {
+          "type": "integer"
+        },
+        "maximumRowsPerDocument": {
+          "type": "integer"
+        },
+        "maximumTotalRows": {
+          "type": "integer"
+        },
+        "maximumValueLength": {
+          "type": "integer"
+        },
+        "media": {
+          "additionalProperties": false,
+          "properties": {
+            "maximumChartPoints": {
+              "type": "integer"
+            },
+            "maximumImageBytes": {
+              "type": "integer"
+            },
+            "maximumImagesPerDocument": {
+              "type": "integer"
+            },
+            "maximumTotalImageBytes": {
+              "type": "integer"
+            }
+          },
+          "type": "object"
+        }
+      },
+      "type": "object"
+    },
+    "token": {
+      "additionalProperties": false,
+      "properties": {
+        "batchSha256": {
+          "type": "string"
+        },
+        "mediaSha256": {
+          "type": "string"
+        },
+        "templateSha256": {
+          "type": "string"
+        }
+      },
+      "type": "object"
+    }
+  },
+  "type": "object"
+}
+```
+
+### Shared parts
+
+Change and error targets are summarised per anchor type. Every concrete anchor type is
+enumerated from the abstractions assembly, so a new anchor type appears here when it ships.
+
+Target summary: `CellAnchor`
+
+```text
+$: object
+$.id: string
+$.kind: string
+```
+
+Target summary: `NodeAnchor`
+
+```text
+$: object
+$.kind: string
+$.nodeKind: string
+$.path: string
+```
+
+Target summary: `ShapeAnchor`
+
+```text
+$: object
+$.id: string
+$.kind: string
+```
+
+Target summary: `StructuralAnchor`
+
+```text
+$: object
+$.kind: string
+$.structuralKind: string
+$.tag: string
+```
+
+Target summary: `StyleAnchor`
+
+```text
+$: object
+$.kind: string
+$.styleId: string
+```
+
+Target summary: `TextSpanAnchor`
+
+```text
+$: object
+$.expect: string
+$.kind: string
+$.occurrence: number
+$.paraId: string
+```
+
+Receipt payload: optional members absent
+
+```text
+$: object
+$.actor: null
+$.inputSha256: string
+$.outcome: string
+$.outputDocument: null
+$.outputSha256: null
+$.planSha256: string
+$.receiptVersion: string
+$.revision: object
+$.revision.author: string
+$.revision.timestampUtc: null
+$.timestampUtc: string
+```
+
+Receipt payload: optional members present
+
+```text
+$: object
+$.actor: object
+$.actor.displayName: string
+$.actor.issuer: string
+$.actor.subject: string
+$.inputSha256: string
+$.outcome: string
+$.outputDocument: object
+$.outputDocument.connectionId: string
+$.outputDocument.contentType: string
+$.outputDocument.itemId: string
+$.outputDocument.name: string
+$.outputDocument.provider: string
+$.outputDocument.version: string
+$.outputSha256: string
+$.planSha256: string
+$.receiptVersion: string
+$.revision: object
+$.revision.author: string
+$.revision.timestampUtc: string
+$.timestampUtc: string
+```
+
+### Response states
+
+#### `apply_plan`
+
+State: committed, anonymous caller
+
+```text
+$: object
+$.changes: array
+$.changes[]: object
+$.changes[].after: string
+$.changes[].before: string
+$.changes[].blastRadius: number
+$.changes[].capability: string
+$.changes[].context: string
+$.changes[].target: object
+$.changes[].target.expect: string
+$.changes[].target.kind: string
+$.changes[].target.occurrence: number
+$.changes[].target.paraId: string
+$.changes[].verb: string
+$.committed: boolean
+$.errors: array
+$.isValid: boolean
+$.outputConnectionId: string
+$.outputContentType: string
+$.outputDocumentId: string
+$.outputName: string
+$.outputVersion: string
+$.receipt: object
+$.receipt.actor: null
+$.receipt.inputSha256: string
+$.receipt.outcome: string
+$.receipt.outputDocument: object
+$.receipt.outputDocument.connectionId: string
+$.receipt.outputDocument.contentType: string
+$.receipt.outputDocument.itemId: string
+$.receipt.outputDocument.name: string
+$.receipt.outputDocument.provider: string
+$.receipt.outputDocument.version: string
+$.receipt.outputSha256: string
+$.receipt.planSha256: string
+$.receipt.receiptVersion: string
+$.receipt.revision: object
+$.receipt.revision.author: string
+$.receipt.revision.timestampUtc: string
+$.receipt.timestampUtc: string
+$.sourceDocumentId: null
+```
+
+State: committed, authenticated actor
+
+```text
+$: object
+$.changes: array
+$.changes[]: object
+$.changes[].after: string
+$.changes[].before: string
+$.changes[].blastRadius: number
+$.changes[].capability: string
+$.changes[].context: string
+$.changes[].target: object
+$.changes[].target.expect: string
+$.changes[].target.kind: string
+$.changes[].target.occurrence: number
+$.changes[].target.paraId: string
+$.changes[].verb: string
+$.committed: boolean
+$.errors: array
+$.isValid: boolean
+$.outputConnectionId: string
+$.outputContentType: string
+$.outputDocumentId: string
+$.outputName: string
+$.outputVersion: string
+$.receipt: object
+$.receipt.actor: object
+$.receipt.actor.displayName: string
+$.receipt.actor.issuer: string
+$.receipt.actor.subject: string
+$.receipt.inputSha256: string
+$.receipt.outcome: string
+$.receipt.outputDocument: object
+$.receipt.outputDocument.connectionId: string
+$.receipt.outputDocument.contentType: string
+$.receipt.outputDocument.itemId: string
+$.receipt.outputDocument.name: string
+$.receipt.outputDocument.provider: string
+$.receipt.outputDocument.version: string
+$.receipt.outputSha256: string
+$.receipt.planSha256: string
+$.receipt.receiptVersion: string
+$.receipt.revision: object
+$.receipt.revision.author: string
+$.receipt.revision.timestampUtc: string
+$.receipt.timestampUtc: string
+$.sourceDocumentId: null
+```
+
+State: validation failure
+
+```text
+$: object
+$.changes: array
+$.committed: boolean
+$.errors: array
+$.errors[]: object
+$.errors[].code: string
+$.errors[].message: string
+$.errors[].target: object
+$.errors[].target.expect: string
+$.errors[].target.kind: string
+$.errors[].target.occurrence: number
+$.errors[].target.paraId: string
+$.isValid: boolean
+$.outputConnectionId: null
+$.outputContentType: null
+$.outputDocumentId: null
+$.outputName: null
+$.outputVersion: null
+$.receipt: object
+$.receipt.actor: null
+$.receipt.inputSha256: string
+$.receipt.outcome: string
+$.receipt.outputDocument: null
+$.receipt.outputSha256: null
+$.receipt.planSha256: string
+$.receipt.receiptVersion: string
+$.receipt.revision: object
+$.receipt.revision.author: string
+$.receipt.revision.timestampUtc: string
+$.receipt.timestampUtc: string
+$.sourceDocumentId: null
+```
+
+State: unknown document
+
+```text
+$: object
+$.changes: array
+$.committed: boolean
+$.errors: array
+$.errors[]: object
+$.errors[].code: string
+$.errors[].connectionId: string
+$.errors[].itemId: string
+$.errors[].message: string
+$.errors[].provider: string
+$.errors[].target: null
+$.isValid: boolean
+$.outputConnectionId: null
+$.outputContentType: null
+$.outputDocumentId: null
+$.outputName: null
+$.outputVersion: null
+$.receipt: null
+$.sourceDocumentId: null
+```
+
+State: connection denied
+
+```text
+$: object
+$.changes: array
+$.committed: boolean
+$.errors: array
+$.errors[]: object
+$.errors[].code: string
+$.errors[].connectionId: null
+$.errors[].itemId: null
+$.errors[].message: string
+$.errors[].provider: null
+$.errors[].target: null
+$.isValid: boolean
+$.outputConnectionId: null
+$.outputContentType: null
+$.outputDocumentId: null
+$.outputName: null
+$.outputVersion: null
+$.receipt: null
+$.sourceDocumentId: null
+```
+
+State: stale version at save
+
+```text
+$: object
+$.changes: array
+$.committed: boolean
+$.errors: array
+$.errors[]: object
+$.errors[].code: string
+$.errors[].connectionId: string
+$.errors[].itemId: string
+$.errors[].message: string
+$.errors[].provider: string
+$.errors[].target: null
+$.isValid: boolean
+$.outputConnectionId: null
+$.outputContentType: null
+$.outputDocumentId: null
+$.outputName: null
+$.outputVersion: null
+$.receipt: null
+$.sourceDocumentId: null
+```
+
+State: storage refused the write
+
+```text
+$: object
+$.changes: array
+$.committed: boolean
+$.errors: array
+$.errors[]: object
+$.errors[].code: string
+$.errors[].connectionId: string
+$.errors[].itemId: string
+$.errors[].message: string
+$.errors[].provider: string
+$.errors[].target: null
+$.isValid: boolean
+$.outputConnectionId: null
+$.outputContentType: null
+$.outputDocumentId: null
+$.outputName: null
+$.outputVersion: null
+$.receipt: null
+$.sourceDocumentId: null
+```
+
+State: storage accepted, then failed to confirm
+
+```text
+$: object
+$.changes: array
+$.committed: boolean
+$.errors: array
+$.errors[]: object
+$.errors[].code: string
+$.errors[].connectionId: string
+$.errors[].itemId: string
+$.errors[].message: string
+$.errors[].provider: string
+$.errors[].target: null
+$.isValid: boolean
+$.outputConnectionId: null
+$.outputContentType: null
+$.outputDocumentId: null
+$.outputName: null
+$.outputVersion: null
+$.receipt: null
+$.sourceDocumentId: null
+```
+
+State: cancelled after storage accepted
+
+```text
+$: object
+$.changes: array
+$.committed: boolean
+$.errors: array
+$.errors[]: object
+$.errors[].code: string
+$.errors[].connectionId: null
+$.errors[].itemId: null
+$.errors[].message: string
+$.errors[].provider: null
+$.errors[].target: null
+$.isValid: boolean
+$.outputConnectionId: null
+$.outputContentType: null
+$.outputDocumentId: null
+$.outputName: null
+$.outputVersion: null
+$.receipt: null
+$.sourceDocumentId: null
+```
+
+#### `compare_documents`
+
+State: identical documents
+
+```text
+$: object
+$.coverage: array
+$.coverage[]: object
+$.coverage[].code: null
+$.coverage[].detail: null
+$.coverage[].name: string
+$.coverage[].state: string
+$.diagnostics: array
+$.differences: array
+$.isComplete: boolean
+$.originalSha256: string
+$.plan: object
+$.plan.contractVersion: string
+$.plan.format: string
+$.plan.operations: array
+$.plan.revision: object
+$.plan.revision.author: string
+$.plan.revision.timestampUtc: null
+$.plan.snapshot: object
+$.plan.snapshot.eTag: string
+$.revisedSha256: string
+```
+
+State: differences found
+
+```text
+$: object
+$.coverage: array
+$.coverage[]: object
+$.coverage[].code: null
+$.coverage[].detail: null
+$.coverage[].name: string
+$.coverage[].state: string
+$.diagnostics: array
+$.differences: array
+$.differences[]: object
+$.differences[].after: string
+$.differences[].before: string
+$.differences[].kind: string
+$.differences[].originalIndex: number
+$.differences[].revisedIndex: number
+$.isComplete: boolean
+$.originalSha256: string
+$.plan: object
+$.plan.contractVersion: string
+$.plan.format: string
+$.plan.operations: array
+$.plan.operations[]: object
+$.plan.operations[].mode: string
+$.plan.operations[].op: string
+$.plan.operations[].target: object
+$.plan.operations[].target.$anchor: string
+$.plan.operations[].target.expect: string
+$.plan.operations[].target.id: string
+$.plan.operations[].target.occurrence: number
+$.plan.operations[].target.paraId: string
+$.plan.operations[].with: string
+$.plan.revision: object
+$.plan.revision.author: string
+$.plan.revision.timestampUtc: null
+$.plan.snapshot: object
+$.plan.snapshot.eTag: string
+$.revisedSha256: string
+```
+
+State: unknown document
+
+```text
+$: object
+$.changes: array
+$.committed: boolean
+$.errors: array
+$.errors[]: object
+$.errors[].code: string
+$.errors[].connectionId: string
+$.errors[].itemId: string
+$.errors[].message: string
+$.errors[].provider: string
+$.errors[].target: null
+$.isValid: boolean
+$.outputConnectionId: null
+$.outputContentType: null
+$.outputDocumentId: null
+$.outputName: null
+$.outputVersion: null
+$.receipt: null
+$.sourceDocumentId: null
+```
+
+#### `create_document`
+
+State: created blank
+
+```text
+$: object
+$.changes: array
+$.committed: boolean
+$.errors: array
+$.isValid: boolean
+$.outputConnectionId: string
+$.outputContentType: string
+$.outputDocumentId: string
+$.outputName: string
+$.outputVersion: string
+$.receipt: null
+$.sourceDocumentId: null
+```
+
+State: created from a plan
+
+```text
+$: object
+$.changes: array
+$.changes[]: object
+$.changes[].after: string
+$.changes[].before: string
+$.changes[].blastRadius: number
+$.changes[].capability: string
+$.changes[].context: string
+$.changes[].target: object
+$.changes[].target.expect: string
+$.changes[].target.kind: string
+$.changes[].target.occurrence: number
+$.changes[].target.paraId: string
+$.changes[].verb: string
+$.committed: boolean
+$.errors: array
+$.isValid: boolean
+$.outputConnectionId: string
+$.outputContentType: string
+$.outputDocumentId: string
+$.outputName: string
+$.outputVersion: string
+$.receipt: object
+$.receipt.actor: null
+$.receipt.inputSha256: string
+$.receipt.outcome: string
+$.receipt.outputDocument: object
+$.receipt.outputDocument.connectionId: string
+$.receipt.outputDocument.contentType: string
+$.receipt.outputDocument.itemId: string
+$.receipt.outputDocument.name: string
+$.receipt.outputDocument.provider: string
+$.receipt.outputDocument.version: string
+$.receipt.outputSha256: string
+$.receipt.planSha256: string
+$.receipt.receiptVersion: string
+$.receipt.revision: object
+$.receipt.revision.author: string
+$.receipt.revision.timestampUtc: string
+$.receipt.timestampUtc: string
+$.sourceDocumentId: null
+```
+
+State: validation failure
+
+```text
+$: object
+$.changes: array
+$.committed: boolean
+$.errors: array
+$.errors[]: object
+$.errors[].code: string
+$.errors[].message: string
+$.errors[].target: object
+$.errors[].target.expect: string
+$.errors[].target.kind: string
+$.errors[].target.occurrence: number
+$.errors[].target.paraId: string
+$.isValid: boolean
+$.outputConnectionId: null
+$.outputContentType: null
+$.outputDocumentId: null
+$.outputName: null
+$.outputVersion: null
+$.receipt: object
+$.receipt.actor: null
+$.receipt.inputSha256: string
+$.receipt.outcome: string
+$.receipt.outputDocument: null
+$.receipt.outputSha256: null
+$.receipt.planSha256: string
+$.receipt.receiptVersion: string
+$.receipt.revision: object
+$.receipt.revision.author: string
+$.receipt.revision.timestampUtc: string
+$.receipt.timestampUtc: string
+$.sourceDocumentId: null
+```
+
+State: name already exists
+
+```text
+$: object
+$.changes: array
+$.committed: boolean
+$.errors: array
+$.errors[]: object
+$.errors[].code: string
+$.errors[].connectionId: string
+$.errors[].itemId: null
+$.errors[].message: string
+$.errors[].provider: string
+$.errors[].target: null
+$.isValid: boolean
+$.outputConnectionId: null
+$.outputContentType: null
+$.outputDocumentId: null
+$.outputName: null
+$.outputVersion: null
+$.receipt: null
+$.sourceDocumentId: null
+```
+
+State: storage accepted, then failed to confirm
+
+```text
+$: object
+$.changes: array
+$.committed: boolean
+$.errors: array
+$.errors[]: object
+$.errors[].code: string
+$.errors[].connectionId: string
+$.errors[].itemId: string
+$.errors[].message: string
+$.errors[].provider: string
+$.errors[].target: null
+$.isValid: boolean
+$.outputConnectionId: null
+$.outputContentType: null
+$.outputDocumentId: null
+$.outputName: null
+$.outputVersion: null
+$.receipt: null
+$.sourceDocumentId: null
+```
+
+#### `create_document_content`
+
+State: created
+
+```text
+$: object
+$.changes: array
+$.changes[]: object
+$.changes[].after: string
+$.changes[].before: string
+$.changes[].blastRadius: number
+$.changes[].capability: string
+$.changes[].context: string
+$.changes[].target: object
+$.changes[].target.expect: string
+$.changes[].target.kind: string
+$.changes[].target.occurrence: number
+$.changes[].target.paraId: string
+$.changes[].verb: string
+$.committed: boolean
+$.contentBase64: string
+$.contentBytes: number
+$.errors: array
+$.isValid: boolean
+$.name: string
+$.receipt: object
+$.receipt.actor: null
+$.receipt.inputSha256: string
+$.receipt.outcome: string
+$.receipt.outputDocument: null
+$.receipt.outputSha256: string
+$.receipt.planSha256: string
+$.receipt.receiptVersion: string
+$.receipt.revision: object
+$.receipt.revision.author: string
+$.receipt.revision.timestampUtc: string
+$.receipt.timestampUtc: string
+```
+
+State: validation failure
+
+```text
+$: object
+$.changes: array
+$.committed: boolean
+$.contentBase64: null
+$.contentBytes: null
+$.errors: array
+$.errors[]: object
+$.errors[].code: string
+$.errors[].message: string
+$.errors[].target: object
+$.errors[].target.expect: string
+$.errors[].target.kind: string
+$.errors[].target.occurrence: number
+$.errors[].target.paraId: string
+$.isValid: boolean
+$.name: string
+$.receipt: object
+$.receipt.actor: null
+$.receipt.inputSha256: string
+$.receipt.outcome: string
+$.receipt.outputDocument: null
+$.receipt.outputSha256: null
+$.receipt.planSha256: string
+$.receipt.receiptVersion: string
+$.receipt.revision: object
+$.receipt.revision.author: string
+$.receipt.revision.timestampUtc: string
+$.receipt.timestampUtc: string
+```
+
+#### `describe_capabilities`
+
+State: connections visible
 
 ```text
 $: object
@@ -1262,278 +3167,82 @@ $.requiresInspection: array
 $.requiresInspection[]: string
 ```
 
-### `create_document`
+State: no connection visible to the caller
 
 ```text
 $: object
-$.changes: array
-$.changes[]: object
-$.changes[].after: string
-$.changes[].before: string
-$.changes[].blastRadius: number
-$.changes[].capability: string
-$.changes[].context: string
-$.changes[].target: object
-$.changes[].target.expect: string
-$.changes[].target.kind: string
-$.changes[].target.occurrence: number
-$.changes[].target.paraId: string
-$.changes[].verb: string
-$.committed: boolean
-$.errors: array
-$.isValid: boolean
-$.outputConnectionId: string
-$.outputContentType: string
-$.outputDocumentId: string
-$.outputName: string
-$.outputVersion: string
-$.receipt: object
-$.receipt.actor: null
-$.receipt.inputSha256: string
-$.receipt.outcome: string
-$.receipt.outputDocument: object
-$.receipt.outputDocument.connectionId: string
-$.receipt.outputDocument.contentType: string
-$.receipt.outputDocument.itemId: string
-$.receipt.outputDocument.name: string
-$.receipt.outputDocument.provider: string
-$.receipt.outputDocument.version: string
-$.receipt.outputSha256: string
-$.receipt.planSha256: string
-$.receipt.receiptVersion: string
-$.receipt.revision: object
-$.receipt.revision.author: string
-$.receipt.revision.timestampUtc: string
-$.receipt.timestampUtc: string
-$.sourceDocumentId: null
+$.connections: array
+$.contracts: object
+$.contracts.applyReceipt: string
+$.contracts.editPlan: string
+$.contracts.mergeReceipt: string
+$.formats: array
+$.formats[]: object
+$.formats[].changeModes: array
+$.formats[].changeModes[]: string
+$.formats[].format: string
+$.formats[].nodeKinds: array
+$.formats[].nodeKinds[]: string
+$.formats[].operations: array
+$.formats[].operations[]: string
+$.limits: object
+$.limits.maximumCompressedBytes: number
+$.limits.maximumExpandedBytes: number
+$.limits.maximumExpansionRatio: number
+$.limits.maximumPartBytes: number
+$.limits.maximumParts: number
+$.limits.maximumXmlCharacters: number
+$.limits.maximumXmlDepth: number
+$.renderingAvailable: boolean
+$.requiresInspection: array
+$.requiresInspection[]: string
 ```
 
-### `inspect_document`
+#### `discover_template`
+
+State: slots found
 
 ```text
 $: object
-$.cells: array
-$.contentControls: array
-$.format: string
-$.nodes: array
-$.nodes[]: object
-$.nodes[].kind: string
-$.nodes[].path: string
-$.nodes[].summary: string
-$.outline: array
-$.paragraphLimit: number
-$.paragraphOffset: number
-$.paragraphs: array
-$.paragraphsTotal: number
-$.paragraphs[]: object
-$.paragraphs[].in: null
-$.paragraphs[].location: string
-$.paragraphs[].paraId: string
-$.paragraphs[].style: null
-$.paragraphs[].text: string
-$.snapshot: string
-$.styles: array
-$.styles[]: object
-$.styles[].id: string
-$.styles[].inUseCount: number
-$.styles[].name: string
-$.worksheets: array
-```
-
-### `find_in_document`
-
-```text
-$: array
-$[]: object
-$[].address: null
-$[].context: string
-$[].expect: string
-$[].location: string
-$[].occurrence: number
-$[].paraId: string
-$[].sheetId: null
-```
-
-### `preview_plan`
-
-```text
-$: object
-$.changes: array
-$.changes[]: object
-$.changes[].after: string
-$.changes[].before: string
-$.changes[].blastRadius: number
-$.changes[].capability: string
-$.changes[].context: string
-$.changes[].target: object
-$.changes[].target.expect: string
-$.changes[].target.kind: string
-$.changes[].target.occurrence: number
-$.changes[].target.paraId: string
-$.changes[].verb: string
-$.committed: boolean
-$.errors: array
-$.isValid: boolean
-$.outputConnectionId: null
-$.outputContentType: null
-$.outputDocumentId: null
-$.outputName: null
-$.outputVersion: null
-$.receipt: object
-$.receipt.actor: null
-$.receipt.inputSha256: string
-$.receipt.outcome: string
-$.receipt.outputDocument: null
-$.receipt.outputSha256: null
-$.receipt.planSha256: string
-$.receipt.receiptVersion: string
-$.receipt.revision: object
-$.receipt.revision.author: string
-$.receipt.revision.timestampUtc: string
-$.receipt.timestampUtc: string
-$.sourceDocumentId: null
-```
-
-### `compare_documents`
-
-```text
-$: object
-$.coverage: array
-$.coverage[]: object
-$.coverage[].code: null
-$.coverage[].detail: string
-$.coverage[].name: string
-$.coverage[].state: string
 $.diagnostics: array
-$.diagnostics[]: object
-$.diagnostics[].code: string
-$.diagnostics[].message: string
-$.diagnostics[].path: string
-$.differences: array
-$.isComplete: boolean
-$.originalSha256: string
-$.plan: null
-$.revisedSha256: string
+$.mediaSlots: array
+$.mediaSlots[]: object
+$.mediaSlots[].inRepeatingRow: boolean
+$.mediaSlots[].mediaKind: string
+$.mediaSlots[].name: string
+$.mediaSlots[].path: string
+$.repeatingRows: array
+$.repeatingRows[]: object
+$.repeatingRows[].confirmed: boolean
+$.repeatingRows[].fields: array
+$.repeatingRows[].fields[]: string
+$.repeatingRows[].tablePath: string
+$.repeatingRows[].tableRowCount: number
+$.repeatingRows[].templateRowIndex: number
+$.slots: array
+$.slots[]: object
+$.slots[].bindable: boolean
+$.slots[].currentText: null
+$.slots[].kind: string
+$.slots[].name: string
+$.slots[].occurrences: number
+$.templateSha256: string
 ```
 
-### `apply_plan`
+State: no slots
 
 ```text
 $: object
-$.changes: array
-$.changes[]: object
-$.changes[].after: string
-$.changes[].before: string
-$.changes[].blastRadius: number
-$.changes[].capability: string
-$.changes[].context: string
-$.changes[].target: object
-$.changes[].target.expect: string
-$.changes[].target.kind: string
-$.changes[].target.occurrence: number
-$.changes[].target.paraId: string
-$.changes[].verb: string
-$.committed: boolean
-$.errors: array
-$.isValid: boolean
-$.outputConnectionId: string
-$.outputContentType: string
-$.outputDocumentId: string
-$.outputName: string
-$.outputVersion: string
-$.receipt: object
-$.receipt.actor: null
-$.receipt.inputSha256: string
-$.receipt.outcome: string
-$.receipt.outputDocument: object
-$.receipt.outputDocument.connectionId: string
-$.receipt.outputDocument.contentType: string
-$.receipt.outputDocument.itemId: string
-$.receipt.outputDocument.name: string
-$.receipt.outputDocument.provider: string
-$.receipt.outputDocument.version: string
-$.receipt.outputSha256: string
-$.receipt.planSha256: string
-$.receipt.receiptVersion: string
-$.receipt.revision: object
-$.receipt.revision.author: string
-$.receipt.revision.timestampUtc: string
-$.receipt.timestampUtc: string
-$.sourceDocumentId: null
+$.diagnostics: array
+$.mediaSlots: array
+$.repeatingRows: array
+$.slots: array
+$.templateSha256: string
 ```
 
-### `export_document_content`
+#### `edit_document`
 
-```text
-$: object
-$.connectionId: string
-$.contentBase64: string
-$.contentBytes: number
-$.contentType: string
-$.documentId: string
-$.name: string
-```
-
-### `import_document_content`
-
-```text
-$: object
-$.connectionId: string
-$.contentType: string
-$.documentId: string
-$.name: string
-$.version: string
-```
-
-### `register_document`
-
-```text
-$: object
-$.connectionId: string
-$.contentType: string
-$.documentId: string
-$.name: string
-$.version: string
-```
-
-### `open_document`
-
-```text
-$: object
-$.cells: array
-$.connectionId: string
-$.contentControls: array
-$.contentType: string
-$.documentId: string
-$.format: string
-$.name: string
-$.nodes: array
-$.nodes[]: object
-$.nodes[].kind: string
-$.nodes[].path: string
-$.nodes[].summary: string
-$.outline: array
-$.paragraphLimit: number
-$.paragraphOffset: number
-$.paragraphs: array
-$.paragraphsTotal: number
-$.paragraphs[]: object
-$.paragraphs[].in: null
-$.paragraphs[].location: string
-$.paragraphs[].paraId: string
-$.paragraphs[].style: null
-$.paragraphs[].text: string
-$.snapshot: string
-$.styles: array
-$.styles[]: object
-$.styles[].id: string
-$.styles[].inUseCount: number
-$.styles[].name: string
-$.version: string
-$.worksheets: array
-```
-
-### `edit_document`
+State: committed
 
 ```text
 $: object
@@ -1579,76 +3288,68 @@ $.receipt.timestampUtc: string
 $.sourceDocumentId: string
 ```
 
-### `create_document_content`
+State: validation failure
 
 ```text
 $: object
 $.changes: array
-$.changes[]: object
-$.changes[].after: string
-$.changes[].before: string
-$.changes[].blastRadius: number
-$.changes[].capability: string
-$.changes[].context: string
-$.changes[].target: object
-$.changes[].target.expect: string
-$.changes[].target.kind: string
-$.changes[].target.occurrence: number
-$.changes[].target.paraId: string
-$.changes[].verb: string
 $.committed: boolean
-$.contentBase64: string
-$.contentBytes: number
 $.errors: array
+$.errors[]: object
+$.errors[].code: string
+$.errors[].message: string
+$.errors[].target: object
+$.errors[].target.expect: string
+$.errors[].target.kind: string
+$.errors[].target.occurrence: number
+$.errors[].target.paraId: string
 $.isValid: boolean
-$.name: string
+$.outputConnectionId: null
+$.outputContentType: null
+$.outputDocumentId: null
+$.outputName: null
+$.outputVersion: null
 $.receipt: object
 $.receipt.actor: null
 $.receipt.inputSha256: string
 $.receipt.outcome: string
 $.receipt.outputDocument: null
-$.receipt.outputSha256: string
+$.receipt.outputSha256: null
 $.receipt.planSha256: string
 $.receipt.receiptVersion: string
 $.receipt.revision: object
 $.receipt.revision.author: string
 $.receipt.revision.timestampUtc: string
 $.receipt.timestampUtc: string
+$.sourceDocumentId: string
 ```
 
-### `inspect_document_content`
+State: find target not bound
 
 ```text
 $: object
-$.cells: array
-$.contentControls: array
-$.format: string
-$.nodes: array
-$.nodes[]: object
-$.nodes[].kind: string
-$.nodes[].path: string
-$.nodes[].summary: string
-$.outline: array
-$.paragraphLimit: number
-$.paragraphOffset: number
-$.paragraphs: array
-$.paragraphsTotal: number
-$.paragraphs[]: object
-$.paragraphs[].in: null
-$.paragraphs[].location: string
-$.paragraphs[].paraId: string
-$.paragraphs[].style: null
-$.paragraphs[].text: string
-$.snapshot: string
-$.styles: array
-$.styles[]: object
-$.styles[].id: string
-$.styles[].inUseCount: number
-$.styles[].name: string
-$.worksheets: array
+$.changes: array
+$.committed: boolean
+$.errors: array
+$.errors[]: object
+$.errors[].code: string
+$.errors[].connectionId: string
+$.errors[].itemId: string
+$.errors[].message: string
+$.errors[].target: null
+$.isValid: boolean
+$.outputConnectionId: null
+$.outputContentType: null
+$.outputDocumentId: null
+$.outputName: null
+$.outputVersion: null
+$.receipt: null
+$.sourceDocumentId: string
 ```
 
-### `edit_document_content`
+#### `edit_document_content`
+
+State: committed
 
 ```text
 $: object
@@ -1685,70 +3386,614 @@ $.receipt.revision.timestampUtc: string
 $.receipt.timestampUtc: string
 ```
 
-### `discover_template`
+State: preview only
 
 ```text
 $: object
-$.diagnostics: array
-$.mediaSlots: array
-$.mediaSlots[]: object
-$.mediaSlots[].inRepeatingRow: boolean
-$.mediaSlots[].mediaKind: string
-$.mediaSlots[].name: string
-$.mediaSlots[].path: string
-$.repeatingRows: array
-$.repeatingRows[]: object
-$.repeatingRows[].confirmed: boolean
-$.repeatingRows[].fields: array
-$.repeatingRows[].fields[]: string
-$.repeatingRows[].tablePath: string
-$.repeatingRows[].tableRowCount: number
-$.repeatingRows[].templateRowIndex: number
-$.slots: array
-$.slots[]: object
-$.slots[].bindable: boolean
-$.slots[].currentText: null
-$.slots[].kind: string
-$.slots[].name: string
-$.slots[].occurrences: number
-$.templateSha256: string
-```
-
-### `preview_template_batch`
-
-```text
-$: object
-$.diagnostics: array
+$.changes: array
+$.changes[]: object
+$.changes[].after: string
+$.changes[].before: string
+$.changes[].blastRadius: number
+$.changes[].capability: string
+$.changes[].context: string
+$.changes[].target: object
+$.changes[].target.expect: string
+$.changes[].target.kind: string
+$.changes[].target.occurrence: number
+$.changes[].target.paraId: string
+$.changes[].verb: string
+$.committed: boolean
+$.contentBase64: null
+$.contentBytes: null
+$.errors: array
 $.isValid: boolean
-$.items: array
-$.items[]: object
-$.items[].diagnostics: array
-$.items[].diagnosticsTruncated: boolean
-$.items[].imageBytes: number
-$.items[].imageCount: number
-$.items[].isValid: boolean
-$.items[].operationCount: number
-$.items[].outputName: string
-$.items[].rowCount: number
-$.limits: object
-$.limits.maximumDiagnosticsPerItem: number
-$.limits.maximumDocuments: number
-$.limits.maximumFieldsPerDocument: number
-$.limits.maximumRowsPerDocument: number
-$.limits.maximumTotalRows: number
-$.limits.maximumValueLength: number
-$.limits.media: object
-$.limits.media.maximumChartPoints: number
-$.limits.media.maximumImageBytes: number
-$.limits.media.maximumImagesPerDocument: number
-$.limits.media.maximumTotalImageBytes: number
-$.token: object
-$.token.batchSha256: string
-$.token.mediaSha256: string
-$.token.templateSha256: string
+$.name: null
+$.receipt: object
+$.receipt.actor: null
+$.receipt.inputSha256: string
+$.receipt.outcome: string
+$.receipt.outputDocument: null
+$.receipt.outputSha256: null
+$.receipt.planSha256: string
+$.receipt.receiptVersion: string
+$.receipt.revision: object
+$.receipt.revision.author: string
+$.receipt.revision.timestampUtc: string
+$.receipt.timestampUtc: string
 ```
 
-### `populate_template_batch`
+State: validation failure
+
+```text
+$: object
+$.changes: array
+$.committed: boolean
+$.contentBase64: null
+$.contentBytes: null
+$.errors: array
+$.errors[]: object
+$.errors[].code: string
+$.errors[].message: string
+$.errors[].target: object
+$.errors[].target.expect: string
+$.errors[].target.kind: string
+$.errors[].target.occurrence: number
+$.errors[].target.paraId: string
+$.isValid: boolean
+$.name: null
+$.receipt: object
+$.receipt.actor: null
+$.receipt.inputSha256: string
+$.receipt.outcome: string
+$.receipt.outputDocument: null
+$.receipt.outputSha256: null
+$.receipt.planSha256: string
+$.receipt.receiptVersion: string
+$.receipt.revision: object
+$.receipt.revision.author: string
+$.receipt.revision.timestampUtc: string
+$.receipt.timestampUtc: string
+```
+
+#### `export_document_content`
+
+State: exported
+
+```text
+$: object
+$.connectionId: string
+$.contentBase64: string
+$.contentBytes: number
+$.contentType: string
+$.documentId: string
+$.name: string
+```
+
+State: unknown document
+
+```text
+$: object
+$.changes: array
+$.committed: boolean
+$.errors: array
+$.errors[]: object
+$.errors[].code: string
+$.errors[].connectionId: string
+$.errors[].itemId: string
+$.errors[].message: string
+$.errors[].provider: string
+$.errors[].target: null
+$.isValid: boolean
+$.outputConnectionId: null
+$.outputContentType: null
+$.outputDocumentId: null
+$.outputName: null
+$.outputVersion: null
+$.receipt: null
+$.sourceDocumentId: null
+```
+
+#### `find_in_document`
+
+State: hits
+
+```text
+$: array
+$[]: object
+$[].address: null
+$[].context: string
+$[].expect: string
+$[].location: string
+$[].occurrence: number
+$[].paraId: string
+$[].sheetId: null
+```
+
+State: no hits
+
+```text
+$: array
+```
+
+State: unknown document
+
+```text
+$: object
+$.changes: array
+$.committed: boolean
+$.errors: array
+$.errors[]: object
+$.errors[].code: string
+$.errors[].connectionId: string
+$.errors[].itemId: string
+$.errors[].message: string
+$.errors[].provider: string
+$.errors[].target: null
+$.isValid: boolean
+$.outputConnectionId: null
+$.outputContentType: null
+$.outputDocumentId: null
+$.outputName: null
+$.outputVersion: null
+$.receipt: null
+$.sourceDocumentId: null
+```
+
+#### `import_document_content`
+
+State: imported
+
+```text
+$: object
+$.connectionId: string
+$.contentType: string
+$.documentId: string
+$.name: string
+$.version: string
+```
+
+State: content is not a package
+
+```text
+$: object
+$.changes: array
+$.committed: boolean
+$.errors: array
+$.errors[]: object
+$.errors[].code: string
+$.errors[].connectionId: null
+$.errors[].itemId: null
+$.errors[].message: string
+$.errors[].provider: null
+$.errors[].target: null
+$.isValid: boolean
+$.outputConnectionId: null
+$.outputContentType: null
+$.outputDocumentId: null
+$.outputName: null
+$.outputVersion: null
+$.receipt: null
+$.sourceDocumentId: null
+```
+
+#### `inspect_document`
+
+State: Word, populated collections
+
+```text
+$: object
+$.cells: array
+$.contentControls: array
+$.contentControls[]: object
+$.contentControls[].kind: string
+$.contentControls[].tag: string
+$.format: string
+$.nodes: array
+$.nodes[]: object
+$.nodes[].kind: string
+$.nodes[].path: string
+$.nodes[].summary: string
+$.outline: array
+$.paragraphLimit: number
+$.paragraphOffset: number
+$.paragraphs: array
+$.paragraphsTotal: number
+$.paragraphs[]: object
+$.paragraphs[].in: null | string
+$.paragraphs[].location: string
+$.paragraphs[].paraId: string
+$.paragraphs[].style: null
+$.paragraphs[].text: string
+$.snapshot: string
+$.styles: array
+$.worksheets: array
+```
+
+State: Word, blank document
+
+```text
+$: object
+$.cells: array
+$.contentControls: array
+$.format: string
+$.nodes: array
+$.nodes[]: object
+$.nodes[].kind: string
+$.nodes[].path: string
+$.nodes[].summary: string
+$.outline: array
+$.paragraphLimit: number
+$.paragraphOffset: number
+$.paragraphs: array
+$.paragraphsTotal: number
+$.paragraphs[]: object
+$.paragraphs[].in: null
+$.paragraphs[].location: string
+$.paragraphs[].paraId: string
+$.paragraphs[].style: null
+$.paragraphs[].text: string
+$.snapshot: string
+$.styles: array
+$.styles[]: object
+$.styles[].id: string
+$.styles[].inUseCount: number
+$.styles[].name: string
+$.worksheets: array
+```
+
+State: PowerPoint deck
+
+```text
+$: object
+$.cells: array
+$.contentControls: array
+$.contentControls[]: object
+$.contentControls[].kind: string
+$.contentControls[].tag: string
+$.format: string
+$.nodes: array
+$.nodes[]: object
+$.nodes[].kind: string
+$.nodes[].path: string
+$.nodes[].summary: string
+$.outline: array
+$.outline[]: object
+$.outline[].children: array
+$.outline[].level: number
+$.outline[].paraId: null
+$.outline[].text: string
+$.paragraphLimit: number
+$.paragraphOffset: number
+$.paragraphs: array
+$.paragraphsTotal: number
+$.paragraphs[]: object
+$.paragraphs[].in: string
+$.paragraphs[].location: string
+$.paragraphs[].paraId: string
+$.paragraphs[].style: null
+$.paragraphs[].text: string
+$.snapshot: string
+$.styles: array
+$.worksheets: array
+```
+
+State: Excel workbook
+
+```text
+$: object
+$.cells: array
+$.contentControls: array
+$.format: string
+$.nodes: array
+$.nodes[]: object
+$.nodes[].kind: string
+$.nodes[].path: string
+$.nodes[].summary: string
+$.outline: array
+$.paragraphLimit: number
+$.paragraphOffset: number
+$.paragraphs: array
+$.paragraphsTotal: number
+$.snapshot: string
+$.styles: array
+$.worksheets: array
+$.worksheets[]: object
+$.worksheets[].dimension: null
+$.worksheets[].name: string
+$.worksheets[].sheetId: number
+$.worksheets[].tables: array
+```
+
+State: unknown document
+
+```text
+$: object
+$.changes: array
+$.committed: boolean
+$.errors: array
+$.errors[]: object
+$.errors[].code: string
+$.errors[].connectionId: string
+$.errors[].itemId: string
+$.errors[].message: string
+$.errors[].provider: string
+$.errors[].target: null
+$.isValid: boolean
+$.outputConnectionId: null
+$.outputContentType: null
+$.outputDocumentId: null
+$.outputName: null
+$.outputVersion: null
+$.receipt: null
+$.sourceDocumentId: null
+```
+
+State: connection denied
+
+```text
+$: object
+$.changes: array
+$.committed: boolean
+$.errors: array
+$.errors[]: object
+$.errors[].code: string
+$.errors[].connectionId: null
+$.errors[].itemId: null
+$.errors[].message: string
+$.errors[].provider: null
+$.errors[].target: null
+$.isValid: boolean
+$.outputConnectionId: null
+$.outputContentType: null
+$.outputDocumentId: null
+$.outputName: null
+$.outputVersion: null
+$.receipt: null
+$.sourceDocumentId: null
+```
+
+State: cancelled before start
+
+```text
+$: object
+$.changes: array
+$.committed: boolean
+$.errors: array
+$.errors[]: object
+$.errors[].code: string
+$.errors[].connectionId: null
+$.errors[].itemId: null
+$.errors[].message: string
+$.errors[].provider: null
+$.errors[].target: null
+$.isValid: boolean
+$.outputConnectionId: null
+$.outputContentType: null
+$.outputDocumentId: null
+$.outputName: null
+$.outputVersion: null
+$.receipt: null
+$.sourceDocumentId: null
+```
+
+#### `inspect_document_content`
+
+State: inspected
+
+```text
+$: object
+$.cells: array
+$.contentControls: array
+$.format: string
+$.nodes: array
+$.nodes[]: object
+$.nodes[].kind: string
+$.nodes[].path: string
+$.nodes[].summary: string
+$.outline: array
+$.paragraphLimit: number
+$.paragraphOffset: number
+$.paragraphs: array
+$.paragraphsTotal: number
+$.paragraphs[]: object
+$.paragraphs[].in: null
+$.paragraphs[].location: string
+$.paragraphs[].paraId: string
+$.paragraphs[].style: null
+$.paragraphs[].text: string
+$.snapshot: string
+$.styles: array
+$.styles[]: object
+$.styles[].id: string
+$.styles[].inUseCount: number
+$.styles[].name: string
+$.worksheets: array
+```
+
+State: content is not a package
+
+```text
+$: object
+$.changes: array
+$.committed: boolean
+$.contentBase64: null
+$.contentBytes: null
+$.errors: array
+$.errors[]: object
+$.errors[].code: string
+$.errors[].message: string
+$.errors[].target: null
+$.isValid: boolean
+$.name: null
+$.receipt: null
+```
+
+#### `list_connections`
+
+State: connections visible
+
+```text
+$: array
+$[]: object
+$[].canCreateDocuments: boolean
+$[].connectionId: string
+$[].provider: string
+```
+
+State: no connection visible to the caller
+
+```text
+$: array
+```
+
+#### `merge_documents`
+
+State: committed
+
+```text
+$: object
+$.committed: boolean
+$.content: null
+$.diagnostics: array
+$.document: object
+$.document.connectionId: string
+$.document.contentType: string
+$.document.itemId: string
+$.document.name: string
+$.document.provider: string
+$.document.version: string
+$.receipt: object
+$.receipt.actor: null
+$.receipt.inputs: array
+$.receipt.inputs[]: object
+$.receipt.inputs[].document: object
+$.receipt.inputs[].document.connectionId: string
+$.receipt.inputs[].document.contentType: string
+$.receipt.inputs[].document.itemId: string
+$.receipt.inputs[].document.name: string
+$.receipt.inputs[].document.provider: string
+$.receipt.inputs[].document.version: string
+$.receipt.inputs[].index: number
+$.receipt.inputs[].sha256: string
+$.receipt.outputDocument: object
+$.receipt.outputDocument.connectionId: string
+$.receipt.outputDocument.contentType: string
+$.receipt.outputDocument.itemId: string
+$.receipt.outputDocument.name: string
+$.receipt.outputDocument.provider: string
+$.receipt.outputDocument.version: string
+$.receipt.outputSha256: string
+$.receipt.planSha256: string
+$.receipt.receiptVersion: string
+$.receipt.timestampUtc: string
+```
+
+State: storage accepted, then failed to confirm
+
+```text
+$: object
+$.changes: array
+$.committed: boolean
+$.errors: array
+$.errors[]: object
+$.errors[].code: string
+$.errors[].connectionId: string
+$.errors[].itemId: string
+$.errors[].message: string
+$.errors[].provider: string
+$.errors[].target: null
+$.isValid: boolean
+$.outputConnectionId: null
+$.outputContentType: null
+$.outputDocumentId: null
+$.outputName: null
+$.outputVersion: null
+$.receipt: null
+$.sourceDocumentId: null
+```
+
+State: source changed since preview
+
+```text
+$: object
+$.committed: boolean
+$.content: null
+$.diagnostics: array
+$.diagnostics[]: object
+$.diagnostics[].code: string
+$.diagnostics[].message: string
+$.diagnostics[].path: string
+$.document: null
+$.receipt: null
+```
+
+#### `open_document`
+
+State: opened
+
+```text
+$: object
+$.cells: array
+$.connectionId: string
+$.contentControls: array
+$.contentType: string
+$.documentId: string
+$.format: string
+$.name: string
+$.nodes: array
+$.nodes[]: object
+$.nodes[].kind: string
+$.nodes[].path: string
+$.nodes[].summary: string
+$.outline: array
+$.paragraphLimit: number
+$.paragraphOffset: number
+$.paragraphs: array
+$.paragraphsTotal: number
+$.paragraphs[]: object
+$.paragraphs[].in: null
+$.paragraphs[].location: string
+$.paragraphs[].paraId: string
+$.paragraphs[].style: null
+$.paragraphs[].text: string
+$.snapshot: string
+$.styles: array
+$.styles[]: object
+$.styles[].id: string
+$.styles[].inUseCount: number
+$.styles[].name: string
+$.version: string
+$.worksheets: array
+```
+
+State: file not found
+
+```text
+$: object
+$.changes: array
+$.committed: boolean
+$.errors: array
+$.errors[]: object
+$.errors[].code: string
+$.errors[].connectionId: string
+$.errors[].itemId: null
+$.errors[].message: string
+$.errors[].provider: string
+$.errors[].target: null
+$.isValid: boolean
+$.outputConnectionId: null
+$.outputContentType: null
+$.outputDocumentId: null
+$.outputName: null
+$.outputVersion: null
+$.receipt: null
+$.sourceDocumentId: null
+```
+
+#### `populate_template_batch`
+
+State: every item committed
 
 ```text
 $: object
@@ -1802,7 +4047,107 @@ $.items[].report.errors: array
 $.items[].report.isValid: boolean
 ```
 
-### `preview_document_merge`
+State: stale preview token
+
+```text
+$: object
+$.committed: boolean
+$.items: array
+$.items[]: object
+$.items[].committed: boolean
+$.items[].diagnostics: array
+$.items[].diagnostics[]: object
+$.items[].diagnostics[].code: string
+$.items[].diagnostics[].message: string
+$.items[].diagnostics[].path: string
+$.items[].document: null
+$.items[].outcome: string
+$.items[].outputName: string
+$.items[].receipt: null
+$.items[].report: null
+```
+
+State: partial: one committed, one refused before any write
+
+```text
+$: object
+$.committed: boolean
+$.items: array
+$.items[]: object
+$.items[].committed: boolean
+$.items[].diagnostics: array
+$.items[].diagnostics[]: object
+$.items[].diagnostics[].code: string
+$.items[].diagnostics[].message: string
+$.items[].diagnostics[].path: string
+$.items[].document: null | object
+$.items[].document.connectionId: string
+$.items[].document.contentType: string
+$.items[].document.itemId: string
+$.items[].document.name: string
+$.items[].document.provider: string
+$.items[].document.version: string
+$.items[].outcome: string
+$.items[].outputName: string
+$.items[].receipt: null | object
+$.items[].receipt.actor: null
+$.items[].receipt.inputSha256: string
+$.items[].receipt.outcome: string
+$.items[].receipt.outputDocument: object
+$.items[].receipt.outputDocument.connectionId: string
+$.items[].receipt.outputDocument.contentType: string
+$.items[].receipt.outputDocument.itemId: string
+$.items[].receipt.outputDocument.name: string
+$.items[].receipt.outputDocument.provider: string
+$.items[].receipt.outputDocument.version: string
+$.items[].receipt.outputSha256: string
+$.items[].receipt.planSha256: string
+$.items[].receipt.receiptVersion: string
+$.items[].receipt.revision: object
+$.items[].receipt.revision.author: string
+$.items[].receipt.revision.timestampUtc: string
+$.items[].receipt.timestampUtc: string
+$.items[].report: null | object
+$.items[].report.changes: array
+$.items[].report.changes[]: object
+$.items[].report.changes[].after: string
+$.items[].report.changes[].before: string
+$.items[].report.changes[].blastRadius: number
+$.items[].report.changes[].capability: string
+$.items[].report.changes[].context: string
+$.items[].report.changes[].target: object
+$.items[].report.changes[].target.$anchor: string
+$.items[].report.changes[].target.id: string
+$.items[].report.changes[].target.kind: string
+$.items[].report.changes[].target.tag: string
+$.items[].report.changes[].verb: string
+$.items[].report.errors: array
+$.items[].report.isValid: boolean
+```
+
+State: item uncertain after storage accepted
+
+```text
+$: object
+$.committed: boolean
+$.items: array
+$.items[]: object
+$.items[].committed: boolean
+$.items[].diagnostics: array
+$.items[].diagnostics[]: object
+$.items[].diagnostics[].code: string
+$.items[].diagnostics[].message: string
+$.items[].diagnostics[].path: string
+$.items[].document: null
+$.items[].outcome: string
+$.items[].outputName: string
+$.items[].receipt: null
+$.items[].report: null
+```
+
+#### `preview_document_merge`
+
+State: valid
 
 ```text
 $: object
@@ -1836,56 +4181,127 @@ $.sources[].sections: number
 $.sources[].tables: number
 ```
 
-### `merge_documents`
+State: unsupported source content
 
 ```text
 $: object
-$.committed: boolean
-$.content: null
 $.diagnostics: array
-$.document: object
-$.document.connectionId: string
-$.document.contentType: string
-$.document.itemId: string
-$.document.name: string
-$.document.provider: string
-$.document.version: string
+$.diagnostics[]: object
+$.diagnostics[].code: string
+$.diagnostics[].message: string
+$.diagnostics[].path: string
+$.isValid: boolean
+$.plan: null
+$.sources: array
+```
+
+#### `preview_plan`
+
+State: valid, changes proposed
+
+```text
+$: object
+$.changes: array
+$.changes[]: object
+$.changes[].after: string
+$.changes[].before: string
+$.changes[].blastRadius: number
+$.changes[].capability: string
+$.changes[].context: string
+$.changes[].target: object
+$.changes[].target.expect: string
+$.changes[].target.kind: string
+$.changes[].target.occurrence: number
+$.changes[].target.paraId: string
+$.changes[].verb: string
+$.committed: boolean
+$.errors: array
+$.isValid: boolean
+$.outputConnectionId: null
+$.outputContentType: null
+$.outputDocumentId: null
+$.outputName: null
+$.outputVersion: null
 $.receipt: object
 $.receipt.actor: null
-$.receipt.inputs: array
-$.receipt.inputs[]: object
-$.receipt.inputs[].document: object
-$.receipt.inputs[].document.connectionId: string
-$.receipt.inputs[].document.contentType: string
-$.receipt.inputs[].document.itemId: string
-$.receipt.inputs[].document.name: string
-$.receipt.inputs[].document.provider: string
-$.receipt.inputs[].document.version: string
-$.receipt.inputs[].index: number
-$.receipt.inputs[].sha256: string
-$.receipt.outputDocument: object
-$.receipt.outputDocument.connectionId: string
-$.receipt.outputDocument.contentType: string
-$.receipt.outputDocument.itemId: string
-$.receipt.outputDocument.name: string
-$.receipt.outputDocument.provider: string
-$.receipt.outputDocument.version: string
-$.receipt.outputSha256: string
+$.receipt.inputSha256: string
+$.receipt.outcome: string
+$.receipt.outputDocument: null
+$.receipt.outputSha256: null
 $.receipt.planSha256: string
 $.receipt.receiptVersion: string
+$.receipt.revision: object
+$.receipt.revision.author: string
+$.receipt.revision.timestampUtc: string
 $.receipt.timestampUtc: string
+$.sourceDocumentId: null
 ```
 
-### `remove_document`
+State: valid, empty plan
 
 ```text
 $: object
-$.connectionId: string
-$.documentId: string
-$.removed: boolean
+$.changes: array
+$.committed: boolean
+$.errors: array
+$.isValid: boolean
+$.outputConnectionId: null
+$.outputContentType: null
+$.outputDocumentId: null
+$.outputName: null
+$.outputVersion: null
+$.receipt: object
+$.receipt.actor: null
+$.receipt.inputSha256: string
+$.receipt.outcome: string
+$.receipt.outputDocument: null
+$.receipt.outputSha256: null
+$.receipt.planSha256: string
+$.receipt.receiptVersion: string
+$.receipt.revision: object
+$.receipt.revision.author: string
+$.receipt.revision.timestampUtc: string
+$.receipt.timestampUtc: string
+$.sourceDocumentId: null
 ```
 
-### Error envelope: unreadable plan JSON
+State: validation failure
+
+```text
+$: object
+$.changes: array
+$.committed: boolean
+$.errors: array
+$.errors[]: object
+$.errors[].code: string
+$.errors[].message: string
+$.errors[].target: object
+$.errors[].target.expect: string
+$.errors[].target.kind: string
+$.errors[].target.occurrence: number
+$.errors[].target.paraId: string
+$.isValid: boolean
+$.outputConnectionId: null
+$.outputContentType: null
+$.outputDocumentId: null
+$.outputName: null
+$.outputVersion: null
+$.receipt: object
+$.receipt.actor: null
+$.receipt.inputSha256: string
+$.receipt.outcome: string
+$.receipt.outputDocument: null
+$.receipt.outputSha256: null
+$.receipt.planSha256: string
+$.receipt.receiptVersion: string
+$.receipt.revision: object
+$.receipt.revision.author: string
+$.receipt.revision.timestampUtc: string
+$.receipt.timestampUtc: string
+$.sourceDocumentId: null
+```
+
+State: unreadable plan
 
 ```text
 $: object
@@ -1909,7 +4325,153 @@ $.receipt: null
 $.sourceDocumentId: null
 ```
 
-### Error envelope: unknown document
+#### `preview_template_batch`
+
+State: valid
+
+```text
+$: object
+$.diagnostics: array
+$.isValid: boolean
+$.items: array
+$.items[]: object
+$.items[].diagnostics: array
+$.items[].diagnosticsTruncated: boolean
+$.items[].imageBytes: number
+$.items[].imageCount: number
+$.items[].isValid: boolean
+$.items[].operationCount: number
+$.items[].outputName: string
+$.items[].rowCount: number
+$.limits: object
+$.limits.maximumDiagnosticsPerItem: number
+$.limits.maximumDocuments: number
+$.limits.maximumFieldsPerDocument: number
+$.limits.maximumRowsPerDocument: number
+$.limits.maximumTotalRows: number
+$.limits.maximumValueLength: number
+$.limits.media: object
+$.limits.media.maximumChartPoints: number
+$.limits.media.maximumImageBytes: number
+$.limits.media.maximumImagesPerDocument: number
+$.limits.media.maximumTotalImageBytes: number
+$.token: object
+$.token.batchSha256: string
+$.token.mediaSha256: string
+$.token.templateSha256: string
+```
+
+State: invalid binding
+
+```text
+$: object
+$.diagnostics: array
+$.isValid: boolean
+$.items: array
+$.items[]: object
+$.items[].diagnostics: array
+$.items[].diagnosticsTruncated: boolean
+$.items[].diagnostics[]: object
+$.items[].diagnostics[].code: string
+$.items[].diagnostics[].message: string
+$.items[].diagnostics[].path: string
+$.items[].imageBytes: number
+$.items[].imageCount: number
+$.items[].isValid: boolean
+$.items[].operationCount: number
+$.items[].outputName: string
+$.items[].rowCount: number
+$.limits: object
+$.limits.maximumDiagnosticsPerItem: number
+$.limits.maximumDocuments: number
+$.limits.maximumFieldsPerDocument: number
+$.limits.maximumRowsPerDocument: number
+$.limits.maximumTotalRows: number
+$.limits.maximumValueLength: number
+$.limits.media: object
+$.limits.media.maximumChartPoints: number
+$.limits.media.maximumImageBytes: number
+$.limits.media.maximumImagesPerDocument: number
+$.limits.media.maximumTotalImageBytes: number
+$.token: object
+$.token.batchSha256: string
+$.token.mediaSha256: string
+$.token.templateSha256: string
+```
+
+#### `register_document`
+
+State: registered
+
+```text
+$: object
+$.connectionId: string
+$.contentType: string
+$.documentId: string
+$.name: string
+$.version: string
+```
+
+State: file not found
+
+```text
+$: object
+$.changes: array
+$.committed: boolean
+$.errors: array
+$.errors[]: object
+$.errors[].code: string
+$.errors[].connectionId: string
+$.errors[].itemId: null
+$.errors[].message: string
+$.errors[].provider: string
+$.errors[].target: null
+$.isValid: boolean
+$.outputConnectionId: null
+$.outputContentType: null
+$.outputDocumentId: null
+$.outputName: null
+$.outputVersion: null
+$.receipt: null
+$.sourceDocumentId: null
+```
+
+State: path outside the root
+
+```text
+$: object
+$.changes: array
+$.committed: boolean
+$.errors: array
+$.errors[]: object
+$.errors[].code: string
+$.errors[].connectionId: string
+$.errors[].itemId: null
+$.errors[].message: string
+$.errors[].provider: string
+$.errors[].target: null
+$.isValid: boolean
+$.outputConnectionId: null
+$.outputContentType: null
+$.outputDocumentId: null
+$.outputName: null
+$.outputVersion: null
+$.receipt: null
+$.sourceDocumentId: null
+```
+
+#### `remove_document`
+
+State: removed
+
+```text
+$: object
+$.connectionId: string
+$.documentId: string
+$.removed: boolean
+```
+
+State: unknown document
 
 ```text
 $: object

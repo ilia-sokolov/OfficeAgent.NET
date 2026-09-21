@@ -13,12 +13,26 @@ receiving the JSON it was written for. Breaking changes wait for 2.0.
 | Baseline | Records | Covers |
 | --- | --- | --- |
 | [C# API reference](csharp-api.md) | Every public type and member, with constant values, enum values, default arguments, `init` versus `set`, nullability, base types, protected members and stability class | Compiled and recompiled .NET callers |
-| [Wire contract](wire-contract.md) | Plan operations and their members, anchors, every tool's input schema, the response shape of all 21 tools and the error envelope, configuration keys, and the default value of every member a caller constructs | Agents, MCP clients, stored plans, configuration files |
+| [Wire contract](wire-contract.md) | Plan operations and their members, anchors, the input schemas of all 22 tools (including the MCP-only `list_connections`), responses (see below), configuration keys, and the default value of every member a caller constructs | Agents, MCP clients, stored plans, configuration files |
 
-CI regenerates both and fails when either differs from the committed file. A change that shows
-up in either diff is a contract change and needs a recorded decision. Each gate has been checked
-by deliberately introducing a breaking change against a passing control, and it caught every
-one.
+Responses are frozen in three layers, and only what they list is frozen:
+
+- the 7 tools that return one typed record have a schema derived from that type, covering every
+  member in every state;
+- the parts anonymous envelopes share are enumerated: the change-target summary of each of the 6
+  anchor types, and the receipt payload with its optional members absent and present;
+- 69 named response states across all 22 tools, among them success, validation failure,
+  provider failure, access denied, cancellation, storage accepting a write and then failing,
+  a partial and an uncertain template batch, and empty and populated collections. Generation
+  fails unless each response is in the state it is named after.
+
+The states are driven through memory, filesystem and a fault-injecting provider. SharePoint is
+not driven; its responses use the same envelopes, but that is not what these baselines prove.
+
+CI regenerates both baselines and fails when either differs from the committed file. A change
+that shows up in either diff is a contract change and needs a recorded decision. Fifteen
+deliberate breaks, including changes to failure envelopes and partial-batch fields that no C#
+signature shows, were each introduced against a passing control, and every one was caught.
 
 ## Four version numbers
 

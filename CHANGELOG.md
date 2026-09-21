@@ -33,9 +33,13 @@ corresponding GitHub release.
   `ComparisonDiagnosticCodes`, `AssemblyDiagnosticCodes` and `RenderFailureCodes`, beside
   `ValidationErrorCodes`. Values are unchanged from 0.9.
 - A [wire contract](docs/wire-contract.md) baseline, gated in CI beside the C# API reference.
-  It records plan operations, anchors, the input schemas and response shapes of all 21 tools,
-  configuration keys, and the default of every member a caller constructs. The gate also checks
+  It records plan operations, anchors, the input schemas of all 22 tools, configuration keys, the
+  default of every member a caller constructs, and responses in three layers: schemas derived
+  from the 7 typed results, every anchor summary and receipt state, and 69 named response states
+  including failures, cancellation, uncertain writes and partial batches. The gate also checks
   that the netstandard2.0 build exposes exactly the net8.0 surface.
+- `ToolErrorCodes.Cancelled`. The `cancelled` code every tool already emitted was the only one
+  missing from the catalogues.
 
 ### Fixed
 
@@ -44,6 +48,8 @@ corresponding GitHub release.
   `w:outlineLvl` as unsupported content, so two documents `create_document` had just produced
   failed `preview_document_merge` with `unsupported-merge-content`.
 - The ingestion-limits guide no longer shows an internal constructor that no host could call.
+- Removing an unknown id from a memory or session connection fails with `not-found`, as every
+  other provider already did, instead of reporting `removed: true`.
 
 ## 0.9.0 — 2026-09-20
 

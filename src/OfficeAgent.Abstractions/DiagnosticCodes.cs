@@ -8,7 +8,7 @@ namespace OfficeAgent.Abstractions;
 
 /// <summary>
 /// Codes an agent tool returns in its error envelope. Provider failures surface here with the
-/// code that corresponds to their <see cref="ProviderErrorCode"/>.
+/// code that corresponds to their <c>OfficeAgent.Core.DocumentProviders.ProviderErrorCode</c>.
 /// </summary>
 public static class ToolErrorCodes
 {
@@ -20,6 +20,12 @@ public static class ToolErrorCodes
 
     /// <summary>The host's connection or provider configuration is invalid.</summary>
     public const string ConfigurationError = "configuration-error";
+
+    /// <summary>
+    /// The call was cancelled. It does not say nothing was written: a cancellation that arrives
+    /// after storage accepted the bytes leaves the write in place.
+    /// </summary>
+    public const string Cancelled = "cancelled";
 
     /// <summary>The connection access policy refused the capability the tool needs.</summary>
     public const string ConnectionForbidden = "connection-forbidden";

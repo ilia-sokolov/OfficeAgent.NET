@@ -13,7 +13,7 @@ and compared with 1.0, section by section:
 | --- | --- |
 | Public C# API | One type removed: `SpreadsheetPartUtility`, below. Added: five code catalogues with 81 constants. 25 engine seams gained `[Experimental]`, below. No other line changed. |
 | Plan operations, anchors, every tool's input schema | Identical. Every 0.9 request and stored plan runs unchanged. |
-| Tool responses, all 21 tools | 88 property paths in 12 responses changed from PascalCase to camelCase. Nothing was added, removed or retyped. Template, merge, comparison and registration responses were already camelCase. |
+| Tool responses | One representative response per tool was compared, 23 responses in all. 88 property paths in 12 of them changed from PascalCase to camelCase; nothing was added, removed or retyped. Template, merge, comparison and registration responses were already camelCase. Failure, partial and cancellation states were frozen after this comparison and were not compared with 0.9. |
 | Configuration keys and defaults | Identical. |
 | Default value of every stable type's members | Identical. |
 
@@ -98,6 +98,18 @@ It was public only so two OfficeAgent assemblies could share it. It was hidden f
 and documented as infrastructure. Code that called it has no supported replacement; open an issue
 describing the need if you relied on it.
 
+## Removing an unknown session document fails
+
+**Who is affected:** callers of `remove_document`, or `MemoryDocumentProvider.RemoveAsync`, on a
+memory or MCP session connection with an id the connection does not hold.
+
+In 0.9 that call reported `removed: true`, while the filesystem and SharePoint providers refused
+the same call with `not-found`, as the provider documentation said. It now fails with
+`not-found` on every provider.
+
+**To migrate:** treat `not-found` from `remove_document` as "already gone" if your workflow can
+remove the same id twice.
+
 ## Stable codes are available as constants
 
 Nothing breaks here; this is new.
@@ -107,7 +119,7 @@ Every stable failure and diagnostic code is now a public constant, beside the ex
 
 | Catalogue | Covers |
 | --- | --- |
-| `ToolErrorCodes` | Errors a tool returns, including provider failures |
+| `ToolErrorCodes` | Errors a tool returns, including provider failures and `cancelled` |
 | `TemplateDiagnosticCodes` | Template discovery, batch preflight and population |
 | `ComparisonDiagnosticCodes` | Word comparison |
 | `AssemblyDiagnosticCodes` | Word document assembly |
