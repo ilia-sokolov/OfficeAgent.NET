@@ -13,7 +13,7 @@ public sealed class RenderingTests
         var renderer = Renderer(pdfArguments: new[] { "--pages=2" });
 
         var result = await renderer.RenderAsync(
-            new MemoryStream(new byte[] { 1, 2, 3 }), Options());
+            new MemoryStream(Package()), Options());
 
         Assert.True(result.Succeeded, result.Message);
         Assert.Equal(new[] { 1, 2 }, result.Pages.Select(page => page.PageNumber));
@@ -26,7 +26,7 @@ public sealed class RenderingTests
         var renderer = Renderer(pdfArguments: new[] { "--pages=2" });
 
         var result = await renderer.RenderAsync(
-            new MemoryStream(new byte[] { 1 }), Options(maximumPages: 1));
+            new MemoryStream(Package()), Options(maximumPages: 1));
 
         Assert.False(result.Succeeded);
         Assert.Equal("page-limit-exceeded", result.FailureCode);
@@ -39,7 +39,7 @@ public sealed class RenderingTests
         var renderer = Renderer(libreOfficeArguments: new[] { "--delay-ms=1000" });
 
         var result = await renderer.RenderAsync(
-            new MemoryStream(new byte[] { 1 }), Options(timeout: TimeSpan.FromMilliseconds(250)));
+            new MemoryStream(Package()), Options(timeout: TimeSpan.FromMilliseconds(250)));
 
         Assert.False(result.Succeeded);
         Assert.Equal("render-timeout", result.FailureCode);
@@ -53,7 +53,7 @@ public sealed class RenderingTests
         var stopwatch = Stopwatch.StartNew();
 
         var result = await renderer.RenderAsync(
-            new MemoryStream(new byte[] { 1 }), Options(timeout: TimeSpan.FromMilliseconds(250)));
+            new MemoryStream(Package()), Options(timeout: TimeSpan.FromMilliseconds(250)));
 
         Assert.False(result.Succeeded);
         Assert.Equal("render-timeout", result.FailureCode);
@@ -64,7 +64,7 @@ public sealed class RenderingTests
     public async Task Renderer_rejects_output_that_exceeds_the_byte_limit()
     {
         var result = await Renderer().RenderAsync(
-            new MemoryStream(new byte[] { 1 }),
+            new MemoryStream(Package()),
             Options(maximumOutputBytes: 32));
 
         Assert.False(result.Succeeded);
@@ -78,7 +78,7 @@ public sealed class RenderingTests
         var renderer = Renderer(libreOfficeArguments: new[] { "--allocate-mb=64" });
 
         var result = await renderer.RenderAsync(
-            new MemoryStream(new byte[] { 1 }),
+            new MemoryStream(Package()),
             Options(timeout: TimeSpan.FromSeconds(5), maximumWorkingSetBytes: 32L * 1024 * 1024));
 
         Assert.False(result.Succeeded);
@@ -98,7 +98,7 @@ public sealed class RenderingTests
             PdfToPpmExecutable = "officeagent-no-such-rasterizer"
         });
 
-        var result = await renderer.RenderAsync(new MemoryStream(new byte[] { 1 }), Options());
+        var result = await renderer.RenderAsync(new MemoryStream(Package()), Options());
 
         Assert.False(result.Succeeded);
         Assert.Equal("renderer-unavailable", result.FailureCode);
@@ -173,6 +173,64 @@ public sealed class RenderingTests
     {
         if (!result.TryGetPages(out var pages)) return false;
         return pages.Count <= budget;
+    }
+
+    [Fact]
+    public async Task Content_that_is_not_the_declared_package_is_refused_before_any_backend_runs()
+    {
+        // No backend exists at these paths: reaching one would report renderer-unavailable, so
+        // renderer-failed proves the refusal came first. LibreOffice imports by content, and a
+        // .docx name alone would hand any of these to one of its parsers.
+        var renderer = new LibreOfficeDocumentRenderer(new LibreOfficeRendererOptions
+        {
+            LibreOfficeExecutable = "officeagent-no-such-renderer",
+            PdfToPpmExecutable = "officeagent-no-such-rasterizer"
+        });
+        var samples = new (string Name, byte[] Bytes)[]
+        {
+            ("plain text", "not a package"u8.ToArray()),
+            ("a zip with no content types", Zip(("word/document.xml", "<w:document/>"))),
+            ("a deck under a .docx name", Package("application/vnd.openxmlformats-officedocument.presentationml.presentation.main+xml")),
+            ("a macro-enabled main part", Package("application/vnd.ms-word.document.macroEnabled.main+xml")),
+            ("a VBA project beside a normal main part", Package(extra: ("word/vbaProject.bin", "x"))),
+        };
+
+        foreach (var (name, bytes) in samples)
+        {
+            var result = await renderer.RenderAsync(new MemoryStream(bytes), Options());
+            Assert.True(result.FailureCode == "renderer-failed", $"{name}: {result.FailureCode} {result.Message}");
+        }
+
+        var genuine = await renderer.RenderAsync(new MemoryStream(Package()), Options());
+        Assert.Equal("renderer-unavailable", genuine.FailureCode);
+    }
+
+    /// <summary>A minimal package declaring a Word main part, small enough for the test input limit.</summary>
+    private static byte[] Package(
+        string mainContentType = "application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml",
+        (string Name, string Content)? extra = null)
+    {
+        var entries = new List<(string, string)>
+        {
+            ("[Content_Types].xml",
+             "<?xml version=\"1.0\"?><Types xmlns=\"http://schemas.openxmlformats.org/package/2006/content-types\">" +
+             $"<Override PartName=\"/word/document.xml\" ContentType=\"{mainContentType}\"/></Types>"),
+            ("word/document.xml", "<w:document/>")
+        };
+        if (extra is { } added) entries.Add(added);
+        return Zip(entries.ToArray());
+    }
+
+    private static byte[] Zip(params (string Name, string Content)[] entries)
+    {
+        using var stream = new MemoryStream();
+        using (var zip = new System.IO.Compression.ZipArchive(stream, System.IO.Compression.ZipArchiveMode.Create, leaveOpen: true))
+            foreach (var (name, content) in entries)
+            {
+                using var writer = new StreamWriter(zip.CreateEntry(name).Open());
+                writer.Write(content);
+            }
+        return stream.ToArray();
     }
 
     private static LibreOfficeDocumentRenderer Renderer(

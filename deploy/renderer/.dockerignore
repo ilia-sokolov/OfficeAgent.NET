@@ -1,0 +1,4 @@
+**
+!worker/bin/publish/**
+!officeagent-hardening.xcd
+!test/officeagent-permissive.xcd

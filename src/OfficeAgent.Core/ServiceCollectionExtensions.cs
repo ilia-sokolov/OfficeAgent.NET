@@ -34,7 +34,11 @@ public static class ServiceCollectionExtensions
             // A host that registers its own ceilings owns them; nothing downstream can
             // raise them, only ask for something stricter.
             var limits = sp.GetService<OpenXmlIngestionLimits>() ?? OpenXmlIngestionLimits.Default;
-            return new OfficeAgentEngine(modules, resolverList, loggerFactory, limits);
+            // Discovery reports a renderer when the host registered one. Registered is what the
+            // capability promises; whether the backend then starts is reported per render, as
+            // renderer-unavailable.
+            return new OfficeAgentEngine(modules, resolverList, loggerFactory, limits,
+                renderingAvailable: sp.GetService<IDocumentRenderer>() is not null);
         });
 
         services.AddSingleton<DocumentProviderRegistry>();

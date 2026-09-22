@@ -21,6 +21,7 @@ MARKDOWN = [
     *sorted((ROOT / "evaluations").glob("**/*.md")),
     *sorted((ROOT / "security").glob("*.md")),
     *sorted((ROOT / "samples").glob("**/README.md")),
+    *sorted((ROOT / "deploy").glob("**/README.md")),
     *sorted((ROOT / "skills").glob("**/*.md")),
 ]
 

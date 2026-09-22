@@ -25,6 +25,13 @@ new temporary profile to produce PDF, then runs Poppler's `pdftoppm` to produce 
 images. Configure `LibreOfficeExecutable` and `PdfToPpmExecutable` when those commands are not on
 `PATH`.
 
+Before any backend process starts, the renderer checks that the file really is the macro-free
+OOXML package its extension declares: a zip whose `[Content_Types].xml` names the Word,
+PowerPoint or Excel main part, with no macro-enabled part and no VBA project. Anything else fails
+with `renderer-failed`. The check matters because LibreOffice chooses an import filter from the
+content, not the name, so without it a `.docx` name would hand arbitrary bytes, such as plain
+text, RTF or an OpenDocument file with macros, to one of its parsers.
+
 The implementation copies a bounded input into a unique temporary directory, redirects and
 drains process output through fixed-size buffers without retaining it, samples each renderer
 process's working set, and watches elapsed time, page count, and output bytes. The single timeout
@@ -34,9 +41,12 @@ Cancellation also stops the tracked process tree. Temporary input and output are
 the result when the operating system releases them.
 
 The working-set check is a process-level guard. For documents from untrusted callers, run the
-host in an OS container or job boundary that applies hard aggregate CPU, memory, filesystem, and
-process limits to LibreOffice and all descendants. The in-process monitor cannot guarantee that
-an already-detached descendant is terminated or included in the working-set sample. Keep renderer
+renderer inside an OS boundary that applies hard aggregate CPU, memory, filesystem, and process
+limits to LibreOffice and all descendants. The [sandboxed renderer reference](../deploy/renderer/README.md)
+is a tested one: a fresh Linux container per render, with no network, a read-only root, no
+capabilities, and kernel-enforced memory and process limits, each proved by an automated test.
+The in-process monitor cannot guarantee that an already-detached descendant is terminated or
+included in the working-set sample. Keep renderer
 workers away from service credentials and network access. Do not log renderer stdout, stderr,
 input bytes, or rendered pages; they may contain document content or sensitive paths.
 
@@ -45,6 +55,11 @@ The renderer reports `renderer-unavailable`, `renderer-failed`, `renderer-output
 `output-limit-exceeded`, or `invalid-render-options`. The first implementation returns page
 images. Visual overflow detection requires a chosen renderer and a representative document
 corpus and is not inferred from these images yet.
+
+Registering an `IDocumentRenderer` in the service collection before `AddOfficeAgent()` makes
+`describe_capabilities` report `renderingAvailable: true`. The flag means a renderer is
+registered, not that its backend is healthy; a missing backend is reported per render as
+`renderer-unavailable`.
 
 ## Reading the result
 

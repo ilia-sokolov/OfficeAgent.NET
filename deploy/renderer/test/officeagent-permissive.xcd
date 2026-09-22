@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  TEST ONLY. The control for the hardening tests: the same keys set to their most permissive
+  values, so a test can show that it detects macro execution and link loading when they are
+  allowed. It is built only into the `permissive` stage, which the deployment never uses.
+-->
+<oor:data xmlns:xs="http://www.w3.org/2001/XMLSchema" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:oor="http://openoffice.org/2001/registry">
+  <dependency file="main"/>
+  <oor:component-data oor:name="Common" oor:package="org.openoffice.Office">
+    <node oor:name="Security">
+      <node oor:name="Scripting">
+        <prop oor:name="MacroSecurityLevel" oor:finalized="true" oor:type="xs:int"><value>0</value></prop>
+        <prop oor:name="DisableMacrosExecution" oor:finalized="true" oor:type="xs:boolean"><value>false</value></prop>
+        <prop oor:name="BlockUntrustedRefererLinks" oor:finalized="true" oor:type="xs:boolean"><value>false</value></prop>
+      </node>
+    </node>
+  </oor:component-data>
+  <oor:component-data oor:name="Writer" oor:package="org.openoffice.Office">
+    <node oor:name="Content">
+      <node oor:name="Update">
+        <prop oor:name="Link" oor:finalized="true" oor:type="xs:int"><value>0</value></prop>
+      </node>
+    </node>
+  </oor:component-data>
+  <oor:component-data oor:name="Calc" oor:package="org.openoffice.Office">
+    <node oor:name="Content">
+      <node oor:name="Update">
+        <prop oor:name="Link" oor:finalized="true" oor:type="xs:int"><value>0</value></prop>
+      </node>
+    </node>
+  </oor:component-data>
+</oor:data>

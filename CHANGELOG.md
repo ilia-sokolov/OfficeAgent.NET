@@ -38,6 +38,10 @@ corresponding GitHub release.
   from the 7 typed results, every anchor summary and receipt state, and 69 named response states
   including failures, cancellation, uncertain writes and partial batches. The gate also checks
   that the netstandard2.0 build exposes exactly the net8.0 surface.
+- A tested [sandboxed renderer reference](deploy/renderer/README.md): a pinned LibreOffice and
+  Poppler image and a host-side `IDocumentRenderer` that runs each render in a fresh container
+  with no network, a read-only root, no capabilities, and memory, process and scratch limits.
+  Each boundary is proved by an automated test in a dedicated CI job.
 - `ToolErrorCodes.Cancelled`. The `cancelled` code every tool already emitted was the only one
   missing from the catalogues.
 
@@ -50,6 +54,12 @@ corresponding GitHub release.
 - The ingestion-limits guide no longer shows an internal constructor that no host could call.
 - Removing an unknown id from a memory or session connection fails with `not-found`, as every
   other provider already did, instead of reporting `removed: true`.
+- The renderer refuses a file that is not the macro-free OOXML package its extension declares,
+  with `renderer-failed`, before LibreOffice starts. LibreOffice chooses an import filter by
+  content, so random bytes named `.docx` were rendered as a text document, and an OpenDocument
+  file under a `.docx` name reached LibreOffice's ODF import.
+- `describe_capabilities` reports `renderingAvailable: true` when an `IDocumentRenderer` is
+  registered. It was always `false`, contradicting its documentation.
 
 ## 0.9.0 — 2026-09-20
 

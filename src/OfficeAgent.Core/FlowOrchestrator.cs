@@ -52,7 +52,10 @@ internal sealed class FlowOrchestrator
     }
 
     /// <summary>Describes the engine from the modules and ceilings actually registered.</summary>
-    public EngineCapabilities Describe() => CapabilityDiscovery.Describe(_modules, _limits);
+    /// <summary>Whether the host registered an optional page renderer; reported by discovery.</summary>
+    internal bool RenderingAvailable { get; init; }
+
+    public EngineCapabilities Describe() => CapabilityDiscovery.Describe(_modules, _limits, RenderingAvailable);
 
     public InspectResult Inspect(DocumentHandle handle, InspectOptions options) =>
         InspectCore(ReadAll(handle), options);

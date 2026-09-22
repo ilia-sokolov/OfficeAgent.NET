@@ -63,6 +63,11 @@ public sealed class LibreOfficeDocumentRenderer : IDocumentRenderer
             var copied = await CopyBoundedAsync(
                 document, inputPath, options.MaximumInputBytes, cancellationToken).ConfigureAwait(false);
             if (!copied) return Failure(RenderFailureCodes.InputLimitExceeded, "The document exceeded the configured input-size limit.");
+            // LibreOffice picks an import filter from the content, not the name, so a .docx
+            // name alone would hand attacker bytes to any of its parsers: plain text, RTF, ODF
+            // with macros. Only the package the caller declared is rendered.
+            if (NotDeclaredPackage(inputPath, Path.GetExtension(fileName)) is { } refusal)
+                return Failure(RenderFailureCodes.RendererFailed, refusal);
 
             var clock = Stopwatch.StartNew();
             var convertArguments = _renderer.LibreOfficePrefixArguments.Concat(new[]
@@ -116,6 +121,47 @@ public sealed class LibreOfficeDocumentRenderer : IDocumentRenderer
             try { Directory.Delete(root, recursive: true); }
             catch (IOException) { }
             catch (UnauthorizedAccessException) { }
+        }
+    }
+
+    private static readonly Dictionary<string, string> MainContentTypes = new(StringComparer.OrdinalIgnoreCase)
+    {
+        [".docx"] = "application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml",
+        [".pptx"] = "application/vnd.openxmlformats-officedocument.presentationml.presentation.main+xml",
+        [".xlsx"] = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml",
+    };
+
+    /// <summary>
+    /// Why the file is not the macro-free OOXML package its extension declares, or null when
+    /// it is. Checks the package's own content-type declaration rather than trusting the name.
+    /// </summary>
+    private static string? NotDeclaredPackage(string path, string extension)
+    {
+        var refusal = $"The document is not a valid {extension.ToLowerInvariant()} package.";
+        try
+        {
+            using var zip = System.IO.Compression.ZipFile.OpenRead(path);
+            var types = zip.GetEntry("[Content_Types].xml");
+            if (types is null) return refusal;
+            System.Xml.Linq.XDocument declaration;
+            using (var stream = types.Open())
+                declaration = System.Xml.Linq.XDocument.Load(stream);
+            var contentTypes = declaration.Descendants()
+                .Select(element => (string?)element.Attribute("ContentType"))
+                .Where(value => value is not null)
+                .ToList();
+            if (!contentTypes.Contains(MainContentTypes[extension], StringComparer.OrdinalIgnoreCase))
+                return refusal;
+            // A macro-enabled main part or a VBA project is refused even under the right name.
+            if (contentTypes.Any(value => value!.Contains("macroEnabled", StringComparison.OrdinalIgnoreCase) ||
+                                          value.Contains("vbaProject", StringComparison.OrdinalIgnoreCase)) ||
+                zip.Entries.Any(entry => entry.FullName.EndsWith("vbaProject.bin", StringComparison.OrdinalIgnoreCase)))
+                return $"The document carries macros; a {extension.ToLowerInvariant()} package is rendered only without them.";
+            return null;
+        }
+        catch (Exception ex) when (ex is InvalidDataException or System.Xml.XmlException or IOException)
+        {
+            return refusal;
         }
     }
 

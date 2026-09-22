@@ -1,0 +1,39 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    Reference tests for the sandboxed renderer in deploy/renderer. They need a Linux container
+    engine and build the reference image, so they are not in the solution and run in their own
+    CI job. With no engine they fail rather than skip: a skipped boundary test proves nothing.
+  -->
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <IsPackable>false</IsPackable>
+    <IsTestProject>true</IsTestProject>
+    <GenerateDocumentationFile>false</GenerateDocumentationFile>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Using Include="Xunit" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Compile Include="..\..\deploy\renderer\host\SandboxedDocumentRenderer.cs" Link="Reference\SandboxedDocumentRenderer.cs" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\OfficeAgent.Abstractions\OfficeAgent.Abstractions.csproj" />
+    <ProjectReference Include="..\..\src\OfficeAgent.Core\OfficeAgent.Core.csproj" />
+    <ProjectReference Include="..\..\src\OfficeAgent.PowerPoint\OfficeAgent.PowerPoint.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="DocumentFormat.OpenXml" Version="3.5.1" />
+    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.6.0" />
+    <PackageReference Include="xunit" Version="2.9.2" />
+    <PackageReference Include="xunit.runner.visualstudio" Version="2.8.2">
+      <PrivateAssets>all</PrivateAssets>
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+    </PackageReference>
+  </ItemGroup>
+
+</Project>
