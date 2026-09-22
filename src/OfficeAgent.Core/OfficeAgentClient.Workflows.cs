@@ -198,7 +198,25 @@ public sealed partial class OfficeAgentClient
                 continue;
             }
 
-            cancellationToken.ThrowIfCancellationRequested();
+            if (cancellationToken.IsCancellationRequested)
+            {
+                // Before the first item nothing has happened, so cancellation is plain. After
+                // it, throwing would discard the record of outputs already written, and a
+                // caller told only "cancelled" could not know which of them exist.
+                if (results.Count == 0) cancellationToken.ThrowIfCancellationRequested();
+                results.AddRange(request.Items.Skip(results.Count).Select(remaining => new TemplateBatchItemResult
+                {
+                    OutputName = remaining.OutputName,
+                    Outcome = TemplateItemOutcome.Skipped,
+                    Diagnostics = new[]
+                    {
+                        Diagnostic(TemplateDiagnosticCodes.ItemSkipped,
+                            "The batch was cancelled before this output was attempted, so it does not exist.",
+                            remaining.OutputName)
+                    }
+                }));
+                break;
+            }
             var plan = await BuildTemplatePlanWithMediaAsync(template, item.Binding, limits, cancellationToken)
                 .ConfigureAwait(false);
             if (!plan.IsValid || plan.Plan is null)
@@ -238,14 +256,10 @@ public sealed partial class OfficeAgentClient
                 // A provider that already accepted the bytes and then failed leaves an
                 // output that may or may not exist. Reporting that as a plain failure
                 // would be a guess, and a caller acting on it would either lose the file
-                // or create a duplicate.
-                bool decidedBeforeAnyWrite = ex.Code is ProviderErrorCode.AlreadyExists
-                    or ProviderErrorCode.AccessDenied
-                    or ProviderErrorCode.ExtensionNotAllowed
-                    or ProviderErrorCode.InvalidArgument
-                    or ProviderErrorCode.ContentTooLarge
-                    or ProviderErrorCode.ConfigurationError
-                    or ProviderErrorCode.NotFound;
+                // or create a duplicate. The rule is the engine's single classification,
+                // so a batch item and a single commit can never disagree.
+                bool decidedBeforeAnyWrite = StorageWrite.ProvesNothingWritten(ex.Code);
+                bool writtenNotRegistered = ex.Code == ProviderErrorCode.RegistrationFailed;
 
                 results.Add(new TemplateBatchItemResult
                 {
@@ -255,11 +269,15 @@ public sealed partial class OfficeAgentClient
                         : TemplateItemOutcome.Uncertain,
                     Diagnostics = new[]
                     {
-                        Diagnostic(ToKebabCase(ex.Code.ToString()),
+                        // The catalogued code: kebab-casing the enum name once turned IO into "i-o".
+                        Diagnostic(StorageWrite.WireCode(ex.Code),
                             decidedBeforeAnyWrite
                                 ? ex.Message
-                                : ex.Message + " Storage may already hold this output; do not retry the " +
-                                  "same name blindly. Inspect the destination and reconcile it.",
+                                : writtenNotRegistered
+                                    ? ex.Message + " The output was written but is not registered; register it " +
+                                      "by name rather than populating this item again."
+                                    : ex.Message + " Storage may already hold this output; do not retry the " +
+                                      "same name blindly. Inspect the destination and reconcile it.",
                             item.OutputName)
                     }
                 });
@@ -1314,6 +1332,4 @@ public sealed partial class OfficeAgentClient
         Path = path
     };
 
-    private static string ToKebabCase(string value) =>
-        string.Concat(value.Select((ch, index) => char.IsUpper(ch) && index > 0 ? $"-{char.ToLowerInvariant(ch)}" : char.ToLowerInvariant(ch).ToString()));
 }

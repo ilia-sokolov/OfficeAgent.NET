@@ -192,7 +192,7 @@ public sealed class SharePointDocumentProvider : IDocumentProvider, IDocumentCre
         catch (Exception ex)
         {
             throw Error(
-                ProviderErrorCode.IO,
+                ProviderErrorCode.RegistrationFailed,
                 $"Document '{fileName}' was created in SharePoint, but its registration " +
                 "could not be persisted. Do not retry creation; report the possibly " +
                 "unregistered file to the host/operator for recovery.",
@@ -337,10 +337,24 @@ public sealed class SharePointDocumentProvider : IDocumentProvider, IDocumentCre
             : ValidateName(options.NewName!);
         var uploadUrl =
             $"{ItemUrl(driveId, item.ParentId)}:/{Uri.EscapeDataString(destinationName)}:/content?@microsoft.graph.conflictBehavior=fail";
-        var saved = await UploadAsync(uploadUrl, bytes, ifMatch: null, itemId: source.ItemId, cancellationToken).ConfigureAwait(false);
+        var saved = await UploadAsync(uploadUrl, bytes, ifMatch: null, itemId: source.ItemId, cancellationToken,
+            conflictCode: ProviderErrorCode.AlreadyExists).ConfigureAwait(false);
 
         var savedDriveId = string.IsNullOrEmpty(saved.DriveId) ? driveId : saved.DriveId;
-        var newId = await _store.AddAsync(new SharePointItemRef(savedDriveId, saved.Id), cancellationToken).ConfigureAwait(false);
+        string newId;
+        try
+        {
+            // Graph confirmed the upload. Finish registering even if the caller cancels now,
+            // so a stored file is not left unregistered behind a plain cancellation.
+            newId = await _store.AddAsync(new SharePointItemRef(savedDriveId, saved.Id), CancellationToken.None).ConfigureAwait(false);
+        }
+        catch (Exception ex)
+        {
+            throw Error(ProviderErrorCode.RegistrationFailed,
+                $"Document '{destinationName}' was saved to SharePoint, but its registration could not be " +
+                "persisted. Do not save it again; register the saved file to recover it.",
+                source.ItemId, ex);
+        }
         return CreateReference(newId, saved);
     }
 
@@ -385,7 +399,7 @@ public sealed class SharePointDocumentProvider : IDocumentProvider, IDocumentCre
                     ? "A document with that name already exists in the configured SharePoint folder; choose another name."
                     : "A file already exists at the destination path; refusing to overwrite without Replace mode.",
                 itemId);
-        await ThrowOnFailureAsync(response, itemId).ConfigureAwait(false);
+        await ThrowOnFailureAsync(response, itemId, write: true).ConfigureAwait(false);
         return ParseItem(await response.Content.ReadAsStringAsync().ConfigureAwait(false), itemId);
     }
 
@@ -421,7 +435,7 @@ public sealed class SharePointDocumentProvider : IDocumentProvider, IDocumentCre
         }
     }
 
-    private async Task ThrowOnFailureAsync(HttpResponseMessage response, string? itemId)
+    private async Task ThrowOnFailureAsync(HttpResponseMessage response, string? itemId, bool write = false)
     {
         if (response.IsSuccessStatusCode) return;
 
@@ -437,6 +451,13 @@ public sealed class SharePointDocumentProvider : IDocumentProvider, IDocumentCre
                 "(If-Match)", "(changed)", ProviderName, ConnectionId, itemId),
             HttpStatusCode.RequestEntityTooLarge => Error(ProviderErrorCode.ContentTooLarge,
                 $"Graph rejected the content as too large.{suffix}", itemId),
+            // For an upload, any other refusal status (400, 409, 423 locked, 429 throttled) is
+            // Graph declining the request: nothing was stored. A server error is not a refusal;
+            // the request may have been processed, so the outcome is unknown.
+            _ when write && (int)response.StatusCode is >= 400 and < 500 => Error(ProviderErrorCode.WriteRejected,
+                $"Graph refused the upload with status {(int)response.StatusCode}; nothing was stored.{suffix}", itemId),
+            _ when write => Error(ProviderErrorCode.OutcomeUnknown,
+                $"Graph failed the upload with status {(int)response.StatusCode}; it may have been stored.{suffix}", itemId),
             _ => Error(ProviderErrorCode.IO,
                 $"Graph request failed with status {(int)response.StatusCode}.{suffix}", itemId)
         };

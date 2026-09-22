@@ -35,6 +35,7 @@ this page to choose the shortest path for your scenario.
 | Run a tracked Word review | [Sample review workflows](../samples/documents/README.md#reproducible-review-workflows) | [Optional review skill](skill-installation.md) |
 | Edit a document that already has tracked changes | [Pending revisions](pending-revisions.md) | [Document plans](document-plans.md#validation-errors) |
 | Bound what an untrusted document can spend | [Ingestion limits](ingestion-limits.md) | [Operations](operations.md) |
+| Recover from a failed or uncertain save | [Storage outcomes and recovery](recovery.md) | [Operations](operations.md#what-a-failed-commit-tells-you-about-storage) |
 | Find out what the server supports before planning | [Capability discovery](capability-discovery.md) | [Document plans](document-plans.md) |
 | Measure a candidate, or check for a regression | [Benchmarks](benchmarks.md) | [Word preservation evidence](word-preservation-evidence.md) |
 | Move an existing integration from 0.9 to 1.0 | [Upgrading to 1.0](upgrading-to-1.0.md) | [Wire contract](wire-contract.md) |

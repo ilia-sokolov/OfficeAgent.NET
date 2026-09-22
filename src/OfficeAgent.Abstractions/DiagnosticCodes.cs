@@ -22,13 +22,26 @@ public static class ToolErrorCodes
     public const string ConfigurationError = "configuration-error";
 
     /// <summary>
-    /// The call was cancelled. It does not say nothing was written: a cancellation that arrives
-    /// after storage accepted the bytes leaves the write in place.
+    /// The call was cancelled before any storage write began, so nothing was written. A
+    /// cancellation that arrives once a write has begun is reported as
+    /// <see cref="OutcomeUnknown"/> instead.
     /// </summary>
     public const string Cancelled = "cancelled";
 
     /// <summary>The connection access policy refused the capability the tool needs.</summary>
     public const string ConnectionForbidden = "connection-forbidden";
+
+    /// <summary>
+    /// A storage write failed, timed out or was cancelled after it began, so the output may or
+    /// may not exist. Reconcile the destination before retrying.
+    /// </summary>
+    public const string OutcomeUnknown = "outcome-unknown";
+
+    /// <summary>The document was written but its registration could not be persisted.</summary>
+    public const string RegistrationFailed = "registration-failed";
+
+    /// <summary>The storage definitely refused the write; nothing was changed.</summary>
+    public const string WriteRejected = "write-rejected";
 
     /// <summary>The document or supplied content exceeds a size limit.</summary>
     public const string ContentTooLarge = "content-too-large";

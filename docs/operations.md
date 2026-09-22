@@ -107,10 +107,13 @@ copy validated bytes into the root through the trusted host.
 ## Provider retries
 
 OfficeAgent does not automatically retry Microsoft Graph requests or interpret
-`Retry-After`. Reads can be retried with normal bounded backoff. A timed-out or
-throttled write is ambiguous: first reopen the existing id, or look up the
-requested new name, to determine whether Graph committed it. If the source
-changed, re-inspect and rebuild the plan; do not replay a stale plan blindly.
+`Retry-After`. Reads can be retried with normal bounded backoff. A refused upload,
+such as a 409, 423 or 429, is reported as `WriteRejected` or `AlreadyExists`: nothing
+was stored, and it can be retried once the cause clears. A server error, a timeout or
+a lost response is reported as an unknown outcome: reconcile it as
+[described in the recovery guide](recovery.md#reconciling-an-unknown-outcome) before
+retrying. If the source changed, re-inspect and rebuild the plan; do not replay a stale
+plan blindly.
 
 ## Output paths
 
@@ -178,19 +181,26 @@ For a direct in-memory call, pass the actor with
 | `Errors` contains `invalid-operation` naming mode `Tracked` on a deck | PresentationML has no redline vocabulary | Send `"mode": "Direct"`, or set the connection's `DefaultChangeMode` so deck plans need not restate it |
 | MCP server exits during startup | An invalid `AuthMode`, unreadable config file, or incomplete provider configuration | Read the named configuration error and restart. No storage configuration by itself starts the `session` connection; invalid authentication modes never fall back to app-only. |
 | Graph returns 429 or a transient 5xx | Throttling or a service interruption | Respect `Retry-After` in the host; reconcile an attempted write before retrying |
-| A create call reports an I/O error but the name is now occupied | Storage accepted the file before registration or the response failed | Inspect the destination and register the surviving item; do not overwrite or blindly retry the name |
+| A create call reports `registration-failed` or `outcome-unknown` and the name is now occupied | Storage accepted the file before registration, or the response was lost | Inspect the destination and register the surviving item; do not overwrite or blindly retry the name. See [recovery](recovery.md) |
 
 ## What a failed commit tells you about storage
 
-Three outcomes are distinguishable, and only the first lets you conclude that nothing was written.
+Four outcomes are distinguishable, and only the first lets you conclude that nothing was written.
+[Storage outcomes and recovery](recovery.md) has every boundary, the safe next action for each,
+and how to reconcile.
 
 | Outcome | How you know | What to do |
 |---|---|---|
-| **Nothing was written** | `ApplyResult.Committed` is `false` with validation `Errors`, or a `DocumentVersionConflictException` from the pre-save check | The plan never reached storage. Fix the plan or re-inspect, then retry safely |
-| **The write landed** | The call returned and `ProviderApplyResult.Committed` is `true` with a `Document` reference | Use the returned reference. The receipt names the output |
-| **Unknown** | A provider or cancellation error raised *after* the content was handed to storage | Do not retry blindly and do not report the document as unchanged. Inspect the destination, reconcile what is actually there, and report the possibly-written name to the operator |
+| **Nothing was written** | Validation `Errors`, or a `DocumentProviderException` with a pre-write code such as `VersionConflict`, `AlreadyExists` or `WriteRejected`; tools report `writeOutcome: notWritten` | Fix the plan or the cause, re-inspect if the source changed, then retry |
+| **The write landed** | `ProviderApplyResult.Committed` is `true` with a `Document` reference; tools report `writeOutcome: committed` | Use the returned reference. The receipt names the output |
+| **Written, not registered** | Code `RegistrationFailed`; tools report `writeOutcome: writtenNotRegistered` | Do not write it again; register the named output |
+| **Unknown** | `DocumentWriteOutcomeUnknownException` (code `OutcomeUnknown`): the write failed, timed out or was cancelled after it began; tools report `writeOutcome: unknown` with a `possibleOutput` locator | Do not retry blindly and do not report the document as unchanged. Compare the destination with the locator's `expectedSha256`, then act |
 
-The uncertainty in the third row is real and cannot be engineered away at this layer: a provider that accepts bytes and then fails to confirm leaves a write this library cannot see. OfficeAgent does not claim exactly-once delivery. What it does guarantee is that plan validation failures are always the first row - they are decided entirely in memory, before any provider write.
+The uncertainty in the last row is real and cannot be engineered away at this layer: a provider
+that accepts bytes and then fails to confirm leaves a write this library cannot see. OfficeAgent
+does not claim exactly-once delivery. What it does guarantee is that it never reports that case
+as nothing written, and that plan validation failures are always the first row, because they are
+decided entirely in memory, before any provider write.
 
 ## Versioning
 

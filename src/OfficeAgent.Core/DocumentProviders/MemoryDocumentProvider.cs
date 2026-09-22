@@ -179,6 +179,11 @@ public sealed class MemoryDocumentProvider : IDocumentProvider, IDocumentCreatin
             var name = string.IsNullOrWhiteSpace(options.NewName)
                 ? NextVersionedNameUnsafe(current.Name)
                 : ValidateName(options.NewName!);
+            // A taken name is refused, as CreateAsync and every other provider refuse it, rather
+            // than leaving two documents that share a name.
+            Require(!_documents.Values.Any(entry => string.Equals(entry.Name, name, StringComparison.OrdinalIgnoreCase)),
+                ProviderErrorCode.AlreadyExists,
+                $"A document named '{name}' is already open in this connection.", itemId: source.ItemId);
 
             return AddUnsafe(name, bytes, roomAlreadyChecked: true);
         }

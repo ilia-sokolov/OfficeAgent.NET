@@ -147,24 +147,23 @@ public sealed class FileSystemDocumentProvider : IDocumentProvider, IDocumentCre
             await WriteAtomicallyAsync(
                 destinationPath, bytes, replace: false, cancellationToken).ConfigureAwait(false);
         }
-        catch (IOException ex) when (File.Exists(destinationPath) || Directory.Exists(destinationPath))
+        // WriteAtomicallyAsync reports every failed publish as WriteRejected, wrapping the
+        // framework exception. These handlers once caught IOException directly, which never
+        // arrives here, so a lost creation race was not reported as AlreadyExists and the
+        // framework message, which carries the absolute path, was echoed unchanged.
+        catch (DocumentProviderException ex) when (
+            ex.Code == ProviderErrorCode.WriteRejected &&
+            (File.Exists(destinationPath) || Directory.Exists(destinationPath)))
         {
             throw Error(ProviderErrorCode.AlreadyExists,
                 $"A document named '{fileName}' already exists in this connection; choose another name.",
                 itemId: null, ex);
         }
-        catch (UnauthorizedAccessException ex)
+        catch (DocumentProviderException ex) when (ex.Code == ProviderErrorCode.WriteRejected)
         {
-            throw Error(ProviderErrorCode.AccessDenied,
-                $"Could not create '{fileName}': the connection's storage refused access.", itemId: null, ex);
-        }
-        catch (IOException ex)
-        {
-            // The framework's IO messages carry the absolute path, and this exception
-            // travels back to the agent, so only the caller's own file name is echoed; the
-            // original exception remains available to the host as the inner exception.
-            throw Error(ProviderErrorCode.IO,
-                $"Could not create '{fileName}': the connection's storage rejected the write.", itemId: null, ex);
+            throw Error(ProviderErrorCode.WriteRejected,
+                $"Could not create '{fileName}': the connection's storage rejected the write; nothing was created.",
+                itemId: null, ex);
         }
 
         string id;
@@ -180,7 +179,7 @@ public sealed class FileSystemDocumentProvider : IDocumentProvider, IDocumentCre
             // Do not compensate by deleting the published path: another actor could have
             // opened, changed, or replaced it after publication. The caller knows the name
             // and can register that file explicitly instead of risking data loss.
-            throw Error(ProviderErrorCode.IO,
+            throw Error(ProviderErrorCode.RegistrationFailed,
                 $"Document '{fileName}' was created in this connection, but its registration " +
                 "could not be persisted. The file may exist but is unregistered. Do not retry " +
                 "creation; recover the known filename through registration when available, " +
@@ -296,7 +295,7 @@ public sealed class FileSystemDocumentProvider : IDocumentProvider, IDocumentCre
         var sourcePath = ResolveAndValidateSource(LookupPath(source.ItemId));
         var sourceName = Path.GetFileName(sourcePath);
         var sourceDir = Path.GetDirectoryName(sourcePath)
-            ?? throw Error(ProviderErrorCode.IO, "The referenced file has no parent directory.", source.ItemId);
+            ?? throw Error(ProviderErrorCode.WriteRejected, "The referenced file has no parent directory; nothing was changed.", source.ItemId);
 
         var expectedVersion = options.ExpectedVersion ?? source.Version;
         if (!string.IsNullOrEmpty(expectedVersion))
@@ -312,8 +311,9 @@ public sealed class FileSystemDocumentProvider : IDocumentProvider, IDocumentCre
             }
             catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
             {
+                // Refused before anything was written, so the outcome is certain.
                 throw Error(
-                    ProviderErrorCode.IO,
+                    ProviderErrorCode.WriteRejected,
                     $"The document could not be read to check its version: {ex.Message} " +
                     $"'{sourceName}' is most likely open in another process; nothing was changed.",
                     source.ItemId, ex);
@@ -338,13 +338,29 @@ public sealed class FileSystemDocumentProvider : IDocumentProvider, IDocumentCre
             ? NextVersionedName(sourceDir, sourceName)
             : ValidateName(options.NewName!);
         var destinationPath = Path.Combine(sourceDir, destinationName);
+        // A taken name is refused before anything is written, so it is AlreadyExists, which
+        // callers may treat as certain, rather than IO, which they must treat as uncertain.
         if (File.Exists(destinationPath))
-            throw Error(ProviderErrorCode.IO,
+            throw Error(ProviderErrorCode.AlreadyExists,
                 "A file already exists at the destination path; refusing to overwrite without Replace mode.",
                 source.ItemId);
         await WriteAtomicallyAsync(destinationPath, bytes, replace: false, cancellationToken).ConfigureAwait(false);
 
-        var newId = await MintAndPersistAsync(destinationPath, cancellationToken).ConfigureAwait(false);
+        string newId;
+        try
+        {
+            // The file is published. Finish registering it even if the caller cancels now:
+            // stopping here would leave a written, unregistered document behind a plain
+            // cancellation, which a caller would read as nothing written.
+            newId = await MintAndPersistAsync(destinationPath, CancellationToken.None).ConfigureAwait(false);
+        }
+        catch (Exception ex)
+        {
+            throw Error(ProviderErrorCode.RegistrationFailed,
+                $"Document '{destinationName}' was written, but its registration could not be persisted. " +
+                "Do not save it again; register the file by name to recover it.",
+                source.ItemId, ex);
+        }
         return CreateReference(newId, ComputeVersion(bytes), destinationName);
     }
 
@@ -714,10 +730,23 @@ public sealed class FileSystemDocumentProvider : IDocumentProvider, IDocumentCre
         {
             await WriteAtomicallyCoreAsync(destinationPath, bytes, replace, cancellationToken).ConfigureAwait(false);
         }
+        catch (OperationCanceledException ex)
+        {
+            // Cancellation is observed only while the temporary file is written or between
+            // publish attempts, never after a successful rename, so the destination is as it was.
+            throw Error(
+                ProviderErrorCode.WriteRejected,
+                $"The write to '{Path.GetFileName(destinationPath)}' was cancelled before it was published; nothing was changed.",
+                itemId: null,
+                innerException: ex);
+        }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
+            // Publication is one rename or replace of a fully written temporary file, so a
+            // failure leaves the destination as it was. That certainty is what WriteRejected
+            // means, and what lets a caller retry without reconciling first.
             throw Error(
-                ProviderErrorCode.IO,
+                ProviderErrorCode.WriteRejected,
                 $"The document could not be written to '{Path.GetFileName(destinationPath)}': {ex.Message} " +
                 "The destination is most likely held open by another process; nothing was changed.",
                 itemId: null,

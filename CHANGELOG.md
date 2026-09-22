@@ -21,6 +21,21 @@ corresponding GitHub release.
   Migration: if you build a custom module, suppress `OFFICEAGENT001` and expect these types to
   change in minor releases. See [compatibility](docs/compatibility.md#engine-extensibility).
 
+- **Cell and shape change targets use their plan discriminator.** A change or error target for
+  an Excel cell or a PowerPoint shape was `{kind: "CellAnchor", id}`: a C# class name without
+  the sheet, cell or slide. It is now `{kind: "cell", sheetId, address}` or
+  `{kind: "shape", slideId, shapeId}`, like every other target. Migration: match `kind` against
+  the plan's `$anchor` values. See [upgrading to 1.0](docs/upgrading-to-1.0.md).
+
+- **A failed save reports what happened to storage.** A refusal, an accepted write whose
+  registration failed, and a write whose outcome is unknown are now distinct. They carry the new
+  codes `WriteRejected`, `RegistrationFailed` and `OutcomeUnknown`, and a
+  `DocumentWriteOutcomeUnknownException` with the output's SHA-256. Previously they all surfaced
+  as `IO`. Tool responses gain `writeOutcome` and, when uncertain, a `possibleOutput` locator.
+  A cancellation after a write began is reported as `outcome-unknown`, never as nothing written.
+  A taken output name is `AlreadyExists` rather than `IO`. Migration: see
+  [upgrading to 1.0](docs/upgrading-to-1.0.md) and the [recovery guide](docs/recovery.md).
+
 - **`SpreadsheetPartUtility` is internal.** It was public only so the Excel and PowerPoint
   assemblies could share it, it was hidden from IntelliSense, and its documentation called it
   infrastructure. Migration: none supported. It was never part of the documented surface.
@@ -58,6 +73,14 @@ corresponding GitHub release.
   with `renderer-failed`, before LibreOffice starts. LibreOffice chooses an import filter by
   content, so random bytes named `.docx` were rendered as a text document, and an OpenDocument
   file under a `.docx` name reached LibreOffice's ODF import.
+- A template batch cancelled after its first item returns its result, with committed items and
+  their receipts, instead of throwing and losing the record of outputs already written.
+- A template batch reported an I/O failure with the uncatalogued code `i-o`; it now reports the
+  same `io-error` a tool does. Every provider code is checked identical on both surfaces.
+- The filesystem provider's creation race and path-safe messages never ran: they caught
+  `IOException`, which the atomic writer had already wrapped. A lost race is now `AlreadyExists`.
+- Registration after a new version is finished even if the caller cancels, on the filesystem and
+  SharePoint, so a stored file is not left unregistered behind a plain cancellation.
 - `describe_capabilities` reports `renderingAvailable: true` when an `IDocumentRenderer` is
   registered. It was always `false`, contradicting its documentation.
 

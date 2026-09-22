@@ -98,6 +98,51 @@ It was public only so two OfficeAgent assemblies could share it. It was hidden f
 and documented as infrastructure. Code that called it has no supported replacement; open an issue
 describing the need if you relied on it.
 
+## Cell and shape targets are named like plan anchors
+
+**Who is affected:** hosts that read the `target` of a change or error in an Excel or PowerPoint
+result, for example from `preview_plan`, `apply_plan` or `edit_document_content`.
+
+In 0.9 a cell or shape target was reported as `{ "kind": "CellAnchor", "id": "…" }`: the C#
+class name, and no sheet, cell or slide. Every other target already used its plan discriminator.
+In 1.0:
+
+```json
+{ "kind": "cell", "sheetId": 1, "address": "B2" }
+{ "kind": "shape", "slideId": "256", "shapeId": "4" }
+```
+
+**To migrate:** match `kind` against `cell` and `shape`, the same values a plan's `$anchor`
+uses, and read the locator members instead of `id`.
+
+## A failed save says what happened to storage
+
+**Who is affected:** hosts that handle a failed save, create, template batch or merge.
+
+In 0.9 a provider refusal and a write that landed but went unconfirmed both surfaced as the same
+`IO` failure, and every tool error reported `committed: false`, including a cancellation after
+storage had accepted the bytes. 1.0 separates the outcomes:
+
+| 0.9 | 1.0 |
+| --- | --- |
+| `IO` for a taken output name (filesystem and SharePoint new versions) | `AlreadyExists` |
+| `IO` when the filesystem could not publish, or SharePoint refused an upload (4xx) | `WriteRejected`: nothing was changed |
+| `IO` when a registration failed after the document was written | `RegistrationFailed` |
+| `IO`, a transport error, or `OperationCanceledException` after a write began | `DocumentWriteOutcomeUnknownException`, code `OutcomeUnknown`, with the output's SHA-256 |
+| tool `committed: false` for all of these | tool `writeOutcome`: `notWritten`, `committed`, `writtenNotRegistered` or `unknown`, and a `possibleOutput` locator for the last two |
+| a template batch cancelled mid-way threw, losing its committed items | it returns them, with the rest `Skipped` |
+
+The memory connection now also refuses a new version under a name it already holds, as the other
+providers did.
+
+**To migrate:**
+- Read `writeOutcome` instead of inferring from `committed: false`.
+- Handle `OutcomeUnknown` by reconciling, as the [recovery guide](recovery.md) describes.
+- Treat a cancellation as "nothing written" only when it arrives as `OperationCanceledException`,
+  or as the tool code `cancelled`.
+- A custom provider that can prove nothing was stored should throw `WriteRejected`. A plain `IO`
+  is now treated as uncertain.
+
 ## Removing an unknown session document fails
 
 **Who is affected:** callers of `remove_document`, or `MemoryDocumentProvider.RemoveAsync`, on a

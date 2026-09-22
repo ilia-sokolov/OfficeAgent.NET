@@ -431,7 +431,7 @@ public sealed class ConcurrencyAndIsolationTests
         var client = new OfficeAgentClient(new DocumentProviderRegistry(new[] { provider }), new WordModule());
 
         var hit = (await client.FindAsync(reference, new FindQuery("Acme Corp"))).First();
-        await Assert.ThrowsAsync<DocumentProviderException>(() => client.CommitAsync(reference, new DocumentPlan
+        var failure = await Assert.ThrowsAsync<DocumentProviderException>(() => client.CommitAsync(reference, new DocumentPlan
         {
             Operations = new PlanOperation[]
             {
@@ -439,7 +439,35 @@ public sealed class ConcurrencyAndIsolationTests
             }
         }, new SaveDocumentOptions { Mode = SaveMode.Replace }));
 
+        // The provider proved nothing was stored, so the certainty survives to the caller.
+        Assert.Equal(ProviderErrorCode.WriteRejected, failure.Code);
         Assert.Equal(before, provider.ContentHash(reference.ItemId));
+        Assert.False(provider.AcceptedWrite);
+    }
+
+    /// <summary>
+    /// A provider failure the provider did not classify cannot be proved harmless by the
+    /// engine, so it is reported as an unknown outcome even when, as here, nothing was stored.
+    /// Pessimism costs a reconcile; optimism costs a lost or duplicated write.
+    /// </summary>
+    [Fact]
+    public async Task An_unclassified_provider_failure_is_reported_as_an_unknown_outcome()
+    {
+        var provider = new FaultingProvider("faulty", FaultPoint.UnclassifiedBeforeSave);
+        var reference = provider.Add("contract.docx", DocxFactory.Contract());
+        var client = new OfficeAgentClient(new DocumentProviderRegistry(new[] { provider }), new WordModule());
+
+        var hit = (await client.FindAsync(reference, new FindQuery("Acme Corp"))).First();
+        var failure = await Assert.ThrowsAsync<DocumentWriteOutcomeUnknownException>(() => client.CommitAsync(reference, new DocumentPlan
+        {
+            Operations = new PlanOperation[]
+            {
+                new ChangeTextOp { Target = hit.Anchor, With = "Contoso Research", Mode = ChangeMode.Direct }
+            }
+        }, new SaveDocumentOptions { Mode = SaveMode.Replace }));
+
+        Assert.Equal(ProviderErrorCode.OutcomeUnknown, failure.Code);
+        Assert.IsType<DocumentProviderException>(failure.InnerException);
         Assert.False(provider.AcceptedWrite);
     }
 
@@ -458,7 +486,7 @@ public sealed class ConcurrencyAndIsolationTests
         var client = new OfficeAgentClient(new DocumentProviderRegistry(new[] { provider }), new WordModule());
 
         var hit = (await client.FindAsync(reference, new FindQuery("Acme Corp"))).First();
-        var failure = await Assert.ThrowsAsync<DocumentProviderException>(
+        var failure = await Assert.ThrowsAsync<DocumentWriteOutcomeUnknownException>(
             () => client.CommitAsync(reference, new DocumentPlan
             {
                 Operations = new PlanOperation[]
@@ -469,6 +497,11 @@ public sealed class ConcurrencyAndIsolationTests
 
         Assert.True(provider.AcceptedWrite, "the provider accepted the bytes before faulting");
         Assert.NotEqual(before, provider.ContentHash(reference.ItemId));
+
+        // The exception carries the hash of the bytes it sent, which is exactly how a caller
+        // reconciles: the destination now holds those bytes, so the write landed.
+        Assert.Equal(ProviderErrorCode.OutcomeUnknown, failure.Code);
+        Assert.Equal(provider.ContentHash(reference.ItemId), failure.OutputSha256, ignoreCase: true);
 
         // The failure must not assert that nothing was written, because something was.
         Assert.DoesNotContain("nothing was changed", failure.Message, StringComparison.OrdinalIgnoreCase);
@@ -603,7 +636,7 @@ public sealed class ConcurrencyAndIsolationTests
         }
     }
 
-    private enum FaultPoint { None, BeforeSave, AfterSaveAccepted }
+    private enum FaultPoint { None, BeforeSave, UnclassifiedBeforeSave, AfterSaveAccepted }
 
     /// <summary>
     /// A provider that can fail at a chosen point, so a test can tell the difference
@@ -656,7 +689,10 @@ public sealed class ConcurrencyAndIsolationTests
         {
             if (_fault == FaultPoint.BeforeSave)
                 throw new DocumentProviderException(
-                    ProviderErrorCode.IO, "The storage refused the write.", Provider, ConnectionId, source.ItemId);
+                    ProviderErrorCode.WriteRejected, "The storage refused the write.", Provider, ConnectionId, source.ItemId);
+            if (_fault == FaultPoint.UnclassifiedBeforeSave)
+                throw new DocumentProviderException(
+                    ProviderErrorCode.IO, "The storage failed.", Provider, ConnectionId, source.ItemId);
 
             using var buffer = new MemoryStream();
             await content.CopyToAsync(buffer, cancellationToken).ConfigureAwait(false);

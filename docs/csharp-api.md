@@ -1799,9 +1799,12 @@ public const string InternalError = "internal-error";
 public const string InvalidArgument = "invalid-argument";
 public const string InvalidJson = "invalid-json";
 public const string NotFound = "not-found";
+public const string OutcomeUnknown = "outcome-unknown";
 public const string ProviderError = "provider-error";
 public const string RegexTimeout = "regex-timeout";
+public const string RegistrationFailed = "registration-failed";
 public const string VersionConflict = "version-conflict";
+public const string WriteRejected = "write-rejected";
 ```
 
 ### `OfficeAgent.Abstractions.TransitionOp`
@@ -2221,6 +2224,15 @@ public string ActualVersion { get; }
 public string ExpectedVersion { get; }
 ```
 
+### `OfficeAgent.Core.DocumentProviders.DocumentWriteOutcomeUnknownException`
+
+```csharp
+public sealed class DocumentWriteOutcomeUnknownException : OfficeAgent.Core.DocumentProviders.DocumentProviderException, System.Runtime.Serialization.ISerializable
+public DocumentWriteOutcomeUnknownException(string message, string provider, string connectionId, string? itemId, string? outputName, string outputSha256, Exception? innerException = null);
+public string? OutputName { get; }
+public string OutputSha256 { get; }
+```
+
 ### `OfficeAgent.Core.DocumentProviders.FileSystemDocumentProvider`
 
 ```csharp
@@ -2333,6 +2345,9 @@ InvalidArgument = 6
 ConfigurationError = 7
 IO = 8
 AlreadyExists = 9
+WriteRejected = 10
+OutcomeUnknown = 11
+RegistrationFailed = 12
 ```
 
 ### `OfficeAgent.Core.DocumentProviders.ServiceCollectionExtensions`

@@ -261,7 +261,8 @@ public sealed partial class OfficeAgentClient
         activity?.SetTag("officeagent.bytes", bytes.Length);
 
         var sw = Stopwatch.StartNew();
-        var created = await creator.CreateAsync(name, output, cancellationToken).ConfigureAwait(false);
+        var created = await StorageWrite.RunAsync(provider, itemId: null, name, bytes,
+            token => creator.CreateAsync(name, output, token), cancellationToken).ConfigureAwait(false);
 
         _logger.LogInformation(
             "Provider create {Provider}:{ConnectionId} '{Name}' → {ItemId} ({Bytes} B, {Operations} initial op(s)) in {Elapsed} ms",
@@ -518,7 +519,8 @@ public sealed partial class OfficeAgentClient
         saveActivity?.SetTag("officeagent.bytes", bytes.Length);
 
         var sw = Stopwatch.StartNew();
-        var saved = await provider.SaveAsync(content.Reference, output, saveOpts, cancellationToken).ConfigureAwait(false);
+        var saved = await StorageWrite.RunAsync(provider, reference.ItemId, saveOpts.NewName, bytes,
+            token => provider.SaveAsync(content.Reference, output, saveOpts, token), cancellationToken).ConfigureAwait(false);
 
         _logger.LogInformation(
             "Provider save {Provider}:{ConnectionId} {Source} → {Destination} ({Bytes} B, mode={Mode}) in {Elapsed} ms",

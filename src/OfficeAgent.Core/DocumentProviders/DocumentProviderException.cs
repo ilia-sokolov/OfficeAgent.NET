@@ -38,7 +38,27 @@ public enum ProviderErrorCode
     /// overwrite it. Distinct from <see cref="IO"/> because the caller fixes it by
     /// choosing another name rather than by retrying.
     /// </summary>
-    AlreadyExists
+    AlreadyExists,
+
+    /// <summary>
+    /// The storage definitely did not accept the write: nothing was changed. A provider
+    /// reports this only when it can guarantee it, for example after an atomic publish failed.
+    /// Safe to retry once the cause is fixed.
+    /// </summary>
+    WriteRejected,
+
+    /// <summary>
+    /// The write may or may not have been stored: the provider failed, timed out or was
+    /// cancelled after the write began. Do not retry blindly and do not report the document as
+    /// unchanged; reopen the destination and compare it with the intended output first.
+    /// </summary>
+    OutcomeUnknown,
+
+    /// <summary>
+    /// The document was stored but its registration could not be persisted, so it exists
+    /// without a document id. Do not create it again; register the known name instead.
+    /// </summary>
+    RegistrationFailed
 }
 
 /// <summary>
@@ -76,4 +96,40 @@ public class DocumentProviderException : Exception
 
     /// <summary>Gets the offending item id when known.</summary>
     public string? ItemId { get; }
+}
+
+/// <summary>
+/// A storage write whose outcome is unknown: the provider failed, timed out or was cancelled
+/// after the write call began. Carries what a caller needs to reconcile before retrying.
+/// </summary>
+/// <remarks>
+/// The engine raises this for every failure inside a provider's save or create call that the
+/// provider did not classify as certain. It never reports such a failure as nothing written.
+/// To recover, reopen the destination and compare its content hash with
+/// <see cref="OutputSha256"/>: equal means the write landed; the source's prior version means
+/// it did not; anything else means another writer intervened and the document must be
+/// inspected again.
+/// </remarks>
+public sealed class DocumentWriteOutcomeUnknownException : DocumentProviderException
+{
+    /// <summary>Initializes the exception for one uncertain write.</summary>
+    public DocumentWriteOutcomeUnknownException(
+        string message,
+        string provider,
+        string connectionId,
+        string? itemId,
+        string? outputName,
+        string outputSha256,
+        Exception? innerException = null)
+        : base(ProviderErrorCode.OutcomeUnknown, message, provider, connectionId, itemId, innerException)
+    {
+        OutputName = outputName;
+        OutputSha256 = outputSha256;
+    }
+
+    /// <summary>The name the caller asked the output to have, when the write was a creation or new version.</summary>
+    public string? OutputName { get; }
+
+    /// <summary>Lowercase SHA-256 of the exact bytes the write was carrying.</summary>
+    public string OutputSha256 { get; }
 }

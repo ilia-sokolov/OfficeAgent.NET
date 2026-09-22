@@ -1295,10 +1295,38 @@ public sealed class OfficeAgentTools
             return SerializeError(
                 ProviderCodeToWire(ex.Code),
                 ProviderMessage(ex.Code),
-                ex.Provider, ex.ConnectionId, ex.ItemId);
+                ex.Provider, ex.ConnectionId, ex.ItemId,
+                WriteOutcome(ex.Code), PossibleOutput(ex));
         }
         catch (Exception) { return SerializeError(ToolErrorCodes.InternalError, "An unexpected internal error occurred."); }
     }
+
+    /// <summary>
+    /// What a failed call did to storage. Only three answers are honest after a write call
+    /// fails: nothing was written, it was written but not registered, or nobody can know.
+    /// </summary>
+    private static string WriteOutcome(ProviderErrorCode code) => code switch
+    {
+        ProviderErrorCode.OutcomeUnknown => "unknown",
+        ProviderErrorCode.RegistrationFailed => "writtenNotRegistered",
+        _ => "notWritten"
+    };
+
+    /// <summary>
+    /// Where a possibly written output would be, for the uncertain outcomes only. It carries
+    /// what the caller supplied (the connection, the source document id and the output name
+    /// they asked for) and the hash of the bytes sent, never a storage path.
+    /// </summary>
+    private static object? PossibleOutput(DocumentProviderException ex) =>
+        ex.Code is not (ProviderErrorCode.OutcomeUnknown or ProviderErrorCode.RegistrationFailed)
+            ? null
+            : new
+            {
+                connectionId = ex.ConnectionId,
+                sourceDocumentId = ex.ItemId,
+                outputName = (ex as DocumentWriteOutcomeUnknownException)?.OutputName,
+                expectedSha256 = (ex as DocumentWriteOutcomeUnknownException)?.OutputSha256
+            };
 
     private async ValueTask DemandAccessAsync(
         string connectionId,
@@ -1373,7 +1401,7 @@ public sealed class OfficeAgentTools
         };
     }
 
-    private static string ProviderCodeToWire(ProviderErrorCode code) => code switch
+    internal static string ProviderCodeToWire(ProviderErrorCode code) => code switch
     {
         ProviderErrorCode.NotFound => ToolErrorCodes.NotFound,
         ProviderErrorCode.AccessDenied => ToolErrorCodes.AccessDenied,
@@ -1384,6 +1412,9 @@ public sealed class OfficeAgentTools
         ProviderErrorCode.ConfigurationError => ToolErrorCodes.ConfigurationError,
         ProviderErrorCode.IO => ToolErrorCodes.IOError,
         ProviderErrorCode.AlreadyExists => ToolErrorCodes.AlreadyExists,
+        ProviderErrorCode.WriteRejected => ToolErrorCodes.WriteRejected,
+        ProviderErrorCode.OutcomeUnknown => ToolErrorCodes.OutcomeUnknown,
+        ProviderErrorCode.RegistrationFailed => ToolErrorCodes.RegistrationFailed,
         _ => ToolErrorCodes.ProviderError
     };
 
@@ -1403,6 +1434,12 @@ public sealed class OfficeAgentTools
         ProviderErrorCode.ConfigurationError => "The document connection is not configured for this operation.",
         ProviderErrorCode.IO => "The document provider operation failed.",
         ProviderErrorCode.AlreadyExists => "A document with that name already exists.",
+        ProviderErrorCode.WriteRejected => "The storage refused the write; nothing was changed.",
+        ProviderErrorCode.OutcomeUnknown =>
+            "The write failed after it began, so the output may or may not exist. Do not retry blindly: " +
+            "open the destination and compare it with the intended output before trying again.",
+        ProviderErrorCode.RegistrationFailed =>
+            "The document was written but could not be registered. Do not create it again; register it by name.",
         _ => "The document provider operation failed."
     };
 
@@ -1525,6 +1562,8 @@ public sealed class OfficeAgentTools
         {
             isValid = report.IsValid,
             committed,
+            writeOutcome = committed ? "committed" : "notWritten",
+            possibleOutput = (object?)null,
             receipt = ReceiptPayload(receipt),
             // Present only for the composite tools, which mint the source id themselves:
             // it lets the agent keep working with the document it just named by path.
@@ -1548,11 +1587,14 @@ public sealed class OfficeAgentTools
             })
         }, Json);
 
-    private static string SerializeError(string code, string message, string? provider = null, string? connectionId = null, string? itemId = null) =>
+    private static string SerializeError(string code, string message, string? provider = null, string? connectionId = null,
+        string? itemId = null, string writeOutcome = "notWritten", object? possibleOutput = null) =>
         JsonSerializer.Serialize(new
         {
             isValid = false,
             committed = false,
+            writeOutcome,
+            possibleOutput,
             receipt = (ApplyReceipt?)null,
             sourceDocumentId = (string?)null,
             outputConnectionId = (string?)null,
@@ -1577,6 +1619,8 @@ public sealed class OfficeAgentTools
         {
             isValid = false,
             committed = false,
+            writeOutcome = "notWritten",
+            possibleOutput = (object?)null,
             receipt = (ApplyReceipt?)null,
             sourceDocumentId,
             outputConnectionId = (string?)null,
@@ -1602,6 +1646,11 @@ public sealed class OfficeAgentTools
         StructuralAnchor s => new { kind = "structural", tag = s.Tag, structuralKind = s.Kind },
         NodeAnchor n => new { kind = "node", nodeKind = n.Kind, path = n.Path },
         StyleAnchor s => new { kind = "style", styleId = s.StyleId },
+        // Before 1.0 these two fell through to the fallback and reported the C# class name
+        // ("CellAnchor") without the sheet, cell or slide, so an agent could not tell what changed.
+        CellAnchor c => new { kind = "cell", sheetId = c.SheetId, address = c.Address },
+        ShapeAnchor sh => new { kind = "shape", slideId = sh.SlideId, shapeId = sh.ShapeId },
+        // Reached by no shipped anchor type; AnchorSummaryTests fails if a new one lands here.
         _ => new { kind = anchor.GetType().Name, anchor.Id }
     };
 

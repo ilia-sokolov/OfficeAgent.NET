@@ -199,7 +199,8 @@ public class CreateDocumentTests
         var error = await Assert.ThrowsAsync<DocumentProviderException>(() =>
             workspace.Client.CreateAsync("workspace", "report.docx"));
 
-        Assert.Equal(ProviderErrorCode.IO, error.Code);
+        // Written but not registered is its own outcome, not a generic IO failure.
+        Assert.Equal(ProviderErrorCode.RegistrationFailed, error.Code);
         Assert.Contains("unregistered", error.Message);
         Assert.True(File.Exists(Path.Combine(workspace.Root, "report.docx")));
     }

@@ -20,6 +20,7 @@
   <ItemGroup>
     <!-- Lets the wire-contract baseline read the canonical plan serializer options. -->
     <InternalsVisibleTo Include="OfficeAgent.ApiDocs" />
+    <InternalsVisibleTo Include="OfficeAgent.Tests" />
   </ItemGroup>
 
 </Project>

@@ -105,7 +105,7 @@ public class SharePointProviderTests
         var error = await Assert.ThrowsAsync<DocumentProviderException>(() =>
             provider.CreateAsync("brief.docx", content));
 
-        Assert.Equal(ProviderErrorCode.IO, error.Code);
+        Assert.Equal(ProviderErrorCode.RegistrationFailed, error.Code);
         Assert.Contains("unregistered", error.Message);
         Assert.True(drive.HasName("brief.docx"));
     }
@@ -413,6 +413,107 @@ public class SharePointProviderTests
     /// separate host. Items report their parent drive id, so registration by URL or
     /// by driveId/itemId both resolve a fully-addressed item.
     /// </summary>
+    // ── Storage outcome simulations (V10-02) ─────────────────────────────────────────────
+    // Controlled simulations against the fake Graph drive, not live SharePoint. Each drives a
+    // create through the engine, so the outcome asserted is the one a caller receives.
+
+    private static OfficeAgentClient EngineOver(SharePointDocumentProvider provider) =>
+        new(new DocumentProviderRegistry(new IDocumentProvider[] { provider }), new WordModule());
+
+    [Theory]
+    [InlineData(HttpStatusCode.BadRequest)]
+    [InlineData((HttpStatusCode)423)] // Locked
+    [InlineData(HttpStatusCode.TooManyRequests)]
+    public async Task A_refused_upload_is_certain_and_leaves_nothing_behind(HttpStatusCode status)
+    {
+        using var drive = new FakeGraphDrive { UploadStatus = status };
+        var error = await Assert.ThrowsAsync<DocumentProviderException>(() =>
+            EngineOver(drive.Provider()).CreateAsync("legal", "refused.docx"));
+
+        Assert.Equal(ProviderErrorCode.WriteRejected, error.Code);
+        Assert.False(drive.HasName("refused.docx"));
+    }
+
+    [Fact]
+    public async Task A_server_error_on_upload_is_an_unknown_outcome()
+    {
+        // A 503 is not a refusal: Graph may have processed the request before failing.
+        using var drive = new FakeGraphDrive { UploadStatus = HttpStatusCode.ServiceUnavailable };
+        var error = await Assert.ThrowsAsync<DocumentWriteOutcomeUnknownException>(() =>
+            EngineOver(drive.Provider()).CreateAsync("legal", "maybe.docx"));
+
+        Assert.Equal(ProviderErrorCode.OutcomeUnknown, error.Code);
+    }
+
+    [Fact]
+    public async Task A_lost_response_after_a_stored_upload_is_unknown_and_reconcilable()
+    {
+        using var drive = new FakeGraphDrive { StoreThenLoseResponse = true };
+        var error = await Assert.ThrowsAsync<DocumentWriteOutcomeUnknownException>(() =>
+            EngineOver(drive.Provider()).CreateAsync("legal", "lost.docx"));
+
+        // The upload landed although the caller was never told. The exception says so, and
+        // its hash is exactly what the destination now holds, which is how a caller reconciles.
+        Assert.Equal(ProviderErrorCode.OutcomeUnknown, error.Code);
+        Assert.Equal("lost.docx", error.OutputName);
+        Assert.True(drive.HasName("lost.docx"));
+        Assert.Equal(Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(drive.BytesNamed("lost.docx"))),
+            error.OutputSha256, ignoreCase: true);
+    }
+
+    [Fact]
+    public async Task A_taken_name_on_a_new_version_is_refused_before_upload()
+    {
+        using var drive = new FakeGraphDrive();
+        var provider = drive.Provider();
+        var source = drive.Seed("contract.docx", DocxFactory.Contract());
+        drive.Seed("taken.docx", DocxFactory.Contract());
+        var reference = await provider.RegisterAsync(drive.SourceById(source));
+
+        var error = await Assert.ThrowsAsync<DocumentProviderException>(() =>
+            provider.SaveAsync(reference, new MemoryStream(DocxFactory.Contract()),
+                new SaveDocumentOptions { Mode = SaveMode.NewDocument, NewName = "taken.docx" }));
+
+        // Was reported as IO, which a template batch then called uncertain.
+        Assert.Equal(ProviderErrorCode.AlreadyExists, error.Code);
+    }
+
+    [Fact]
+    public async Task A_new_version_whose_registration_fails_is_written_not_registered()
+    {
+        using var drive = new FakeGraphDrive();
+        var provider = drive.Provider(registrationStore: new RegisterOnceStore());
+        var source = drive.Seed("contract.docx", DocxFactory.Contract());
+        var reference = await provider.RegisterAsync(drive.SourceById(source));
+
+        var error = await Assert.ThrowsAsync<DocumentProviderException>(() =>
+            provider.SaveAsync(reference, new MemoryStream(DocxFactory.Contract()),
+                new SaveDocumentOptions { Mode = SaveMode.NewDocument, NewName = "copy.docx" }));
+
+        Assert.Equal(ProviderErrorCode.RegistrationFailed, error.Code);
+        Assert.True(drive.HasName("copy.docx"));
+    }
+
+    /// <summary>Accepts the first registration, then fails every later one.</summary>
+    private sealed class RegisterOnceStore : ISharePointRegistrationStore
+    {
+        private readonly Dictionary<string, SharePointItemRef> _items = new();
+
+        public Task<string> AddAsync(SharePointItemRef item, CancellationToken cancellationToken = default)
+        {
+            if (_items.Count > 0) throw new IOException("Registration store unavailable.");
+            var id = "reg-" + _items.Count;
+            _items[id] = item;
+            return Task.FromResult(id);
+        }
+
+        public Task<SharePointItemRef?> ResolveAsync(string registrationId, CancellationToken cancellationToken = default) =>
+            Task.FromResult<SharePointItemRef?>(_items.TryGetValue(registrationId, out var item) ? item : null);
+
+        public Task<bool> RemoveAsync(string registrationId, CancellationToken cancellationToken = default) =>
+            Task.FromResult(_items.Remove(registrationId));
+    }
+
     private sealed class FailingRegistrationStore : ISharePointRegistrationStore
     {
         public Task<string> AddAsync(
@@ -451,6 +552,18 @@ public class SharePointProviderTests
         public bool SawAuthorizedDownloadCall { get; private set; }
         public string? CreationFailureMessage { get; init; }
         public string? ResolutionFailureMessage { get; init; }
+
+        /// <summary>Simulation: answer the next upload with this status without storing it.</summary>
+        public HttpStatusCode? UploadStatus { get; set; }
+
+        /// <summary>
+        /// Simulation: store the next upload, then lose the response the way a timeout or a
+        /// dropped connection does. The item exists; the caller never hears so.
+        /// </summary>
+        public bool StoreThenLoseResponse { get; set; }
+
+        /// <summary>The bytes stored under a name, for reconciliation assertions.</summary>
+        public byte[] BytesNamed(string name) => _byName[name].Bytes;
 
         /// <summary>Seeds a drive item and returns its Graph item id.</summary>
         public string Seed(string name, byte[] bytes)
@@ -563,6 +676,12 @@ public class SharePointProviderTests
                     return Status(HttpStatusCode.NotFound);
                 rest = rest.Substring("/items/".Length);
 
+                if (request.Method == HttpMethod.Put && _drive.UploadStatus is { } simulated)
+                {
+                    _drive.UploadStatus = null;
+                    return GraphError(simulated, "simulated");
+                }
+
                 // PUT /items/{folderId}:/{name}:/content. Graph replaces by default;
                 // conflictBehavior=fail is what gives creation its no-overwrite guarantee.
                 if (request.Method == HttpMethod.Put && rest.Contains(":/"))
@@ -591,6 +710,12 @@ public class SharePointProviderTests
                     }
                     var bytes = request.Content!.ReadAsByteArrayAsync().GetAwaiter().GetResult();
                     var id = _drive.Seed(name, bytes);
+                    if (_drive.StoreThenLoseResponse)
+                    {
+                        _drive.StoreThenLoseResponse = false;
+                        // HttpClient reports a timeout as a TaskCanceledException the caller did not ask for.
+                        throw new TaskCanceledException("The request timed out after the upload was stored.");
+                    }
                     return Item(_drive._byId[id]);
                 }
 

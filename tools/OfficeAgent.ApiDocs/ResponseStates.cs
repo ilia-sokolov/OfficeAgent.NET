@@ -156,10 +156,12 @@ internal static class ResponseStates
 
         foreach (var (fault, name, code) in new[]
                  {
-                     (Fault.VersionConflict, "stale version at save", "version-conflict"),
-                     (Fault.RefuseWrite, "storage refused the write", "io-error"),
-                     (Fault.AfterAccept, "storage accepted, then failed to confirm", "io-error"),
-                     (Fault.CancelAfterAccept, "cancelled after storage accepted", ToolErrorCodes.Cancelled),
+                     (Fault.VersionConflict, "stale version at save", ToolErrorCodes.VersionConflict),
+                     (Fault.RefuseWrite, "storage refused the write", ToolErrorCodes.WriteRejected),
+                     (Fault.UnclassifiedFailure, "provider failed without classifying the outcome", ToolErrorCodes.OutcomeUnknown),
+                     (Fault.AfterAccept, "storage accepted, then failed to confirm", ToolErrorCodes.OutcomeUnknown),
+                     (Fault.CancelAfterAccept, "cancelled after storage accepted", ToolErrorCodes.OutcomeUnknown),
+                     (Fault.RegistrationFailed, "written but not registered", ToolErrorCodes.RegistrationFailed),
                  })
         {
             // A fresh document per case: an accepted write really lands, and the next case
@@ -168,7 +170,7 @@ internal static class ResponseStates
             var faultyPlan = EditPlan(await tools.InspectDocument("faulty", faultyDoc));
             faulty.Next = fault;
             await Record("apply_plan", name, tools.ApplyPlan("faulty", faultyDoc, faultyPlan),
-                n => IsError(n) && (code == "io-error" || HasCode(n, code)), $"an error envelope ({code})");
+                n => HasCode(n, code), $"an error envelope ({code})");
             faulty.Next = Fault.None;
         }
 
@@ -183,7 +185,8 @@ internal static class ResponseStates
             n => HasCode(n, ToolErrorCodes.AlreadyExists), "already-exists");
         faulty.Next = Fault.AfterAccept;
         await Record("create_document", "storage accepted, then failed to confirm", tools.CreateDocument("faulty", "made.docx"),
-            IsError, "an error envelope");
+            n => HasCode(n, ToolErrorCodes.OutcomeUnknown) && n["writeOutcome"]?.GetValue<string>() == "unknown",
+            "an unknown outcome with a locator");
         faulty.Next = Fault.None;
 
         // register_document, open_document, edit_document, remove_document
@@ -302,7 +305,8 @@ internal static class ResponseStates
             n => Bool(n, "committed") && n["receipt"] is JsonObject, "a commit with a receipt");
         faulty.Next = Fault.AfterAccept;
         await Record("merge_documents", "storage accepted, then failed to confirm", tools.MergeDocuments(mergePlan, "faulty", "packet.docx"),
-            IsError, "an error envelope");
+            n => HasCode(n, ToolErrorCodes.OutcomeUnknown) && n["writeOutcome"]?.GetValue<string>() == "unknown",
+            "an unknown outcome with a locator");
         faulty.Next = Fault.None;
         await tools.ApplyPlan("memory", left, EditPlan(await tools.InspectDocument("memory", left)));
         await Record("merge_documents", "source changed since preview", tools.MergeDocuments(mergePlan, "memory", "stale.docx"),
@@ -390,7 +394,7 @@ internal static class ResponseStates
             ConnectionCapability capability, CancellationToken cancellationToken = default) => new(false);
     }
 
-    private enum Fault { None, VersionConflict, RefuseWrite, AfterAccept, CancelAfterAccept }
+    private enum Fault { None, VersionConflict, RefuseWrite, UnclassifiedFailure, AfterAccept, CancelAfterAccept, RegistrationFailed }
 
     /// <summary>
     /// A memory store whose next write fails at a chosen boundary. References carry a name and
@@ -445,7 +449,7 @@ internal static class ResponseStates
         public async Task<DocumentReference> CreateAsync(string name, Stream content, CancellationToken cancellationToken = default)
         {
             if (name == RefuseCreateNamed)
-                throw new DocumentProviderException(ProviderErrorCode.IO, "The storage refused the write.", Provider, ConnectionId, null);
+                throw new DocumentProviderException(ProviderErrorCode.AlreadyExists, "A document with that name already exists.", Provider, ConnectionId, null);
             var bytes = await Before(null, content, cancellationToken);
             var id = $"item-{++_next}";
             _items[id] = (name, bytes);
@@ -463,8 +467,11 @@ internal static class ResponseStates
         {
             if (Next == Fault.VersionConflict)
                 throw new DocumentVersionConflictException("expected", "actual", Provider, ConnectionId, itemId);
+            // A provider that can prove nothing was stored says so; one that cannot uses IO.
             if (Next == Fault.RefuseWrite)
-                throw new DocumentProviderException(ProviderErrorCode.IO, "The storage refused the write.", Provider, ConnectionId, itemId);
+                throw new DocumentProviderException(ProviderErrorCode.WriteRejected, "The storage refused the write.", Provider, ConnectionId, itemId);
+            if (Next == Fault.UnclassifiedFailure)
+                throw new DocumentProviderException(ProviderErrorCode.IO, "The storage failed.", Provider, ConnectionId, itemId);
             using var buffer = new MemoryStream();
             await content.CopyToAsync(buffer, cancellationToken);
             return buffer.ToArray();
@@ -475,6 +482,9 @@ internal static class ResponseStates
             if (Next == Fault.AfterAccept)
                 throw new DocumentProviderException(ProviderErrorCode.IO,
                     "The storage accepted the document but the result could not be confirmed.", Provider, ConnectionId, id);
+            if (Next == Fault.RegistrationFailed)
+                throw new DocumentProviderException(ProviderErrorCode.RegistrationFailed,
+                    "The document was stored but could not be registered.", Provider, ConnectionId, id);
             if (Next == Fault.CancelAfterAccept)
                 throw new OperationCanceledException("Cancelled after the storage accepted the document.");
         }

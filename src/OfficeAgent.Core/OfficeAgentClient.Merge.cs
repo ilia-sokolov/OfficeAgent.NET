@@ -70,8 +70,9 @@ public sealed partial class OfficeAgentClient
         if (!result.Committed) return result;
         cancellationToken.ThrowIfCancellationRequested();
         using var output = new MemoryStream(result.Content!, writable: false);
-        // Deliberately do not translate provider/cancellation failures into a guaranteed no-write result.
-        var document = await creator.CreateAsync(outputName, output, cancellationToken).ConfigureAwait(false);
+        // A failure after the create began is reported as an uncertain write, never as no write.
+        var document = await StorageWrite.RunAsync(provider, itemId: null, outputName, result.Content!,
+            token => creator.CreateAsync(outputName, output, token), cancellationToken).ConfigureAwait(false);
         return new()
         {
             Committed = true,

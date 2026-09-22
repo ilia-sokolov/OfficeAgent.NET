@@ -2444,8 +2444,9 @@ Target summary: `CellAnchor`
 
 ```text
 $: object
-$.id: string
+$.address: string
 $.kind: string
+$.sheetId: number
 ```
 
 Target summary: `NodeAnchor`
@@ -2461,8 +2462,9 @@ Target summary: `ShapeAnchor`
 
 ```text
 $: object
-$.id: string
 $.kind: string
+$.shapeId: string
+$.slideId: string
 ```
 
 Target summary: `StructuralAnchor`
@@ -2564,6 +2566,7 @@ $.outputContentType: string
 $.outputDocumentId: string
 $.outputName: string
 $.outputVersion: string
+$.possibleOutput: null
 $.receipt: object
 $.receipt.actor: null
 $.receipt.inputSha256: string
@@ -2583,6 +2586,7 @@ $.receipt.revision.author: string
 $.receipt.revision.timestampUtc: string
 $.receipt.timestampUtc: string
 $.sourceDocumentId: null
+$.writeOutcome: string
 ```
 
 State: committed, authenticated actor
@@ -2610,6 +2614,7 @@ $.outputContentType: string
 $.outputDocumentId: string
 $.outputName: string
 $.outputVersion: string
+$.possibleOutput: null
 $.receipt: object
 $.receipt.actor: object
 $.receipt.actor.displayName: string
@@ -2632,6 +2637,7 @@ $.receipt.revision.author: string
 $.receipt.revision.timestampUtc: string
 $.receipt.timestampUtc: string
 $.sourceDocumentId: null
+$.writeOutcome: string
 ```
 
 State: validation failure
@@ -2655,6 +2661,7 @@ $.outputContentType: null
 $.outputDocumentId: null
 $.outputName: null
 $.outputVersion: null
+$.possibleOutput: null
 $.receipt: object
 $.receipt.actor: null
 $.receipt.inputSha256: string
@@ -2668,6 +2675,7 @@ $.receipt.revision.author: string
 $.receipt.revision.timestampUtc: string
 $.receipt.timestampUtc: string
 $.sourceDocumentId: null
+$.writeOutcome: string
 ```
 
 State: unknown document
@@ -2690,8 +2698,10 @@ $.outputContentType: null
 $.outputDocumentId: null
 $.outputName: null
 $.outputVersion: null
+$.possibleOutput: null
 $.receipt: null
 $.sourceDocumentId: null
+$.writeOutcome: string
 ```
 
 State: connection denied
@@ -2714,8 +2724,10 @@ $.outputContentType: null
 $.outputDocumentId: null
 $.outputName: null
 $.outputVersion: null
+$.possibleOutput: null
 $.receipt: null
 $.sourceDocumentId: null
+$.writeOutcome: string
 ```
 
 State: stale version at save
@@ -2738,8 +2750,10 @@ $.outputContentType: null
 $.outputDocumentId: null
 $.outputName: null
 $.outputVersion: null
+$.possibleOutput: null
 $.receipt: null
 $.sourceDocumentId: null
+$.writeOutcome: string
 ```
 
 State: storage refused the write
@@ -2762,8 +2776,40 @@ $.outputContentType: null
 $.outputDocumentId: null
 $.outputName: null
 $.outputVersion: null
+$.possibleOutput: null
 $.receipt: null
 $.sourceDocumentId: null
+$.writeOutcome: string
+```
+
+State: provider failed without classifying the outcome
+
+```text
+$: object
+$.changes: array
+$.committed: boolean
+$.errors: array
+$.errors[]: object
+$.errors[].code: string
+$.errors[].connectionId: string
+$.errors[].itemId: string
+$.errors[].message: string
+$.errors[].provider: string
+$.errors[].target: null
+$.isValid: boolean
+$.outputConnectionId: null
+$.outputContentType: null
+$.outputDocumentId: null
+$.outputName: null
+$.outputVersion: null
+$.possibleOutput: object
+$.possibleOutput.connectionId: string
+$.possibleOutput.expectedSha256: string
+$.possibleOutput.outputName: null
+$.possibleOutput.sourceDocumentId: string
+$.receipt: null
+$.sourceDocumentId: null
+$.writeOutcome: string
 ```
 
 State: storage accepted, then failed to confirm
@@ -2786,8 +2832,14 @@ $.outputContentType: null
 $.outputDocumentId: null
 $.outputName: null
 $.outputVersion: null
+$.possibleOutput: object
+$.possibleOutput.connectionId: string
+$.possibleOutput.expectedSha256: string
+$.possibleOutput.outputName: null
+$.possibleOutput.sourceDocumentId: string
 $.receipt: null
 $.sourceDocumentId: null
+$.writeOutcome: string
 ```
 
 State: cancelled after storage accepted
@@ -2799,10 +2851,10 @@ $.committed: boolean
 $.errors: array
 $.errors[]: object
 $.errors[].code: string
-$.errors[].connectionId: null
-$.errors[].itemId: null
+$.errors[].connectionId: string
+$.errors[].itemId: string
 $.errors[].message: string
-$.errors[].provider: null
+$.errors[].provider: string
 $.errors[].target: null
 $.isValid: boolean
 $.outputConnectionId: null
@@ -2810,8 +2862,44 @@ $.outputContentType: null
 $.outputDocumentId: null
 $.outputName: null
 $.outputVersion: null
+$.possibleOutput: object
+$.possibleOutput.connectionId: string
+$.possibleOutput.expectedSha256: string
+$.possibleOutput.outputName: null
+$.possibleOutput.sourceDocumentId: string
 $.receipt: null
 $.sourceDocumentId: null
+$.writeOutcome: string
+```
+
+State: written but not registered
+
+```text
+$: object
+$.changes: array
+$.committed: boolean
+$.errors: array
+$.errors[]: object
+$.errors[].code: string
+$.errors[].connectionId: string
+$.errors[].itemId: string
+$.errors[].message: string
+$.errors[].provider: string
+$.errors[].target: null
+$.isValid: boolean
+$.outputConnectionId: null
+$.outputContentType: null
+$.outputDocumentId: null
+$.outputName: null
+$.outputVersion: null
+$.possibleOutput: object
+$.possibleOutput.connectionId: string
+$.possibleOutput.expectedSha256: null
+$.possibleOutput.outputName: null
+$.possibleOutput.sourceDocumentId: string
+$.receipt: null
+$.sourceDocumentId: null
+$.writeOutcome: string
 ```
 
 #### `compare_documents`
@@ -2904,8 +2992,10 @@ $.outputContentType: null
 $.outputDocumentId: null
 $.outputName: null
 $.outputVersion: null
+$.possibleOutput: null
 $.receipt: null
 $.sourceDocumentId: null
+$.writeOutcome: string
 ```
 
 #### `create_document`
@@ -2923,8 +3013,10 @@ $.outputContentType: string
 $.outputDocumentId: string
 $.outputName: string
 $.outputVersion: string
+$.possibleOutput: null
 $.receipt: null
 $.sourceDocumentId: null
+$.writeOutcome: string
 ```
 
 State: created from a plan
@@ -2952,6 +3044,7 @@ $.outputContentType: string
 $.outputDocumentId: string
 $.outputName: string
 $.outputVersion: string
+$.possibleOutput: null
 $.receipt: object
 $.receipt.actor: null
 $.receipt.inputSha256: string
@@ -2971,6 +3064,7 @@ $.receipt.revision.author: string
 $.receipt.revision.timestampUtc: string
 $.receipt.timestampUtc: string
 $.sourceDocumentId: null
+$.writeOutcome: string
 ```
 
 State: validation failure
@@ -2994,6 +3088,7 @@ $.outputContentType: null
 $.outputDocumentId: null
 $.outputName: null
 $.outputVersion: null
+$.possibleOutput: null
 $.receipt: object
 $.receipt.actor: null
 $.receipt.inputSha256: string
@@ -3007,6 +3102,7 @@ $.receipt.revision.author: string
 $.receipt.revision.timestampUtc: string
 $.receipt.timestampUtc: string
 $.sourceDocumentId: null
+$.writeOutcome: string
 ```
 
 State: name already exists
@@ -3029,8 +3125,10 @@ $.outputContentType: null
 $.outputDocumentId: null
 $.outputName: null
 $.outputVersion: null
+$.possibleOutput: null
 $.receipt: null
 $.sourceDocumentId: null
+$.writeOutcome: string
 ```
 
 State: storage accepted, then failed to confirm
@@ -3043,7 +3141,7 @@ $.errors: array
 $.errors[]: object
 $.errors[].code: string
 $.errors[].connectionId: string
-$.errors[].itemId: string
+$.errors[].itemId: null
 $.errors[].message: string
 $.errors[].provider: string
 $.errors[].target: null
@@ -3053,8 +3151,14 @@ $.outputContentType: null
 $.outputDocumentId: null
 $.outputName: null
 $.outputVersion: null
+$.possibleOutput: object
+$.possibleOutput.connectionId: string
+$.possibleOutput.expectedSha256: string
+$.possibleOutput.outputName: string
+$.possibleOutput.sourceDocumentId: null
 $.receipt: null
 $.sourceDocumentId: null
+$.writeOutcome: string
 ```
 
 #### `create_document_content`
@@ -3267,6 +3371,7 @@ $.outputContentType: string
 $.outputDocumentId: string
 $.outputName: string
 $.outputVersion: string
+$.possibleOutput: null
 $.receipt: object
 $.receipt.actor: null
 $.receipt.inputSha256: string
@@ -3286,6 +3391,7 @@ $.receipt.revision.author: string
 $.receipt.revision.timestampUtc: string
 $.receipt.timestampUtc: string
 $.sourceDocumentId: string
+$.writeOutcome: string
 ```
 
 State: validation failure
@@ -3309,6 +3415,7 @@ $.outputContentType: null
 $.outputDocumentId: null
 $.outputName: null
 $.outputVersion: null
+$.possibleOutput: null
 $.receipt: object
 $.receipt.actor: null
 $.receipt.inputSha256: string
@@ -3322,6 +3429,7 @@ $.receipt.revision.author: string
 $.receipt.revision.timestampUtc: string
 $.receipt.timestampUtc: string
 $.sourceDocumentId: string
+$.writeOutcome: string
 ```
 
 State: find target not bound
@@ -3343,8 +3451,10 @@ $.outputContentType: null
 $.outputDocumentId: null
 $.outputName: null
 $.outputVersion: null
+$.possibleOutput: null
 $.receipt: null
 $.sourceDocumentId: string
+$.writeOutcome: string
 ```
 
 #### `edit_document_content`
@@ -3490,8 +3600,10 @@ $.outputContentType: null
 $.outputDocumentId: null
 $.outputName: null
 $.outputVersion: null
+$.possibleOutput: null
 $.receipt: null
 $.sourceDocumentId: null
+$.writeOutcome: string
 ```
 
 #### `find_in_document`
@@ -3536,8 +3648,10 @@ $.outputContentType: null
 $.outputDocumentId: null
 $.outputName: null
 $.outputVersion: null
+$.possibleOutput: null
 $.receipt: null
 $.sourceDocumentId: null
+$.writeOutcome: string
 ```
 
 #### `import_document_content`
@@ -3573,8 +3687,10 @@ $.outputContentType: null
 $.outputDocumentId: null
 $.outputName: null
 $.outputVersion: null
+$.possibleOutput: null
 $.receipt: null
 $.sourceDocumentId: null
+$.writeOutcome: string
 ```
 
 #### `inspect_document`
@@ -3725,8 +3841,10 @@ $.outputContentType: null
 $.outputDocumentId: null
 $.outputName: null
 $.outputVersion: null
+$.possibleOutput: null
 $.receipt: null
 $.sourceDocumentId: null
+$.writeOutcome: string
 ```
 
 State: connection denied
@@ -3749,8 +3867,10 @@ $.outputContentType: null
 $.outputDocumentId: null
 $.outputName: null
 $.outputVersion: null
+$.possibleOutput: null
 $.receipt: null
 $.sourceDocumentId: null
+$.writeOutcome: string
 ```
 
 State: cancelled before start
@@ -3773,8 +3893,10 @@ $.outputContentType: null
 $.outputDocumentId: null
 $.outputName: null
 $.outputVersion: null
+$.possibleOutput: null
 $.receipt: null
 $.sourceDocumentId: null
+$.writeOutcome: string
 ```
 
 #### `inspect_document_content`
@@ -3899,7 +4021,7 @@ $.errors: array
 $.errors[]: object
 $.errors[].code: string
 $.errors[].connectionId: string
-$.errors[].itemId: string
+$.errors[].itemId: null
 $.errors[].message: string
 $.errors[].provider: string
 $.errors[].target: null
@@ -3909,8 +4031,14 @@ $.outputContentType: null
 $.outputDocumentId: null
 $.outputName: null
 $.outputVersion: null
+$.possibleOutput: object
+$.possibleOutput.connectionId: string
+$.possibleOutput.expectedSha256: string
+$.possibleOutput.outputName: string
+$.possibleOutput.sourceDocumentId: null
 $.receipt: null
 $.sourceDocumentId: null
+$.writeOutcome: string
 ```
 
 State: source changed since preview
@@ -3987,8 +4115,10 @@ $.outputContentType: null
 $.outputDocumentId: null
 $.outputName: null
 $.outputVersion: null
+$.possibleOutput: null
 $.receipt: null
 $.sourceDocumentId: null
+$.writeOutcome: string
 ```
 
 #### `populate_template_batch`
@@ -4222,6 +4352,7 @@ $.outputContentType: null
 $.outputDocumentId: null
 $.outputName: null
 $.outputVersion: null
+$.possibleOutput: null
 $.receipt: object
 $.receipt.actor: null
 $.receipt.inputSha256: string
@@ -4235,6 +4366,7 @@ $.receipt.revision.author: string
 $.receipt.revision.timestampUtc: string
 $.receipt.timestampUtc: string
 $.sourceDocumentId: null
+$.writeOutcome: string
 ```
 
 State: valid, empty plan
@@ -4250,6 +4382,7 @@ $.outputContentType: null
 $.outputDocumentId: null
 $.outputName: null
 $.outputVersion: null
+$.possibleOutput: null
 $.receipt: object
 $.receipt.actor: null
 $.receipt.inputSha256: string
@@ -4263,6 +4396,7 @@ $.receipt.revision.author: string
 $.receipt.revision.timestampUtc: string
 $.receipt.timestampUtc: string
 $.sourceDocumentId: null
+$.writeOutcome: string
 ```
 
 State: validation failure
@@ -4286,6 +4420,7 @@ $.outputContentType: null
 $.outputDocumentId: null
 $.outputName: null
 $.outputVersion: null
+$.possibleOutput: null
 $.receipt: object
 $.receipt.actor: null
 $.receipt.inputSha256: string
@@ -4299,6 +4434,7 @@ $.receipt.revision.author: string
 $.receipt.revision.timestampUtc: string
 $.receipt.timestampUtc: string
 $.sourceDocumentId: null
+$.writeOutcome: string
 ```
 
 State: unreadable plan
@@ -4321,8 +4457,10 @@ $.outputContentType: null
 $.outputDocumentId: null
 $.outputName: null
 $.outputVersion: null
+$.possibleOutput: null
 $.receipt: null
 $.sourceDocumentId: null
+$.writeOutcome: string
 ```
 
 #### `preview_template_batch`
@@ -4432,8 +4570,10 @@ $.outputContentType: null
 $.outputDocumentId: null
 $.outputName: null
 $.outputVersion: null
+$.possibleOutput: null
 $.receipt: null
 $.sourceDocumentId: null
+$.writeOutcome: string
 ```
 
 State: path outside the root
@@ -4456,8 +4596,10 @@ $.outputContentType: null
 $.outputDocumentId: null
 $.outputName: null
 $.outputVersion: null
+$.possibleOutput: null
 $.receipt: null
 $.sourceDocumentId: null
+$.writeOutcome: string
 ```
 
 #### `remove_document`
@@ -4491,8 +4633,10 @@ $.outputContentType: null
 $.outputDocumentId: null
 $.outputName: null
 $.outputVersion: null
+$.possibleOutput: null
 $.receipt: null
 $.sourceDocumentId: null
+$.writeOutcome: string
 ```
 
 ## Configuration
