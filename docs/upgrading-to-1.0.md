@@ -127,9 +127,9 @@ storage had accepted the bytes. 1.0 separates the outcomes:
 | --- | --- |
 | `IO` for a taken output name (filesystem and SharePoint new versions) | `AlreadyExists` |
 | `IO` when the filesystem could not publish, or SharePoint refused an upload (4xx) | `WriteRejected`: nothing was changed |
-| `IO` when a registration failed after the document was written | `RegistrationFailed` |
+| `IO` when a registration failed after the document was written | `DocumentRegistrationFailedException`, code `RegistrationFailed`, with the stored output's name and SHA-256 |
 | `IO`, a transport error, or `OperationCanceledException` after a write began | `DocumentWriteOutcomeUnknownException`, code `OutcomeUnknown`, with the output's SHA-256 |
-| tool `committed: false` for all of these | tool `writeOutcome`: `notWritten`, `committed`, `writtenNotRegistered` or `unknown`, and a `possibleOutput` locator for the last two |
+| tool `committed: false` for all of these | tool `writeOutcome`: `notWritten`, `committed`, `writtenNotRegistered` or `unknown`, and a `possibleOutput` locator for the last two. In .NET both of those exceptions derive from `DocumentWriteRecoveryException`, which carries the same locator |
 | a template batch cancelled mid-way threw, losing its committed items | it returns them, with the rest `Skipped` |
 
 The memory connection now also refuses a new version under a name it already holds, as the other

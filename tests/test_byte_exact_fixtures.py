@@ -46,6 +46,24 @@ class ByteExactFixtureTests(unittest.TestCase):
                 "translation",
             )
 
+    def test_corpus_records_are_lf_text_on_every_platform(self) -> None:
+        """
+        The corpus JSON and Markdown are text with LF endings. A manifest written with CRLF under
+        the blanket -text rule made every line trailing whitespace to `git diff --check`, and the
+        native results are bound to the manifest's exact bytes.
+        """
+        attributes = (ROOT / ".gitattributes").read_text(encoding="utf-8")
+        for pattern in ("tests/OfficeAgent.Tests/Corpus/**/*.json text eol=lf",
+                        "tests/OfficeAgent.Tests/Corpus/**/*.md text eol=lf"):
+            self.assertIn(pattern, attributes)
+
+        with_cr = [
+            name
+            for name in git("ls-files", "--", "tests/OfficeAgent.Tests/Corpus").decode("utf-8").splitlines()
+            if name.endswith((".json", ".md")) and (ROOT / name).exists() and b"\r" in (ROOT / name).read_bytes()
+        ]
+        self.assertEqual([], with_cr, "these corpus records contain carriage returns")
+
     def test_the_working_tree_matches_the_committed_bytes(self) -> None:
         """
         The property every byte-for-byte fixture comparison depends on.

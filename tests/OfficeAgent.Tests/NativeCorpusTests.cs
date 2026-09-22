@@ -213,29 +213,32 @@ public sealed class NativeCorpusTests
         };
         foreach (var (file, bytes, part, bad) in controls)
             File.WriteAllBytes(Path.Combine(root, "controls", file), Corrupt(bytes, part, bad));
+        // LF on every platform: JsonSerializer indents with Environment.NewLine on .NET 8, which
+        // once made the published manifest CRLF, and its hash is what native results are bound to.
         File.WriteAllText(Path.Combine(root, "manifest.json"),
-            JsonSerializer.Serialize(manifest, new JsonSerializerOptions { WriteIndented = true }));
+            JsonSerializer.Serialize(manifest, new JsonSerializerOptions { WriteIndented = true }).Replace("\r\n", "\n"));
     }
 
+    private static string PublishedRoot() =>
+        Path.Combine(RepositoryRoot(), "tests", "OfficeAgent.Tests", "Corpus", "v1.0.0", "native");
+
     /// <summary>
-    /// The published native record is internally consistent: every file Office opened is the
-    /// one the manifest names, every recorded case and control passed, and every operation
-    /// discovery advertises today, and every case the corpus builds, appears in it. A new verb
-    /// or case therefore fails here until native evidence for it is recorded.
+    /// The published native record applies to exactly the published corpus: every binding
+    /// between results, manifest and files holds, and every operation discovery advertises today,
+    /// and every case the corpus builds, appears in it. A new verb or case therefore fails here
+    /// until native evidence for it is recorded.
     /// </summary>
     [Fact]
     public void The_published_native_record_matches_its_files_and_covers_every_advertised_operation()
     {
-        var root = Path.Combine(RepositoryRoot(), "tests", "OfficeAgent.Tests", "Corpus", "v1.0.0", "native");
-        using var manifest = JsonDocument.Parse(File.ReadAllText(Path.Combine(root, "manifest.json")));
-        using var results = JsonDocument.Parse(File.ReadAllText(Path.Combine(root, "results.json")));
+        var root = PublishedRoot();
+        var problems = NativeRecordProblems(root);
+        Assert.True(problems.Count == 0, string.Join("\n", problems));
 
+        using var manifest = JsonDocument.Parse(File.ReadAllBytes(Path.Combine(root, "manifest.json")));
         var families = new Dictionary<string, HashSet<string>>(StringComparer.Ordinal);
         foreach (var entry in manifest.RootElement.EnumerateArray())
         {
-            var file = entry.GetProperty("file").GetString()!;
-            Assert.Equal(entry.GetProperty("inputSha256").GetString(), NativeCorpus.Sha256(File.ReadAllBytes(Path.Combine(root, "inputs", file))));
-            Assert.Equal(entry.GetProperty("outputSha256").GetString(), NativeCorpus.Sha256(File.ReadAllBytes(Path.Combine(root, "outputs", file))));
             var format = entry.GetProperty("format").GetString()!;
             if (!families.TryGetValue(format, out var set)) families[format] = set = new HashSet<string>(StringComparer.Ordinal);
             set.Add(entry.GetProperty("family").GetString()!);
@@ -245,12 +248,6 @@ public sealed class NativeCorpusTests
         var published = manifest.RootElement.EnumerateArray().Select(e => e.GetProperty("id").GetString()).ToHashSet(StringComparer.Ordinal);
         Assert.DoesNotContain(Cases.Value, c => !published.Contains(c.Id));
 
-        var cases = results.RootElement.GetProperty("cases").EnumerateArray().ToArray();
-        Assert.Equal(manifest.RootElement.GetArrayLength(), cases.Length);
-        Assert.All(cases, c => Assert.True(c.GetProperty("pass").GetBoolean(), c.GetProperty("id").GetString()));
-        Assert.All(results.RootElement.GetProperty("controls").EnumerateArray(),
-            c => Assert.True(c.GetProperty("detected").GetBoolean(), c.GetProperty("file").GetString()));
-
         foreach (var (format, module) in new (string, OfficeAgent.Core.IFormatModule)[]
                  {
                      ("word", new OfficeAgent.Word.WordModule()),
@@ -258,6 +255,182 @@ public sealed class NativeCorpusTests
                      ("excel", new OfficeAgent.Excel.ExcelModule())
                  })
             Assert.DoesNotContain(CapabilityDiscoveryTests.Describe(module).Operations, op => !families[format].Contains(op));
+    }
+
+    /// <summary>
+    /// The binding guard fails closed. Each tamper, applied to a temporary copy of the published
+    /// corpus, is one a regeneration could leave behind while keeping the previous passing
+    /// results: none of them may pass.
+    /// </summary>
+    /// <remarks>
+    /// Each case names the problem it must produce. Asserting only that some problem appears let
+    /// every case pass for an unrelated reason: the tampered JSON was once rewritten with CRLF and
+    /// rejected for that, so removing the binding under test went unnoticed.
+    /// </remarks>
+    [Theory]
+    [InlineData("output-regenerated-with-its-hash", "Office opened")]
+    [InlineData("results-manifest-hash", "results were recorded against manifest")]
+    [InlineData("result-case-id", "no native result for")]
+    [InlineData("result-output-hash", "Office opened")]
+    [InlineData("result-case-duplicated", "results list")]
+    [InlineData("check-failed-under-a-passing-case", "check '")]
+    [InlineData("control-missing", "controls recorded")]
+    public void The_native_record_guard_rejects_a_stale_or_altered_record(string tamper, string expectedProblem)
+    {
+        var copy = Path.Combine(Path.GetTempPath(), $"officeagent-native-record-{Guid.NewGuid():N}");
+        CopyDirectory(PublishedRoot(), copy);
+        try
+        {
+            Assert.Empty(NativeRecordProblems(copy));
+            var resultsPath = Path.Combine(copy, "results.json");
+            var manifestPath = Path.Combine(copy, "manifest.json");
+            var results = System.Text.Json.Nodes.JsonNode.Parse(File.ReadAllText(resultsPath))!;
+            var cases = results["cases"]!.AsArray();
+
+            switch (tamper)
+            {
+                case "output-regenerated-with-its-hash":
+                {
+                    // A regeneration: one output changes and the manifest follows it; the old
+                    // native results are kept.
+                    var manifest = System.Text.Json.Nodes.JsonNode.Parse(File.ReadAllText(manifestPath))!.AsArray();
+                    var file = manifest[0]!["file"]!.GetValue<string>();
+                    var output = Path.Combine(copy, "outputs", file);
+                    var bytes = File.ReadAllBytes(output);
+                    bytes[^1] ^= 0xFF;
+                    File.WriteAllBytes(output, bytes);
+                    manifest[0]!["outputSha256"] = NativeCorpus.Sha256(bytes);
+                    File.WriteAllText(manifestPath, manifest.ToJsonString(new JsonSerializerOptions { WriteIndented = true }).Replace("\r\n", "\n"));
+                    break;
+                }
+                case "results-manifest-hash":
+                    results["environment"]!["manifestSha256"] = new string('0', 64);
+                    break;
+                case "result-case-id":
+                    cases[0]!["id"] = "no-such-case";
+                    break;
+                case "result-output-hash":
+                    cases[0]!["sha256"] = new string('0', 64);
+                    break;
+                case "result-case-duplicated":
+                    cases[1] = cases[0]!.DeepClone();
+                    break;
+                case "check-failed-under-a-passing-case":
+                    cases[0]!["checks"]!.AsArray()[0]!["pass"] = false;
+                    break;
+                case "control-missing":
+                    results["controls"]!.AsArray().RemoveAt(0);
+                    break;
+            }
+            if (tamper != "output-regenerated-with-its-hash")
+                File.WriteAllText(resultsPath, results.ToJsonString(new JsonSerializerOptions { WriteIndented = true }).Replace("\r\n", "\n"));
+
+            var problems = NativeRecordProblems(copy);
+            Assert.Contains(problems, problem => problem.Contains(expectedProblem, StringComparison.Ordinal));
+        }
+        finally
+        {
+            Directory.Delete(copy, recursive: true);
+        }
+    }
+
+    /// <summary>
+    /// Every way the native results could fail to describe the corpus beside them. Empty means
+    /// the results were produced by a run over exactly these files.
+    /// </summary>
+    internal static IReadOnlyList<string> NativeRecordProblems(string root)
+    {
+        var problems = new List<string>();
+        var manifestBytes = File.ReadAllBytes(Path.Combine(root, "manifest.json"));
+        var resultsBytes = File.ReadAllBytes(Path.Combine(root, "results.json"));
+        if (manifestBytes.Contains((byte)'\r')) problems.Add("manifest.json contains carriage returns; the corpus writes LF");
+        if (resultsBytes.Contains((byte)'\r')) problems.Add("results.json contains carriage returns; the corpus writes LF");
+        using var manifest = JsonDocument.Parse(manifestBytes);
+        using var results = JsonDocument.Parse(resultsBytes);
+
+        // 1. The results were produced against these exact manifest bytes.
+        var recordedManifest = results.RootElement.GetProperty("environment").GetProperty("manifestSha256").GetString();
+        if (recordedManifest != NativeCorpus.Sha256(manifestBytes))
+            problems.Add($"results were recorded against manifest {recordedManifest}, not this manifest {NativeCorpus.Sha256(manifestBytes)}");
+
+        // 2-4. Unique ids on both sides, and the same set.
+        var entries = manifest.RootElement.EnumerateArray().ToList();
+        var manifestIds = entries.Select(e => e.GetProperty("id").GetString()!).ToList();
+        foreach (var duplicate in manifestIds.GroupBy(id => id).Where(g => g.Count() > 1))
+            problems.Add($"manifest lists {duplicate.Key} {duplicate.Count()} times");
+        var cases = results.RootElement.GetProperty("cases").EnumerateArray().ToList();
+        var resultIds = cases.Select(c => c.GetProperty("id").GetString()!).ToList();
+        foreach (var duplicate in resultIds.GroupBy(id => id).Where(g => g.Count() > 1))
+            problems.Add($"results list {duplicate.Key} {duplicate.Count()} times");
+        foreach (var missing in manifestIds.Except(resultIds))
+            problems.Add($"no native result for {missing}");
+        foreach (var extra in resultIds.Except(manifestIds))
+            problems.Add($"a native result for {extra}, which the manifest does not list");
+
+        var byId = cases.GroupBy(c => c.GetProperty("id").GetString()!).ToDictionary(g => g.Key, g => g.First());
+        foreach (var entry in entries)
+        {
+            var id = entry.GetProperty("id").GetString()!;
+            var file = entry.GetProperty("file").GetString()!;
+            var outputSha = entry.GetProperty("outputSha256").GetString()!;
+
+            // The manifest names the files beside it.
+            var input = Path.Combine(root, "inputs", file);
+            var output = Path.Combine(root, "outputs", file);
+            if (!File.Exists(input) || entry.GetProperty("inputSha256").GetString() != NativeCorpus.Sha256(File.ReadAllBytes(input)))
+                problems.Add($"{id}: input does not match the manifest");
+            var actualOutput = File.Exists(output) ? NativeCorpus.Sha256(File.ReadAllBytes(output)) : "(missing)";
+            if (outputSha != actualOutput)
+                problems.Add($"{id}: output {actualOutput} does not match the manifest {outputSha}");
+
+            if (!byId.TryGetValue(id, out var result)) continue;
+
+            // 5. Same case.
+            foreach (var field in new[] { "format", "family" })
+                if (result.GetProperty(field).GetString() != entry.GetProperty(field).GetString())
+                    problems.Add($"{id}: result {field} differs from the manifest");
+
+            // 6-7. Office opened exactly this output.
+            if (result.GetProperty("manifestSha256").GetString() != outputSha)
+                problems.Add($"{id}: result was run against manifest output {result.GetProperty("manifestSha256").GetString()}");
+            if (result.GetProperty("sha256").GetString() != outputSha || result.GetProperty("sha256").GetString() != actualOutput)
+                problems.Add($"{id}: Office opened {result.GetProperty("sha256").GetString()}, not the published output");
+
+            // 8. Every check passed, not only the case flag.
+            if (!result.GetProperty("pass").GetBoolean()) problems.Add($"{id}: case failed");
+            if (!result.GetProperty("openedCleanly").GetBoolean()) problems.Add($"{id}: not opened cleanly");
+            var checks = result.GetProperty("checks").EnumerateArray().ToList();
+            if (checks.Count == 0) problems.Add($"{id}: no native checks recorded");
+            foreach (var check in checks.Where(check => !check.GetProperty("pass").GetBoolean()))
+                problems.Add($"{id}: check '{check.GetProperty("name").GetString()}' failed");
+        }
+
+        // 9. The controls are exactly the corrupt files beside the corpus, each caught by the
+        // application its extension names.
+        var extensionFormat = new Dictionary<string, string> { [".docx"] = "word", [".pptx"] = "powerpoint", [".xlsx"] = "excel" };
+        var controlFiles = Directory.GetFiles(Path.Combine(root, "controls")).Select(Path.GetFileName).OrderBy(n => n, StringComparer.Ordinal).ToList();
+        var controls = results.RootElement.GetProperty("controls").EnumerateArray().ToList();
+        var recordedControls = controls.Select(c => c.GetProperty("file").GetString()!).ToList();
+        if (!recordedControls.OrderBy(n => n, StringComparer.Ordinal).SequenceEqual(controlFiles))
+            problems.Add($"controls recorded [{string.Join(", ", recordedControls)}] are not the control files [{string.Join(", ", controlFiles)}]");
+        foreach (var control in controls)
+        {
+            var file = control.GetProperty("file").GetString()!;
+            if (!control.GetProperty("detected").GetBoolean()) problems.Add($"control {file} was not caught");
+            if (!control.GetProperty("appOpenedValidCase").GetBoolean()) problems.Add($"control {file}: its application opened no valid case in the run");
+            if (!extensionFormat.TryGetValue(Path.GetExtension(file), out var format) || control.GetProperty("format").GetString() != format)
+                problems.Add($"control {file} was checked by the wrong application");
+        }
+        return problems;
+    }
+
+    private static void CopyDirectory(string source, string destination)
+    {
+        foreach (var directory in Directory.GetDirectories(source, "*", SearchOption.AllDirectories))
+            Directory.CreateDirectory(directory.Replace(source, destination));
+        Directory.CreateDirectory(destination);
+        foreach (var file in Directory.GetFiles(source, "*", SearchOption.AllDirectories))
+            File.Copy(file, file.Replace(source, destination));
     }
 
     private static string RepositoryRoot()

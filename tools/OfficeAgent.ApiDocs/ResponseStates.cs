@@ -161,7 +161,6 @@ internal static class ResponseStates
                      (Fault.UnclassifiedFailure, "provider failed without classifying the outcome", ToolErrorCodes.OutcomeUnknown),
                      (Fault.AfterAccept, "storage accepted, then failed to confirm", ToolErrorCodes.OutcomeUnknown),
                      (Fault.CancelAfterAccept, "cancelled after storage accepted", ToolErrorCodes.OutcomeUnknown),
-                     (Fault.RegistrationFailed, "written but not registered", ToolErrorCodes.RegistrationFailed),
                  })
         {
             // A fresh document per case: an accepted write really lands, and the next case
@@ -171,6 +170,23 @@ internal static class ResponseStates
             faulty.Next = fault;
             await Record("apply_plan", name, tools.ApplyPlan("faulty", faultyDoc, faultyPlan),
                 n => HasCode(n, code), $"an error envelope ({code})");
+            faulty.Next = Fault.None;
+        }
+
+        // Registration happens only when a save creates a new document, so that is where the
+        // outcome arises. Its locator must name the stored output and hash its bytes: this state
+        // once recorded both as null, and a caller could not recover the file.
+        {
+            var faultyDoc = faulty.Add("contract.docx", contractBytes);
+            var faultyPlan = EditPlan(await tools.InspectDocument("faulty", faultyDoc));
+            faulty.Next = Fault.RegistrationFailed;
+            await Record("apply_plan", "written but not registered",
+                tools.ApplyPlan("faulty", faultyDoc, faultyPlan, saveMode: "NewDocument", newName: "copy.docx"),
+                n => HasCode(n, ToolErrorCodes.RegistrationFailed) &&
+                     n["writeOutcome"]?.GetValue<string>() == "writtenNotRegistered" &&
+                     n["possibleOutput"]?["outputName"]?.GetValue<string>() == "copy.docx" &&
+                     (n["possibleOutput"]?["expectedSha256"]?.GetValue<string>()?.Length ?? 0) == 64,
+                "an error envelope (registration-failed) whose locator names and hashes the stored output");
             faulty.Next = Fault.None;
         }
 
@@ -441,8 +457,9 @@ internal static class ResponseStates
                     $"A document named '{newName}' already exists.", Provider, ConnectionId, null);
             var bytes = await Before(source.ItemId, content, cancellationToken);
             var id = options.Mode == SaveMode.Replace ? source.ItemId : $"item-{++_next}";
-            _items[id] = (options.NewName ?? _items[source.ItemId].Name, bytes);
-            After(id);
+            var name = options.NewName ?? _items[source.ItemId].Name;
+            _items[id] = (name, bytes);
+            After(id, source.ItemId, name, bytes);
             return Reference(id);
         }
 
@@ -453,7 +470,7 @@ internal static class ResponseStates
             var bytes = await Before(null, content, cancellationToken);
             var id = $"item-{++_next}";
             _items[id] = (name, bytes);
-            After(id);
+            After(id, null, name, bytes);
             return Reference(id);
         }
 
@@ -477,14 +494,16 @@ internal static class ResponseStates
             return buffer.ToArray();
         }
 
-        private void After(string id)
+        private void After(string id, string? sourceId, string name, byte[] bytes)
         {
             if (Next == Fault.AfterAccept)
                 throw new DocumentProviderException(ProviderErrorCode.IO,
                     "The storage accepted the document but the result could not be confirmed.", Provider, ConnectionId, id);
+            // As the filesystem and SharePoint providers raise it: the stored output's name and hash.
             if (Next == Fault.RegistrationFailed)
-                throw new DocumentProviderException(ProviderErrorCode.RegistrationFailed,
-                    "The document was stored but could not be registered.", Provider, ConnectionId, id);
+                throw new DocumentRegistrationFailedException(
+                    "The document was stored but could not be registered.", Provider, ConnectionId, sourceId, name,
+                    Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(bytes)).ToLowerInvariant());
             if (Next == Fault.CancelAfterAccept)
                 throw new OperationCanceledException("Cancelled after the storage accepted the document.");
         }

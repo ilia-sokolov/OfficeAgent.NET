@@ -213,13 +213,19 @@ public class CreateDocumentTests
         using var workspace = new CreateWorkspace();
         Directory.CreateDirectory(Path.Combine(workspace.Root, ".officeagent", "index.json"));
 
-        var error = await Assert.ThrowsAsync<DocumentProviderException>(() =>
+        var error = await Assert.ThrowsAsync<DocumentRegistrationFailedException>(() =>
             workspace.Client.CreateAsync("workspace", "report.docx"));
 
-        // Written but not registered is its own outcome, not a generic IO failure.
+        // Written but not registered is its own outcome, not a generic IO failure, and it names
+        // the stored file and hashes its bytes so the caller can register it.
         Assert.Equal(ProviderErrorCode.RegistrationFailed, error.Code);
         Assert.Contains("unregistered", error.Message);
-        Assert.True(File.Exists(Path.Combine(workspace.Root, "report.docx")));
+        var stored = Path.Combine(workspace.Root, "report.docx");
+        Assert.True(File.Exists(stored));
+        Assert.Equal("report.docx", error.OutputName);
+        Assert.Equal(Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(File.ReadAllBytes(stored))).ToLowerInvariant(),
+            error.OutputSha256);
+        Assert.DoesNotContain(workspace.Root, error.Message);
     }
 
     [Fact]

@@ -2214,6 +2214,13 @@ public IDocumentProvider ResolveConnection(string connectionId);
 public bool Contains(string provider, string connectionId);
 ```
 
+### `OfficeAgent.Core.DocumentProviders.DocumentRegistrationFailedException`
+
+```csharp
+public sealed class DocumentRegistrationFailedException : OfficeAgent.Core.DocumentProviders.DocumentWriteRecoveryException, System.Runtime.Serialization.ISerializable
+public DocumentRegistrationFailedException(string message, string provider, string connectionId, string? itemId, string outputName, string outputSha256, Exception? innerException = null);
+```
+
 ### `OfficeAgent.Core.DocumentProviders.DocumentVersionConflictException`
 
 ```csharp
@@ -2227,8 +2234,14 @@ public string ExpectedVersion { get; }
 ### `OfficeAgent.Core.DocumentProviders.DocumentWriteOutcomeUnknownException`
 
 ```csharp
-public sealed class DocumentWriteOutcomeUnknownException : OfficeAgent.Core.DocumentProviders.DocumentProviderException, System.Runtime.Serialization.ISerializable
+public sealed class DocumentWriteOutcomeUnknownException : OfficeAgent.Core.DocumentProviders.DocumentWriteRecoveryException, System.Runtime.Serialization.ISerializable
 public DocumentWriteOutcomeUnknownException(string message, string provider, string connectionId, string? itemId, string? outputName, string outputSha256, Exception? innerException = null);
+```
+
+### `OfficeAgent.Core.DocumentProviders.DocumentWriteRecoveryException`
+
+```csharp
+public abstract class DocumentWriteRecoveryException : OfficeAgent.Core.DocumentProviders.DocumentProviderException, System.Runtime.Serialization.ISerializable
 public string? OutputName { get; }
 public string OutputSha256 { get; }
 ```

@@ -38,4 +38,8 @@ To replace this record after a passing run:
 python scripts/native/publish_results.py C:\temp\officeagent-native
 ```
 
-The script refuses to publish a run with any failed case or missed control.
+The script refuses to publish a run with any failed case, failed check or missed control, or
+whose results were not recorded against these exact manifest and output bytes. The same bindings
+are enforced by `NativeCorpusTests` on every build, so a regenerated corpus cannot keep an old
+native record. The JSON and Markdown here are LF text on every platform; the packages are byte
+exact.

@@ -29,9 +29,11 @@ corresponding GitHub release.
 
 - **A failed save reports what happened to storage.** A refusal, an accepted write whose
   registration failed, and a write whose outcome is unknown are now distinct. They carry the new
-  codes `WriteRejected`, `RegistrationFailed` and `OutcomeUnknown`, and a
-  `DocumentWriteOutcomeUnknownException` with the output's SHA-256. Previously they all surfaced
-  as `IO`. Tool responses gain `writeOutcome` and, when uncertain, a `possibleOutput` locator.
+  codes `WriteRejected`, `RegistrationFailed` and `OutcomeUnknown`. The two uncertain outcomes
+  raise `DocumentWriteOutcomeUnknownException` and `DocumentRegistrationFailedException`, both
+  `DocumentWriteRecoveryException`s carrying the output's name and SHA-256. Previously they all
+  surfaced as `IO`. Tool responses gain `writeOutcome` and, when uncertain, a `possibleOutput`
+  locator.
   A cancellation after a write began is reported as `outcome-unknown`, never as nothing written.
   A taken output name is `AlreadyExists` rather than `IO`. Migration: see
   [upgrading to 1.0](docs/upgrading-to-1.0.md) and the [recovery guide](docs/recovery.md).

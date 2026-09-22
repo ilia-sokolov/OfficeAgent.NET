@@ -13,7 +13,7 @@ that nothing was written.
 | --- | --- | --- | --- |
 | Not written | `notWritten` | a validation report, `DocumentProviderException` with a pre-write code, or `OperationCanceledException` | Nothing reached storage, or storage proved it kept nothing |
 | Committed | `committed` | `ProviderApplyResult.Committed` | Storage confirmed the write; the receipt names the output |
-| Written, not registered | `writtenNotRegistered` | code `RegistrationFailed` | The document exists but has no document id |
+| Written, not registered | `writtenNotRegistered` | `DocumentRegistrationFailedException`, code `RegistrationFailed` | The document exists but has no document id |
 | Unknown | `unknown` | `DocumentWriteOutcomeUnknownException`, code `OutcomeUnknown` | The write may or may not have been stored |
 
 A `DocumentProviderException` raised inside a provider's save or create proves nothing was
@@ -48,10 +48,16 @@ every item not yet attempted is `Skipped`.
 
 ## Reconciling an unknown outcome
 
-An unknown outcome carries a locator, `possibleOutput` in tool responses and the exception's
-members in .NET. It holds only what the caller supplied: the connection, the source document id,
-the output name the caller asked for, and the SHA-256 of the bytes the write carried. It never
-contains a storage path, and it does not imply the output was registered.
+Both uncertain outcomes carry a locator: `possibleOutput` in tool responses, and in .NET the
+members of `DocumentWriteRecoveryException`, the base of `DocumentWriteOutcomeUnknownException`
+and `DocumentRegistrationFailedException`. Catch the base to handle both. The locator holds the
+connection, the source document id, the output's name in that connection (the name asked for, or
+the versioned name the provider chose), and the SHA-256 of the exact bytes the write carried. It
+never contains a storage path or a remote drive or item id, and it does not imply the output was
+registered.
+
+For `writtenNotRegistered` the output is known to exist under that name: confirm its hash and
+register it. The steps below are for `unknown`.
 
 1. Find the destination. A `Replace` wrote to `sourceDocumentId`. A new document or version was
    written under `outputName`, or under a versioned name beside the source when no name was given.

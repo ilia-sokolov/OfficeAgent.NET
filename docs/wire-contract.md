@@ -2894,8 +2894,8 @@ $.outputName: null
 $.outputVersion: null
 $.possibleOutput: object
 $.possibleOutput.connectionId: string
-$.possibleOutput.expectedSha256: null
-$.possibleOutput.outputName: null
+$.possibleOutput.expectedSha256: string
+$.possibleOutput.outputName: string
 $.possibleOutput.sourceDocumentId: string
 $.receipt: null
 $.sourceDocumentId: null

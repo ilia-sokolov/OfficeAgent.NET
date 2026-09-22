@@ -63,9 +63,20 @@ internal static class StorageWrite
             return await write(cancellationToken).ConfigureAwait(false);
         }
         catch (DocumentProviderException ex) when (
+            ex.Code is ProviderErrorCode.RegistrationFailed &&
+            ex is not DocumentWriteRecoveryException &&
+            !string.IsNullOrEmpty(outputName))
+        {
+            // A provider that reported the registration failure without the locator: the engine
+            // knows the name it asked for and the exact bytes, so the caller can still find and
+            // register the stored output instead of writing it a second time.
+            throw new DocumentRegistrationFailedException(
+                ex.Message, ex.Provider, ex.ConnectionId, ex.ItemId, outputName!, Sha256(content), ex);
+        }
+        catch (DocumentProviderException ex) when (
             ProvesNothingWritten(ex.Code) ||
             ex.Code is ProviderErrorCode.RegistrationFailed ||
-            ex is DocumentWriteOutcomeUnknownException)
+            ex is DocumentWriteRecoveryException)
         {
             throw;
         }

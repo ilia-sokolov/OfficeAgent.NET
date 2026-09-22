@@ -102,12 +102,13 @@ public class SharePointProviderTests
         var provider = drive.Provider(registrationStore: new FailingRegistrationStore());
         using var content = new MemoryStream(DocxFactory.Contract());
 
-        var error = await Assert.ThrowsAsync<DocumentProviderException>(() =>
+        var error = await Assert.ThrowsAsync<DocumentRegistrationFailedException>(() =>
             provider.CreateAsync("brief.docx", content));
 
         Assert.Equal(ProviderErrorCode.RegistrationFailed, error.Code);
         Assert.Contains("unregistered", error.Message);
         Assert.True(drive.HasName("brief.docx"));
+        AssertLocated(drive, error, "brief.docx", sourceItemId: null);
     }
 
     [Fact]
@@ -486,13 +487,61 @@ public class SharePointProviderTests
         var source = drive.Seed("contract.docx", DocxFactory.Contract());
         var reference = await provider.RegisterAsync(drive.SourceById(source));
 
-        var error = await Assert.ThrowsAsync<DocumentProviderException>(() =>
+        var error = await Assert.ThrowsAsync<DocumentRegistrationFailedException>(() =>
             provider.SaveAsync(reference, new MemoryStream(DocxFactory.Contract()),
                 new SaveDocumentOptions { Mode = SaveMode.NewDocument, NewName = "copy.docx" }));
 
         Assert.Equal(ProviderErrorCode.RegistrationFailed, error.Code);
         Assert.True(drive.HasName("copy.docx"));
+        AssertLocated(drive, error, "copy.docx", reference.ItemId);
     }
+
+    /// <summary>
+    /// Through the tools, the SharePoint outcome carries the same locator, and nothing names the
+    /// drive, folder or Graph item the upload landed in.
+    /// </summary>
+    [Fact]
+    public async Task A_sharepoint_registration_failure_reports_a_path_free_locator_through_the_tools()
+    {
+        using var drive = new FakeGraphDrive();
+        var provider = drive.Provider(registrationStore: new RegisterOnceStore());
+        var source = drive.Seed("contract.docx", DocxFactory.Contract());
+        var reference = await provider.RegisterAsync(drive.SourceById(source));
+        var tools = new OfficeAgentTools(new OfficeAgentClient(new DocumentProviderRegistry(new IDocumentProvider[] { provider }), new WordModule()));
+        using var hits = JsonDocument.Parse(await tools.FindInDocument("legal", reference.ItemId, "Acme Corp"));
+        var hit = hits.RootElement[0];
+        var plan = "{\"operations\":[{\"op\":\"changeText\",\"target\":{\"paraId\":\"" + hit.GetProperty("paraId").GetString() +
+                   "\",\"expect\":\"Acme Corp\",\"occurrence\":" + hit.GetProperty("occurrence").GetInt32() +
+                   "},\"mode\":\"Direct\",\"with\":\"Contoso\"}]}";
+
+        using var result = JsonDocument.Parse(await tools.ApplyPlan("legal", reference.ItemId, plan, saveMode: "NewDocument", newName: "copy.docx"));
+
+        Assert.Equal("registration-failed", result.RootElement.GetProperty("errors")[0].GetProperty("code").GetString());
+        Assert.Equal("writtenNotRegistered", result.RootElement.GetProperty("writeOutcome").GetString());
+        var locator = result.RootElement.GetProperty("possibleOutput");
+        Assert.Equal("legal", locator.GetProperty("connectionId").GetString());
+        Assert.Equal(reference.ItemId, locator.GetProperty("sourceDocumentId").GetString());
+        Assert.Equal("copy.docx", locator.GetProperty("outputName").GetString());
+        Assert.Equal(Sha256(drive.BytesNamed("copy.docx")), locator.GetProperty("expectedSha256").GetString());
+        var json = result.RootElement.ToString();
+        Assert.DoesNotContain(FakeGraphDrive.DriveId, json);
+        Assert.DoesNotContain("graph.fake", json);
+    }
+
+    private static void AssertLocated(FakeGraphDrive drive, DocumentRegistrationFailedException error, string name, string? sourceItemId)
+    {
+        Assert.IsAssignableFrom<DocumentWriteRecoveryException>(error);
+        Assert.Equal("legal", error.ConnectionId);
+        Assert.Equal(sourceItemId, error.ItemId);
+        Assert.Equal(name, error.OutputName);
+        // Graph confirmed the upload: the locator hashes exactly the bytes the drive now holds.
+        Assert.Equal(Sha256(drive.BytesNamed(name)), error.OutputSha256);
+        Assert.DoesNotContain(FakeGraphDrive.DriveId, error.Message);
+        Assert.DoesNotContain("graph.fake", error.Message);
+    }
+
+    private static string Sha256(byte[] bytes) =>
+        Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(bytes)).ToLowerInvariant();
 
     /// <summary>Accepts the first registration, then fails every later one.</summary>
     private sealed class RegisterOnceStore : ISharePointRegistrationStore

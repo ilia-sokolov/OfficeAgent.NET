@@ -193,7 +193,7 @@ and how to reconcile.
 |---|---|---|
 | **Nothing was written** | Validation `Errors`, or a `DocumentProviderException` with a pre-write code such as `VersionConflict`, `AlreadyExists` or `WriteRejected`; tools report `writeOutcome: notWritten` | Fix the plan or the cause, re-inspect if the source changed, then retry |
 | **The write landed** | `ProviderApplyResult.Committed` is `true` with a `Document` reference; tools report `writeOutcome: committed` | Use the returned reference. The receipt names the output |
-| **Written, not registered** | Code `RegistrationFailed`; tools report `writeOutcome: writtenNotRegistered` | Do not write it again; register the named output |
+| **Written, not registered** | `DocumentRegistrationFailedException` (code `RegistrationFailed`) with the output's name and SHA-256; tools report `writeOutcome: writtenNotRegistered` with a `possibleOutput` locator | Do not write it again; confirm the named output's hash and register it |
 | **Unknown** | `DocumentWriteOutcomeUnknownException` (code `OutcomeUnknown`): the write failed, timed out or was cancelled after it began; tools report `writeOutcome: unknown` with a `possibleOutput` locator | Do not retry blindly and do not report the document as unchanged. Compare the destination with the locator's `expectedSha256`, then act |
 
 The uncertainty in the last row is real and cannot be engineered away at this layer: a provider

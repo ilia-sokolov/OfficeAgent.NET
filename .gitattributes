@@ -1,4 +1,10 @@
 tests/OfficeAgent.Tests/Corpus/** -text
+# Within the corpus, the OOXML packages stay byte exact (the rule above), but the JSON and
+# Markdown records are text with one line ending on every platform. A manifest written with CRLF
+# under -text made every line trailing whitespace to `git diff --check`, and native results are
+# bound to the manifest's exact bytes, so its line ending must not depend on the checkout.
+tests/OfficeAgent.Tests/Corpus/**/*.json text eol=lf
+tests/OfficeAgent.Tests/Corpus/**/*.md text eol=lf
 
 # The agent-selection evaluation is regenerated and compared byte for byte against the
 # committed report, for the same reason and with the same failure mode. This was found after

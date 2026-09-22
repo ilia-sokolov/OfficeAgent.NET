@@ -191,13 +191,11 @@ public sealed class SharePointDocumentProvider : IDocumentProvider, IDocumentCre
         }
         catch (Exception ex)
         {
-            throw Error(
-                ProviderErrorCode.RegistrationFailed,
+            throw RegistrationFailed(
                 $"Document '{fileName}' was created in SharePoint, but its registration " +
-                "could not be persisted. Do not retry creation; report the possibly " +
-                "unregistered file to the host/operator for recovery.",
-                itemId: null,
-                ex);
+                "could not be persisted. The file is stored but unregistered. Do not retry creation; " +
+                "register it by name, or report it to the host/operator for recovery.",
+                itemId: null, fileName, bytes, ex);
         }
 
         return CreateReference(registrationId, created);
@@ -350,10 +348,10 @@ public sealed class SharePointDocumentProvider : IDocumentProvider, IDocumentCre
         }
         catch (Exception ex)
         {
-            throw Error(ProviderErrorCode.RegistrationFailed,
+            throw RegistrationFailed(
                 $"Document '{destinationName}' was saved to SharePoint, but its registration could not be " +
                 "persisted. Do not save it again; register the saved file to recover it.",
-                source.ItemId, ex);
+                source.ItemId, destinationName, bytes, ex);
         }
         return CreateReference(newId, saved);
     }
@@ -655,6 +653,18 @@ public sealed class SharePointDocumentProvider : IDocumentProvider, IDocumentCre
                     $"Document exceeds the configured maximum of {_options.MaximumBytes} bytes.", itemId);
         }
         return copy.ToArray();
+    }
+
+    /// <summary>
+    /// Graph confirmed the upload but the registration store failed: carry the file's name and
+    /// content hash so it can be found and registered, never its drive or item id.
+    /// </summary>
+    private DocumentRegistrationFailedException RegistrationFailed(
+        string message, string? itemId, string outputName, byte[] bytes, Exception innerException)
+    {
+        using var sha = System.Security.Cryptography.SHA256.Create();
+        return new(message, ProviderName, ConnectionId, itemId, outputName,
+            string.Concat(sha.ComputeHash(bytes).Select(b => b.ToString("x2"))), innerException);
     }
 
     private DocumentProviderException Error(

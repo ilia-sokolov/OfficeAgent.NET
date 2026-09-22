@@ -6,6 +6,7 @@ Copies inputs, outputs, controls, the manifest and a sanitized results.json into
 tests/OfficeAgent.Tests/Corpus/v1.0.0/native, then replaces the generated matrix section of
 docs/native-compatibility.md. Local paths are removed from results before they are copied.
 """
+import hashlib
 import json
 import os
 import re
@@ -35,11 +36,28 @@ def main(corpus):
     corpus = os.path.abspath(corpus)
     results = json.load(open(os.path.join(corpus, "results.json"), encoding="utf-8-sig"))
     manifest = json.load(open(os.path.join(corpus, "manifest.json"), encoding="utf-8"))
-    failed = [c["id"] for c in results["cases"] if not c["pass"]]
+    failed = [c["id"] for c in results["cases"]
+              if not c["pass"] or not c["checks"] or any(not check["pass"] for check in c["checks"])]
     missed = [c["file"] for c in results["controls"] if not c["detected"]]
     if failed or missed or len(results["cases"]) != len(manifest):
         sys.exit(f"refusing to publish: failed {failed}, missed controls {missed}, "
                  f"{len(results['cases'])} of {len(manifest)} cases run")
+
+    # The results must describe exactly these files: the manifest bytes the run read, and each
+    # output Office opened. NativeCorpusTests enforces the same bindings on the published copy.
+    manifest_bytes = open(os.path.join(corpus, "manifest.json"), "rb").read()
+    if b"\r" in manifest_bytes:
+        sys.exit("refusing to publish: manifest.json contains carriage returns")
+    if hashlib.sha256(manifest_bytes).hexdigest() != results["environment"]["manifestSha256"]:
+        sys.exit("refusing to publish: the results were recorded against a different manifest")
+    by_id = {c["id"]: c for c in results["cases"]}
+    if len(by_id) != len(results["cases"]) or set(by_id) != {e["id"] for e in manifest}:
+        sys.exit("refusing to publish: result case ids are not exactly the manifest's")
+    for entry in manifest:
+        output = hashlib.sha256(open(os.path.join(corpus, "outputs", entry["file"]), "rb").read()).hexdigest()
+        result = by_id[entry["id"]]
+        if not (entry["outputSha256"] == output == result["sha256"] == result["manifestSha256"]):
+            sys.exit(f"refusing to publish: {entry['id']} was not run against its output")
 
     # Only the generated files are replaced; the corpus README is maintained by hand.
     os.makedirs(TARGET, exist_ok=True)

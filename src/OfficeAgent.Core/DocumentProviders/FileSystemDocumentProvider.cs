@@ -179,12 +179,12 @@ public sealed class FileSystemDocumentProvider : IDocumentProvider, IDocumentCre
             // Do not compensate by deleting the published path: another actor could have
             // opened, changed, or replaced it after publication. The caller knows the name
             // and can register that file explicitly instead of risking data loss.
-            throw Error(ProviderErrorCode.RegistrationFailed,
+            throw RegistrationFailed(
                 $"Document '{fileName}' was created in this connection, but its registration " +
-                "could not be persisted. The file may exist but is unregistered. Do not retry " +
+                "could not be persisted. The file exists but is unregistered. Do not retry " +
                 "creation; recover the known filename through registration when available, " +
                 "or report it to the host/operator.",
-                itemId: null, ex);
+                itemId: null, fileName, bytes, ex);
         }
 
         return CreateReference(id, ComputeVersion(bytes), fileName);
@@ -356,10 +356,10 @@ public sealed class FileSystemDocumentProvider : IDocumentProvider, IDocumentCre
         }
         catch (Exception ex)
         {
-            throw Error(ProviderErrorCode.RegistrationFailed,
+            throw RegistrationFailed(
                 $"Document '{destinationName}' was written, but its registration could not be persisted. " +
                 "Do not save it again; register the file by name to recover it.",
-                source.ItemId, ex);
+                source.ItemId, destinationName, bytes, ex);
         }
         return CreateReference(newId, ComputeVersion(bytes), destinationName);
     }
@@ -657,6 +657,15 @@ public sealed class FileSystemDocumentProvider : IDocumentProvider, IDocumentCre
     private static string NewItemId() => Guid.NewGuid().ToString("N");
 
     // ── Hash / IO helpers ─────────────────────────────────────────────────────
+
+    /// <summary>
+    /// The published file exists but has no id: carry its connection-relative name and content
+    /// hash so the caller can find and register it, never its path.
+    /// </summary>
+    private DocumentRegistrationFailedException RegistrationFailed(
+        string message, string? itemId, string outputName, byte[] bytes, Exception innerException) =>
+        new(message, ProviderName, ConnectionId, itemId, outputName,
+            ComputeVersion(bytes).Substring("sha256:".Length), innerException);
 
     private static string ComputeVersion(byte[] bytes)
     {

@@ -216,8 +216,114 @@ public sealed class StorageOutcomeTests : IDisposable
         using var result = await Json(tools.ApplyPlan("fs", id, plan, saveMode: "NewDocument", newName: "copy.docx"));
         Assert.Equal(ToolErrorCodes.RegistrationFailed, Code(result));
         Assert.Equal("writtenNotRegistered", result.RootElement.GetProperty("writeOutcome").GetString());
-        Assert.True(File.Exists(Path.Combine(_root, "copy.docx")));
+        var stored = Path.Combine(_root, "copy.docx");
+        Assert.True(File.Exists(stored));
+
+        // The locator finds the stored file: its name, and the hash of the exact bytes on disk.
+        // It was null for this outcome until 1.0, so a caller could not recover the file.
+        var locator = result.RootElement.GetProperty("possibleOutput");
+        Assert.Equal("fs", locator.GetProperty("connectionId").GetString());
+        Assert.Equal(id, locator.GetProperty("sourceDocumentId").GetString());
+        Assert.Equal("copy.docx", locator.GetProperty("outputName").GetString());
+        Assert.Equal(Sha256Of(stored), locator.GetProperty("expectedSha256").GetString());
+        Assert.Contains("register it by name", result.RootElement.GetProperty("errors")[0].GetProperty("message").GetString());
+        Assert.DoesNotContain(_root, result.RootElement.ToString());
     }
+
+    /// <summary>
+    /// The same outcome through a direct .NET call: the exception is the located type, names the
+    /// file the caller asked for, and hashes exactly the bytes that were stored.
+    /// </summary>
+    [Fact]
+    public async Task A_filesystem_new_version_registration_failure_throws_the_located_exception()
+    {
+        var provider = FileSystem();
+        await File.WriteAllBytesAsync(Path.Combine(_root, "contract.docx"), DocxFactory.Contract());
+        var reference = await provider.RegisterAsync("contract.docx");
+        BreakRegistrationIndex();
+        var bytes = DocxFactory.Contract();
+
+        var error = await Assert.ThrowsAsync<DocumentRegistrationFailedException>(() => provider.SaveAsync(
+            reference, new MemoryStream(bytes), new SaveDocumentOptions { Mode = SaveMode.NewDocument, NewName = "copy.docx" }));
+
+        AssertLocated(error, "copy.docx", bytes, reference.ItemId);
+    }
+
+    /// <summary>A created document whose registration fails carries the same locator.</summary>
+    [Fact]
+    public async Task A_filesystem_create_registration_failure_throws_the_located_exception()
+    {
+        var provider = FileSystem();
+        BreakRegistrationIndex();
+        var bytes = DocxFactory.Contract();
+
+        var error = await Assert.ThrowsAsync<DocumentRegistrationFailedException>(() =>
+            provider.CreateAsync("new.docx", new MemoryStream(bytes)));
+
+        AssertLocated(error, "new.docx", bytes, sourceItemId: null);
+        Assert.Contains("Do not retry creation", error.Message);
+    }
+
+    /// <summary>The create_document tool reports the created file's locator.</summary>
+    [Fact]
+    public async Task The_create_tool_reports_the_locator_when_registration_fails()
+    {
+        var tools = new OfficeAgentTools(Client(FileSystem()));
+        BreakRegistrationIndex();
+
+        using var result = await Json(tools.CreateDocument("fs", "new.docx"));
+
+        Assert.Equal(ToolErrorCodes.RegistrationFailed, Code(result));
+        Assert.Equal("writtenNotRegistered", result.RootElement.GetProperty("writeOutcome").GetString());
+        var locator = result.RootElement.GetProperty("possibleOutput");
+        Assert.Equal("new.docx", locator.GetProperty("outputName").GetString());
+        Assert.Equal(Sha256Of(Path.Combine(_root, "new.docx")), locator.GetProperty("expectedSha256").GetString());
+        Assert.DoesNotContain(_root, result.RootElement.ToString());
+    }
+
+    /// <summary>
+    /// A provider that reports a registration failure without the locator still yields one: the
+    /// engine knows the name it asked for and the bytes it sent.
+    /// </summary>
+    [Fact]
+    public async Task The_engine_locates_a_registration_failure_a_provider_reported_bare()
+    {
+        var provider = new Injector("mem") { ThrowCode = ProviderErrorCode.RegistrationFailed };
+        var (tools, _, id) = Tools(provider);
+
+        using var result = await Json(tools.ApplyPlan("mem", id, await EditPlanAsync(tools, id), saveMode: "NewDocument", newName: "copy.docx"));
+
+        Assert.Equal(ToolErrorCodes.RegistrationFailed, Code(result));
+        Assert.Equal("writtenNotRegistered", result.RootElement.GetProperty("writeOutcome").GetString());
+        var locator = result.RootElement.GetProperty("possibleOutput");
+        Assert.Equal("copy.docx", locator.GetProperty("outputName").GetString());
+        Assert.Matches("^[0-9a-f]{64}$", locator.GetProperty("expectedSha256").GetString()!);
+    }
+
+    private void BreakRegistrationIndex()
+    {
+        // Replace the registration index with a directory, so persisting it fails.
+        var index = Path.Combine(_root, ".officeagent", "index.json");
+        if (File.Exists(index)) File.Delete(index);
+        Directory.CreateDirectory(index);
+    }
+
+    private void AssertLocated(DocumentRegistrationFailedException error, string name, byte[] bytes, string? sourceItemId)
+    {
+        Assert.Equal(ProviderErrorCode.RegistrationFailed, error.Code);
+        Assert.IsAssignableFrom<DocumentWriteRecoveryException>(error);
+        Assert.Equal("fs", error.ConnectionId);
+        Assert.Equal(sourceItemId, error.ItemId);
+        Assert.Equal(name, error.OutputName);
+        var stored = Path.Combine(_root, name);
+        Assert.True(File.Exists(stored));
+        Assert.Equal(Convert.ToHexString(SHA256.HashData(bytes)).ToLowerInvariant(), error.OutputSha256);
+        Assert.Equal(Sha256Of(stored), error.OutputSha256);
+        Assert.DoesNotContain(_root, error.Message);
+    }
+
+    private static string Sha256Of(string path) =>
+        Convert.ToHexString(SHA256.HashData(File.ReadAllBytes(path))).ToLowerInvariant();
 
     // ── during receipt creation ────────────────────────────────────────────────────────
 

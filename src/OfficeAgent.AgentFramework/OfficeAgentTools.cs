@@ -1324,8 +1324,8 @@ public sealed class OfficeAgentTools
             {
                 connectionId = ex.ConnectionId,
                 sourceDocumentId = ex.ItemId,
-                outputName = (ex as DocumentWriteOutcomeUnknownException)?.OutputName,
-                expectedSha256 = (ex as DocumentWriteOutcomeUnknownException)?.OutputSha256
+                outputName = (ex as DocumentWriteRecoveryException)?.OutputName,
+                expectedSha256 = (ex as DocumentWriteRecoveryException)?.OutputSha256
             };
 
     private async ValueTask DemandAccessAsync(
