@@ -8,6 +8,32 @@ Publishing writes to GitHub, NuGet, and the MCP Registry. Work through the steps
 verify each public artifact before continuing. A NuGet version cannot be replaced after it is
 published.
 
+## Prerequisites
+
+Everything below is either in this repository or named here; no step depends on knowledge kept
+elsewhere. [Maintenance and continuity](maintenance.md) lists who holds each account today.
+
+Tools on the maintainer's machine:
+
+- the .NET SDK that [`global.json`](../global.json) selects (a stable 8.0 feature band at or
+  above 8.0.100), and the .NET 10 runtime to repeat the CI runtime leg locally;
+- Python 3 with `jsonschema==4.25.1` for `scripts/validate_server_manifest.py`;
+- `git`, and the GitHub CLI `gh` signed in to an account with the access below;
+- `mcp-publisher`, the Model Context Protocol Registry CLI, for step 3;
+- Docker with `buildx`, for step 4.
+
+Access, each held by the account that owns it:
+
+| System | What the release needs | Where it is configured |
+| --- | --- | --- |
+| GitHub repository `ilia-sokolov/OfficeAgent.NET` | Push tags, create releases, dispatch workflows, approve the `nuget` environment | Repository settings: collaborators and the `nuget` environment's required reviewers |
+| NuGet.org account `ilia-sokolov` | Owner of every `OfficeAgent.*` package, with a Trusted Publishing policy for this repository, workflow `publish.yml` and environment `nuget` | NuGet.org account settings. The workflow logs in as `ilia-sokolov` (`NuGet/login`), so a new owner must change that `user` input and the policy together |
+| GitHub Container Registry `ghcr.io/ilia-sokolov/officeagent-mcp` | Package write from the workflow's `GITHUB_TOKEN` | Package settings: this repository's Actions must keep write access (the 0.9.0 image was published this way) |
+| MCP Registry namespace `io.github.ilia-sokolov` | `mcp-publisher login github` as the owner of that GitHub namespace | Derived from the GitHub account; no separate secret |
+
+No long-lived publishing secret is stored: NuGet uses a short-lived key from Trusted Publishing,
+and GHCR uses the workflow token.
+
 ## 0. Prepare the release
 
 Choose the version in `major.minor.patch` form. It must already be present in
@@ -42,8 +68,11 @@ dotnet test OfficeAgent.NET.sln --no-build --configuration Release
 python scripts/check_vulnerable_packages.py
 python scripts/validate_docs.py
 python scripts/validate_server_manifest.py
-python -m unittest tests/test_agent_evaluation.py tests/test_package_samples.py tests/test_package_skills.py tests/test_release_evidence.py -v
+python -m unittest tests/test_agent_evaluation.py tests/test_package_samples.py tests/test_package_skills.py tests/test_release_evidence.py tests/test_support_policy.py -v
 ```
+
+Update the supported-versions table in [`SECURITY.md`](../SECURITY.md#supported-versions) so its
+supported row names this minor version; `tests/test_support_policy.py` fails until it does.
 
 Update the changelog heading from `unreleased` to the release date. Remove any temporary
 prerelease notice for this version from the README, then commit those changes. The tag must

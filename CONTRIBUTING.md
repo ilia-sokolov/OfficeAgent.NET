@@ -12,7 +12,9 @@ dotnet build OfficeAgent.NET.sln --no-restore
 dotnet test OfficeAgent.NET.sln --no-build
 ```
 
-The library multi-targets `netstandard2.0;net8.0`. Tests run on `net8.0`; build all TFM legs locally before opening a PR.
+The library multi-targets `netstandard2.0;net8.0`. Tests run on `net8.0`; build all TFM legs locally before opening a PR. CI also runs the tests on the .NET 10 runtime; to do the same locally, install the .NET 10 runtime and run `dotnet test` with `DOTNET_ROLL_FORWARD=LatestMajor`.
+
+The [maintenance guide](docs/maintenance.md) describes the checks, the release process and the systems a maintainer needs.
 
 ## What we want PRs for
 
@@ -27,9 +29,9 @@ The library multi-targets `netstandard2.0;net8.0`. Tests run on `net8.0`; build 
 
 ## What we don't want without discussion
 
-- Breaking changes to `DocumentPlan`, `DocumentReference`, `Anchor`, or the JSON wire shapes. Open an issue first; pre-1.0 we still take these but want to talk through the implications.
+- Breaking changes to the public .NET API, the JSON wire shapes, configuration keys or documented defaults. From 1.0 these wait for the next major version; see [compatibility](docs/compatibility.md). CI fails a pull request whose change shows up in `docs/csharp-api.md` or `docs/wire-contract.md` until the baseline is regenerated, and a regenerated baseline needs a recorded decision.
 - New direct dependencies in `OfficeAgent.Abstractions` or `OfficeAgent.Core`. Both are kept small on purpose.
-- New `[Obsolete]` markers - pre-1.0 we delete deprecated API outright. Discuss before adding obsolete shims.
+- Removing or renaming public API. Mark it `[Obsolete]` with its replacement named instead, and note it in the changelog; it is removed only in the next major version, as [the deprecation policy](docs/compatibility.md#deprecation) states.
 
 ## Style
 

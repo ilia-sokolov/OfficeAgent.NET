@@ -6,7 +6,7 @@ body:
     id: version
     attributes:
       label: Package version
-      placeholder: "0.3.0"
+      placeholder: "0.9.0"
     validations:
       required: true
   - type: dropdown
@@ -14,10 +14,15 @@ body:
     attributes:
       label: Affected package
       options:
-        - OfficeAgent.Core
-        - OfficeAgent.Word
-        - OfficeAgent.AgentFramework
         - OfficeAgent.Abstractions
+        - OfficeAgent.AgentFramework
+        - OfficeAgent.Core
+        - OfficeAgent.Excel
+        - OfficeAgent.Mcp
+        - OfficeAgent.PowerPoint
+        - OfficeAgent.Rendering
+        - OfficeAgent.SharePoint
+        - OfficeAgent.Word
         - "Multiple / not sure"
     validations:
       required: true
@@ -34,5 +39,5 @@ body:
       label: Environment
       placeholder: |
         - OS:
-        - .NET runtime:
+        - .NET runtime (for example 8.0.x or 10.0.x):
         - TFM the consumer targets:

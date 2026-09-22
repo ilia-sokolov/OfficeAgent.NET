@@ -11,9 +11,17 @@ error code, and a minimal sanitized reproduction.
 Do not attach confidential documents, credentials, tokens, registration indexes, or tenant
 identifiers. Use the private route in [SECURITY.md](SECURITY.md) for suspected vulnerabilities.
 
-Community support is best-effort and has no response-time guarantee. Managed hosting and
-commercial support are available from dotaction at
+Community support is best-effort: issues are read and triaged by the project maintainer,
+Ilia Sokolov, in English, with no response-time guarantee. The project has one maintainer and no
+backup; [maintenance and continuity](docs/maintenance.md) records what that means and how the
+project can be carried on without private knowledge. The only response targets the project states
+are for [private vulnerability reports](SECURITY.md#report-a-vulnerability-privately).
+
+Managed hosting and commercial support are offered separately by dotaction at
 [contact@dotaction.io](mailto:contact@dotaction.io?subject=OfficeAgent.NET%20commercial%20support).
+Any such service is governed by its own agreement. It does not change the library's license, its
+compatibility promise or this support policy, and nothing in this repository is a service-level
+commitment.
 
 ## Version policy
 
@@ -26,7 +34,12 @@ enforces it.
 
 The NuGet packages and MCP Registry entry are released as one versioned set. Do not mix
 OfficeAgent assemblies from different minor versions. Security fixes are provided for the
-latest published minor version as described in [SECURITY.md](SECURITY.md#supported-versions).
+latest published minor version only, which from 1.0 is the latest 1.x minor; all 0.x versions
+become unsupported when 1.0.0 is published. See [SECURITY.md](SECURITY.md#supported-versions).
+
+A deprecated member keeps working until the next major version and is marked `[Obsolete]`, with
+its replacement named, at least one minor release before it is removed. A change of supported
+runtime is announced in the changelog before the release that makes it.
 
 ## Runtime and platform compatibility
 
@@ -34,8 +47,20 @@ The abstractions, core, format, SharePoint, and Agent Framework libraries target
 `netstandard2.0` and `net8.0`. `OfficeAgent.Rendering` and the standalone MCP tool target
 `net8.0`.
 
+OfficeAgent supports running on .NET versions that Microsoft supports and that CI executes. Today
+those are .NET 8 and .NET 10, the two long-term-support releases.
+[Microsoft's support policy](https://dotnet.microsoft.com/platform/support/policy/dotnet-core)
+ends .NET 8 support on 2026-11-10 and .NET 10 support on 2028-11-14. After 2026-11-10, run
+OfficeAgent on .NET 10: a .NET 10 application consumes the `net8.0` assets unchanged, the MCP
+tool rolls forward to the newest installed runtime (`RollForward=LatestMajor`), and the container
+image runs on the .NET 10 runtime. A problem that reproduces only on a runtime Microsoft no
+longer supports is not guaranteed a fix. .NET 9 is a short-term release, supported until
+2026-11-10, and is not tested separately.
+
 The build workflow compiles, tests, and runs an installed-package smoke on current
-GitHub-hosted Ubuntu, Windows, and macOS runners with the .NET 8 SDK. The smoke installs
+GitHub-hosted Ubuntu, Windows, and macOS runners with the .NET 8 SDK and runtime. A second leg,
+on Ubuntu and Windows, builds with the same SDK and runs the test suite and the packaged smoke on
+the .NET 10 runtime; a test fails that leg if the suite did not actually run on .NET 10. The smoke installs
 the packed `officeagent-mcp` tool into an empty tool directory backed by a fresh package
 cache and an explicit local-only feed, drives a create, inspect, find, preview, apply, and
 export workflow over stdio, and builds a direct consumer that loads the Word, PowerPoint,
@@ -45,7 +70,9 @@ Compilation and tested execution are different claims:
 
 | Target | Compiled | Tested by CI |
 | --- | --- | --- |
-| `net8.0` on Linux x64, Windows x64, macOS | Yes | Yes, on the GitHub-hosted runner architectures |
+| `net8.0` on the .NET 8 runtime: Linux x64, Windows x64, macOS | Yes | Yes, on the GitHub-hosted runner architectures |
+| `net8.0` assets on the .NET 10 runtime: Linux x64, Windows x64 | Yes | Yes |
+| `net8.0` assets on the .NET 10 runtime: macOS | Yes | No. The .NET 10 leg runs on Ubuntu and Windows |
 | `netstandard2.0` consumers (.NET Framework, Mono, Xamarin, Unity) | Yes | No. The libraries compile for it, but no runtime test executes there |
 | Linux arm64, Windows arm64, and other architectures | Yes | No. Not covered by the hosted runners used here |
 | Alpine and other musl distributions | Yes | No |

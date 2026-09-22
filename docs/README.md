@@ -79,6 +79,7 @@ and optimistic-concurrency conflicts instead of guessing.
 - [Library selection guide](choose-officeagent.md) - supported jobs, explicit non-goals, package choices, alternatives, and a verified direct .NET recipe.
 - [Word preservation evidence](word-preservation-evidence.md) - operation-specific changed parts, protected bytes, semantic checks, refusals, and native Office limits.
 - [Native Office compatibility](native-compatibility.md) - every advertised operation opened in Word, PowerPoint and Excel, with the harness, its controls, and known unsupported cases.
+- [Maintenance and continuity](maintenance.md) - who maintains the project, the accounts a release depends on, runtime lifecycle, and how the project can be carried on from this repository alone.
 - [Getting started](getting-started.md) — first successful Word edit from C#.
 - [Deployment and client setup](deployment.md) — local and hosted MCP recipes.
 - [Skill installation](skill-installation.md) — optionally teach Claude Code or Codex a repeatable Word review workflow.

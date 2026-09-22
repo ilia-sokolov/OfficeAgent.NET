@@ -34,7 +34,7 @@ jobs:
 
       - name: Test skill packaging, agent evaluation, and release inventory
         if: matrix.os == 'ubuntu-latest'
-        run: python -m unittest tests/test_agent_evaluation.py tests/test_package_samples.py tests/test_package_skills.py tests/test_release_evidence.py tests/test_smoke_packaged_artifacts.py tests/test_benchmark_report.py tests/test_byte_exact_fixtures.py -v
+        run: python -m unittest tests/test_agent_evaluation.py tests/test_package_samples.py tests/test_package_skills.py tests/test_release_evidence.py tests/test_smoke_packaged_artifacts.py tests/test_benchmark_report.py tests/test_byte_exact_fixtures.py tests/test_support_policy.py -v
 
       - name: Validate MCP Registry manifest
         if: matrix.os == 'ubuntu-latest'
@@ -97,6 +97,48 @@ jobs:
           path: |
             ./artifacts/*.nupkg
             ./artifacts/*.zip
+
+  runtime-dotnet10:
+    # .NET 8 support ends 2026-11-10; .NET 10 is the LTS after it. The libraries keep their
+    # netstandard2.0 and net8.0 targets, which a .NET 10 application consumes, so this leg builds
+    # with the pinned .NET 8 SDK and runs the same tests and the packaged smoke on the .NET 10
+    # runtime. OFFICEAGENT_EXPECT_RUNTIME_MAJOR makes a test fail if the roll-forward did not happen.
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    env:
+      DOTNET_NOLOGO: true
+      DOTNET_CLI_TELEMETRY_OPTOUT: true
+      CI: true
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-dotnet@67a3573c9a986a3f9c594539f4ab511d57bb3ce9 # v4
+        with:
+          dotnet-version: |
+            8.0.x
+            10.0.x
+
+      - name: Build with the pinned SDK
+        run: dotnet build OfficeAgent.NET.sln --configuration Release
+
+      - name: Test on the .NET 10 runtime
+        env:
+          DOTNET_ROLL_FORWARD: LatestMajor
+          OFFICEAGENT_EXPECT_RUNTIME_MAJOR: "10"
+        run: dotnet test OfficeAgent.NET.sln --no-build --configuration Release
+
+      - name: Pack
+        run: dotnet pack OfficeAgent.NET.sln --no-build --configuration Release --output ./artifacts
+
+      - name: Smoke packaged artifacts on the .NET 10 runtime
+        env:
+          DOTNET_ROLL_FORWARD: LatestMajor
+        run: python scripts/smoke_packaged_artifacts.py --artifacts ./artifacts
 
   renderer-sandbox:
     # The sandboxed renderer reference (deploy/renderer). It needs a Linux container engine,

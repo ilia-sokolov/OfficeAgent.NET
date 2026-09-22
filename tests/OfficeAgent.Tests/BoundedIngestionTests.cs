@@ -535,6 +535,72 @@ public sealed class BoundedIngestionTests
         Assert.True(error.Message.Length < 600, $"diagnostic was {error.Message.Length} characters");
     }
 
+    /// <summary>
+    /// A relationship to a part the archive does not contain is damage, refused like any other,
+    /// from every entry point.
+    /// </summary>
+    /// <remarks>
+    /// Malformed seed 8 reached this state on .NET 10, whose zlib compresses the fixture to
+    /// different bytes, so its byte flip lands on the styles relationship. The SDK then throws a
+    /// bare <see cref="InvalidOperationException"/>. Building the shape directly makes the
+    /// refusal provable on every runtime, as seed 11 did for the missing main part.
+    /// </remarks>
+    [Fact]
+    public void A_relationship_to_a_part_the_archive_lacks_is_refused_on_every_entry_point()
+    {
+        // Seed 8's exact bytes as .NET 10 produced them: one flipped byte renames the central
+        // directory entry for word/styles.xml, while the content types and the relationship
+        // still name it. Fixed bytes make the case identical on every runtime.
+        var dangling = Convert.FromBase64String(
+            "UEsDBBQAAAAIAEx2Nl35fBiLfwEAAGsEAAARAAAAd29yZC9kb2N1bWVudC54bWy1VNtq4zAU/BWh91iSG5ZFxA4hDXShbEv7Bap0" +
+            "7Ah0Q1Lt9O+L5ab37m6g6wcfX0Zn5oxHXq0P1qABYtLeNZhVFCNw0ivt+gbf527xE6/b1ciVl/cWXEYHa1ziY4P3OQdOSJJ7sCJV" +
+            "PoA7WNP5aEVOlY89GX1UIXoJKWnXW0NqSn8QK7TDU8s7rx6mGtDIljyIKH6pBtP5YPjIxJYfuKyW0Sff5Up6S3zXaQmFjdSU0XJl" +
+            "TeEI17GU2/xgAI18EKbBFyCm+RhGpF2RZ1A55fYW4qAloE0fAaaRJ0guwDjDvxRdf4/oWcjUiqcgJDQ4REgQB8DtRlpAbxT9Gb/1" +
+            "MZwAR2kvjEEh+kErQNNTLSGh7E8hLSJPZK7+3eaz/2/z1mhwmb8fOqn8VObIZNEfQzWv+C0slFiNXKvjKzaleY7a88qk8ta7DK40" +
+            "fIre9eVmu7u4ujzf3bx34zV+vv2LScvvNKnddR3IrAdASmTgqKY1XVC2oOyz70aOm5u8/DjaR1BLAwQUAAAACABMdjZd1xVFgrwA" +
+            "AABVAQAADwAAAHdvcmQvc3R5bGVzLnhtbI2OS27DMAxEryJwX8vuIggMy9m2yyInIGz6A4iiIMqxc/vCjROgu+yImcF7bC4be3Oj" +
+            "pLMEB1VRgqHQST+H0cGSh48zXNpmrTXfPanZ2AetVwdTzrG2VruJGLWQSGFjP0hizFpIGu0qqY9JOlKdw8jefpblyTLOAV5As9b5" +
+            "HslBxIRjwjiBOarv3sEX4f5ItYfdoln4ulcOBvRKf5iAvFNu6B1Mj7mpwNi2sQfoXdnPIpneNB3bf5bnpe0vUEsDBBQAAAAAAEx2" +
+            "Nl2VC+ZoKgEAACoBAAALAAAAX3JlbHMvLnJlbHPvu788P3htbCB2ZXJzaW9uPSIxLjAiIGVuY29kaW5nPSJ1dGYtOCI/PjxSZWxh" +
+            "dGlvbnNoaXBzIHhtbG5zPSJodHRwOi8vc2NoZW1hcy5vcGVueG1sZm9ybWF0cy5vcmcvcGFja2FnZS8yMDA2L3JlbGF0aW9uc2hp" +
+            "cHMiPjxSZWxhdGlvbnNoaXAgVHlwZT0iaHR0cDovL3NjaGVtYXMub3BlbnhtbGZvcm1hdHMub3JnL29mZmljZURvY3VtZW50LzIw" +
+            "MDYvcmVsYXRpb25zaGlwcy9vZmZpY2VEb2N1bWVudCIgVGFyZ2V0PSIvd29yZC9kb2N1bWVudC54bWwiIElkPSJSOGQxZmJmMjYx" +
+            "ODFkNGVjOSIgLz48L1JlbGF0aW9uc2hpcHM+UEsDBBQAAAAIAEx2Nl2sfb7IuQAAACABAAAcAAAAd29yZC9fcmVscy9kb2N1bWVu" +
+            "dC54bWwucmVsc43PMU4DMRBA0atY07PjRMmKoPWmoUkb5QKWd7xrYXssj0M2Z6PgSFyBhoJIFLS/eNL/+vgcjmuK6p2qBM4GNp0G" +
+            "RdnxFPJs4Nr80zMcx+FM0bbAWZZQRK0pZjGwtFZeEMUtlKx0XCivKXquyTbpuM5YrHuzM+FW6x7rbwMeTXW5F/qPyN4HR6/sroly" +
+            "+wNGafdIAupi60zNAN64Tj+1W1MEdZoMnHfW9wft9ebQ73dbuweF44APn+M3UEsDBBQAAAAIAEx2Nl0nxc6+6gAAANoBAAATAAAA" +
+            "W0NvbnRlbnRfVHlwZXNdLnhtbK3RMU7FMAwG4KtEWVGTwoAQavsGYAUGLhAlbhuROFHslr6zMXAkroDaog6IBYnZv/7Plj/fP5rT" +
+            "EoOYoZBP2MpLVUsBaJPzOLRy4r66kaeueTlnILHEgNTKkTnfak12hGhIpQy4xNCnEg2TSmXQ2dhXM4C+qutrbRMyIFe8dsiuuYfe" +
+            "TIHFw8KAO7vEIMXdnlupVpqcg7eGfUI9o/uBVKnvvQWX7BQBWb2l4nJJFog8DjGoYxKNx4utXv8qFwj0N/r7NlUgbBkafaaDeJqh" +
+            "FO9APJvCjyZCK/W6nSY+ByD175fuvYevt091X1BLAQIUABQAAAAIAEx2Nl35fBiLfwEAAGsEAAARAAAAAAAAAAAAAAAAAAAAAAB3" +
+            "b3JkL2RvY3VtZW50LnhtbFBLAQIUABQAAAAIAEx2Nl3XFUWCvAAAAFUBAAAPAAAAAAAAAAAAAAAAAK4BAAB3b3JkL4x0eWxlcy54" +
+            "bWxQSwECFAAUAAAAAABMdjZdlQvmaCoBAAAqAQAACwAAAAAAAAAAAAAAAACXAgAAX3JlbHMvLnJlbHNQSwECFAAUAAAACABMdjZd" +
+            "rH2+yLkAAAAgAQAAHAAAAAAAAAAAAAAAAADqAwAAd29yZC9fcmVscy9kb2N1bWVudC54bWwucmVsc1BLAQIUABQAAAAIAEx2Nl0n" +
+            "xc6+6gAAANoBAAATAAAAAAAAAAAAAAAAAN0EAABbQ29udGVudF9UeXBlc10ueG1sUEsFBgAAAAAFAAUAQAEAAPgFAAAAAA==");
+        var client = Client();
+        var plan = new DocumentPlan
+        {
+            Operations = new PlanOperation[]
+            {
+                new ChangeTextOp { Target = new TextSpanAnchor { ParaId = "auto-0000", Expect = "Acme Corp" }, With = "Globex", Mode = ChangeMode.Direct }
+            }
+        };
+
+        foreach (var (entry, act) in new (string, Action)[]
+                 {
+                     ("inspect", () => client.Inspect(dangling)),
+                     ("find", () => client.Find(Handle(dangling), new FindQuery("Acme Corp"))),
+                     ("preview", () => client.Preview(Handle(dangling), plan)),
+                     ("commit", () => client.Commit(Handle(dangling), plan).Dispose())
+                 })
+        {
+            var thrown = Record.Exception(act);
+            Assert.True(thrown is OpenXmlPackageRejectedException,
+                $"{entry} produced {thrown?.GetType().Name ?? "no exception"}: {thrown?.Message}");
+            Assert.True(thrown!.Message.Length < 600, $"{entry} diagnostic was {thrown.Message.Length} characters");
+        }
+    }
+
     private static string Override(string partName, string contentType) =>
         "<Types xmlns=\"http://schemas.openxmlformats.org/package/2006/content-types\">" +
         $"<Override PartName=\"{partName}\" ContentType=\"{contentType}\"/>" +

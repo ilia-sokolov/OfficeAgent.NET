@@ -59,14 +59,34 @@ corresponding GitHub release.
   Each boundary is proved by an automated test in a dedicated CI job.
 - `ToolErrorCodes.Cancelled`. The `cancelled` code every tool already emitted was the only one
   missing from the catalogues.
+- A [maintenance and continuity](docs/maintenance.md) guide, a prerequisites section in the
+  [release runbook](docs/releasing.md#prerequisites), and a stated runtime policy: OfficeAgent
+  supports the .NET versions Microsoft supports and CI executes. .NET 8 support ends on
+  2026-11-10; a .NET 10 application consumes the `net8.0` assets unchanged.
+- A CI leg that runs the test suite and the packaged smoke on the .NET 10 runtime, and fails if
+  the suite did not actually run on .NET 10.
 - A [native Office compatibility](docs/native-compatibility.md) matrix. Every advertised
   operation, plus template population, comparison and assembly, is opened in desktop Word,
   PowerPoint and Excel, and what Office reports is checked. That includes accept and reject in
   Word, chart data editing in PowerPoint and recalculation in Excel. Corrupt controls prove the
   harness notices a refused file, and the known unsupported cases are listed.
 
+### Changed
+
+- The MCP server container image runs on the .NET 10 runtime instead of .NET 8, whose support ends
+  on 2026-11-10. The server still targets `net8.0` and rolls forward. The tools it lists and their
+  schemas are identical on both runtimes.
+- Security fixes cover the latest published minor version only, which from 1.0 is the latest 1.x
+  minor; every 0.x version becomes unsupported when 1.0.0 is published. The security response
+  targets are unchanged and now name their owner. See [SECURITY.md](SECURITY.md).
+
 ### Fixed
 
+- A package whose relationship points at a part missing from the archive is refused with
+  `malformed-package` on every entry point. The SDK reported it as a bare
+  `InvalidOperationException`, which reached callers. One flipped byte in an entry name produces
+  this shape; the .NET 10 runtime compresses the test fixture differently, which is how its
+  malformed-seed corpus found it.
 - Documents OfficeAgent creates can be merged. The blank Word document's heading styles carry
   an outline level, as do styles written by `defineStyle` and `format`, and merge refused
   `w:outlineLvl` as unsupported content, so two documents `create_document` had just produced

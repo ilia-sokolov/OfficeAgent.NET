@@ -155,7 +155,20 @@ internal sealed class OpenXmlPackageService
         ex is InvalidDataException
            or FileFormatException
            or System.Xml.XmlException
-           or OpenXmlPackageException;
+           or OpenXmlPackageException
+        || IsMissingPartFault(ex);
+
+    /// <summary>
+    /// A relationship whose target part is absent from the archive, which the SDK reports
+    /// as a bare <see cref="InvalidOperationException"/> from its part loader.
+    /// </summary>
+    /// <remarks>
+    /// Matched by where it is thrown, not by type alone: an <see cref="InvalidOperationException"/>
+    /// from anywhere else is an engine defect and must not be relabelled as a damaged package.
+    /// One flipped byte in an entry name produces this shape, so it is ordinary damage.
+    /// </remarks>
+    private static bool IsMissingPartFault(Exception ex) =>
+        ex is InvalidOperationException && ex.TargetSite?.DeclaringType == typeof(OpenXmlPart);
 
     /// <summary>
     /// Runs work that touches package parts, translating a damaged-package fault into the

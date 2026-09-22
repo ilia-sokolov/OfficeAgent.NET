@@ -432,6 +432,8 @@ Two more limits worth knowing before you build on it:
 OfficeAgent.NET is MIT-licensed and can be self-hosted. Commercial support and
 deployment assistance are available from dotaction:
 [contact dotaction](mailto:contact@dotaction.io?subject=OfficeAgent.NET%20commercial%20support).
+That service is separate from the project: it is governed by its own agreement and does not change
+the library's license, compatibility promise or [community support policy](SUPPORT.md).
 
 ## License
 

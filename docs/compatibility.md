@@ -185,3 +185,9 @@ every build. It loads the netstandard2.0 binaries, renders them with the same re
 baseline, and fails on any type or member that exists in only one target.
 [SUPPORT.md](../SUPPORT.md#runtime-and-platform-compatibility) states which targets CI executes as
 well as compiles.
+
+The supported runtimes are the .NET versions Microsoft supports and CI executes: .NET 8 until its
+end of support on 2026-11-10, and .NET 10. Moving from .NET 8 to .NET 10 needs no OfficeAgent change,
+because a .NET 10 application consumes the `net8.0` assets. Adding a target framework in a 1.x
+minor release is allowed; removing one, or raising the minimum runtime a supported application
+needs, waits for 2.0.

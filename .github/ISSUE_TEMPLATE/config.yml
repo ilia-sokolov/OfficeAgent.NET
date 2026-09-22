@@ -1,0 +1,8 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Report a security vulnerability privately
+    url: https://github.com/ilia-sokolov/OfficeAgent.NET/security/advisories/new
+    about: Do not open a public issue for a suspected vulnerability. See SECURITY.md.
+  - name: Support policy and documentation
+    url: https://github.com/ilia-sokolov/OfficeAgent.NET/blob/main/SUPPORT.md
+    about: What community support covers, supported versions and runtimes.
