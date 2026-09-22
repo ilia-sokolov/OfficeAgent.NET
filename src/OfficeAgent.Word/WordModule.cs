@@ -110,6 +110,11 @@ public sealed class WordModule : IFormatModule, IBlankDocumentFactory, IPlanVali
     /// definition to resolve, Word silently renders the paragraph as Normal. The edit then
     /// appears to succeed - the plan commits, the reference is in the file - while the
     /// document looks nothing like what was asked for.
+    /// <para>
+    /// The settings part declares compatibility mode 15, Word 2013 and later. A package without
+    /// one opens in Word as a Word 2007 document, titled "Compatibility Mode", with newer
+    /// layout and features switched off.
+    /// </para>
     /// </remarks>
     public byte[] CreateBlank()
     {
@@ -118,6 +123,14 @@ public sealed class WordModule : IFormatModule, IBlankDocumentFactory, IPlanVali
         {
             var main = document.AddMainDocumentPart();
             main.Document = new Document(new Body(new Paragraph()));
+
+            main.AddNewPart<DocumentSettingsPart>().Settings = new Settings(
+                new Compatibility(new CompatibilitySetting
+                {
+                    Name = CompatSettingNameValues.CompatibilityMode,
+                    Uri = "http://schemas.microsoft.com/office/word",
+                    Val = "15"
+                }));
 
             var styles = main.AddNewPart<StyleDefinitionsPart>();
             styles.Styles = new Styles(

@@ -90,6 +90,23 @@ public class CreateDocumentTests
         Assert.Single(document.Parts);
     }
 
+    /// <summary>
+    /// Without a declared compatibility mode, Word 16.0.20326 opened a created document as a
+    /// Word 2007 file, titled "Compatibility Mode". Found by the native corpus.
+    /// </summary>
+    [Fact]
+    public void A_created_document_opens_in_current_Word_mode()
+    {
+        using var document = WordprocessingDocument.Open(new MemoryStream(new WordModule().CreateBlank()), isEditable: false);
+        var mode = document.MainDocumentPart!.DocumentSettingsPart?.Settings?
+            .Descendants<CompatibilitySetting>()
+            .SingleOrDefault(s => s.Name?.Value == CompatSettingNameValues.CompatibilityMode);
+
+        Assert.NotNull(mode);
+        Assert.Equal("15", mode!.Val?.Value);
+        Assert.Equal("http://schemas.microsoft.com/office/word", mode.Uri?.Value);
+    }
+
     [Fact]
     public async Task Create_writes_and_registers_a_document()
     {

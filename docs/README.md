@@ -16,6 +16,7 @@ this page to choose the shortest path for your scenario.
 | Decide whether OfficeAgent fits | [Library selection guide](choose-officeagent.md) | [Support and compatibility](../SUPPORT.md) |
 | Combine OfficeAgent with direct Open XML SDK edits | [SDK interoperability](sdk-interoperability.md) | [Concepts](concepts.md), [operations](operations.md) |
 | Inspect Word preservation evidence | [Word preservation matrix](word-preservation-evidence.md) | [Corpus and rerun recipe](../tests/OfficeAgent.Tests/Corpus/v0.9.0/word-preservation/README.md) |
+| Check what Office itself sees in OfficeAgent output | [Native Office compatibility](native-compatibility.md) | [Native corpus](../tests/OfficeAgent.Tests/Corpus/v1.0.0/native/README.md) |
 | Edit a Word document from C# | [Getting started](getting-started.md) | [Concepts](concepts.md), [document plans](document-plans.md) |
 | Look up a public C# type or member | [Generated C# API reference](csharp-api.md) | [Getting started](getting-started.md), [document plans](document-plans.md) |
 | Create a Word document from scratch | [Create a document](getting-started.md#create-a-document-instead) | [Document plans](document-plans.md) |
@@ -77,6 +78,7 @@ and optimistic-concurrency conflicts instead of guessing.
 
 - [Library selection guide](choose-officeagent.md) - supported jobs, explicit non-goals, package choices, alternatives, and a verified direct .NET recipe.
 - [Word preservation evidence](word-preservation-evidence.md) - operation-specific changed parts, protected bytes, semantic checks, refusals, and native Office limits.
+- [Native Office compatibility](native-compatibility.md) - every advertised operation opened in Word, PowerPoint and Excel, with the harness, its controls, and known unsupported cases.
 - [Getting started](getting-started.md) — first successful Word edit from C#.
 - [Deployment and client setup](deployment.md) — local and hosted MCP recipes.
 - [Skill installation](skill-installation.md) — optionally teach Claude Code or Codex a repeatable Word review workflow.

@@ -267,11 +267,75 @@ public sealed class CapabilityDiscoveryTests
         Assert.True(payload.RootElement.TryGetProperty("limits", out _));
     }
 
+    /// <summary>
+    /// Every node kind a module's inspection emits is declared, so discovery offers it.
+    /// </summary>
+    /// <remarks>
+    /// The verb reconciliation above takes node kinds from the declaration it checks, so a kind
+    /// missing from the declaration blinds both sides at once: Excel declared none, and
+    /// appendTableRows, which targets a spreadsheetTable node, was never advertised. This side
+    /// takes the kinds from what inspection actually returns for a representative document.
+    /// </remarks>
+    [Theory]
+    [InlineData("word")]
+    [InlineData("powerpoint")]
+    [InlineData("excel")]
+    public void Every_node_kind_inspection_emits_is_declared(string format)
+    {
+        var (module, bytes) = format switch
+        {
+            "word" => ((IFormatModule)new WordModule(), DocxFactory.Contract()),
+            "powerpoint" => (new PowerPointModule(), PptxFactory.DeckWithTable()),
+            _ => (new ExcelModule(), XlsxFactory.WorkbookWithTable())
+        };
+        var inspected = new OfficeAgentClient(module).Inspect(Handle(bytes), new InspectOptions { Fidelity = Fidelity.Content });
+        var emitted = inspected.Nodes.Select(node => node.Kind).Distinct().ToList();
+        var declared = ((ICapabilityDeclaringModule)module).NodeKinds;
+
+        Assert.NotEmpty(emitted);
+        Assert.Empty(emitted.Except(declared));
+    }
+
+    /// <summary>
+    /// copyStyles has two anchors, and discovery once probed only Target, so it was omitted
+    /// for both formats that implement it. Advertised, and a real one previews cleanly.
+    /// </summary>
+    [Fact]
+    public async Task Word_and_PowerPoint_advertise_copyStyles_and_a_real_one_previews()
+    {
+        Assert.Contains("copyStyles", Describe(new WordModule()).Operations);
+        Assert.Contains("copyStyles", Describe(new PowerPointModule()).Operations);
+
+        var client = new OfficeAgentClient(new WordModule());
+        var hits = await client.FindAsync(Handle(DocxFactory.Contract()), new FindQuery("Acme Corp"));
+        var paragraphs = client.Inspect(Handle(DocxFactory.Contract()), new InspectOptions()).Paragraphs
+            .Where(p => p.Text.Length > 0).Take(2).ToArray();
+        var report = client.Preview(Handle(DocxFactory.Contract()), new DocumentPlan
+        {
+            Operations = new PlanOperation[]
+            {
+                new CopyStylesOp
+                {
+                    Source = new TextSpanAnchor { ParaId = paragraphs[0].ParaId, Expect = "" },
+                    Target = new TextSpanAnchor { ParaId = paragraphs[1].ParaId, Expect = "" },
+                    Scope = "all"
+                }
+            }
+        });
+        Assert.True(report.IsValid, string.Join("; ", report.Errors.Select(e => e.Code + " " + e.Message)));
+    }
+
+    [Fact]
+    public void Excel_advertises_appending_rows_to_a_table()
+    {
+        Assert.Contains("appendTableRows", Describe(new ExcelModule()).Operations);
+    }
+
     // ── Helpers ──────────────────────────────────────────────────────────
 
     private static StreamHandle Handle(byte[] bytes) => new(new MemoryStream(bytes, writable: false));
 
-    private static FormatCapabilities Describe(IFormatModule module) =>
+    internal static FormatCapabilities Describe(IFormatModule module) =>
         CapabilityDiscovery.Describe(new[] { module }).Formats.Single();
 
     /// <summary>
@@ -302,6 +366,9 @@ public sealed class CapabilityDiscoveryTests
                 var property = type.GetProperty(nameof(PlanOperation.Target));
                 if (property is null || !property.PropertyType.IsInstanceOfType(anchor)) continue;
                 property.SetValue(candidate, anchor);
+                foreach (var slot in type.GetProperties())
+                    if (slot != property && slot.CanWrite && slot.PropertyType.IsInstanceOfType(anchor))
+                        slot.SetValue(candidate, anchor);
             }
 
             if (module.Handlers.Any(handler => handler.CanHandle(candidate))) return true;

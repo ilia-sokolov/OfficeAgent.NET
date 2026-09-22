@@ -1,0 +1,2578 @@
+{
+  "environment": {
+    "officeBuild": "16.0.20326.20158",
+    "os": "Microsoft Windows 11 Pro 10.0.26200",
+    "runUtc": "2026-09-22T11:27:34.8482520Z",
+    "manifestSha256": "94158527d40289448d97ba8974a733812d33b6e173f792271642b95084f641af"
+  },
+  "cases": [
+    {
+      "id": "w-changetext-tracked",
+      "format": "word",
+      "family": "changeText",
+      "description": "Tracked replacement of a phrase",
+      "sha256": "92f691bd9674b5d08215231d13629d3faac6ef8cf597428780e3c2c6496e8fa9",
+      "manifestSha256": "92f691bd9674b5d08215231d13629d3faac6ef8cf597428780e3c2c6496e8fa9",
+      "openedCleanly": true,
+      "error": null,
+      "pass": true,
+      "observed": {
+        "wordCompatibilityMode": 12
+      },
+      "checks": [
+        {
+          "name": "revisions at least",
+          "expected": 2,
+          "actual": 2,
+          "pass": true
+        },
+        {
+          "name": "revisions after accept all",
+          "expected": 0,
+          "actual": 0,
+          "pass": true
+        },
+        {
+          "name": "accepted text contains 'Globex Inc.'",
+          "expected": true,
+          "actual": true,
+          "pass": true
+        },
+        {
+          "name": "revisions after reject all",
+          "expected": 0,
+          "actual": 0,
+          "pass": true
+        },
+        {
+          "name": "rejected text contains 'Acme Corp'",
+          "expected": true,
+          "actual": true,
+          "pass": true
+        },
+        {
+          "name": "rejected text excludes 'Globex'",
+          "expected": false,
+          "actual": false,
+          "pass": true
+        },
+        {
+          "name": "Word-saved copy reopens with the same revision count",
+          "expected": 2,
+          "actual": 2,
+          "pass": true
+        }
+      ]
+    },
+    {
+      "id": "w-successive-authors",
+      "format": "word",
+      "family": "revision",
+      "description": "Two authors' tracked edits in successive commits",
+      "sha256": "5ed52f35f730edb1b3586f100a56d24b0b5cb39be1dc2183fe2aa3bdefec435a",
+      "manifestSha256": "5ed52f35f730edb1b3586f100a56d24b0b5cb39be1dc2183fe2aa3bdefec435a",
+      "openedCleanly": true,
+      "error": null,
+      "pass": true,
+      "observed": {
+        "wordCompatibilityMode": 12
+      },
+      "checks": [
+        {
+          "name": "revision authors",
+          "expected": "Alice Reviewer, Bob Approver",
+          "actual": "Alice Reviewer, Bob Approver",
+          "pass": true
+        },
+        {
+          "name": "revisions after accept all",
+          "expected": 0,
+          "actual": 0,
+          "pass": true
+        },
+        {
+          "name": "accepted text contains 'Globex Inc.'",
+          "expected": true,
+          "actual": true,
+          "pass": true
+        },
+        {
+          "name": "accepted text contains 'Northwind Traders'",
+          "expected": true,
+          "actual": true,
+          "pass": true
+        },
+        {
+          "name": "revisions after reject all",
+          "expected": 0,
+          "actual": 0,
+          "pass": true
+        },
+        {
+          "name": "rejected text contains 'Acme Corp'",
+          "expected": true,
+          "actual": true,
+          "pass": true
+        },
+        {
+          "name": "rejected text excludes 'Northwind'",
+          "expected": false,
+          "actual": false,
+          "pass": true
+        },
+        {
+          "name": "rejected text excludes 'Globex'",
+          "expected": false,
+          "actual": false,
+          "pass": true
+        },
+        {
+          "name": "Word-saved copy reopens with the same revision count",
+          "expected": 3,
+          "actual": 3,
+          "pass": true
+        }
+      ]
+    },
+    {
+      "id": "w-insertparagraphs-tracked",
+      "format": "word",
+      "family": "insertParagraphs",
+      "description": "Tracked paragraph insertion",
+      "sha256": "fba501c7fed8608261d53aa327da66dc10fcfa5e28d782f9eb15b8b6a0de6b7d",
+      "manifestSha256": "fba501c7fed8608261d53aa327da66dc10fcfa5e28d782f9eb15b8b6a0de6b7d",
+      "openedCleanly": true,
+      "error": null,
+      "pass": true,
+      "observed": {
+        "wordCompatibilityMode": 12
+      },
+      "checks": [
+        {
+          "name": "revisions at least",
+          "expected": 1,
+          "actual": 1,
+          "pass": true
+        },
+        {
+          "name": "revisions after accept all",
+          "expected": 0,
+          "actual": 0,
+          "pass": true
+        },
+        {
+          "name": "accepted text contains 'Inserted obligation paragraph.'",
+          "expected": true,
+          "actual": true,
+          "pass": true
+        },
+        {
+          "name": "revisions after reject all",
+          "expected": 0,
+          "actual": 0,
+          "pass": true
+        },
+        {
+          "name": "rejected text excludes 'Inserted obligation paragraph.'",
+          "expected": false,
+          "actual": false,
+          "pass": true
+        },
+        {
+          "name": "Word-saved copy reopens with the same revision count",
+          "expected": 1,
+          "actual": 1,
+          "pass": true
+        }
+      ]
+    },
+    {
+      "id": "w-removeparagraph-tracked",
+      "format": "word",
+      "family": "removeParagraph",
+      "description": "Tracked paragraph removal",
+      "sha256": "dfd51d216ae94ec8cda336c9b58d4ba524f3601cdb7ce5664d2f48572de88a62",
+      "manifestSha256": "dfd51d216ae94ec8cda336c9b58d4ba524f3601cdb7ce5664d2f48572de88a62",
+      "openedCleanly": true,
+      "error": null,
+      "pass": true,
+      "observed": {
+        "wordCompatibilityMode": 12
+      },
+      "checks": [
+        {
+          "name": "revisions at least",
+          "expected": 1,
+          "actual": 1,
+          "pass": true
+        },
+        {
+          "name": "revisions after accept all",
+          "expected": 0,
+          "actual": 0,
+          "pass": true
+        },
+        {
+          "name": "accepted text excludes 'Service Agreement'",
+          "expected": false,
+          "actual": false,
+          "pass": true
+        },
+        {
+          "name": "revisions after reject all",
+          "expected": 0,
+          "actual": 0,
+          "pass": true
+        },
+        {
+          "name": "rejected text contains 'Service Agreement'",
+          "expected": true,
+          "actual": true,
+          "pass": true
+        },
+        {
+          "name": "Word-saved copy reopens with the same revision count",
+          "expected": 1,
+          "actual": 1,
+          "pass": true
+        }
+      ]
+    },
+    {
+      "id": "w-format-tracked",
+      "format": "word",
+      "family": "format",
+      "description": "Tracked formatting change",
+      "sha256": "9b6808c87f38fc7cbb41d964225c08aae0405bb5408123077e9e687a0ff8cfaa",
+      "manifestSha256": "9b6808c87f38fc7cbb41d964225c08aae0405bb5408123077e9e687a0ff8cfaa",
+      "openedCleanly": true,
+      "error": null,
+      "pass": true,
+      "observed": {
+        "wordCompatibilityMode": 12
+      },
+      "checks": [
+        {
+          "name": "revisions at least",
+          "expected": 1,
+          "actual": 1,
+          "pass": true
+        },
+        {
+          "name": "revisions after accept all",
+          "expected": 0,
+          "actual": 0,
+          "pass": true
+        },
+        {
+          "name": "accepted text contains 'Acme Corp'",
+          "expected": true,
+          "actual": true,
+          "pass": true
+        },
+        {
+          "name": "Word-saved copy reopens with the same revision count",
+          "expected": 1,
+          "actual": 1,
+          "pass": true
+        }
+      ]
+    },
+    {
+      "id": "w-insert-direct",
+      "format": "word",
+      "family": "insert",
+      "description": "Direct paragraph insertion after a found phrase",
+      "sha256": "8de79ed994969b7904e7b75a9b5c51914deb95d8bc84d26b7aeba4cfdb349313",
+      "manifestSha256": "8de79ed994969b7904e7b75a9b5c51914deb95d8bc84d26b7aeba4cfdb349313",
+      "openedCleanly": true,
+      "error": null,
+      "pass": true,
+      "observed": {
+        "wordCompatibilityMode": 12
+      },
+      "checks": [
+        {
+          "name": "revisions",
+          "expected": 0,
+          "actual": 0,
+          "pass": true
+        },
+        {
+          "name": "text contains 'The Supplier is Acme Corp.'",
+          "expected": true,
+          "actual": true,
+          "pass": true
+        },
+        {
+          "name": "Word-saved copy reopens with the same revision count",
+          "expected": 0,
+          "actual": 0,
+          "pass": true
+        }
+      ]
+    },
+    {
+      "id": "w-revision-accept-all",
+      "format": "word",
+      "family": "revision",
+      "description": "Accept every pending revision",
+      "sha256": "226c10c440c4de55503eeb360360b2f0dde3123763b0b18905a2d2ec9acae85c",
+      "manifestSha256": "226c10c440c4de55503eeb360360b2f0dde3123763b0b18905a2d2ec9acae85c",
+      "openedCleanly": true,
+      "error": null,
+      "pass": true,
+      "observed": {
+        "wordCompatibilityMode": 12
+      },
+      "checks": [
+        {
+          "name": "revisions",
+          "expected": 0,
+          "actual": 0,
+          "pass": true
+        },
+        {
+          "name": "text contains 'approved'",
+          "expected": true,
+          "actual": true,
+          "pass": true
+        },
+        {
+          "name": "text excludes 'draft'",
+          "expected": false,
+          "actual": false,
+          "pass": true
+        },
+        {
+          "name": "Word-saved copy reopens with the same revision count",
+          "expected": 0,
+          "actual": 0,
+          "pass": true
+        }
+      ]
+    },
+    {
+      "id": "w-revision-reject-all",
+      "format": "word",
+      "family": "revision",
+      "description": "Reject every pending revision",
+      "sha256": "d1120bbc067a3a0d1203a5e2ec2b4af0438d35639e47eab822c48418a6137710",
+      "manifestSha256": "d1120bbc067a3a0d1203a5e2ec2b4af0438d35639e47eab822c48418a6137710",
+      "openedCleanly": true,
+      "error": null,
+      "pass": true,
+      "observed": {
+        "wordCompatibilityMode": 12
+      },
+      "checks": [
+        {
+          "name": "revisions",
+          "expected": 0,
+          "actual": 0,
+          "pass": true
+        },
+        {
+          "name": "text contains 'draft'",
+          "expected": true,
+          "actual": true,
+          "pass": true
+        },
+        {
+          "name": "text excludes 'approved'",
+          "expected": false,
+          "actual": false,
+          "pass": true
+        },
+        {
+          "name": "Word-saved copy reopens with the same revision count",
+          "expected": 0,
+          "actual": 0,
+          "pass": true
+        }
+      ]
+    },
+    {
+      "id": "w-comment-add",
+      "format": "word",
+      "family": "comment",
+      "description": "Comment beside existing review threads",
+      "sha256": "0eb7d64c534d7828869e67db2218f984acd40f57fcf1c271e25f6ddeb7218a97",
+      "manifestSha256": "0eb7d64c534d7828869e67db2218f984acd40f57fcf1c271e25f6ddeb7218a97",
+      "openedCleanly": true,
+      "error": null,
+      "pass": true,
+      "observed": {
+        "wordCompatibilityMode": 12
+      },
+      "checks": [
+        {
+          "name": "text contains 'Numbered obligation'",
+          "expected": true,
+          "actual": true,
+          "pass": true
+        },
+        {
+          "name": "comments at least",
+          "expected": 2,
+          "actual": 2,
+          "pass": true
+        },
+        {
+          "name": "Word-saved copy reopens with the same revision count",
+          "expected": 2,
+          "actual": 2,
+          "pass": true
+        }
+      ]
+    },
+    {
+      "id": "w-note-footnote",
+      "format": "word",
+      "family": "note",
+      "description": "Footnote",
+      "sha256": "a7baafaae8adc17e3ceff79863125fe14436b43e13f9aaad81a67c9215e1f8ce",
+      "manifestSha256": "a7baafaae8adc17e3ceff79863125fe14436b43e13f9aaad81a67c9215e1f8ce",
+      "openedCleanly": true,
+      "error": null,
+      "pass": true,
+      "observed": {
+        "wordCompatibilityMode": 12
+      },
+      "checks": [
+        {
+          "name": "footnotes",
+          "expected": 1,
+          "actual": 1,
+          "pass": true
+        },
+        {
+          "name": "footnote text",
+          "expected": "Registered in England.",
+          "actual": "Registered in England.",
+          "pass": true
+        },
+        {
+          "name": "Word-saved copy reopens with the same revision count",
+          "expected": 1,
+          "actual": 1,
+          "pass": true
+        }
+      ]
+    },
+    {
+      "id": "w-note-endnote",
+      "format": "word",
+      "family": "note",
+      "description": "Endnote",
+      "sha256": "8d7f8391a92412d99fe5d4ece7b3f6901ce0daf53bae891d8f148b5f81ba68cb",
+      "manifestSha256": "8d7f8391a92412d99fe5d4ece7b3f6901ce0daf53bae891d8f148b5f81ba68cb",
+      "openedCleanly": true,
+      "error": null,
+      "pass": true,
+      "observed": {
+        "wordCompatibilityMode": 12
+      },
+      "checks": [
+        {
+          "name": "endnotes",
+          "expected": 1,
+          "actual": 1,
+          "pass": true
+        },
+        {
+          "name": "endnote text",
+          "expected": "See schedule 2.",
+          "actual": "See schedule 2.",
+          "pass": true
+        },
+        {
+          "name": "Word-saved copy reopens with the same revision count",
+          "expected": 1,
+          "actual": 1,
+          "pass": true
+        }
+      ]
+    },
+    {
+      "id": "w-fill-control",
+      "format": "word",
+      "family": "fill",
+      "description": "Fill a nested content control",
+      "sha256": "47cf36bb2fcc9094fd8e022cc59bb963f96ef4087cf34d6433e6fd6c8b06ae34",
+      "manifestSha256": "47cf36bb2fcc9094fd8e022cc59bb963f96ef4087cf34d6433e6fd6c8b06ae34",
+      "openedCleanly": true,
+      "error": null,
+      "pass": true,
+      "observed": {
+        "wordCompatibilityMode": 12
+      },
+      "checks": [
+        {
+          "name": "text contains 'Contoso Holdings'",
+          "expected": true,
+          "actual": true,
+          "pass": true
+        },
+        {
+          "name": "content controls at least",
+          "expected": 2,
+          "actual": 2,
+          "pass": true
+        },
+        {
+          "name": "Word-saved copy reopens with the same revision count",
+          "expected": 2,
+          "actual": 2,
+          "pass": true
+        }
+      ]
+    },
+    {
+      "id": "w-inserttable",
+      "format": "word",
+      "family": "insertTable",
+      "description": "Insert a 3x3 table",
+      "sha256": "08a1513cec2b98bdd918a86fcece51d84ee1517a2839f36b0941d52efc088102",
+      "manifestSha256": "08a1513cec2b98bdd918a86fcece51d84ee1517a2839f36b0941d52efc088102",
+      "openedCleanly": true,
+      "error": null,
+      "pass": true,
+      "observed": {
+        "wordCompatibilityMode": 12
+      },
+      "checks": [
+        {
+          "name": "text contains 'Widget'",
+          "expected": true,
+          "actual": true,
+          "pass": true
+        },
+        {
+          "name": "tables",
+          "expected": 1,
+          "actual": 1,
+          "pass": true
+        },
+        {
+          "name": "table rows",
+          "expected": 3,
+          "actual": 3,
+          "pass": true
+        },
+        {
+          "name": "table columns",
+          "expected": 3,
+          "actual": 3,
+          "pass": true
+        },
+        {
+          "name": "Word-saved copy reopens with the same revision count",
+          "expected": 0,
+          "actual": 0,
+          "pass": true
+        }
+      ]
+    },
+    {
+      "id": "w-inserttablerows",
+      "format": "word",
+      "family": "insertTableRows",
+      "description": "Append table rows",
+      "sha256": "983818cf619ca9fed17d4be6b86eb8ba4d16d8de0d41eb62776aa430a04f94bb",
+      "manifestSha256": "983818cf619ca9fed17d4be6b86eb8ba4d16d8de0d41eb62776aa430a04f94bb",
+      "openedCleanly": true,
+      "error": null,
+      "pass": true,
+      "observed": {
+        "wordCompatibilityMode": 12
+      },
+      "checks": [
+        {
+          "name": "text contains 'Sprocket'",
+          "expected": true,
+          "actual": true,
+          "pass": true
+        },
+        {
+          "name": "tables",
+          "expected": 1,
+          "actual": 1,
+          "pass": true
+        },
+        {
+          "name": "table rows",
+          "expected": 4,
+          "actual": 4,
+          "pass": true
+        },
+        {
+          "name": "Word-saved copy reopens with the same revision count",
+          "expected": 0,
+          "actual": 0,
+          "pass": true
+        }
+      ]
+    },
+    {
+      "id": "w-removetablerows",
+      "format": "word",
+      "family": "removeTableRows",
+      "description": "Remove a table row",
+      "sha256": "1ead2ca3bff1344aa9c6e404165283d554a833eaccb7c2d32a2137cad68ee7bd",
+      "manifestSha256": "1ead2ca3bff1344aa9c6e404165283d554a833eaccb7c2d32a2137cad68ee7bd",
+      "openedCleanly": true,
+      "error": null,
+      "pass": true,
+      "observed": {
+        "wordCompatibilityMode": 12
+      },
+      "checks": [
+        {
+          "name": "text excludes 'Gadget'",
+          "expected": false,
+          "actual": false,
+          "pass": true
+        },
+        {
+          "name": "tables",
+          "expected": 1,
+          "actual": 1,
+          "pass": true
+        },
+        {
+          "name": "table rows",
+          "expected": 2,
+          "actual": 2,
+          "pass": true
+        },
+        {
+          "name": "Word-saved copy reopens with the same revision count",
+          "expected": 0,
+          "actual": 0,
+          "pass": true
+        }
+      ]
+    },
+    {
+      "id": "w-inserttablecolumns",
+      "format": "word",
+      "family": "insertTableColumns",
+      "description": "Insert a table column",
+      "sha256": "7dddfdb3d4c00be3d52ca17a7f4457a1c5401040a8e8aeca26f0b958def56a2e",
+      "manifestSha256": "7dddfdb3d4c00be3d52ca17a7f4457a1c5401040a8e8aeca26f0b958def56a2e",
+      "openedCleanly": true,
+      "error": null,
+      "pass": true,
+      "observed": {
+        "wordCompatibilityMode": 12
+      },
+      "checks": [
+        {
+          "name": "text contains 'Total'",
+          "expected": true,
+          "actual": true,
+          "pass": true
+        },
+        {
+          "name": "tables",
+          "expected": 1,
+          "actual": 1,
+          "pass": true
+        },
+        {
+          "name": "table columns",
+          "expected": 4,
+          "actual": 4,
+          "pass": true
+        },
+        {
+          "name": "Word-saved copy reopens with the same revision count",
+          "expected": 4,
+          "actual": 4,
+          "pass": true
+        }
+      ]
+    },
+    {
+      "id": "w-removetablecolumns",
+      "format": "word",
+      "family": "removeTableColumns",
+      "description": "Remove a table column",
+      "sha256": "69eb3d747449ab4d5fea91880b337267ad14abb2824ef5703714e0c52017a1f7",
+      "manifestSha256": "69eb3d747449ab4d5fea91880b337267ad14abb2824ef5703714e0c52017a1f7",
+      "openedCleanly": true,
+      "error": null,
+      "pass": true,
+      "observed": {
+        "wordCompatibilityMode": 12
+      },
+      "checks": [
+        {
+          "name": "text excludes 'Price'",
+          "expected": false,
+          "actual": false,
+          "pass": true
+        },
+        {
+          "name": "tables",
+          "expected": 1,
+          "actual": 1,
+          "pass": true
+        },
+        {
+          "name": "table columns",
+          "expected": 2,
+          "actual": 2,
+          "pass": true
+        },
+        {
+          "name": "Word-saved copy reopens with the same revision count",
+          "expected": 0,
+          "actual": 0,
+          "pass": true
+        }
+      ]
+    },
+    {
+      "id": "w-removetablecolumns-tracked",
+      "format": "word",
+      "family": "removeTableColumns",
+      "description": "Tracked column removal, resolved in Word",
+      "sha256": "58be6233c9ace10d51fc18e0327e8037fecd9f2627f04aba9343b27c4f8ebdc6",
+      "manifestSha256": "58be6233c9ace10d51fc18e0327e8037fecd9f2627f04aba9343b27c4f8ebdc6",
+      "openedCleanly": true,
+      "error": null,
+      "pass": true,
+      "observed": {
+        "wordCompatibilityMode": 12
+      },
+      "checks": [
+        {
+          "name": "revisions at least",
+          "expected": 1,
+          "actual": 4,
+          "pass": true
+        },
+        {
+          "name": "table columns",
+          "expected": 3,
+          "actual": 3,
+          "pass": true
+        },
+        {
+          "name": "revisions after accept all",
+          "expected": 0,
+          "actual": 0,
+          "pass": true
+        },
+        {
+          "name": "accepted text excludes 'Price'",
+          "expected": false,
+          "actual": false,
+          "pass": true
+        },
+        {
+          "name": "table columns after accept all",
+          "expected": 2,
+          "actual": 2,
+          "pass": true
+        },
+        {
+          "name": "revisions after reject all",
+          "expected": 0,
+          "actual": 0,
+          "pass": true
+        },
+        {
+          "name": "rejected text contains 'Price'",
+          "expected": true,
+          "actual": true,
+          "pass": true
+        },
+        {
+          "name": "table columns after reject all",
+          "expected": 3,
+          "actual": 3,
+          "pass": true
+        },
+        {
+          "name": "Word-saved copy reopens with the same revision count",
+          "expected": 4,
+          "actual": 4,
+          "pass": true
+        }
+      ]
+    },
+    {
+      "id": "w-repeattablerow",
+      "format": "word",
+      "family": "repeatTableRow",
+      "description": "Repeat a template row per record",
+      "sha256": "a820c8d340cb67dbe889b3fc972c525ad89c1de90e893144a04f0324befcff08",
+      "manifestSha256": "a820c8d340cb67dbe889b3fc972c525ad89c1de90e893144a04f0324befcff08",
+      "openedCleanly": true,
+      "error": null,
+      "pass": true,
+      "observed": {
+        "wordCompatibilityMode": 12
+      },
+      "checks": [
+        {
+          "name": "text contains 'Widget'",
+          "expected": true,
+          "actual": true,
+          "pass": true
+        },
+        {
+          "name": "text contains 'Gadget'",
+          "expected": true,
+          "actual": true,
+          "pass": true
+        },
+        {
+          "name": "text contains 'Sprocket'",
+          "expected": true,
+          "actual": true,
+          "pass": true
+        },
+        {
+          "name": "text excludes '{{'",
+          "expected": false,
+          "actual": false,
+          "pass": true
+        },
+        {
+          "name": "tables",
+          "expected": 1,
+          "actual": 1,
+          "pass": true
+        },
+        {
+          "name": "table rows",
+          "expected": 4,
+          "actual": 4,
+          "pass": true
+        },
+        {
+          "name": "Word-saved copy reopens with the same revision count",
+          "expected": 0,
+          "actual": 0,
+          "pass": true
+        }
+      ]
+    },
+    {
+      "id": "w-removetable",
+      "format": "word",
+      "family": "removeTable",
+      "description": "Remove a table",
+      "sha256": "c50ec2d370000a3e6ffee8ea7bfdb1e9b4db99b77627a03859a6ce76439e1c4d",
+      "manifestSha256": "c50ec2d370000a3e6ffee8ea7bfdb1e9b4db99b77627a03859a6ce76439e1c4d",
+      "openedCleanly": true,
+      "error": null,
+      "pass": true,
+      "observed": {
+        "wordCompatibilityMode": 12
+      },
+      "checks": [
+        {
+          "name": "text excludes 'Widget'",
+          "expected": false,
+          "actual": false,
+          "pass": true
+        },
+        {
+          "name": "tables",
+          "expected": 0,
+          "actual": 0,
+          "pass": true
+        },
+        {
+          "name": "Word-saved copy reopens with the same revision count",
+          "expected": 0,
+          "actual": 0,
+          "pass": true
+        }
+      ]
+    },
+    {
+      "id": "w-insertimage",
+      "format": "word",
+      "family": "insertImage",
+      "description": "Insert an inline picture",
+      "sha256": "68b132f8aff2e7fedc7461a2354e73b4815d31de17b2225232e9475d82f9006d",
+      "manifestSha256": "68b132f8aff2e7fedc7461a2354e73b4815d31de17b2225232e9475d82f9006d",
+      "openedCleanly": true,
+      "error": null,
+      "pass": true,
+      "observed": {
+        "wordCompatibilityMode": 12
+      },
+      "checks": [
+        {
+          "name": "inline pictures",
+          "expected": 1,
+          "actual": 1,
+          "pass": true
+        },
+        {
+          "name": "Word-saved copy reopens with the same revision count",
+          "expected": 0,
+          "actual": 0,
+          "pass": true
+        }
+      ]
+    },
+    {
+      "id": "w-removeimage",
+      "format": "word",
+      "family": "removeImage",
+      "description": "Remove the picture",
+      "sha256": "af9228dcc04dba51b22f8c0a88ef1c1d666601cabff9f2feae2bbd0952096bb5",
+      "manifestSha256": "af9228dcc04dba51b22f8c0a88ef1c1d666601cabff9f2feae2bbd0952096bb5",
+      "openedCleanly": true,
+      "error": null,
+      "pass": true,
+      "observed": {
+        "wordCompatibilityMode": 12
+      },
+      "checks": [
+        {
+          "name": "inline pictures",
+          "expected": 0,
+          "actual": 0,
+          "pass": true
+        },
+        {
+          "name": "Word-saved copy reopens with the same revision count",
+          "expected": 0,
+          "actual": 0,
+          "pass": true
+        }
+      ]
+    },
+    {
+      "id": "w-backgroundimage",
+      "format": "word",
+      "family": "backgroundImage",
+      "description": "Page background picture",
+      "sha256": "8edcbb99e89079d0c8c84b7ea53d7c4986201db06ac052413bdca979e40a784f",
+      "manifestSha256": "8edcbb99e89079d0c8c84b7ea53d7c4986201db06ac052413bdca979e40a784f",
+      "openedCleanly": true,
+      "error": null,
+      "pass": true,
+      "observed": {
+        "wordCompatibilityMode": 12
+      },
+      "checks": [
+        {
+          "name": "header holds a picture behind text",
+          "expected": 1,
+          "actual": 1,
+          "pass": true
+        },
+        {
+          "name": "Word-saved copy reopens with the same revision count",
+          "expected": 0,
+          "actual": 0,
+          "pass": true
+        }
+      ]
+    },
+    {
+      "id": "w-headerfooter",
+      "format": "word",
+      "family": "headerFooter",
+      "description": "Header, footer and page number",
+      "sha256": "d688f5e944e28225945eafecd2a95054400480a1c4d5a1580248e4a6e1febacb",
+      "manifestSha256": "d688f5e944e28225945eafecd2a95054400480a1c4d5a1580248e4a6e1febacb",
+      "openedCleanly": true,
+      "error": null,
+      "pass": true,
+      "observed": {
+        "wordCompatibilityMode": 12
+      },
+      "checks": [
+        {
+          "name": "header contains 'Contoso'",
+          "expected": true,
+          "actual": true,
+          "pass": true
+        },
+        {
+          "name": "footer contains 'Services agreement'",
+          "expected": true,
+          "actual": true,
+          "pass": true
+        },
+        {
+          "name": "Word-saved copy reopens with the same revision count",
+          "expected": 0,
+          "actual": 0,
+          "pass": true
+        }
+      ]
+    },
+    {
+      "id": "w-pagesetup",
+      "format": "word",
+      "family": "pageSetup",
+      "description": "Landscape A4 with wide margins",
+      "sha256": "b1e00128174291197eeb99502bad99493bbede63895c8e144cf6d4ab1a61d94d",
+      "manifestSha256": "b1e00128174291197eeb99502bad99493bbede63895c8e144cf6d4ab1a61d94d",
+      "openedCleanly": true,
+      "error": null,
+      "pass": true,
+      "observed": {
+        "wordCompatibilityMode": 12
+      },
+      "checks": [
+        {
+          "name": "landscape",
+          "expected": true,
+          "actual": true,
+          "pass": true
+        },
+        {
+          "name": "Word-saved copy reopens with the same revision count",
+          "expected": 0,
+          "actual": 0,
+          "pass": true
+        }
+      ]
+    },
+    {
+      "id": "w-insertbreak",
+      "format": "word",
+      "family": "insertBreak",
+      "description": "Page break",
+      "sha256": "86335d964d229a33f8121ecdd3e76cd4b782adc1a629f03bb8b7418f63b62c0c",
+      "manifestSha256": "86335d964d229a33f8121ecdd3e76cd4b782adc1a629f03bb8b7418f63b62c0c",
+      "openedCleanly": true,
+      "error": null,
+      "pass": true,
+      "observed": {
+        "wordCompatibilityMode": 12
+      },
+      "checks": [
+        {
+          "name": "pages at least",
+          "expected": 2,
+          "actual": 2,
+          "pass": true
+        },
+        {
+          "name": "Word-saved copy reopens with the same revision count",
+          "expected": 0,
+          "actual": 0,
+          "pass": true
+        }
+      ]
+    },
+    {
+      "id": "w-setproperty",
+      "format": "word",
+      "family": "setProperty",
+      "description": "Document title property",
+      "sha256": "2b422ee18aebc46444c211904dda34f854d7f7d81b75a62ee5be8cdb19250071",
+      "manifestSha256": "2b422ee18aebc46444c211904dda34f854d7f7d81b75a62ee5be8cdb19250071",
+      "openedCleanly": true,
+      "error": null,
+      "pass": true,
+      "observed": {
+        "wordCompatibilityMode": 12
+      },
+      "checks": [
+        {
+          "name": "title property",
+          "expected": "Master services agreement",
+          "actual": "Master services agreement",
+          "pass": true
+        },
+        {
+          "name": "Word-saved copy reopens with the same revision count",
+          "expected": 0,
+          "actual": 0,
+          "pass": true
+        }
+      ]
+    },
+    {
+      "id": "w-definestyle",
+      "format": "word",
+      "family": "defineStyle",
+      "description": "Define and apply a heading style",
+      "sha256": "d24deb1fc6303ece701fde58218823f8855f0bfbe3d2b5955ffd2674bed6f151",
+      "manifestSha256": "d24deb1fc6303ece701fde58218823f8855f0bfbe3d2b5955ffd2674bed6f151",
+      "openedCleanly": true,
+      "error": null,
+      "pass": true,
+      "observed": {
+        "wordCompatibilityMode": 12
+      },
+      "checks": [
+        {
+          "name": "style 'Contract Heading' exists",
+          "expected": true,
+          "actual": true,
+          "pass": true
+        },
+        {
+          "name": "Word-saved copy reopens with the same revision count",
+          "expected": 0,
+          "actual": 0,
+          "pass": true
+        }
+      ]
+    },
+    {
+      "id": "w-clearstyles",
+      "format": "word",
+      "family": "clearStyles",
+      "description": "Clear direct formatting on a bolded phrase",
+      "sha256": "c50ec2d370000a3e6ffee8ea7bfdb1e9b4db99b77627a03859a6ce76439e1c4d",
+      "manifestSha256": "c50ec2d370000a3e6ffee8ea7bfdb1e9b4db99b77627a03859a6ce76439e1c4d",
+      "openedCleanly": true,
+      "error": null,
+      "pass": true,
+      "observed": {
+        "wordCompatibilityMode": 12
+      },
+      "checks": [
+        {
+          "name": "revisions",
+          "expected": 0,
+          "actual": 0,
+          "pass": true
+        },
+        {
+          "name": "Word reads the same text as in the input",
+          "expected": "Service Agreement\nAcme Corp shall provide services to Acme Corp.\nClient: PLACEHOLDER\nEffective date: 2020-01-01.\n\n\n\n\n\n\n\n\n\n\n\n\n",
+          "actual": "Service Agreement\nAcme Corp shall provide services to Acme Corp.\nClient: PLACEHOLDER\nEffective date: 2020-01-01.\n\n\n\n\n\n\n\n\n\n\n\n\n",
+          "pass": true
+        },
+        {
+          "name": "Word-saved copy reopens with the same revision count",
+          "expected": 0,
+          "actual": 0,
+          "pass": true
+        }
+      ]
+    },
+    {
+      "id": "w-clearstyles-unpreserved-space",
+      "format": "word",
+      "family": "clearStyles",
+      "description": "Clear formatting on runs written without xml:space",
+      "sha256": "14083271bed742cd0276854bcea1972d8e30fd4cba7c2b336ca9020de80f46ce",
+      "manifestSha256": "14083271bed742cd0276854bcea1972d8e30fd4cba7c2b336ca9020de80f46ce",
+      "openedCleanly": true,
+      "error": null,
+      "pass": true,
+      "observed": {
+        "wordCompatibilityMode": 12
+      },
+      "checks": [
+        {
+          "name": "text contains 'Quarterly target'",
+          "expected": true,
+          "actual": true,
+          "pass": true
+        },
+        {
+          "name": "Word-saved copy reopens with the same revision count",
+          "expected": 2,
+          "actual": 2,
+          "pass": true
+        }
+      ]
+    },
+    {
+      "id": "w-copystyles",
+      "format": "word",
+      "family": "copyStyles",
+      "description": "Copy direct formatting between paragraphs",
+      "sha256": "c2713a3eeca90607202944c00808547570a776a8a3283b63f999e738ac51b11c",
+      "manifestSha256": "c2713a3eeca90607202944c00808547570a776a8a3283b63f999e738ac51b11c",
+      "openedCleanly": true,
+      "error": null,
+      "pass": true,
+      "observed": {
+        "wordCompatibilityMode": 12
+      },
+      "checks": [
+        {
+          "name": "Word reads the same text as in the input",
+          "expected": "Quarterlytargetremains within plan.\nPrior review:approved/\nCommented clause\nOuter startNested valueouter end\nNumbered obligation\nPage7\nLandscape appendix\f\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n",
+          "actual": "Quarterlytargetremains within plan.\nPrior review:approved/\nCommented clause\nOuter startNested valueouter end\nNumbered obligation\nPage7\nLandscape appendix\f\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n",
+          "pass": true
+        },
+        {
+          "name": "Word-saved copy reopens with the same revision count",
+          "expected": 2,
+          "actual": 2,
+          "pass": true
+        }
+      ]
+    },
+    {
+      "id": "w-create-with-plan",
+      "format": "word",
+      "family": "create",
+      "description": "Blank document from OfficeAgent, then written",
+      "sha256": "a7085384a5c7b4ed1b16c1af80b509ace92497e72d6e45937f373ef2c955c355",
+      "manifestSha256": "a7085384a5c7b4ed1b16c1af80b509ace92497e72d6e45937f373ef2c955c355",
+      "openedCleanly": true,
+      "error": null,
+      "pass": true,
+      "observed": {
+        "wordCompatibilityMode": 15
+      },
+      "checks": [
+        {
+          "name": "revisions",
+          "expected": 0,
+          "actual": 0,
+          "pass": true
+        },
+        {
+          "name": "text contains 'Created by OfficeAgent.'",
+          "expected": true,
+          "actual": true,
+          "pass": true
+        },
+        {
+          "name": "Word compatibility mode",
+          "expected": 15,
+          "actual": 15,
+          "pass": true
+        },
+        {
+          "name": "Word-saved copy reopens with the same revision count",
+          "expected": 0,
+          "actual": 0,
+          "pass": true
+        }
+      ]
+    },
+    {
+      "id": "w-template-populated",
+      "format": "word",
+      "family": "template",
+      "description": "Template with a slot and a repeating row, populated",
+      "sha256": "f9c70a3cdd9747df71e7a13b3e88d7bb645de8264bfc83f2fbc615ffeedf63a0",
+      "manifestSha256": "f9c70a3cdd9747df71e7a13b3e88d7bb645de8264bfc83f2fbc615ffeedf63a0",
+      "openedCleanly": true,
+      "error": null,
+      "pass": true,
+      "observed": {
+        "wordCompatibilityMode": 12
+      },
+      "checks": [
+        {
+          "name": "text contains 'Fabrikam Ltd'",
+          "expected": true,
+          "actual": true,
+          "pass": true
+        },
+        {
+          "name": "text contains 'Consulting'",
+          "expected": true,
+          "actual": true,
+          "pass": true
+        },
+        {
+          "name": "text contains 'Support'",
+          "expected": true,
+          "actual": true,
+          "pass": true
+        },
+        {
+          "name": "text excludes '{{'",
+          "expected": false,
+          "actual": false,
+          "pass": true
+        },
+        {
+          "name": "text excludes 'CUSTOMER'",
+          "expected": false,
+          "actual": false,
+          "pass": true
+        },
+        {
+          "name": "table rows",
+          "expected": 3,
+          "actual": 3,
+          "pass": true
+        },
+        {
+          "name": "Word-saved copy reopens with the same revision count",
+          "expected": 0,
+          "actual": 0,
+          "pass": true
+        }
+      ]
+    },
+    {
+      "id": "w-template-image",
+      "format": "word",
+      "family": "template",
+      "description": "Template image slot bound through a template batch on the filesystem provider",
+      "sha256": "bba938e62b746af93f5f1949988f3729eebb66cc19a14609fdf08673bd538218",
+      "manifestSha256": "bba938e62b746af93f5f1949988f3729eebb66cc19a14609fdf08673bd538218",
+      "openedCleanly": true,
+      "error": null,
+      "pass": true,
+      "observed": {
+        "wordCompatibilityMode": 12
+      },
+      "checks": [
+        {
+          "name": "text contains 'Quote for Fabrikam Ltd'",
+          "expected": true,
+          "actual": true,
+          "pass": true
+        },
+        {
+          "name": "text excludes 'CUSTOMER'",
+          "expected": false,
+          "actual": false,
+          "pass": true
+        },
+        {
+          "name": "picture size in points",
+          "expected": "180 x 90",
+          "actual": "180 x 90",
+          "pass": true
+        },
+        {
+          "name": "inline pictures",
+          "expected": 1,
+          "actual": 1,
+          "pass": true
+        },
+        {
+          "name": "Word-saved copy reopens with the same revision count",
+          "expected": 0,
+          "actual": 0,
+          "pass": true
+        }
+      ]
+    },
+    {
+      "id": "w-comparison-table-cell",
+      "format": "word",
+      "family": "comparison",
+      "description": "Comparison redline of a table-cell edit",
+      "sha256": "7c633d16c9e517b452efa5031e4bdb3323dccedefe4a266feeefec8a7092c33a",
+      "manifestSha256": "7c633d16c9e517b452efa5031e4bdb3323dccedefe4a266feeefec8a7092c33a",
+      "openedCleanly": true,
+      "error": null,
+      "pass": true,
+      "observed": {
+        "wordCompatibilityMode": 12
+      },
+      "checks": [
+        {
+          "name": "revisions at least",
+          "expected": 1,
+          "actual": 2,
+          "pass": true
+        },
+        {
+          "name": "tables",
+          "expected": 1,
+          "actual": 1,
+          "pass": true
+        },
+        {
+          "name": "table rows",
+          "expected": 3,
+          "actual": 3,
+          "pass": true
+        },
+        {
+          "name": "revisions after accept all",
+          "expected": 0,
+          "actual": 0,
+          "pass": true
+        },
+        {
+          "name": "accepted text contains 'Gizmo'",
+          "expected": true,
+          "actual": true,
+          "pass": true
+        },
+        {
+          "name": "accepted text excludes 'Gadget'",
+          "expected": false,
+          "actual": false,
+          "pass": true
+        },
+        {
+          "name": "revisions after reject all",
+          "expected": 0,
+          "actual": 0,
+          "pass": true
+        },
+        {
+          "name": "rejected text contains 'Gadget'",
+          "expected": true,
+          "actual": true,
+          "pass": true
+        },
+        {
+          "name": "rejected text excludes 'Gizmo'",
+          "expected": false,
+          "actual": false,
+          "pass": true
+        },
+        {
+          "name": "Word-saved copy reopens with the same revision count",
+          "expected": 2,
+          "actual": 2,
+          "pass": true
+        }
+      ]
+    },
+    {
+      "id": "w-comparison",
+      "format": "word",
+      "family": "comparison",
+      "description": "Comparison redline between two versions",
+      "sha256": "752cd35f37b9b4d8639a37134e8dfa1d0cc583ac1cb2ad4df0a5324dea77ca26",
+      "manifestSha256": "752cd35f37b9b4d8639a37134e8dfa1d0cc583ac1cb2ad4df0a5324dea77ca26",
+      "openedCleanly": true,
+      "error": null,
+      "pass": true,
+      "observed": {
+        "wordCompatibilityMode": 12
+      },
+      "checks": [
+        {
+          "name": "revisions at least",
+          "expected": 1,
+          "actual": 2,
+          "pass": true
+        },
+        {
+          "name": "revisions after accept all",
+          "expected": 0,
+          "actual": 0,
+          "pass": true
+        },
+        {
+          "name": "accepted text contains 'Globex Inc.'",
+          "expected": true,
+          "actual": true,
+          "pass": true
+        },
+        {
+          "name": "revisions after reject all",
+          "expected": 0,
+          "actual": 0,
+          "pass": true
+        },
+        {
+          "name": "rejected text contains 'Acme Corp'",
+          "expected": true,
+          "actual": true,
+          "pass": true
+        },
+        {
+          "name": "rejected text excludes 'Globex'",
+          "expected": false,
+          "actual": false,
+          "pass": true
+        },
+        {
+          "name": "Word-saved copy reopens with the same revision count",
+          "expected": 2,
+          "actual": 2,
+          "pass": true
+        }
+      ]
+    },
+    {
+      "id": "w-assembly",
+      "format": "word",
+      "family": "assembly",
+      "description": "Two documents assembled, each keeping its header",
+      "sha256": "3f3fee4ec5d1ec75339a01e4c1876d38044f0f446c28d035baa01ed23ccf60e0",
+      "manifestSha256": "3f3fee4ec5d1ec75339a01e4c1876d38044f0f446c28d035baa01ed23ccf60e0",
+      "openedCleanly": true,
+      "error": null,
+      "pass": true,
+      "observed": {
+        "wordCompatibilityMode": 15
+      },
+      "checks": [
+        {
+          "name": "revisions",
+          "expected": 0,
+          "actual": 0,
+          "pass": true
+        },
+        {
+          "name": "text contains 'Acme Corp'",
+          "expected": true,
+          "actual": true,
+          "pass": true
+        },
+        {
+          "name": "text contains 'Appendix A: rate card.'",
+          "expected": true,
+          "actual": true,
+          "pass": true
+        },
+        {
+          "name": "sections at least",
+          "expected": 2,
+          "actual": 2,
+          "pass": true
+        },
+        {
+          "name": "Word compatibility mode",
+          "expected": 15,
+          "actual": 15,
+          "pass": true
+        },
+        {
+          "name": "Word-saved copy reopens with the same revision count",
+          "expected": 0,
+          "actual": 0,
+          "pass": true
+        }
+      ]
+    },
+    {
+      "id": "p-insertslide",
+      "format": "powerpoint",
+      "family": "insertSlide",
+      "description": "Two slides added to a blank deck",
+      "sha256": "36093d6ca9d3089408dbf338371d65c1ef5c2fde25614fd7048e9952faef9fce",
+      "manifestSha256": "36093d6ca9d3089408dbf338371d65c1ef5c2fde25614fd7048e9952faef9fce",
+      "openedCleanly": true,
+      "error": null,
+      "pass": true,
+      "observed": {},
+      "checks": [
+        {
+          "name": "slides",
+          "expected": 3,
+          "actual": 3,
+          "pass": true
+        },
+        {
+          "name": "text contains 'Second'",
+          "expected": true,
+          "actual": true,
+          "pass": true
+        },
+        {
+          "name": "text contains 'Closing point'",
+          "expected": true,
+          "actual": true,
+          "pass": true
+        },
+        {
+          "name": "PowerPoint-saved copy reopens with the same slide count",
+          "expected": 3,
+          "actual": 3,
+          "pass": true
+        }
+      ]
+    },
+    {
+      "id": "p-removeslide",
+      "format": "powerpoint",
+      "family": "removeSlide",
+      "description": "Remove a slide",
+      "sha256": "ef1f6bc707964ae531b68d042fdcb42bbb09534d9b5a98d9cffe052f837165c3",
+      "manifestSha256": "ef1f6bc707964ae531b68d042fdcb42bbb09534d9b5a98d9cffe052f837165c3",
+      "openedCleanly": true,
+      "error": null,
+      "pass": true,
+      "observed": {},
+      "checks": [
+        {
+          "name": "slides",
+          "expected": 2,
+          "actual": 2,
+          "pass": true
+        },
+        {
+          "name": "text excludes 'Another point'",
+          "expected": false,
+          "actual": false,
+          "pass": true
+        },
+        {
+          "name": "PowerPoint-saved copy reopens with the same slide count",
+          "expected": 2,
+          "actual": 2,
+          "pass": true
+        }
+      ]
+    },
+    {
+      "id": "p-moveslide",
+      "format": "powerpoint",
+      "family": "moveSlide",
+      "description": "Move the last slide first",
+      "sha256": "256f166e1f02194c7808c1549424170e0fab412827f9ab55e551ca526a9787cd",
+      "manifestSha256": "256f166e1f02194c7808c1549424170e0fab412827f9ab55e551ca526a9787cd",
+      "openedCleanly": true,
+      "error": null,
+      "pass": true,
+      "observed": {},
+      "checks": [
+        {
+          "name": "slides",
+          "expected": 3,
+          "actual": 3,
+          "pass": true
+        },
+        {
+          "name": "first slide contains 'Third'",
+          "expected": true,
+          "actual": true,
+          "pass": true
+        },
+        {
+          "name": "PowerPoint-saved copy reopens with the same slide count",
+          "expected": 3,
+          "actual": 3,
+          "pass": true
+        }
+      ]
+    },
+    {
+      "id": "p-duplicateslide",
+      "format": "powerpoint",
+      "family": "duplicateSlide",
+      "description": "Duplicate a slide",
+      "sha256": "0358aa598d1971bd82d5e2198a3828d2ac434bdc371ee8ed741a094561c7ed69",
+      "manifestSha256": "0358aa598d1971bd82d5e2198a3828d2ac434bdc371ee8ed741a094561c7ed69",
+      "openedCleanly": true,
+      "error": null,
+      "pass": true,
+      "observed": {},
+      "checks": [
+        {
+          "name": "slides",
+          "expected": 4,
+          "actual": 4,
+          "pass": true
+        },
+        {
+          "name": "PowerPoint-saved copy reopens with the same slide count",
+          "expected": 4,
+          "actual": 4,
+          "pass": true
+        }
+      ]
+    },
+    {
+      "id": "p-section",
+      "format": "powerpoint",
+      "family": "section",
+      "description": "Add a section",
+      "sha256": "bcb0c61870306cdb8d6c94526ae4baba822d6f67d9a822379432d316233412ac",
+      "manifestSha256": "bcb0c61870306cdb8d6c94526ae4baba822d6f67d9a822379432d316233412ac",
+      "openedCleanly": true,
+      "error": null,
+      "pass": true,
+      "observed": {},
+      "checks": [
+        {
+          "name": "sections at least",
+          "expected": 2,
+          "actual": 2,
+          "pass": true
+        },
+        {
+          "name": "section 'Financials'",
+          "expected": true,
+          "actual": true,
+          "pass": true
+        },
+        {
+          "name": "PowerPoint-saved copy reopens with the same slide count",
+          "expected": 3,
+          "actual": 3,
+          "pass": true
+        }
+      ]
+    },
+    {
+      "id": "p-transition",
+      "format": "powerpoint",
+      "family": "transition",
+      "description": "Fade transition on every slide",
+      "sha256": "8313f2e903e3c598a9179edac2dc26707810cb799ccdd6c816a881f1e7af7ae7",
+      "manifestSha256": "8313f2e903e3c598a9179edac2dc26707810cb799ccdd6c816a881f1e7af7ae7",
+      "openedCleanly": true,
+      "error": null,
+      "pass": true,
+      "observed": {},
+      "checks": [
+        {
+          "name": "slides",
+          "expected": 3,
+          "actual": 3,
+          "pass": true
+        },
+        {
+          "name": "every slide has a transition",
+          "expected": true,
+          "actual": true,
+          "pass": true
+        },
+        {
+          "name": "PowerPoint-saved copy reopens with the same slide count",
+          "expected": 3,
+          "actual": 3,
+          "pass": true
+        }
+      ]
+    },
+    {
+      "id": "p-animate",
+      "format": "powerpoint",
+      "family": "animate",
+      "description": "Fade-in animation on a shape",
+      "sha256": "35a2e7ba9f6f311efc8faafb62ddda4d08550d78f206e8fc9c0c7af3c2c68540",
+      "manifestSha256": "35a2e7ba9f6f311efc8faafb62ddda4d08550d78f206e8fc9c0c7af3c2c68540",
+      "openedCleanly": true,
+      "error": null,
+      "pass": true,
+      "observed": {},
+      "checks": [
+        {
+          "name": "animations at least",
+          "expected": 1,
+          "actual": 1,
+          "pass": true
+        },
+        {
+          "name": "PowerPoint-saved copy reopens with the same slide count",
+          "expected": 3,
+          "actual": 3,
+          "pass": true
+        }
+      ]
+    },
+    {
+      "id": "p-headerfooter",
+      "format": "powerpoint",
+      "family": "headerFooter",
+      "description": "Footer and slide numbers",
+      "sha256": "8bdb9c06d4d144877c98be03d33bb2ba0bbdaa77394089cb18e54fdb80317dfe",
+      "manifestSha256": "8bdb9c06d4d144877c98be03d33bb2ba0bbdaa77394089cb18e54fdb80317dfe",
+      "openedCleanly": true,
+      "error": null,
+      "pass": true,
+      "observed": {},
+      "checks": [
+        {
+          "name": "footer contains 'Confidential'",
+          "expected": true,
+          "actual": true,
+          "pass": true
+        },
+        {
+          "name": "PowerPoint-saved copy reopens with the same slide count",
+          "expected": 3,
+          "actual": 3,
+          "pass": true
+        }
+      ]
+    },
+    {
+      "id": "p-insertshape",
+      "format": "powerpoint",
+      "family": "insertShape",
+      "description": "Insert a text box",
+      "sha256": "0baba9f73cc9343330df6726742cd73c45bce12fc24d63d266ef2e5301af0e26",
+      "manifestSha256": "0baba9f73cc9343330df6726742cd73c45bce12fc24d63d266ef2e5301af0e26",
+      "openedCleanly": true,
+      "error": null,
+      "pass": true,
+      "observed": {},
+      "checks": [
+        {
+          "name": "text contains 'Accent'",
+          "expected": true,
+          "actual": true,
+          "pass": true
+        },
+        {
+          "name": "PowerPoint-saved copy reopens with the same slide count",
+          "expected": 2,
+          "actual": 2,
+          "pass": true
+        }
+      ]
+    },
+    {
+      "id": "p-removeshape",
+      "format": "powerpoint",
+      "family": "removeShape",
+      "description": "Remove the text box",
+      "sha256": "230d2d364937d91239650a972dab703820c76541ea4f3ef45676b36599127688",
+      "manifestSha256": "230d2d364937d91239650a972dab703820c76541ea4f3ef45676b36599127688",
+      "openedCleanly": true,
+      "error": null,
+      "pass": true,
+      "observed": {},
+      "checks": [
+        {
+          "name": "text excludes 'Accent'",
+          "expected": false,
+          "actual": false,
+          "pass": true
+        },
+        {
+          "name": "PowerPoint-saved copy reopens with the same slide count",
+          "expected": 2,
+          "actual": 2,
+          "pass": true
+        }
+      ]
+    },
+    {
+      "id": "p-insertchart",
+      "format": "powerpoint",
+      "family": "insertChart",
+      "description": "Native column chart with embedded data",
+      "sha256": "ed2cfb4bbea98c7d1e61e925302eecfa17ac2b1650115282dd4365ea2c75012e",
+      "manifestSha256": "ed2cfb4bbea98c7d1e61e925302eecfa17ac2b1650115282dd4365ea2c75012e",
+      "openedCleanly": true,
+      "error": null,
+      "pass": true,
+      "observed": {},
+      "checks": [
+        {
+          "name": "charts",
+          "expected": 1,
+          "actual": 1,
+          "pass": true
+        },
+        {
+          "name": "chart data opens for editing",
+          "expected": true,
+          "actual": true,
+          "pass": true
+        },
+        {
+          "name": "chart series values",
+          "expected": "10, 12, 15",
+          "actual": "10, 12, 15",
+          "pass": true
+        },
+        {
+          "name": "PowerPoint-saved copy reopens with the same slide count",
+          "expected": 1,
+          "actual": 1,
+          "pass": true
+        }
+      ]
+    },
+    {
+      "id": "p-updatechart",
+      "format": "powerpoint",
+      "family": "updateChart",
+      "description": "Replace the chart's data",
+      "sha256": "df3c09d612d701e99cbc277c912c47c1d7ca5b7090146b62f5d39fc7dc5f359a",
+      "manifestSha256": "df3c09d612d701e99cbc277c912c47c1d7ca5b7090146b62f5d39fc7dc5f359a",
+      "openedCleanly": true,
+      "error": null,
+      "pass": true,
+      "observed": {},
+      "checks": [
+        {
+          "name": "charts",
+          "expected": 1,
+          "actual": 1,
+          "pass": true
+        },
+        {
+          "name": "chart data opens for editing",
+          "expected": true,
+          "actual": true,
+          "pass": true
+        },
+        {
+          "name": "chart series values",
+          "expected": "2, 3",
+          "actual": "2, 3",
+          "pass": true
+        },
+        {
+          "name": "PowerPoint-saved copy reopens with the same slide count",
+          "expected": 1,
+          "actual": 1,
+          "pass": true
+        }
+      ]
+    },
+    {
+      "id": "p-template-chart",
+      "format": "powerpoint",
+      "family": "template",
+      "description": "Template chart slot bound through a template batch on the filesystem provider",
+      "sha256": "1976b1880a3ba4e3dff0b6a99014ba0b95350abeae57b940d36623657ec701f7",
+      "manifestSha256": "1976b1880a3ba4e3dff0b6a99014ba0b95350abeae57b940d36623657ec701f7",
+      "openedCleanly": true,
+      "error": null,
+      "pass": true,
+      "observed": {},
+      "checks": [
+        {
+          "name": "charts",
+          "expected": 1,
+          "actual": 1,
+          "pass": true
+        },
+        {
+          "name": "chart data opens for editing",
+          "expected": true,
+          "actual": true,
+          "pass": true
+        },
+        {
+          "name": "chart series values",
+          "expected": "41, 58",
+          "actual": "41, 58",
+          "pass": true
+        },
+        {
+          "name": "PowerPoint-saved copy reopens with the same slide count",
+          "expected": 1,
+          "actual": 1,
+          "pass": true
+        }
+      ]
+    },
+    {
+      "id": "p-insertimage",
+      "format": "powerpoint",
+      "family": "insertImage",
+      "description": "Insert a picture",
+      "sha256": "b76187d3797dc2656bddef1357baa1dd6973fb0bf4ec6e46cc39f401d1041683",
+      "manifestSha256": "b76187d3797dc2656bddef1357baa1dd6973fb0bf4ec6e46cc39f401d1041683",
+      "openedCleanly": true,
+      "error": null,
+      "pass": true,
+      "observed": {},
+      "checks": [
+        {
+          "name": "pictures",
+          "expected": 1,
+          "actual": 1,
+          "pass": true
+        },
+        {
+          "name": "PowerPoint-saved copy reopens with the same slide count",
+          "expected": 2,
+          "actual": 2,
+          "pass": true
+        }
+      ]
+    },
+    {
+      "id": "p-removeimage",
+      "format": "powerpoint",
+      "family": "removeImage",
+      "description": "Remove the picture",
+      "sha256": "372a6d2a561737f4045d985d44e71eebf274d7a30585376303aaa1fe161431db",
+      "manifestSha256": "372a6d2a561737f4045d985d44e71eebf274d7a30585376303aaa1fe161431db",
+      "openedCleanly": true,
+      "error": null,
+      "pass": true,
+      "observed": {},
+      "checks": [
+        {
+          "name": "pictures",
+          "expected": 0,
+          "actual": 0,
+          "pass": true
+        },
+        {
+          "name": "PowerPoint-saved copy reopens with the same slide count",
+          "expected": 2,
+          "actual": 2,
+          "pass": true
+        }
+      ]
+    },
+    {
+      "id": "p-backgroundimage",
+      "format": "powerpoint",
+      "family": "backgroundImage",
+      "description": "Slide background picture",
+      "sha256": "21604a2721d6f3f404a4c9893e220e4da97f5cd8a2f307f32e0b2da753c1d055",
+      "manifestSha256": "21604a2721d6f3f404a4c9893e220e4da97f5cd8a2f307f32e0b2da753c1d055",
+      "openedCleanly": true,
+      "error": null,
+      "pass": true,
+      "observed": {},
+      "checks": [
+        {
+          "name": "slide background is a picture",
+          "expected": true,
+          "actual": true,
+          "pass": true
+        },
+        {
+          "name": "PowerPoint-saved copy reopens with the same slide count",
+          "expected": 2,
+          "actual": 2,
+          "pass": true
+        }
+      ]
+    },
+    {
+      "id": "p-insertmedia",
+      "format": "powerpoint",
+      "family": "insertMedia",
+      "description": "Embedded video with a poster frame",
+      "sha256": "2e3875978afd3326803663efbf572602bd551df98f8f601cf784c2d8ab7ff8ad",
+      "manifestSha256": "2e3875978afd3326803663efbf572602bd551df98f8f601cf784c2d8ab7ff8ad",
+      "openedCleanly": true,
+      "error": null,
+      "pass": true,
+      "observed": {},
+      "checks": [
+        {
+          "name": "media objects",
+          "expected": 1,
+          "actual": 1,
+          "pass": true
+        },
+        {
+          "name": "PowerPoint-saved copy reopens with the same slide count",
+          "expected": 1,
+          "actual": 1,
+          "pass": true
+        }
+      ]
+    },
+    {
+      "id": "p-inserttable",
+      "format": "powerpoint",
+      "family": "insertTable",
+      "description": "Insert a table",
+      "sha256": "584ec8d98569ae520b411bbc4cf5712ba8c0bc83132c7c49c3d1162e6c182860",
+      "manifestSha256": "584ec8d98569ae520b411bbc4cf5712ba8c0bc83132c7c49c3d1162e6c182860",
+      "openedCleanly": true,
+      "error": null,
+      "pass": true,
+      "observed": {},
+      "checks": [
+        {
+          "name": "text contains 'EMEA'",
+          "expected": true,
+          "actual": true,
+          "pass": true
+        },
+        {
+          "name": "tables",
+          "expected": 1,
+          "actual": 1,
+          "pass": true
+        },
+        {
+          "name": "PowerPoint-saved copy reopens with the same slide count",
+          "expected": 1,
+          "actual": 1,
+          "pass": true
+        }
+      ]
+    },
+    {
+      "id": "p-inserttablerows",
+      "format": "powerpoint",
+      "family": "insertTableRows",
+      "description": "Append a table row",
+      "sha256": "3b417aceb358d26a1667d6233c19a1b87e20c0dec10a6f0b8c872f2345f27461",
+      "manifestSha256": "3b417aceb358d26a1667d6233c19a1b87e20c0dec10a6f0b8c872f2345f27461",
+      "openedCleanly": true,
+      "error": null,
+      "pass": true,
+      "observed": {},
+      "checks": [
+        {
+          "name": "text contains 'APAC'",
+          "expected": true,
+          "actual": true,
+          "pass": true
+        },
+        {
+          "name": "tables",
+          "expected": 1,
+          "actual": 1,
+          "pass": true
+        },
+        {
+          "name": "PowerPoint-saved copy reopens with the same slide count",
+          "expected": 1,
+          "actual": 1,
+          "pass": true
+        }
+      ]
+    },
+    {
+      "id": "p-removetablerows",
+      "format": "powerpoint",
+      "family": "removeTableRows",
+      "description": "Remove a table row",
+      "sha256": "b48e13fc7b1df3fe2b060960809cbfd597477be817d16cd644a1ed2e0d765ba8",
+      "manifestSha256": "b48e13fc7b1df3fe2b060960809cbfd597477be817d16cd644a1ed2e0d765ba8",
+      "openedCleanly": true,
+      "error": null,
+      "pass": true,
+      "observed": {},
+      "checks": [
+        {
+          "name": "tables",
+          "expected": 1,
+          "actual": 1,
+          "pass": true
+        },
+        {
+          "name": "PowerPoint-saved copy reopens with the same slide count",
+          "expected": 1,
+          "actual": 1,
+          "pass": true
+        }
+      ]
+    },
+    {
+      "id": "p-inserttablecolumns",
+      "format": "powerpoint",
+      "family": "insertTableColumns",
+      "description": "Insert a table column",
+      "sha256": "52fcae37a82a3322f1313593afc3225745be33b824ba617a19f907f9499dd605",
+      "manifestSha256": "52fcae37a82a3322f1313593afc3225745be33b824ba617a19f907f9499dd605",
+      "openedCleanly": true,
+      "error": null,
+      "pass": true,
+      "observed": {},
+      "checks": [
+        {
+          "name": "text contains 'Q2'",
+          "expected": true,
+          "actual": true,
+          "pass": true
+        },
+        {
+          "name": "tables",
+          "expected": 1,
+          "actual": 1,
+          "pass": true
+        },
+        {
+          "name": "PowerPoint-saved copy reopens with the same slide count",
+          "expected": 1,
+          "actual": 1,
+          "pass": true
+        }
+      ]
+    },
+    {
+      "id": "p-removetablecolumns",
+      "format": "powerpoint",
+      "family": "removeTableColumns",
+      "description": "Remove a table column",
+      "sha256": "da67ae1e0e7db1061d383ca8fd27d8a4327f490fdfe0a1fb2968e8d29dd20d7b",
+      "manifestSha256": "da67ae1e0e7db1061d383ca8fd27d8a4327f490fdfe0a1fb2968e8d29dd20d7b",
+      "openedCleanly": true,
+      "error": null,
+      "pass": true,
+      "observed": {},
+      "checks": [
+        {
+          "name": "tables",
+          "expected": 1,
+          "actual": 1,
+          "pass": true
+        },
+        {
+          "name": "PowerPoint-saved copy reopens with the same slide count",
+          "expected": 1,
+          "actual": 1,
+          "pass": true
+        }
+      ]
+    },
+    {
+      "id": "p-removetable",
+      "format": "powerpoint",
+      "family": "removeTable",
+      "description": "Remove the table",
+      "sha256": "7e447b8503efe388697dbfd6d55a505c141ce3ea93c7c8d4f311e8965abd63fc",
+      "manifestSha256": "7e447b8503efe388697dbfd6d55a505c141ce3ea93c7c8d4f311e8965abd63fc",
+      "openedCleanly": true,
+      "error": null,
+      "pass": true,
+      "observed": {},
+      "checks": [
+        {
+          "name": "tables",
+          "expected": 0,
+          "actual": 0,
+          "pass": true
+        },
+        {
+          "name": "PowerPoint-saved copy reopens with the same slide count",
+          "expected": 1,
+          "actual": 1,
+          "pass": true
+        }
+      ]
+    },
+    {
+      "id": "p-changetext",
+      "format": "powerpoint",
+      "family": "changeText",
+      "description": "Replace the title text",
+      "sha256": "19d81a0678b4fa331cb4d50a98bd06302c19b7b3ae0a0b65982f77d149df7999",
+      "manifestSha256": "19d81a0678b4fa331cb4d50a98bd06302c19b7b3ae0a0b65982f77d149df7999",
+      "openedCleanly": true,
+      "error": null,
+      "pass": true,
+      "observed": {},
+      "checks": [
+        {
+          "name": "text contains 'Revised title'",
+          "expected": true,
+          "actual": true,
+          "pass": true
+        },
+        {
+          "name": "PowerPoint-saved copy reopens with the same slide count",
+          "expected": 3,
+          "actual": 3,
+          "pass": true
+        }
+      ]
+    },
+    {
+      "id": "p-insert",
+      "format": "powerpoint",
+      "family": "insert",
+      "description": "Insert a paragraph after the title",
+      "sha256": "4b76ce3c282fa499d58480f5181e5bd284277455a2258dbc6995dee6510fc2af",
+      "manifestSha256": "4b76ce3c282fa499d58480f5181e5bd284277455a2258dbc6995dee6510fc2af",
+      "openedCleanly": true,
+      "error": null,
+      "pass": true,
+      "observed": {},
+      "checks": [
+        {
+          "name": "text contains 'Draft for discussion'",
+          "expected": true,
+          "actual": true,
+          "pass": true
+        },
+        {
+          "name": "PowerPoint-saved copy reopens with the same slide count",
+          "expected": 3,
+          "actual": 3,
+          "pass": true
+        }
+      ]
+    },
+    {
+      "id": "p-format",
+      "format": "powerpoint",
+      "family": "format",
+      "description": "Bold, coloured title",
+      "sha256": "fcfcd47ae791511d00e9bc6a3ab94ad12bc27fb7627d1d6a196845fd6f1e66dc",
+      "manifestSha256": "fcfcd47ae791511d00e9bc6a3ab94ad12bc27fb7627d1d6a196845fd6f1e66dc",
+      "openedCleanly": true,
+      "error": null,
+      "pass": true,
+      "observed": {},
+      "checks": [
+        {
+          "name": "text contains 'Second'",
+          "expected": true,
+          "actual": true,
+          "pass": true
+        },
+        {
+          "name": "PowerPoint-saved copy reopens with the same slide count",
+          "expected": 3,
+          "actual": 3,
+          "pass": true
+        }
+      ]
+    },
+    {
+      "id": "p-clearstyles",
+      "format": "powerpoint",
+      "family": "clearStyles",
+      "description": "Clear direct formatting on the title",
+      "sha256": "fe7cbd727687163d5ccf3d5d12f256a17d5340a40e8e7d089603a322c429282a",
+      "manifestSha256": "fe7cbd727687163d5ccf3d5d12f256a17d5340a40e8e7d089603a322c429282a",
+      "openedCleanly": true,
+      "error": null,
+      "pass": true,
+      "observed": {},
+      "checks": [
+        {
+          "name": "text contains 'Second'",
+          "expected": true,
+          "actual": true,
+          "pass": true
+        },
+        {
+          "name": "PowerPoint-saved copy reopens with the same slide count",
+          "expected": 3,
+          "actual": 3,
+          "pass": true
+        }
+      ]
+    },
+    {
+      "id": "p-copystyles",
+      "format": "powerpoint",
+      "family": "copyStyles",
+      "description": "Copy paragraph formatting between lines",
+      "sha256": "fe7cbd727687163d5ccf3d5d12f256a17d5340a40e8e7d089603a322c429282a",
+      "manifestSha256": "fe7cbd727687163d5ccf3d5d12f256a17d5340a40e8e7d089603a322c429282a",
+      "openedCleanly": true,
+      "error": null,
+      "pass": true,
+      "observed": {},
+      "checks": [
+        {
+          "name": "slides",
+          "expected": 3,
+          "actual": 3,
+          "pass": true
+        },
+        {
+          "name": "PowerPoint-saved copy reopens with the same slide count",
+          "expected": 3,
+          "actual": 3,
+          "pass": true
+        }
+      ]
+    },
+    {
+      "id": "p-comment",
+      "format": "powerpoint",
+      "family": "comment",
+      "description": "Modern comment on a slide",
+      "sha256": "9d9374dd55761f0a8fec6174fe87a84b126cb10d9aa7153647b9a21f22fa3426",
+      "manifestSha256": "9d9374dd55761f0a8fec6174fe87a84b126cb10d9aa7153647b9a21f22fa3426",
+      "openedCleanly": true,
+      "error": null,
+      "pass": true,
+      "observed": {},
+      "checks": [
+        {
+          "name": "comments at least",
+          "expected": 1,
+          "actual": 1,
+          "pass": true
+        },
+        {
+          "name": "PowerPoint-saved copy reopens with the same slide count",
+          "expected": 2,
+          "actual": 2,
+          "pass": true
+        }
+      ]
+    },
+    {
+      "id": "p-fill",
+      "format": "powerpoint",
+      "family": "fill",
+      "description": "Fill a named template shape",
+      "sha256": "57e395213a71a84c19be9c24f3fc9e24c227878f381e232472c5aec552890f43",
+      "manifestSha256": "57e395213a71a84c19be9c24f3fc9e24c227878f381e232472c5aec552890f43",
+      "openedCleanly": true,
+      "error": null,
+      "pass": true,
+      "observed": {},
+      "checks": [
+        {
+          "name": "text contains 'Northwind Traders Limited'",
+          "expected": true,
+          "actual": true,
+          "pass": true
+        },
+        {
+          "name": "text excludes '[CLIENT]'",
+          "expected": false,
+          "actual": false,
+          "pass": true
+        },
+        {
+          "name": "PowerPoint-saved copy reopens with the same slide count",
+          "expected": 1,
+          "actual": 1,
+          "pass": true
+        }
+      ]
+    },
+    {
+      "id": "x-setcell-values-and-formula",
+      "format": "excel",
+      "family": "setCell",
+      "description": "Text, numbers and a SUM formula",
+      "sha256": "86a397bf84e349ef64b8fa199843b8368b00a26cdc7b5470a7a0174fcbbe34f9",
+      "manifestSha256": "86a397bf84e349ef64b8fa199843b8368b00a26cdc7b5470a7a0174fcbbe34f9",
+      "openedCleanly": true,
+      "error": null,
+      "pass": true,
+      "observed": {},
+      "checks": [
+        {
+          "name": "no Excel repair log",
+          "expected": 0,
+          "actual": 0,
+          "pass": true
+        },
+        {
+          "name": "A1 value",
+          "expected": "Verified by OfficeAgent",
+          "actual": "Verified by OfficeAgent",
+          "pass": true
+        },
+        {
+          "name": "B2 value",
+          "expected": "12.5",
+          "actual": "12.5",
+          "pass": true
+        },
+        {
+          "name": "B4 value",
+          "expected": "20",
+          "actual": "20",
+          "pass": true
+        },
+        {
+          "name": "B4 formula",
+          "expected": "=SUM(B2:B3)",
+          "actual": "=SUM(B2:B3)",
+          "pass": true
+        },
+        {
+          "name": "Excel-saved copy reopens",
+          "expected": true,
+          "actual": true,
+          "pass": true
+        }
+      ]
+    },
+    {
+      "id": "x-comment",
+      "format": "excel",
+      "family": "comment",
+      "description": "Cell comment",
+      "sha256": "b04ac5b9c6cc8519b8c75423f800397bd5c2fa080a02538ec72c9d7d35762a8f",
+      "manifestSha256": "b04ac5b9c6cc8519b8c75423f800397bd5c2fa080a02538ec72c9d7d35762a8f",
+      "openedCleanly": true,
+      "error": null,
+      "pass": true,
+      "observed": {},
+      "checks": [
+        {
+          "name": "no Excel repair log",
+          "expected": 0,
+          "actual": 0,
+          "pass": true
+        },
+        {
+          "name": "comments at least",
+          "expected": 1,
+          "actual": 1,
+          "pass": true
+        },
+        {
+          "name": "Excel-saved copy reopens",
+          "expected": true,
+          "actual": true,
+          "pass": true
+        }
+      ]
+    },
+    {
+      "id": "x-appendtablerows",
+      "format": "excel",
+      "family": "appendTableRows",
+      "description": "Append rows to an Excel table",
+      "sha256": "b6c96755328e621ff674228adc177c0c6af0a1f98f5b7dda9320bb04d2ef97e5",
+      "manifestSha256": "b6c96755328e621ff674228adc177c0c6af0a1f98f5b7dda9320bb04d2ef97e5",
+      "openedCleanly": true,
+      "error": null,
+      "pass": true,
+      "observed": {},
+      "checks": [
+        {
+          "name": "no Excel repair log",
+          "expected": 0,
+          "actual": 0,
+          "pass": true
+        },
+        {
+          "name": "cells contains 'APAC'",
+          "expected": true,
+          "actual": true,
+          "pass": true
+        },
+        {
+          "name": "tables",
+          "expected": 1,
+          "actual": 1,
+          "pass": true
+        },
+        {
+          "name": "table data rows grew by",
+          "expected": 1,
+          "actual": 1,
+          "pass": true
+        },
+        {
+          "name": "Excel-saved copy reopens",
+          "expected": true,
+          "actual": true,
+          "pass": true
+        }
+      ]
+    }
+  ],
+  "controls": [
+    {
+      "file": "control-corrupt.docx",
+      "format": "word",
+      "detected": true,
+      "appOpenedValidCase": true,
+      "error": "worker exited  without a result",
+      "checks": []
+    },
+    {
+      "file": "control-corrupt.pptx",
+      "format": "powerpoint",
+      "detected": true,
+      "appOpenedValidCase": true,
+      "error": "worker exited  without a result",
+      "checks": []
+    },
+    {
+      "file": "control-corrupt.xlsx",
+      "format": "excel",
+      "detected": true,
+      "appOpenedValidCase": true,
+      "error": "worker exited  without a result",
+      "checks": []
+    }
+  ]
+}

@@ -42,8 +42,12 @@ public sealed class ExcelModule : IFormatModule, IBlankDocumentFactory, IApplyTi
     public IReadOnlyList<ChangeMode> SupportedChangeModes { get; } = new[] { ChangeMode.Direct };
 
     /// <inheritdoc />
-    /// <remarks>The workbook module surfaces no node kinds; its anchors are cells and tables.</remarks>
-    public IReadOnlyList<string> NodeKinds { get; } = Array.Empty<string>();
+    /// <remarks>
+    /// The kinds inspection emits: a node per worksheet and per Excel table. Declaring none,
+    /// as before 1.0, hid <c>appendTableRows</c> from discovery, because its target is a
+    /// <c>spreadsheetTable</c> node and discovery offers only declared kinds.
+    /// </remarks>
+    public IReadOnlyList<string> NodeKinds { get; } = new[] { "spreadsheetTable", "worksheet" };
     /// <inheritdoc />
     public bool CanHandle(IOpenXmlPackage package) => package.Format == DocFormat.Excel;
     /// <inheritdoc />

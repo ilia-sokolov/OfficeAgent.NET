@@ -172,6 +172,12 @@ public static class CapabilityDiscovery
         try
         {
             property.SetValue(candidate, anchor);
+            // Every anchor slot gets the same shape, not only Target: copyStyles also reads a
+            // Source, and a candidate with a null Source never matched, so discovery omitted a
+            // verb both Word and PowerPoint implement.
+            foreach (var slot in type.GetProperties())
+                if (slot != property && slot.CanWrite && slot.PropertyType.IsInstanceOfType(anchor))
+                    slot.SetValue(candidate, anchor);
         }
         catch (Exception ex) when (ex is ArgumentException or MethodAccessException or InvalidOperationException)
         {

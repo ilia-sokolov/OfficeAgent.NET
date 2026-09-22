@@ -59,6 +59,11 @@ corresponding GitHub release.
   Each boundary is proved by an automated test in a dedicated CI job.
 - `ToolErrorCodes.Cancelled`. The `cancelled` code every tool already emitted was the only one
   missing from the catalogues.
+- A [native Office compatibility](docs/native-compatibility.md) matrix. Every advertised
+  operation, plus template population, comparison and assembly, is opened in desktop Word,
+  PowerPoint and Excel, and what Office reports is checked. That includes accept and reject in
+  Word, chart data editing in PowerPoint and recalculation in Excel. Corrupt controls prove the
+  harness notices a refused file, and the known unsupported cases are listed.
 
 ### Fixed
 
@@ -83,6 +88,14 @@ corresponding GitHub release.
   SharePoint, so a stored file is not left unregistered behind a plain cancellation.
 - `describe_capabilities` reports `renderingAvailable: true` when an `IDocumentRenderer` is
   registered. It was always `false`, contradicting its documentation.
+- `describe_capabilities` lists `copyStyles` for Word and PowerPoint, and `appendTableRows` for
+  Excel, which also reports its `spreadsheetTable` and `worksheet` node kinds. Both verbs
+  worked, but discovery probed only an operation's `Target`, while `copyStyles` also reads a
+  `Source`. And Excel declared no node kinds, so a verb whose target is a table node was never
+  offered. An agent that trusted discovery could not find either verb.
+- A Word document from `create_document` opens in current Word rather than in "Compatibility
+  Mode". It declared no compatibility mode, so Word treated it as a Word 2007 file with newer
+  layout and features off. Documents you supply keep the mode they have.
 
 ## 0.9.0 — 2026-09-20
 
