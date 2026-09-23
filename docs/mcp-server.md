@@ -212,7 +212,7 @@ Word assembly adds the read-only `preview_document_merge` and, when `AllowCreati
 enabled, `merge_documents`. They authorize every input connection; commit also authorizes
 the destination. See [Word document assembly](document-assembly.md) for the JSON contracts.
 
-The MCP toolset is the projection of [the agent-integration surface](agent-integration.md): `inspect_document`, `find_in_document`, `preview_plan`, `apply_plan`, `compare_documents`, and `preview_document_merge`; `AllowRegistration` independently adds `register_document` / `remove_document` plus the composites `open_document` / `edit_document`, while `AllowCreation` adds `create_document`, the template trio `discover_template` / `preview_template_batch` / `populate_template_batch`, and `merge_documents` when at least one connection allows a creatable extension - `.docx`, `.pptx`, or `.xlsx` (SharePoint also requires its creation destination). Either opt-in adds `list_connections`, which returns `{connectionId, provider, canCreateDocuments}` entries. That boolean means the connection is configured for at least one creatable format; it is not a format list, a permission check, or a readiness probe. The higher-level workflow contracts and their limits are documented in [template population and comparison](document-workflows.md) and [Word document assembly](document-assembly.md).
+The MCP toolset is the projection of [the agent-integration surface](agent-integration.md): `describe_capabilities`, `inspect_document`, `find_in_document`, `preview_plan`, `apply_plan`, `compare_documents`, and `preview_document_merge`; `AllowRegistration` independently adds `register_document` / `remove_document` plus the composites `open_document` / `edit_document`, while `AllowCreation` adds `create_document`, the template trio `discover_template` / `preview_template_batch` / `populate_template_batch`, and `merge_documents` when at least one connection allows a creatable extension - `.docx`, `.pptx`, or `.xlsx` (SharePoint also requires its creation destination). Either opt-in adds `list_connections`, which returns `{connectionId, provider, canCreateDocuments}` entries. That boolean means the connection is configured for at least one creatable format; it is not a format list, a permission check, or a readiness probe. The higher-level workflow contracts and their limits are documented in [template population and comparison](document-workflows.md) and [Word document assembly](document-assembly.md).
 
 Discovery and batch preflight write nothing and demand read access only, but they arrive
 with `AllowCreation` rather than separately: a preflight exists to precede a commit, so
@@ -231,12 +231,14 @@ wire, including fields that have semantic defaults. Send `fidelity: "content"`,
 empty `planJson` is valid only for `create_document`; preview, apply, and edit
 require an operations array or plan object.
 
-Plan reports always contain `isValid`, `committed`, `receipt`, `sourceDocumentId`,
+Plan reports always contain `isValid`, `committed`, `writeOutcome`, `possibleOutput`, `receipt`, `sourceDocumentId`,
 `outputConnectionId`, `outputDocumentId`, `outputVersion`, `outputName`,
 `outputContentType`, `changes`, and `errors`. Values that do not apply are
 `null`; `changes` and `errors` are arrays. Clients must decide success from
 `isValid`, `committed`, and `errors`, not merely from the presence of an output
-id.
+id. `writeOutcome` is `committed`, `notWritten`, `unknown`, or
+`writtenNotRegistered`; only `notWritten` proves storage was unchanged. The uncertain
+outcomes include `possibleOutput` and must be reconciled before retrying.
 
 On apply and inline preview, `receipt` contains the outcome, one apply timestamp, resolved
 revision identity, SHA-256 hashes for the effective plan and exact document bytes, and the

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import hashlib
+import re
 import shutil
 import sys
 import tempfile
@@ -47,6 +48,30 @@ class PackageSkillsTests(unittest.TestCase):
         self.assertTrue((installed / "assets" / "Program.cs").is_file())
         shutil.rmtree(installed)
         self.assertFalse(installed.exists())
+
+    def test_packaged_skills_match_release_version_and_write_safety_contract(self) -> None:
+        package_skills.package_skills(self.inventory, self.output)
+        changelog = (ROOT / "CHANGELOG.md").read_text(encoding="utf-8")
+        version = re.search(r"^## (\d+\.\d+\.\d+) —", changelog, re.MULTILINE)
+        self.assertIsNotNone(version)
+        release = version.group(1)
+
+        with zipfile.ZipFile(self.output / "officeagent-integration.zip") as archive:
+            integration = "\n".join(
+                archive.read(name).decode("utf-8")
+                for name in archive.namelist()
+                if name.endswith((".md", ".csproj"))
+            )
+        self.assertIn(release, integration)
+        self.assertNotIn("0.9.0", integration)
+        self.assertNotIn("blob/v0.9.0", integration)
+
+        with zipfile.ZipFile(self.output / "word-document-review.zip") as archive:
+            review = archive.read("word-document-review/SKILL.md").decode("utf-8")
+        self.assertIn("writeOutcome", review)
+        self.assertIn("possibleOutput", review)
+        self.assertIn("do not retry blindly", review)
+        self.assertNotIn("A plan that fails wrote nothing", review)
 
 
 if __name__ == "__main__":

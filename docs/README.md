@@ -6,10 +6,25 @@ rich content operations, review workflows, and several hosting and storage model
 this page to choose the shortest path for your scenario.
 
 > [!IMPORTANT]
-> OfficeAgent.NET is pre-1.0. Pin package and container versions in production,
-> review release notes before upgrading, and test representative documents.
+> This documentation targets OfficeAgent.NET 1.0.0. Pin package and container versions in
+> production, review release notes before upgrading, and test representative documents.
 
-## Choose a learning path
+## Choose by role
+
+| You are... | Start with | Use as the contract |
+| --- | --- | --- |
+| Evaluating fit, evidence, and limits | [Library selection guide](choose-officeagent.md) | [Scope](#scope), [support](../SUPPORT.md), and the named evidence pages—not marketing examples |
+| A .NET application developer | [Getting started](getting-started.md) | Public C# API plus [document plans](document-plans.md) |
+| An agent or MCP integrator | [Agent integration](agent-integration.md) | Runtime tool schemas, tool descriptions, and the matching versioned skill |
+| A production operator | [Deployment](deployment.md) | Provider, security, ingestion-limit, operation, and [recovery](recovery.md) contracts |
+| A maintainer or release verifier | [Releasing](releasing.md) | Generated baselines, candidate verifiers, and explicitly versioned evidence corpora |
+
+Generated [wire-contract](wire-contract.md) schemas define request and response structure but
+deliberately exclude model-facing descriptions. Agents must use the runtime schemas and current
+skills together; humans should use the task guides and public API reference. Historical `v0.9.0`
+corpora and evaluations remain evidence for that release, not instructions for a 1.0 integration.
+
+## Choose a task
 
 | Goal | Start here | Then read |
 | --- | --- | --- |
@@ -66,20 +81,20 @@ Every integration uses the same safety loop:
 2. **Inspect** structure and capture a snapshot.
 3. **Find** text to obtain content-verified anchors.
 4. **Preview** the complete plan without writing.
-5. **Commit** atomically through the provider.
-6. **Open the result** by its returned id and deliver it outside model context.
+5. **Commit** the complete in-memory transaction through the provider and inspect `writeOutcome`.
+6. **Open the result** only after `committed`; reconcile `possibleOutput` before retrying an uncertain write.
+7. **Verify in native Office** when layout, recalculation, or consequential review matters.
 
 The engine refuses stale snapshots, mismatched anchors, unsupported operations,
 and optimistic-concurrency conflicts instead of guessing.
 
 ## Documentation map
 
-### Tutorials
+### End-user tutorials and evidence
 
 - [Library selection guide](choose-officeagent.md) - supported jobs, explicit non-goals, package choices, alternatives, and a verified direct .NET recipe.
 - [Word preservation evidence](word-preservation-evidence.md) - operation-specific changed parts, protected bytes, semantic checks, refusals, and native Office limits.
 - [Native Office compatibility](native-compatibility.md) - every advertised operation opened in Word, PowerPoint and Excel, with the harness, its controls, and known unsupported cases.
-- [Maintenance and continuity](maintenance.md) - who maintains the project, the accounts a release depends on, runtime lifecycle, and how the project can be carried on from this repository alone.
 - [Getting started](getting-started.md) — first successful Word edit from C#.
 - [Deployment and client setup](deployment.md) — local and hosted MCP recipes.
 - [Skill installation](skill-installation.md) — optionally teach Claude Code or Codex a repeatable Word review workflow.
@@ -102,9 +117,6 @@ and optimistic-concurrency conflicts instead of guessing.
 - [Visual rendering](rendering.md) — optional out-of-process PDF and page-image conversion.
 - [Template population and comparison](document-workflows.md) — batch binding, repeating Word rows, comparison coverage, and redline generation.
 - [Troubleshooting](troubleshooting.md) — diagnose setup, identity, and edit failures.
-- [Releasing](releasing.md) — the maintainer steps for NuGet, the MCP Registry, GitHub releases, and repository metadata.
-- [Adoption validation](adoption-validation.md) — fresh-user trials across the main Word, PowerPoint, and review paths before broad promotion.
-- [Agent selection evaluation](../evaluations/agent-selection/v0.9.0/README.md) - controlled recall, search/selection, and implementation protocol with explicit live evidence limits.
 - [Support and compatibility](../SUPPORT.md) — supported runtimes, version policy, release assurances, and help routes.
 - [Compatibility policy](compatibility.md) — what 1.x promises for the API, JSON, configuration and defaults, and what it excludes.
 - [Security policy](../SECURITY.md) — supported versions, private reporting, and the hosted security boundary.
@@ -114,6 +126,14 @@ and optimistic-concurrency conflicts instead of guessing.
 - [Generated C# API reference](csharp-api.md) - public types and members from every library package.
 - [Document plans](document-plans.md) — operation JSON and validation codes.
 - [MCP server](mcp-server.md) — transports, settings, tools, and response contracts.
+
+### Maintainer and historical evidence
+
+- [Maintenance and continuity](maintenance.md) - ownership, release accounts, runtime lifecycle, and repository continuity.
+- [Releasing](releasing.md) — the maintainer steps for NuGet, the MCP Registry, GitHub releases, and repository metadata.
+- [Adoption validation](adoption-validation.md) — fresh-user trials required before broad promotion; blank rows are not evidence.
+- [v0.9.0 agent selection evaluation](../evaluations/agent-selection/v0.9.0/README.md) - historical controlled protocol with explicit live-evidence limits.
+- [v0.9.0 benchmarks](../evaluations/benchmarks/v0.9.0/README.md) - historical measurements, not 1.0 adoption proof.
 
 ## Scope
 

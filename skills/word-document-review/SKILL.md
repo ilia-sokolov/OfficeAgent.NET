@@ -95,9 +95,13 @@ trip.
 
 ### 4. Apply
 
-`apply_plan` commits and saves. **Applying is all-or-nothing**: if any operation fails,
-nothing is written. That is what makes a multi-operation plan safe — you never end up with
-half a change.
+`apply_plan` applies the complete plan in memory before it asks the provider to save. A
+validation or operation-conflict failure has `writeOutcome: "notWritten"`, so you never get
+a document containing only half the plan. A provider can still fail after accepting the
+finished bytes: `writeOutcome: "unknown"` means the output may exist, and
+`"writtenNotRegistered"` means it exists but its registration failed. In either case, keep
+`possibleOutput`, do not retry blindly, and ask the host or operator to reconcile the named
+output and `expectedSha256`.
 
 Put related edits in one plan rather than one call per edit. It is faster, and it means the
 document is never in a half-edited state.
@@ -167,9 +171,14 @@ call is almost never it.
 | `invalid-argument` on `contentBase64` | The content did not arrive intact | Your copy is damaged; re-sending it fails the same way. Import the document by handle instead. |
 | `io-error` | The file could not be read or written | Usually open in Word. Tell the user to close it. |
 | `not-found` / `access-denied` | The id does not resolve, or is outside the connection | Do not retry with a path — ids are provider-assigned. |
+| `outcome-unknown` | A storage write began but the provider could not confirm its outcome | Do not retry or report the document unchanged. Give `possibleOutput` to the host/operator to reconcile first. |
+| `registration-failed` | The bytes were written but the output registration failed | Do not write again. Reconcile the named output and `expectedSha256`, then register or deliver it. |
+| `write-rejected` | Storage definitely refused the write | Nothing was written; correct the storage condition before retrying. |
+| `cancelled` | The call was cancelled before a storage write began | Nothing was written. Confirm the request is still wanted before starting again. |
+| `connection-forbidden` | Host policy denied this connection capability | Do not try another id or path. Ask the host to grant the required capability or choose an authorized connection. |
 
-A plan that fails wrote nothing. Say what failed and why rather than reporting partial
-success.
+For every apply result, read `writeOutcome`. Only `notWritten` proves storage was unchanged;
+`committed` identifies the saved result, and the two uncertain outcomes require reconciliation.
 
 ## What this cannot do
 

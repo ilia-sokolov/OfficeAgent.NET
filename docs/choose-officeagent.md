@@ -5,13 +5,13 @@ structured way to inspect and edit OOXML files. It is built on the Open XML SDK,
 and its direct .NET API does not require MCP, an LLM, or an agent framework.
 
 > [!IMPORTANT]
-> This guide is versioned for OfficeAgent.NET `0.9.0`. Its executable recipe pins
-> `0.9.0` and was verified against the release-candidate packages on 2026-09-16.
+> This guide is versioned for OfficeAgent.NET `1.0.0`. Its executable recipe pins
+> `1.0.0` and must be verified against the release packages before publication.
 > Before the release appears on NuGet, use the locally packed candidate feed described
 > in the release runbook. Keep every OfficeAgent package on the same version.
 
 The supported-job summaries and recipe describe the source and package contract in
-the `v0.9.0` tag. For another release, use the documentation from that release's tag.
+the `v1.0.0` tag. For another release, use the documentation from that release's tag.
 
 ## Use OfficeAgent.NET when
 
@@ -107,8 +107,8 @@ Create the project and install the exact packages:
 ```bash
 dotnet new console -n OfficeAgentSelectionTrial
 cd OfficeAgentSelectionTrial
-dotnet add package OfficeAgent.Core --version 0.9.0
-dotnet add package OfficeAgent.Word --version 0.9.0
+dotnet add package OfficeAgent.Core --version 1.0.0
+dotnet add package OfficeAgent.Word --version 1.0.0
 ```
 
 Replace `Program.cs` with:
@@ -232,7 +232,7 @@ the workflow for production documents.
 ## Version and support checks
 
 Before upgrading, read the [version policy and support terms](../SUPPORT.md) and
-the [changelog](../CHANGELOG.md). OfficeAgent is pre-1.0, so pin versions, keep
+the [changelog](../CHANGELOG.md). Pin versions, keep
 all OfficeAgent packages on one version, and test representative documents.
 
 The package version used by the application is the package identity. A repository

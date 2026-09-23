@@ -1,6 +1,6 @@
 # Installed-package recipes
 
-These recipes target OfficeAgent.NET `0.9.0` and use fictional documents created at runtime. The project asset defaults to the exact `OfficeAgent.Core` and `OfficeAgent.Word` `0.9.0` package version. Maintainers can override `OfficeAgentPackageVersion` only when verifying the same source against a locally packed candidate. It writes only under its disposable working directory.
+These recipes target OfficeAgent.NET `1.0.0` and use fictional documents created at runtime. The project asset defaults to the exact `OfficeAgent.Core` and `OfficeAgent.Word` `1.0.0` package version. Maintainers can override `OfficeAgentPackageVersion` only when verifying the same source against a locally packed candidate. It writes only under its disposable working directory.
 
 Copy [IntegrationRecipes.csproj](../assets/IntegrationRecipes.csproj) and [Program.cs](../assets/Program.cs) into an empty directory, then run:
 
@@ -9,13 +9,13 @@ dotnet restore
 dotnet run --configuration Release --no-restore
 ```
 
-For an unpublished candidate, put locally packed `0.9.0` packages in a directory and add that directory as the first package source in a temporary `NuGet.Config`. Do not mistake a branch name or source build for a published package.
+For an unpublished candidate, put locally packed `1.0.0` packages in a directory and add that directory as the first package source in a temporary `NuGet.Config`. Do not mistake a branch name or source build for a published package.
 
 ## Recipe 1: tracked Word edit
 
 Input: a generated `proposal.docx` containing `Prepared for Northwind Labs.`
 
-Dependencies: `OfficeAgent.Core` and `OfficeAgent.Word` `0.9.0`. The sample also uses the transitive Open XML SDK types to construct and inspect its fixture.
+Dependencies: `OfficeAgent.Core` and `OfficeAgent.Word` `1.0.0`. The sample also uses the transitive Open XML SDK types to construct and inspect its fixture.
 
 The recipe inspects the file, finds `Northwind Labs`, previews a `ChangeTextOp` with `ChangeMode.Tracked`, and commits `Contoso Research`. It asserts:
 
@@ -54,7 +54,7 @@ The recipe takes an authorized provider snapshot, copies the bytes to a separate
 
 It then makes a second SDK write to the output and replays the earlier plan. The expected recovery evidence is a `DocumentVersionConflictException` and an unchanged document.
 
-Anchors, snapshots, approved previews, and receipts never carry across an SDK edit. Reinspect and rebuild the plan instead. An SDK edit produces no OfficeAgent receipt and is covered by no OfficeAgent audit trail, and schema validation does not prove native layout or tracked-change semantics. The per-stage guarantees are in the versioned [SDK interoperability guide](https://github.com/ilia-sokolov/OfficeAgent.NET/blob/v0.9.0/docs/sdk-interoperability.md).
+Anchors, snapshots, approved previews, and receipts never carry across an SDK edit. Reinspect and rebuild the plan instead. An SDK edit produces no OfficeAgent receipt and is covered by no OfficeAgent audit trail, and schema validation does not prove native layout or tracked-change semantics. The per-stage guarantees are in the versioned [SDK interoperability guide](https://github.com/ilia-sokolov/OfficeAgent.NET/blob/v1.0.0/docs/sdk-interoperability.md).
 
 ## Expected output
 

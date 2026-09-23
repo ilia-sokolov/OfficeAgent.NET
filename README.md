@@ -80,10 +80,12 @@ This small workflow demonstrates that OfficeAgent can change an existing OOXML f
 without flattening its structure. It uses tracked changes because the result is easy to
 verify in Word; review is one part of the broader document operation set.
 
-Install the server. The published package command is:
+Install the server version documented by this branch. This command succeeds after `1.0.0`
+has been published; while testing an unpublished candidate, use the locally packed tool from
+the release workflow instead of silently falling back to an older package.
 
 ```bash
-dotnet tool install --global OfficeAgent.Mcp
+dotnet tool install --global OfficeAgent.Mcp --version 1.0.0
 ```
 
 Make a folder for the agent to work in and download the
@@ -93,7 +95,7 @@ agreement with a clause to change, a table, an open comment, and a pending redli
 ```bash
 mkdir -p ~/officeagent-documents
 curl -Lo ~/officeagent-documents/services-agreement.docx \
-  https://raw.githubusercontent.com/ilia-sokolov/OfficeAgent.NET/main/samples/documents/services-agreement.docx
+  https://raw.githubusercontent.com/ilia-sokolov/OfficeAgent.NET/v1.0.0/samples/documents/services-agreement.docx
 ```
 
 PowerShell:
@@ -102,7 +104,7 @@ PowerShell:
 $officeAgentDocuments = Join-Path $env:USERPROFILE "officeagent-documents"
 New-Item -ItemType Directory -Force $officeAgentDocuments | Out-Null
 Invoke-WebRequest `
-  https://raw.githubusercontent.com/ilia-sokolov/OfficeAgent.NET/main/samples/documents/services-agreement.docx `
+  https://raw.githubusercontent.com/ilia-sokolov/OfficeAgent.NET/v1.0.0/samples/documents/services-agreement.docx `
   -OutFile (Join-Path $officeAgentDocuments "services-agreement.docx")
 ```
 
@@ -136,10 +138,16 @@ Then ask:
 
 > In services-agreement.docx, change the payment terms from thirty days to forty-five days.
 
-Open the file in Word. Clause 3 now reads **forty-five days** as a tracked change you can
-accept or reject, and everything else — the table, the comment, the redline that was
-already there — is exactly as it was. This demonstrates a key engine property: apply the
-requested operation while preserving unrelated package content.
+Expected result when the client invokes OfficeAgent correctly: `apply_plan` reports
+`writeOutcome: "committed"` and returns an output id, and clause 3 reads **forty-five days**
+as a tracked change you can accept or reject. Open that output in Word and verify the change.
+The regression test also verifies that the sample's existing table, comment, earlier payment
+redline, and heading remain present with their tested XML semantics. It does not claim byte-for-byte
+identity for every unrelated OOXML part; see the bounded [preservation evidence](docs/word-preservation-evidence.md).
+
+If the agent did not call `apply_plan`, or if `writeOutcome` is not `committed`, do not report
+the edit as complete. For `unknown` or `writtenNotRegistered`, preserve `possibleOutput` and
+follow [storage recovery](docs/recovery.md) instead of retrying blindly.
 
 [What else the sample is good for](samples/documents/README.md) — reviewing comments,
 accepting revisions, editing the table.
@@ -155,6 +163,7 @@ Next, try [creating a Word document](docs/getting-started.md#create-a-document-i
 | `claude mcp list` shows officeagent as failed | Check `RootPath` is an absolute path to a directory that exists. |
 | The agent says it cannot find the document | Use a relative name, or an absolute path that still resolves inside `RootPath`. |
 | `io-error` on save | Close the file in Word, then check filesystem permissions and the available disk space. |
+| `outcome-unknown` or `registration-failed` | Do not repeat the edit. Preserve `possibleOutput` and follow the [recovery procedure](docs/recovery.md) to determine whether the output already exists. |
 
 ## Configure broader workflows
 
@@ -316,7 +325,9 @@ Every edit follows the same four steps:
 A plan (`DocumentPlan`) is a typed, JSON-serialisable list of operations. An
 anchor records both a location and the content expected there. If the content
 or optional document snapshot has changed, validation fails instead of silently
-targeting a different location. Applying a plan is all-or-nothing.
+targeting a different location. All operations are applied to one in-memory transaction or
+none are; a later provider failure can still leave storage uncertain, so callers must inspect
+`writeOutcome` before retrying.
 
 The Word module supports changes to text, paragraphs, tables, images, styles,
 content controls, comment threads, footnotes and endnotes, page geometry and

@@ -1,6 +1,6 @@
 # Install OfficeAgent agent skills
 
-The v0.9.0 release workflow packages two optional agent skills as GitHub release assets:
+The v1.0.0 release workflow packages two optional agent skills as GitHub release assets:
 
 | Skill | Use it for |
 | --- | --- |
@@ -11,12 +11,12 @@ A skill is guidance and bundled recipe material. Installing one does not install
 
 ## Install a released skill
 
-The examples pin release `v0.9.0`. Replace `$skillName` only with one of the names above, and keep the skill and OfficeAgent packages on the same release.
+The examples pin release `v1.0.0`. Replace `$skillName` only with one of the names above, and keep the skill and OfficeAgent packages on the same release.
 
 Bash:
 
 ```bash
-release=v0.9.0
+release=v1.0.0
 skillName=officeagent-integration
 destination="$HOME/.codex/skills"
 temporary="$(mktemp -d)"
@@ -30,7 +30,7 @@ test -f "$destination/$skillName/SKILL.md"
 PowerShell:
 
 ```powershell
-$release = "v0.9.0"
+$release = "v1.0.0"
 $skillName = "officeagent-integration"
 $destination = Join-Path $env:USERPROFILE ".codex\skills"
 $archive = Join-Path $env:TEMP "$skillName.zip"
@@ -82,4 +82,4 @@ python scripts/package_skills.py --output artifacts
 python scripts/verify_integration_kit.py --artifacts artifacts
 ```
 
-The verification uses an isolated temporary agent home. It checks archive layout and relative references, reads the repository package version, restores a disposable consumer from locally packed packages with that exact version, runs all three recipes and the refusal assertion, removes the installed skill, and confirms removal. On the `v0.9.0` release tag that version must be `0.9.0`. The verifier does not install into the user's active agent directories, connect a live model, or perform native Office visual review.
+The verification uses an isolated temporary agent home. It checks archive layout, relative references, release-version pins, and uncertain-write guidance; reads the repository package version; restores a disposable consumer from locally packed packages with that exact version; runs all four recipes and the refusal assertion; removes the installed skill; and confirms removal. On the `v1.0.0` release tag that version must be `1.0.0`. The verifier does not install into the user's active agent directories, connect a live model, or perform native Office visual review.

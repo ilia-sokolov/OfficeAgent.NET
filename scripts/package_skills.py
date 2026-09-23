@@ -18,6 +18,42 @@ SKILL_NAME_RE = re.compile(r"^[a-z0-9]+(?:-[a-z0-9]+)*$")
 ARCHIVE_TIMESTAMP = (1980, 1, 1, 0, 0, 0)
 
 
+def documented_release_version() -> str:
+    changelog = (ROOT / "CHANGELOG.md").read_text(encoding="utf-8")
+    match = re.search(r"^## (\d+\.\d+\.\d+) —", changelog, re.MULTILINE)
+    if not match:
+        raise release_evidence.EvidenceError("CHANGELOG.md has no release heading")
+    return match.group(1)
+
+
+def validate_skill_semantics(name: str, files: list[Path]) -> None:
+    text_files = [path for path in files if path.suffix.lower() in {".md", ".csproj"}]
+    combined = "\n".join(path.read_text(encoding="utf-8") for path in text_files)
+    if name == "officeagent-integration":
+        version = documented_release_version()
+        if version not in combined:
+            raise release_evidence.EvidenceError(
+                f"{name} does not name documented release {version}"
+            )
+        stale_links = re.findall(r"blob/v(\d+\.\d+\.\d+)/", combined)
+        if any(linked != version for linked in stale_links):
+            raise release_evidence.EvidenceError(
+                f"{name} contains a documentation link for a release other than {version}"
+            )
+        default = re.search(r"<OfficeAgentPackageVersion[^>]*>([^<]+)</OfficeAgentPackageVersion>", combined)
+        if not default or default.group(1) != version:
+            raise release_evidence.EvidenceError(
+                f"{name} package default does not equal documented release {version}"
+            )
+    elif name == "word-document-review":
+        required = ("writeOutcome", "possibleOutput", "do not retry blindly")
+        missing = [phrase for phrase in required if phrase not in combined]
+        if missing or "A plan that fails wrote nothing" in combined:
+            raise release_evidence.EvidenceError(
+                f"{name} does not carry the uncertain-write recovery contract"
+            )
+
+
 def package_skills(inventory: dict, output: Path) -> list[Path]:
     output.mkdir(parents=True, exist_ok=True)
     archives: list[Path] = []
@@ -40,6 +76,7 @@ def package_skills(inventory: dict, output: Path) -> list[Path]:
         for path in files:
             if path.is_symlink():
                 raise release_evidence.EvidenceError(f"skill packages cannot contain symlinks: {path}")
+        validate_skill_semantics(name, files)
 
         destination = output / archive_name
         temporary = output / f".{archive_name}.tmp"

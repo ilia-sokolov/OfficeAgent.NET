@@ -14,8 +14,9 @@ namespace OfficeAgent.Tests;
 /// <remarks>
 /// A first-run experience that does not do what the page said is worse than no sample at
 /// all: the reader cannot tell whether they misconfigured something or the project
-/// oversold itself. These pin the two things the README claims - that the payment clause
-/// becomes a tracked change, and that nothing else in the document moves.
+/// oversold itself. These pin the bounded claims in the README: the payment clause becomes
+/// a tracked change, while the named table, comment, earlier revision and heading retain
+/// their XML semantics.
 /// </remarks>
 public class SampleDocumentTests
 {
@@ -58,10 +59,30 @@ public class SampleDocumentTests
     }
 
     [Fact]
-    public void The_first_edit_lands_as_a_redline_and_disturbs_nothing_else()
+    public void The_first_edit_lands_as_a_redline_and_preserves_the_named_review_features()
     {
         var client = new OfficeAgentClient(new WordModule());
         var before = Sample();
+
+        string tableBefore;
+        string commentsBefore;
+        string earlierInsertionBefore;
+        string earlierDeletionBefore;
+        string headingBefore;
+        using (var beforeStream = new MemoryStream(before))
+        using (var beforePackage = WordprocessingDocument.Open(beforeStream, isEditable: false))
+        {
+            var beforeMain = beforePackage.MainDocumentPart!;
+            var beforeBody = beforeMain.Document.Body!;
+            tableBefore = beforeBody.Descendants<Table>().Single().OuterXml;
+            commentsBefore = beforeMain.WordprocessingCommentsPart!.Comments!.OuterXml;
+            earlierInsertionBefore = beforeBody.Descendants<InsertedRun>()
+                .Single(run => run.InnerText.Contains("3% above base rate", StringComparison.Ordinal)).OuterXml;
+            earlierDeletionBefore = beforeBody.Descendants<DeletedRun>()
+                .Single(run => run.InnerText.Contains("2% above base rate", StringComparison.Ordinal)).OuterXml;
+            headingBefore = beforeBody.Elements<Paragraph>()
+                .Single(paragraph => paragraph.InnerText == "Master Services Agreement").OuterXml;
+        }
 
         var clause = client.Inspect(before).Paragraphs
             .First(p => p.Text.Contains("thirty days", StringComparison.Ordinal));
@@ -94,14 +115,16 @@ public class SampleDocumentTests
         Assert.Contains("forty-five days", body.Descendants<InsertedRun>().Select(r => r.InnerText));
         Assert.Contains("thirty days", body.Descendants<DeletedText>().Select(t => t.Text));
 
-        // "everything else is exactly as it was" - the claim worth pinning, because it is
-        // what distinguishes this from extracting the text and writing a new file.
-        Assert.Single(body.Descendants<Table>());
-        Assert.Equal(4, body.Descendants<Table>().Single().Elements<TableRow>().Count());
-        Assert.Single(main.WordprocessingCommentsPart!.Comments!.Elements<Comment>());
-        Assert.Contains("3% above base rate", body.Descendants<InsertedRun>().Select(r => r.InnerText));
-        Assert.Contains("2% above base rate", body.Descendants<DeletedText>().Select(t => t.Text));
-        Assert.Contains("Master Services Agreement", body.InnerText);
+        // These are the exact preservation properties promised for this sample. They are
+        // deliberately narrower than byte identity for every unrelated package part.
+        Assert.Equal(tableBefore, body.Descendants<Table>().Single().OuterXml);
+        Assert.Equal(commentsBefore, main.WordprocessingCommentsPart!.Comments!.OuterXml);
+        Assert.Equal(earlierInsertionBefore, body.Descendants<InsertedRun>()
+            .Single(run => run.InnerText.Contains("3% above base rate", StringComparison.Ordinal)).OuterXml);
+        Assert.Equal(earlierDeletionBefore, body.Descendants<DeletedRun>()
+            .Single(run => run.InnerText.Contains("2% above base rate", StringComparison.Ordinal)).OuterXml);
+        Assert.Equal(headingBefore, body.Elements<Paragraph>()
+            .Single(paragraph => paragraph.InnerText == "Master Services Agreement").OuterXml);
 
         var problems = new OpenXmlValidator(FileFormatVersions.Office2019).Validate(package).ToList();
         Assert.True(problems.Count == 0,

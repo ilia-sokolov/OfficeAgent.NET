@@ -33,6 +33,22 @@ public class AiToolsTests
     }
 
     [Fact]
+    public void ApplyPlan_description_requires_uncertain_write_reconciliation()
+    {
+        using var workspace = new ToolsWorkspace();
+        var apply = Assert.Single(
+            new OfficeAgentTools(workspace.Client).AsAIFunctions(),
+            function => function.Name == "apply_plan");
+
+        Assert.Contains("writeOutcome", apply.Description);
+        Assert.Contains("possibleOutput", apply.Description);
+        Assert.Contains("never retry", apply.Description);
+        Assert.DoesNotContain("On any failure nothing is written", apply.Description);
+        Assert.Contains("unknown or writtenNotRegistered", OfficeAgentTools.SystemPromptGuidance);
+        Assert.Contains("do not retry blindly", OfficeAgentTools.SystemPromptGuidance);
+    }
+
+    [Fact]
     public async Task ApplyPlan_round_trips_a_polymorphic_plan_through_storage()
     {
         using var workspace = new ToolsWorkspace();

@@ -69,29 +69,51 @@ The `seeded.ItemId` goes into the system prompt; the LLM threads it through ever
 
 ## Exposed tools
 
-The default agent surface is read-and-edit only - registration and removal are
-host responsibilities, and the agent cannot supply file paths.
+The default connection-addressed surface has seven read, plan, comparison, and edit tools.
+Registration, creation, inline-content, and session-transfer tools are separate opt-ins; an
+agent cannot supply file paths or create outputs unless the host grants the corresponding
+surface.
 
 The function schemas use strict mode: every listed argument is required on the
 wire even when it has a semantic default. Send the defaults shown below rather
 than omitting a property.
 
+### Default connection-addressed tools
+
 | Tool | Purpose |
 | --- | --- |
+| `describe_capabilities()` | Lists the accepted contract, formats, operations, limits, rendering availability, and only the connections and capabilities visible to the caller. Call it before planning when the surface is not already known. |
 | `inspect_document(connectionId, documentId, fidelity, paragraphOffset, paragraphLimit, sheetId, range, maximumCells)` | Returns format-specific structure and a snapshot etag. Send `"content"`, `0`, `200`, `0`, `""`, and `1000` for the defaults. Paragraph paging applies to Word/PowerPoint; `sheetId`, `range`, and `maximumCells` bound Excel inspection. |
 | `find_in_document(connectionId, documentId, pattern, regex, wholeWord, caseSensitive, spreadsheetValueView)` | Returns content-verified anchors usable as plan targets. Send `false` for each search flag and `"both"` for the spreadsheet value default. |
 | `preview_plan(connectionId, documentId, planJson)` | Validates a `DocumentPlan` JSON without writing. Returns the canonical plan-report envelope below, with `committed: false` and null output fields. |
-| `apply_plan(connectionId, documentId, planJson, saveMode, newName)` | Applies the plan atomically and saves through the provider. Send `"Replace"` and `""` for the defaults; other modes are `NewVersion` and `NewDocument`. `NewDocument` optionally accepts `newName`; when it is empty, the provider derives a versioned sibling name. An unrecognised mode is refused. |
+| `apply_plan(connectionId, documentId, planJson, saveMode, newName)` | Applies the complete plan in memory and then saves through the provider. Send `"Replace"` and `""` for the defaults; other modes are `NewVersion` and `NewDocument`. Always inspect `writeOutcome`; a provider can fail after accepting the bytes. |
+| `compare_documents(originalConnectionId, originalDocumentId, revisedConnectionId, revisedDocumentId, revisionAuthor)` | Reads two Word files and returns hashes, differences, coverage diagnostics, and a snapshot-bound tracked plan when coverage is complete. Requires read access to both connections and writes nothing. |
+| `preview_document_merge(requestJson)` | Previews ordered whole-document Word assembly, reports compatibility and remapping, and returns a hash-bound merge plan. Requires read access to every source and writes nothing. |
+
+### Opt-in tool groups
+
+| Option | Added tools | Boundary |
+| --- | --- | --- |
+| `AllowRegistration` | `register_document`, `remove_document`, `open_document`, `edit_document` | Lets the agent name a provider-relative source. The underlying file is never deleted by `remove_document`. |
+| `AllowCreation` | `create_document`, `discover_template`, `preview_template_batch`, `populate_template_batch`, `merge_documents` | Lets the agent create new stored outputs. A preflight is available only when its corresponding commit can also be enabled. |
+| `AllowInlineContent` | `create_document_content`, `inspect_document_content`, `edit_document_content` | Carries the complete document as base64 with no storage. Use for bounded, self-contained calls. |
+| `AllowEphemeralDocuments` | `import_document_content`, `export_document_content` | Transfers bytes into and out of a session connection; ordinary default tools handle the edits between those calls. |
+
+The workflow-specific contracts remain:
+
+| Tool | Purpose |
+| --- | --- |
 | `discover_template(connectionId, documentId)` | Reports what a template can be bound to: scalar slots, image and native-chart media slots, repeating Word rows, ambiguity diagnostics, and the template hash. Writes nothing and requires read access only. Exposed with `AllowCreation`, because a preflight exists to precede a commit. |
 | `preview_template_batch(connectionId, documentId, requestJson)` | Validates a whole batch and writes nothing, reporting every item rather than stopping at the first failure, with per-item operation, row, image and byte counts. Returns a token binding the preview to the exact template bytes and normalized batch. Read access only. |
 | `populate_template_batch(connectionId, documentId, requestJson, expectedTokenJson)` | Resolves scalar, image and native-chart values and repeating Word rows and saves bounded, independent outputs with one receipt per item. Pass the token from `preview_template_batch` to refuse a commit whose template or batch changed since it was reviewed; send `""` to commit without that binding. Exposed only with `AllowCreation`; requires read and create access on the connection. |
-| `compare_documents(originalConnectionId, originalDocumentId, revisedConnectionId, revisedDocumentId, revisionAuthor)` | Reads two Word files and returns hashes, differences, coverage diagnostics, and a snapshot-bound tracked plan when coverage is complete. Covers body paragraph text and table cell text where the table geometry is unchanged; see [what the comparison understands](document-workflows.md#what-the-comparison-understands). Requires read access to both connections and writes nothing. |
-| `preview_document_merge(requestJson)` | Previews ordered whole-document Word assembly, reports compatibility and remapping, and returns a hash-bound merge plan. Requires read access to every source. |
 | `merge_documents(planJson, destinationConnectionId, outputName)` | Revalidates every source and creates one new `.docx`. Exposed with `AllowCreation`; requires source read and destination create access. See [assembly](document-assembly.md). |
 
-Plan reports always contain `isValid`, `committed`, `sourceDocumentId`,
+Plan reports always contain `isValid`, `committed`, `writeOutcome`, `possibleOutput`, `receipt`, `sourceDocumentId`,
 `outputConnectionId`, `outputDocumentId`, `outputVersion`, `outputName`,
 `outputContentType`, `changes`, and `errors`. Non-applicable values are `null`.
+`writeOutcome` is `committed`, `notWritten`, `unknown`, or `writtenNotRegistered`.
+Only `notWritten` proves storage did not change. The two uncertain outcomes include a
+`possibleOutput` locator; preserve it and reconcile the destination before retrying.
 
 `inspect_document` returns `snapshot` as an etag string. To detect drift in the
 format's covered text hosts, copy it into the plan token:
@@ -252,7 +274,7 @@ The host pre-registers the document and writes the resulting `(connectionId, doc
 2. `find_in_document` → obtain content-verified anchors for any text targets.
 3. Draft a `DocumentPlan` referencing those anchors.
 4. `preview_plan` → surface any validation errors to the user.
-5. `apply_plan` → commit, then use the returned `outputDocumentId` for any follow-up edits.
+5. `apply_plan` → inspect `writeOutcome`. On `committed`, use the returned `outputDocumentId` for follow-up edits. On `unknown` or `writtenNotRegistered`, stop and reconcile `possibleOutput`; never retry blindly.
 
 When the composite tools are enabled and the user names a file by path, the same
 work is two calls or one:
@@ -278,12 +300,17 @@ work is two calls or one:
 | `contract-mismatch` | The edit plan must omit `contractVersion` for legacy `0.2` behavior or set it to `"0.2"`. Null, empty, malformed, and unknown versions are refused before saving. |
 | `invalid-argument`, `invalid-json` | The plan or arguments were malformed. Unknown properties, operations, enum names, integer enum values, and non-string versions are refused. The error message says what to fix. |
 | `configuration-error` | The `connectionId` is not registered on this host, or - for `create_document` - that connection cannot create documents. Try another connection rather than retrying. |
+| `outcome-unknown` | A write began but the provider could not confirm whether it landed. Do not retry or report the document unchanged; reconcile `possibleOutput.expectedSha256`. |
+| `registration-failed` | The bytes were written but the output registration failed. Do not write again; recover the named output from `possibleOutput`. |
+| `write-rejected` | Storage definitely rejected the write, so `writeOutcome` is `notWritten`. Correct the storage condition before retrying. |
+| `cancelled` | The call was cancelled before a write began. A cancellation after writing begins is instead `outcome-unknown`. |
+| `connection-forbidden` | Host policy denied the required capability. Do not probe other ids; use an authorized connection or ask the host to grant access. |
 
 Every error also carries `connectionId` and `itemId` (when known) so the agent can correlate the failure to a specific call.
 
 ## Prompt guidance
 
-`OfficeAgentTools.SystemPromptGuidance` is a `const string` you concatenate into your agent's instructions. It teaches the model the host-registered `(connectionId, documentId)` contract, the safety loop (re-inspect on stale snapshot, re-find on expect mismatch), the `Tracked` default for Word and why a deck refuses it, how a deck is addressed, that saving replaces the document in place, and the rule that anchors and node paths come from the engine - never invented. Append `OfficeAgentTools.RegistrationPromptGuidance` when the registration tools are enabled, and `OfficeAgentTools.CreationPromptGuidance` when `create_document` is among them - each block should be present only when its tools are.
+`OfficeAgentTools.SystemPromptGuidance` is a `const string` you concatenate into your agent's instructions. It teaches the model the host-registered `(connectionId, documentId)` contract, the safety loop (re-inspect on stale snapshot, re-find on expect mismatch), uncertain-write recovery, the `Tracked` default for Word and why a deck refuses it, how a deck is addressed, that saving replaces the document in place, and the rule that anchors and node paths come from the engine - never invented. Append `OfficeAgentTools.RegistrationPromptGuidance` when the registration tools are enabled, and `OfficeAgentTools.CreationPromptGuidance` when `create_document` is among them - each block should be present only when its tools are.
 
 ## Use OfficeAgent over MCP
 

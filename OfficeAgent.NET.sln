@@ -55,6 +55,8 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "tools", "tools", "{7D89ACB6
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "OfficeAgent.ApiDocs", "tools\OfficeAgent.ApiDocs\OfficeAgent.ApiDocs.csproj", "{82CA3FA9-8DE2-4ADB-84BE-B483D6BBA441}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "OfficeAgent.RealWorldFixtures", "tools\OfficeAgent.RealWorldFixtures\OfficeAgent.RealWorldFixtures.csproj", "{D4C6C149-FA92-4ADB-95F2-9D71CA2DB345}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -329,6 +331,18 @@ Global
 		{82CA3FA9-8DE2-4ADB-84BE-B483D6BBA441}.Release|x64.Build.0 = Release|Any CPU
 		{82CA3FA9-8DE2-4ADB-84BE-B483D6BBA441}.Release|x86.ActiveCfg = Release|Any CPU
 		{82CA3FA9-8DE2-4ADB-84BE-B483D6BBA441}.Release|x86.Build.0 = Release|Any CPU
+		{D4C6C149-FA92-4ADB-95F2-9D71CA2DB345}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{D4C6C149-FA92-4ADB-95F2-9D71CA2DB345}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{D4C6C149-FA92-4ADB-95F2-9D71CA2DB345}.Debug|x64.ActiveCfg = Debug|Any CPU
+		{D4C6C149-FA92-4ADB-95F2-9D71CA2DB345}.Debug|x64.Build.0 = Debug|Any CPU
+		{D4C6C149-FA92-4ADB-95F2-9D71CA2DB345}.Debug|x86.ActiveCfg = Debug|Any CPU
+		{D4C6C149-FA92-4ADB-95F2-9D71CA2DB345}.Debug|x86.Build.0 = Debug|Any CPU
+		{D4C6C149-FA92-4ADB-95F2-9D71CA2DB345}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{D4C6C149-FA92-4ADB-95F2-9D71CA2DB345}.Release|Any CPU.Build.0 = Release|Any CPU
+		{D4C6C149-FA92-4ADB-95F2-9D71CA2DB345}.Release|x64.ActiveCfg = Release|Any CPU
+		{D4C6C149-FA92-4ADB-95F2-9D71CA2DB345}.Release|x64.Build.0 = Release|Any CPU
+		{D4C6C149-FA92-4ADB-95F2-9D71CA2DB345}.Release|x86.ActiveCfg = Release|Any CPU
+		{D4C6C149-FA92-4ADB-95F2-9D71CA2DB345}.Release|x86.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
@@ -356,5 +370,6 @@ Global
 		{DC779A70-E3B1-4A30-B420-E73FE9D5FEB4} = {E9165D53-4CEC-4488-99C8-63147AFEBC54}
 		{FF5D0AC3-AB58-44CD-A7B9-30741DCBED64} = {07267456-D982-4C5D-A1E3-2D4BFD723D03}
 		{82CA3FA9-8DE2-4ADB-84BE-B483D6BBA441} = {7D89ACB6-3B53-4D72-A699-F81E48F85E78}
+		{D4C6C149-FA92-4ADB-95F2-9D71CA2DB345} = {7D89ACB6-3B53-4D72-A699-F81E48F85E78}
 	EndGlobalSection
 EndGlobal

@@ -11,9 +11,9 @@ Use OfficeAgent.NET only when its typed OOXML operations and preservation bounda
 
 - For dependency selection, application wiring, package installation, providers, MCP, or agent tools, continue with this skill.
 - For an agent actively reviewing or editing an existing Word document, use `word-document-review` after the host integration is ready.
-- For unsupported formats, native Office layout, Excel calculation, or low-level OOXML operations outside the documented plan operations, choose another component or use the Open XML SDK directly. When both are needed in one application, follow the tested copy, edit, reinspect workflow in the versioned [SDK interoperability guide](https://github.com/ilia-sokolov/OfficeAgent.NET/blob/v0.9.0/docs/sdk-interoperability.md) and recipe 4 of [recipes](references/recipes.md).
+- For unsupported formats, native Office layout, Excel calculation, or low-level OOXML operations outside the documented plan operations, choose another component or use the Open XML SDK directly. When both are needed in one application, follow the tested copy, edit, reinspect workflow in the versioned [SDK interoperability guide](https://github.com/ilia-sokolov/OfficeAgent.NET/blob/v1.0.0/docs/sdk-interoperability.md) and recipe 4 of [recipes](references/recipes.md).
 
-Read the versioned [selection guide](https://github.com/ilia-sokolov/OfficeAgent.NET/blob/v0.9.0/docs/choose-officeagent.md) before choosing packages. Keep all OfficeAgent packages on the same version.
+Read the versioned [selection guide](https://github.com/ilia-sokolov/OfficeAgent.NET/blob/v1.0.0/docs/choose-officeagent.md) before choosing packages. Keep all OfficeAgent packages on the same version.
 
 ## Build in this order
 
@@ -43,8 +43,8 @@ Do not apply a comparison when `IsComplete` is false or `Plan` is null. On `stal
 
 Read [interface configuration](references/interfaces.md) for minimal package and host wiring. Keep the provider and direct `OfficeAgentClient` workflow testable independently of model calls.
 
-For Microsoft Agent Framework, follow the versioned [agent integration guide](https://github.com/ilia-sokolov/OfficeAgent.NET/blob/v0.9.0/docs/agent-integration.md). Expose registration or creation tools only when the host explicitly grants those capabilities.
+For Microsoft Agent Framework, follow the versioned [agent integration guide](https://github.com/ilia-sokolov/OfficeAgent.NET/blob/v1.0.0/docs/agent-integration.md). Expose registration or creation tools only when the host explicitly grants those capabilities.
 
-For MCP, install and configure `OfficeAgent.Mcp` separately using the versioned [MCP guide](https://github.com/ilia-sokolov/OfficeAgent.NET/blob/v0.9.0/docs/mcp-server.md). Confirm the server appears in the client's tool list before relying on it. The skill archive alone cannot prove that runtime connection.
+For MCP, install and configure `OfficeAgent.Mcp` separately using the versioned [MCP guide](https://github.com/ilia-sokolov/OfficeAgent.NET/blob/v1.0.0/docs/mcp-server.md). Confirm the server appears in the client's tool list before relying on it. The skill archive alone cannot prove that runtime connection.
 
-For supported installation and removal of this skill, use the versioned [skill installation guide](https://github.com/ilia-sokolov/OfficeAgent.NET/blob/v0.9.0/docs/skill-installation.md).
+For supported installation and removal of this skill, use the versioned [skill installation guide](https://github.com/ilia-sokolov/OfficeAgent.NET/blob/v1.0.0/docs/skill-installation.md).

@@ -6,7 +6,7 @@ using A = DocumentFormat.OpenXml.Drawing;
 using P = DocumentFormat.OpenXml.Presentation;
 using W = DocumentFormat.OpenXml.Wordprocessing;
 
-namespace OfficeAgent.Tests;
+namespace OfficeAgent.RealWorldFixtures;
 
 /// <summary>
 /// Writes documents with the length, structure and language of real ones - a signed
@@ -14,15 +14,13 @@ namespace OfficeAgent.Tests;
 /// against them the way a client such as Claude Code would, and the result judged by
 /// opening it in Office.
 /// </summary>
-public class RealWorldFixtureBuilder
+internal static class Program
 {
-    public static string Workspace =>
+    private static string Workspace =>
         Environment.GetEnvironmentVariable("OFFICEAGENT_REALWORLD_ROOT")
         ?? Path.Combine(Path.GetTempPath(), "officeagent-realworld");
 
-    [Fact]
-    [Trait("Category", "Fixture")]
-    public void Build_the_real_world_workspace()
+    private static int Main()
     {
         Directory.CreateDirectory(Workspace);
         File.WriteAllBytes(Path.Combine(Workspace, "statement-of-work.docx"), StatementOfWork());
@@ -30,15 +28,15 @@ public class RealWorldFixtureBuilder
         File.WriteAllBytes(Path.Combine(Workspace, "_blank.pptx"),
             new OfficeAgent.PowerPoint.PowerPointModule().CreateBlank());
 
-        Assert.True(File.Exists(Path.Combine(Workspace, "statement-of-work.docx")));
-        Assert.True(File.Exists(Path.Combine(Workspace, "qbr-fy26q3.pptx")));
+        Console.WriteLine($"Created real-world fixtures in {Workspace}");
+        return 0;
     }
 
     /// <summary>
     /// A consulting statement of work: parties, numbered sections in the language such
     /// documents actually use, a rate card, a milestone schedule, and a signature block.
     /// </summary>
-    public static byte[] StatementOfWork()
+    private static byte[] StatementOfWork()
     {
         using var buffer = new MemoryStream();
         using (var document = WordprocessingDocument.Create(buffer, WordprocessingDocumentType.Document))
@@ -106,7 +104,7 @@ public class RealWorldFixtureBuilder
     /// A quarterly business review deck with the slides such a deck really has, and
     /// speaker notes on the three that a presenter would annotate.
     /// </summary>
-    public static byte[] QuarterlyReview()
+    private static byte[] QuarterlyReview()
     {
         using var buffer = new MemoryStream();
         using (var document = PresentationDocument.Create(buffer, PresentationDocumentType.Presentation))

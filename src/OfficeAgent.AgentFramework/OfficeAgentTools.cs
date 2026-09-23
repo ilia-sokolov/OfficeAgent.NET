@@ -58,7 +58,7 @@ public sealed class OfficeAgentToolsOptions
 
     /// <summary>
     /// Gets whether the tools that address documents by <c>(connectionId, documentId)</c>
-    /// are exposed at all - the four core tools, and the registration and creation tools
+    /// are exposed at all - the seven default tools, and the registration and creation tools
     /// the two options above gate. The default is <see langword="true"/>.
     /// </summary>
     /// <remarks>
@@ -240,6 +240,7 @@ public sealed class OfficeAgentTools
         - The connectionId and documentId are already in your instructions or in the conversation context. NEVER ask the user for them - the user does not know or manage these values. If a request mentions "the document", it means the current document you were given; start working with it immediately.
         - apply_plan returns outputDocumentId, outputName, and outputContentType for the saved revision. Use outputDocumentId as the next call's documentId if you keep editing. When the work is complete, tell the user the document is ready; the host retrieves its bytes and presents the download or attachment. Do not place document base64 in the final response.
         - Saving edits the document in place (saveMode "Replace", the default), so outputDocumentId is the same id you passed in. If the user wants the original kept, pass saveMode "NewVersion" to write a sibling revision instead, and tell them where the result landed.
+        - After any write call, decide storage state from writeOutcome, not from committed alone. committed means use the returned output. notWritten means storage was not changed. unknown means the provider may have accepted the bytes; writtenNotRegistered means it did accept them but registration failed. For unknown or writtenNotRegistered, do not retry blindly and do not tell the user the document is unchanged: preserve possibleOutput and ask the host/operator to reconcile its name and expectedSha256 first.
 
         Plan shape, anchors, safety loop
         - Plan body is { "snapshot": { "eTag": "<snapshot from inspect_document>" }, "operations": [ ... ] }. Copy the scalar snapshot string returned by inspect_document into snapshot.eTag to detect drift in Word body/header/footer/footnote/endnote XML or PowerPoint slide/notes XML. It does not cover properties, comments, sections, media/image bytes, masters, or layouts; their anchors and provider version checks still apply. Omit snapshot only deliberately. Omit contractVersion for legacy 0.2 behavior, or set it to exactly "0.2". Other values fail with contract-mismatch.
@@ -353,12 +354,12 @@ public sealed class OfficeAgentTools
         - Documents in a session connection are gone when the server stops, and are written to no storage. Export before you finish, or tell the user the result was not saved anywhere.
         """;
 
-    /// <summary>Returns the four core AIFunctions the host registers with its agent.</summary>
+    /// <summary>Returns the seven default AIFunctions the host registers with its agent.</summary>
     public AIFunction[] AsAIFunctions() => AsAIFunctions(new OfficeAgentToolsOptions());
 
     /// <summary>
-    /// Returns the AIFunctions selected by <paramref name="options"/>: the five core
-    /// inspect/find/preview/apply/comparison tools, plus the source-addressed tools
+    /// Returns the AIFunctions selected by <paramref name="options"/>: the seven default
+    /// discovery/inspect/find/preview/apply/comparison/merge-preview tools, plus the source-addressed tools
     /// (<c>register_document</c>, <c>remove_document</c>, <c>open_document</c>,
     /// <c>edit_document</c>) when registration is allowed, and independently
     /// <c>create_document</c> when creation is allowed. The composites are gated with
@@ -565,7 +566,7 @@ public sealed class OfficeAgentTools
             PlanOperations)),
         AIFunctionFactory.Create(ApplyPlan, Opts(
             "apply_plan",
-            "Apply a DocumentPlan JSON to (connectionId, documentId) and save through the provider. Returns {isValid, committed, receipt, sourceDocumentId, outputConnectionId, outputDocumentId, outputVersion, outputName, outputContentType, changes, errors}; non-applicable values are null. The receipt hashes the effective plan and exact input/output bytes and keeps the host-authenticated actor separate from the plan's display revision author. saveMode: 'Replace' (default, overwrites the source after an optimistic version check), 'NewVersion' (keeps the source and mints a new id under the same connection), 'NewDocument' (mints a fresh id with an optional newName for display). On any failure nothing is written.")),
+            "Apply a DocumentPlan JSON to (connectionId, documentId) and save through the provider. Returns {isValid, committed, writeOutcome, possibleOutput, receipt, sourceDocumentId, outputConnectionId, outputDocumentId, outputVersion, outputName, outputContentType, changes, errors}; non-applicable values are null. The receipt hashes the effective plan and exact input/output bytes and keeps the host-authenticated actor separate from the plan's display revision author. saveMode: 'Replace' (default, overwrites the source after an optimistic version check), 'NewVersion' (keeps the source and mints a new id under the same connection), 'NewDocument' (mints a fresh id with an optional newName for display). Plan-validation and operation-conflict failures have writeOutcome 'notWritten'. A provider failure after a write began may instead return 'unknown' or 'writtenNotRegistered' with possibleOutput; never retry those blindly or report the document unchanged until the host reconciles the possible output.")),
         AIFunctionFactory.Create(CompareDocuments, Opts(
             "compare_documents",
             "Read two Word documents and return paragraph differences, exact input SHA-256 hashes, coverage diagnostics, and a tracked-change plan bound to the original snapshot. " +

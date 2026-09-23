@@ -41,6 +41,12 @@ def repository_version() -> tuple[int, int]:
     return int(match.group(1)), int(match.group(2))
 
 
+def documented_release_version() -> str:
+    match = re.search(r"^## (\d+\.\d+\.\d+) —", read("CHANGELOG.md"), re.MULTILINE)
+    assert match, "CHANGELOG.md has no release heading"
+    return match.group(1)
+
+
 def packable_projects() -> set[str]:
     names = set()
     for project in (ROOT / "src").glob("*/*.csproj"):
@@ -63,9 +69,25 @@ class SupportPolicyTests(unittest.TestCase):
             self.assertEqual("Unsupported", support.get(unsupported_before))
 
     def test_no_policy_document_still_describes_the_project_as_pre_release(self) -> None:
-        for relative in ("SECURITY.md", "SUPPORT.md", "CONTRIBUTING.md"):
+        for relative in ("SECURITY.md", "SUPPORT.md", "CONTRIBUTING.md", "docs/README.md", "docs/choose-officeagent.md"):
             with self.subTest(document=relative):
                 self.assertNotRegex(read(relative), r"(?i)\bpre-1\.0\b")
+
+    def test_current_product_guidance_pins_the_documented_release_version(self) -> None:
+        version = documented_release_version()
+        for relative in (
+            "docs/choose-officeagent.md",
+            "docs/skill-installation.md",
+            "skills/officeagent-integration/SKILL.md",
+            "skills/officeagent-integration/references/interfaces.md",
+            "skills/officeagent-integration/references/recipes.md",
+            "skills/officeagent-integration/assets/IntegrationRecipes.csproj",
+        ):
+            with self.subTest(document=relative):
+                text = read(relative)
+                self.assertIn(version, text)
+                self.assertNotIn("0.9.0", text)
+                self.assertNotIn("blob/v0.9.0", text)
 
     def test_security_release_statement_matches_the_support_statement(self) -> None:
         security = read("SECURITY.md")

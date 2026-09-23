@@ -1,5 +1,10 @@
 # Adoption validation
 
+> [!IMPORTANT]
+> Unfilled trial rows mean the workflow has not been validated by a fresh participant. Structural
+> tests, replay fixtures, and maintainer runs do not substitute for the recorded human or live-agent
+> attempt required here; do not cite this worksheet as adoption evidence until those rows are complete.
+
 Use this check before broad promotion of a release. It measures whether developers can
 discover a relevant OfficeAgent workflow and produce a correct Office file. Repository stars
 and package downloads measure attention, not successful use.

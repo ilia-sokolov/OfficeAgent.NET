@@ -150,6 +150,46 @@ def validate_skills() -> list[str]:
     return errors
 
 
+def validate_agent_safety_guidance() -> list[str]:
+    errors: list[str] = []
+    review_skill = (ROOT / "skills" / "word-document-review" / "SKILL.md").read_text(encoding="utf-8")
+    tool_source = (ROOT / "src" / "OfficeAgent.AgentFramework" / "OfficeAgentTools.cs").read_text(encoding="utf-8")
+    agent_docs = (ROOT / "docs" / "agent-integration.md").read_text(encoding="utf-8")
+    mcp_docs = (ROOT / "docs" / "mcp-server.md").read_text(encoding="utf-8")
+
+    unsafe = ("On any failure nothing is written", "A plan that fails wrote nothing")
+    for phrase in unsafe:
+        for relative, text in (
+            ("skills/word-document-review/SKILL.md", review_skill),
+            ("src/OfficeAgent.AgentFramework/OfficeAgentTools.cs", tool_source),
+        ):
+            if phrase in text:
+                errors.append(f"unsafe uncertain-write claim in {relative}: {phrase}")
+
+    for relative, text in (
+        ("skills/word-document-review/SKILL.md", review_skill),
+        ("src/OfficeAgent.AgentFramework/OfficeAgentTools.cs", tool_source),
+        ("docs/agent-integration.md", agent_docs),
+        ("docs/mcp-server.md", mcp_docs),
+    ):
+        for required in ("writeOutcome", "possibleOutput"):
+            if required not in text:
+                errors.append(f"{relative} omits uncertain-write field {required}")
+
+    for required_tool in (
+        "describe_capabilities",
+        "inspect_document",
+        "find_in_document",
+        "preview_plan",
+        "apply_plan",
+        "compare_documents",
+        "preview_document_merge",
+    ):
+        if required_tool not in agent_docs or required_tool not in mcp_docs:
+            errors.append(f"default tool inventory omits {required_tool}")
+    return errors
+
+
 def validate_release_examples() -> list[str]:
     errors: list[str] = []
     examples = {
@@ -187,6 +227,7 @@ def main() -> int:
         validate_markdown()
         + validate_release_metadata()
         + validate_skills()
+        + validate_agent_safety_guidance()
         + validate_release_examples()
     )
     if errors:
