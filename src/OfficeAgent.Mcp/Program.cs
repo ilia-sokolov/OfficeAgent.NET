@@ -9,6 +9,7 @@
 // OFFICEAGENT_CONFIG, environment variables prefixed OfficeAgent__, and the command line,
 // in that order of increasing precedence. See docs/mcp-server.md.
 
+using System.Reflection;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Configuration;
@@ -18,7 +19,10 @@ using Microsoft.Extensions.Logging;
 using OfficeAgent.Mcp;
 using OfficeAgent.SharePoint;
 
-var version = typeof(OfficeAgentMcpServer).Assembly.GetName().Version?.ToString(3) ?? "0.0.0";
+var serverAssembly = typeof(OfficeAgentMcpServer).Assembly;
+var version = OfficeAgentMcpServer.ReportedVersion(
+    serverAssembly.GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion,
+    serverAssembly.GetName().Version);
 
 var configurationPath = OfficeAgentConfiguration.ResolvePath(args);
 

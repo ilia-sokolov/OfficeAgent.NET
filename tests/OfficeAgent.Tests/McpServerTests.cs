@@ -14,6 +14,20 @@ namespace OfficeAgent.Tests;
 /// </summary>
 public class McpServerTests
 {
+    /// <summary>
+    /// The server reports the package version, prerelease label included: a candidate built as
+    /// 1.0.0-rc.1 once told MCP clients and /healthz it was 1.0.0, because the four-part assembly
+    /// version cannot carry a label. The source-control suffix after '+' is not part of it.
+    /// </summary>
+    [Theory]
+    [InlineData("1.0.0-rc.1+6e9f0a3", "1.0.0.0", "1.0.0-rc.1")]
+    [InlineData("1.0.0+6e9f0a3", "1.0.0.0", "1.0.0")]
+    [InlineData("0.9.0", "0.9.0.0", "0.9.0")]
+    [InlineData(null, "1.2.3.0", "1.2.3")]
+    [InlineData(null, null, "0.0.0")]
+    public void The_server_reports_the_package_version_with_its_prerelease_label(string? informational, string? assembly, string expected) =>
+        Assert.Equal(expected, OfficeAgentMcpServer.ReportedVersion(informational, assembly is null ? null : Version.Parse(assembly)));
+
     [Fact]
     public void Toolset_exposes_core_and_registration_tools_by_default()
     {

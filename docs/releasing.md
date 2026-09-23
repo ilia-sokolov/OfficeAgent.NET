@@ -68,7 +68,20 @@ dotnet test OfficeAgent.NET.sln --no-build --configuration Release
 python scripts/check_vulnerable_packages.py
 python scripts/validate_docs.py
 python scripts/validate_server_manifest.py
-python -m unittest tests/test_agent_evaluation.py tests/test_package_samples.py tests/test_package_skills.py tests/test_release_evidence.py tests/test_support_policy.py -v
+python -m unittest tests/test_agent_evaluation.py tests/test_package_samples.py tests/test_package_skills.py tests/test_release_evidence.py tests/test_support_policy.py tests/test_verify_candidate_consumer.py -v
+```
+
+Verify the candidate as a consumer sees it, from locally packed packages. The version can be a
+prerelease such as `1.0.0-rc.1`; nothing here publishes:
+
+```bash
+dotnet pack OfficeAgent.NET.sln --configuration Release -p:Version="$CANDIDATE" --output ./candidate
+python scripts/smoke_packaged_artifacts.py --artifacts ./candidate --version "$CANDIDATE"
+python scripts/verify_candidate_consumer.py --artifacts ./candidate --version "$CANDIDATE"
+python scripts/package_samples.py --output ./candidate --version "$CANDIDATE"
+python scripts/verify_quickedit_sample.py --artifacts ./candidate
+python scripts/package_skills.py --output ./candidate
+python scripts/verify_integration_kit.py --artifacts ./candidate --version "$CANDIDATE"
 ```
 
 Update the supported-versions table in [`SECURITY.md`](../SECURITY.md#supported-versions) so its

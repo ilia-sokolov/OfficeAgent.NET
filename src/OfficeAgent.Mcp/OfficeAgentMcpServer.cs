@@ -25,6 +25,22 @@ public static class OfficeAgentMcpServer
     public const string ServerName = "officeagent";
 
     /// <summary>
+    /// The version the server reports in <c>serverInfo</c> and <c>/healthz</c>: the package version,
+    /// prerelease label included, without the source-control suffix after <c>+</c>.
+    /// </summary>
+    /// <remarks>
+    /// The four-part assembly version cannot carry a prerelease label, so a candidate built as
+    /// 1.0.0-rc.1 once reported itself as the final 1.0.0. It is only the fallback now.
+    /// </remarks>
+    internal static string ReportedVersion(string? informationalVersion, Version? assemblyVersion)
+    {
+        var informational = informationalVersion?.Split('+')[0].Trim();
+        return !string.IsNullOrEmpty(informational)
+            ? informational!
+            : assemblyVersion?.ToString(3) ?? "0.0.0";
+    }
+
+    /// <summary>
     /// Instructions advertised to MCP clients: the same contract the in-process
     /// Microsoft.Extensions.AI tools teach, plus registration guidance when enabled, and
     /// an inventory of the configured connections when registration or creation is
