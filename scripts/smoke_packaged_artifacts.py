@@ -19,11 +19,15 @@ import io
 import json
 import os
 import platform
+import socket
 import re
 import subprocess
 import sys
 import tempfile
+import urllib.error
+import urllib.request
 import threading
+import time
 import zipfile
 from pathlib import Path
 
@@ -53,6 +57,7 @@ REQUIRED_TOOLS = {
 STARTUP_TIMEOUT_SECONDS = 90
 CALL_TIMEOUT_SECONDS = 60
 SHUTDOWN_TIMEOUT_SECONDS = 30
+HTTP_START_SECONDS = 90
 PROBE_TIMEOUT_SECONDS = 30
 
 
@@ -292,11 +297,16 @@ def initialize(server: StdioServer) -> dict:
     return result
 
 
+def reported_version_matches(reported: str | None, expected: str) -> bool:
+    """Exact after removing the source-control suffix: 1.0.0-rc.30 is not 1.0.0-rc.3."""
+    return bool(reported) and reported.split("+", 1)[0] == expected
+
+
 def verify_document_workflow(server: StdioServer, version: str) -> None:
     info = initialize(server)
     server_info = info.get("serverInfo", {})
     reported = server_info.get("version", "")
-    if reported.split("+")[0] != version:
+    if not reported_version_matches(reported, version):
         raise SmokeError(f"server reports version {reported!r}, expected the candidate {version!r}")
 
     tools = {tool["name"] for tool in server.request("tools/list").get("tools", [])}
@@ -647,6 +657,45 @@ def verify_missing_configuration(command: list[str], cwd: Path, env: dict[str, s
     print(f"missing-config=passed code={result.returncode} detail={first[:120]}")
 
 
+def free_port() -> int:
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as probe:
+        probe.bind(("127.0.0.1", 0))
+        return probe.getsockname()[1]
+
+
+def verify_http_health(executable: Path, workdir: Path, env: dict[str, str], version: str) -> None:
+    """The installed server over HTTP, as the container runs it: /healthz names the exact version."""
+    port = free_port()
+    http_env = dict(env)
+    http_env["ASPNETCORE_URLS"] = f"http://127.0.0.1:{port}"
+    process = subprocess.Popen(
+        [str(executable)], cwd=workdir, env=http_env,
+        stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, text=True)
+    try:
+        deadline = time.monotonic() + HTTP_START_SECONDS
+        body = None
+        while time.monotonic() < deadline:
+            if process.poll() is not None:
+                raise SmokeError(f"HTTP server exited with {process.returncode}: {process.stderr.read()[:800]}")
+            try:
+                with urllib.request.urlopen(f"http://127.0.0.1:{port}/healthz", timeout=5) as response:
+                    body = json.loads(response.read().decode("utf-8"))
+                    break
+            except (urllib.error.URLError, ConnectionError, TimeoutError):
+                time.sleep(0.5)
+        if body is None:
+            raise SmokeError(f"/healthz did not answer within {HTTP_START_SECONDS} s")
+        if body.get("status") != "ok" or not reported_version_matches(body.get("version"), version):
+            raise SmokeError(f"/healthz reports {body!r}, expected the candidate {version!r}")
+        print(f"http-health=passed version={body.get('version')}")
+    finally:
+        process.kill()
+        try:
+            process.wait(timeout=SHUTDOWN_TIMEOUT_SECONDS)
+        except subprocess.TimeoutExpired:
+            pass
+
+
 def verify_installed_tool_payload(tool_root: Path, version: str) -> None:
     """The installed tool must carry its dependencies, not just its own assembly."""
     assemblies = {path.name for path in tool_root.rglob("*.dll")}
@@ -812,6 +861,7 @@ def smoke(artifacts: Path, version: str, dotnet: str) -> None:
 
         with StdioServer(command, workdir, env) as server:
             verify_document_workflow(server, version)
+        verify_http_health(executable, workdir, env, version)
 
         verify_stdin_eof_exit(command, workdir, env)
         verify_malformed_request(command, workdir, env)

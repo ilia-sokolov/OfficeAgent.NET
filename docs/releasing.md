@@ -84,6 +84,18 @@ python scripts/package_skills.py --output ./candidate
 python scripts/verify_integration_kit.py --artifacts ./candidate --version "$CANDIDATE"
 ```
 
+Then run the same checks on every platform and runtime from the pushed candidate commit. The
+ordinary build packs the committed version, so it is branch evidence; only the candidate job packs
+and verifies the requested version:
+
+```bash
+gh workflow run build.yml --ref v1.0.0 -f candidate_version="$CANDIDATE"
+```
+
+Its `candidate-packages` job covers .NET 8 on Ubuntu, Windows and macOS and .NET 10 on Ubuntu and
+Windows, and fails unless every installed assembly, `serverInfo` and `/healthz` carry exactly
+`$CANDIDATE`. Record the run URL and its commit as the candidate's installed-package evidence.
+
 Update the supported-versions table in [`SECURITY.md`](../SECURITY.md#supported-versions) so its
 supported row names this minor version; `tests/test_support_policy.py` fails until it does.
 

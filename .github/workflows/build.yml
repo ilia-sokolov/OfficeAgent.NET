@@ -6,6 +6,11 @@ on:
   pull_request:
     branches: [main]
   workflow_dispatch:
+    inputs:
+      candidate_version:
+        description: 'Release-candidate package version to pack and verify on every platform, for example 1.0.0-rc.4. Empty runs the ordinary build only.'
+        required: false
+        default: ''
 
 jobs:
   build:
@@ -144,6 +149,81 @@ jobs:
         env:
           DOTNET_ROLL_FORWARD: LatestMajor
         run: python scripts/smoke_packaged_artifacts.py --artifacts ./artifacts
+
+  candidate-packages:
+    # Installed-package evidence for an explicit release candidate. The ordinary build packs the
+    # committed version, so it is branch evidence, not candidate evidence: a candidate is packed here
+    # at exactly the requested version, and every verifier is told that version rather than inferring
+    # it. Runs only when a candidate_version is dispatched.
+    if: github.event_name == 'workflow_dispatch' && inputs.candidate_version != ''
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { os: ubuntu-latest, runtime: '8' }
+          - { os: windows-latest, runtime: '8' }
+          - { os: macos-latest, runtime: '8' }
+          - { os: ubuntu-latest, runtime: '10' }
+          - { os: windows-latest, runtime: '10' }
+    env:
+      DOTNET_NOLOGO: true
+      DOTNET_CLI_TELEMETRY_OPTOUT: true
+      CI: true
+      CANDIDATE_VERSION: ${{ inputs.candidate_version }}
+      OFFICEAGENT_EXPECT_RUNTIME_MAJOR: ${{ matrix.runtime }}
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-dotnet@67a3573c9a986a3f9c594539f4ab511d57bb3ce9 # v4
+        with:
+          dotnet-version: |
+            8.0.x
+            10.0.x
+
+      - name: Validate the candidate version
+        run: |
+          if [[ ! "$CANDIDATE_VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.]+)?$ ]]; then
+            echo "candidate_version must be major.minor.patch with an optional prerelease label" >&2
+            exit 1
+          fi
+          echo "candidate $CANDIDATE_VERSION at $GITHUB_SHA on $RUNNER_OS, .NET $OFFICEAGENT_EXPECT_RUNTIME_MAJOR runtime"
+
+      - name: Pack every package at the candidate version
+        run: dotnet pack OfficeAgent.NET.sln --configuration Release -p:Version="$CANDIDATE_VERSION" --output ./candidate
+
+      - name: Require exactly the nine candidate packages
+        run: |
+          for id in Abstractions AgentFramework Core Excel Mcp PowerPoint Rendering SharePoint Word; do
+            test -f "candidate/OfficeAgent.$id.$CANDIDATE_VERSION.nupkg" || { echo "missing OfficeAgent.$id.$CANDIDATE_VERSION.nupkg" >&2; exit 1; }
+          done
+          count=$(ls candidate/*.nupkg | wc -l)
+          test "$count" -eq 9 || { echo "expected 9 packages, found $count" >&2; exit 1; }
+
+      - name: Run installed packages on the .NET 10 runtime
+        if: matrix.runtime == '10'
+        run: echo "DOTNET_ROLL_FORWARD=LatestMajor" >> "$GITHUB_ENV"
+
+      - name: Smoke the installed candidate (stdio, serverInfo and /healthz versions)
+        run: python scripts/smoke_packaged_artifacts.py --artifacts ./candidate --version "$CANDIDATE_VERSION"
+
+      - name: Verify stored records and exact assembly versions with the installed candidate
+        run: python scripts/verify_candidate_consumer.py --artifacts ./candidate --version "$CANDIDATE_VERSION"
+
+      - name: Verify the QuickEdit sample with the installed candidate
+        run: |
+          python scripts/package_samples.py --output ./candidate --version "$CANDIDATE_VERSION"
+          python scripts/verify_quickedit_sample.py --artifacts ./candidate
+
+      - name: Verify the integration kit with the installed candidate
+        run: |
+          python scripts/package_skills.py --output ./candidate
+          python scripts/verify_integration_kit.py --artifacts ./candidate --version "$CANDIDATE_VERSION"
 
   renderer-sandbox:
     # The sandboxed renderer reference (deploy/renderer). It needs a Linux container engine,

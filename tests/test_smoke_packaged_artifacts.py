@@ -415,5 +415,23 @@ class PackageSetTests(unittest.TestCase):
         self.assertRegex(smoke.repository_version(), r"^\d+\.\d+\.\d+")
 
 
+
+class ReportedVersionTests(unittest.TestCase):
+    """serverInfo and /healthz must name exactly the candidate: a prefix is not a match."""
+
+    def test_the_candidate_with_source_control_metadata_matches(self) -> None:
+        self.assertTrue(smoke.reported_version_matches("1.0.0-rc.3+8264f64", "1.0.0-rc.3"))
+        self.assertTrue(smoke.reported_version_matches("1.0.0+8264f64", "1.0.0"))
+
+    def test_a_near_match_does_not(self) -> None:
+        self.assertFalse(smoke.reported_version_matches("1.0.0-rc.30+8264f64", "1.0.0-rc.3"))
+        self.assertFalse(smoke.reported_version_matches("1.0.0-rc.3+8264f64", "1.0.0"))
+        self.assertFalse(smoke.reported_version_matches("1.0.0", "1.0.0-rc.3"))
+
+    def test_no_version_does_not(self) -> None:
+        self.assertFalse(smoke.reported_version_matches(None, "1.0.0"))
+        self.assertFalse(smoke.reported_version_matches("", "1.0.0"))
+
+
 if __name__ == "__main__":
     unittest.main()

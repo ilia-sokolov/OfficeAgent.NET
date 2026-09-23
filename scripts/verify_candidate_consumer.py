@@ -13,7 +13,10 @@ locally packed candidate and checks, from the repository's stored corpora:
   protected part byte identical;
 - the stored v0.8 PowerPoint and Excel fixtures still open and inspect;
 - the 1.0 recovery types are reachable from the packages;
-- every loaded OfficeAgent assembly carries the candidate version.
+- every loaded OfficeAgent assembly carries exactly the candidate version: its informational version,
+  without the source-control suffix after '+', equals the requested package version;
+- when OFFICEAGENT_EXPECT_RUNTIME_MAJOR is set, the consumer ran on that .NET major version, so a
+  runtime cell of a CI matrix cannot pass on another runtime.
 
 It proves packaging and compatibility for the candidate, not publication.
 """
@@ -21,6 +24,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import subprocess
 import sys
 import tempfile
@@ -54,6 +58,9 @@ REQUIRED_RECORDS = (
 PACKAGES = ("OfficeAgent.Core", "OfficeAgent.Word", "OfficeAgent.PowerPoint", "OfficeAgent.Excel",
             "OfficeAgent.AgentFramework")
 
+# The assemblies whose version the consumer reports. Abstractions arrives transitively.
+ASSEMBLIES = ("OfficeAgent.Abstractions",) + PACKAGES
+
 PROJECT = """<Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
     <OutputType>Exe</OutputType>
@@ -85,7 +92,6 @@ using OfficeAgent.Word;
 
 var v08 = args[0];
 var v09 = args[1];
-var expectedVersion = args[2];
 var failures = new List<string>();
 
 void Check(string name, Func<Task<string?>> check)
@@ -220,18 +226,67 @@ Check("the 1.0 recovery types are reachable from the packages", () =>
                              typeof(DocumentWriteRecoveryException).IsAssignableFrom(typeof(DocumentWriteOutcomeUnknownException))
         ? null : "the recovery hierarchy is missing"));
 
-Check("every loaded OfficeAgent assembly carries the candidate version", () =>
+Console.WriteLine($"RUNTIME\t{Environment.Version}");
+
+// Reported, not judged here: the exact comparison is scripts/verify_candidate_consumer.py's
+// version_mismatches, which its unit tests exercise with near matches.
+foreach (var type in new[] { typeof(DocumentPlan), typeof(OfficeAgentClient), typeof(WordModule), typeof(PowerPointModule),
+                             typeof(ExcelModule), typeof(OfficeAgentTools) })
 {
-    var assemblies = new[] { typeof(OfficeAgentClient), typeof(WordModule), typeof(PowerPointModule), typeof(ExcelModule),
-                             typeof(OfficeAgentTools), typeof(DocumentPlan) }.Select(t => t.Assembly);
-    var wrong = assemblies.Select(a => (a.GetName().Name, Version: a.GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion ?? ""))
-        .Where(a => !a.Version.StartsWith(expectedVersion, StringComparison.Ordinal)).ToArray();
-    return Task.FromResult<string?>(wrong.Length == 0 ? null : string.Join(", ", wrong.Select(w => $"{w.Name}={w.Version}")));
-});
+    var assembly = type.Assembly;
+    Console.WriteLine($"ASSEMBLY\t{assembly.GetName().Name}\t{assembly.GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion ?? ""}");
+}
 
 Console.WriteLine(failures.Count == 0 ? "candidate-consumer=passed" : $"candidate-consumer=failed ({failures.Count})");
 return failures.Count == 0 ? 0 : 1;
 """
+
+
+def normalized_informational_version(value: str | None) -> str | None:
+    """The package version an assembly claims: its informational version without the
+    source-control suffix after the first '+'. Nothing else is normalized."""
+    if value is None or not value.strip():
+        return None
+    return value.strip().split("+", 1)[0]
+
+
+def version_mismatches(observed: dict[str, str | None], expected: str) -> list[str]:
+    """Every assembly that does not carry exactly the expected version, by name.
+
+    Exact ordinal equality after normalization: 1.0.0-rc.30 is not 1.0.0-rc.3, and 1.0.0-rc.3 is
+    not 1.0.0. A missing assembly or a missing informational version is a mismatch.
+    """
+    problems = []
+    for name in ASSEMBLIES:
+        if name not in observed:
+            problems.append(f"{name}: not reported by the consumer")
+            continue
+        normalized = normalized_informational_version(observed[name])
+        if normalized is None:
+            problems.append(f"{name}: no informational version")
+        elif normalized != expected:
+            problems.append(f"{name}: informational version {observed[name]!r}, expected {expected!r}")
+    return problems
+
+
+def runtime_mismatch(stdout: str, expected_major: str | None) -> str | None:
+    """None when no runtime is required or the consumer ran on the required major version."""
+    if not expected_major:
+        return None
+    reported = next((line.split("\t", 1)[1] for line in stdout.splitlines() if line.startswith("RUNTIME\t")), None)
+    if reported is None:
+        return "the consumer did not report its runtime"
+    return None if reported.split(".", 1)[0] == expected_major.strip() else \
+        f"the consumer ran on .NET {reported}, expected major version {expected_major}"
+
+
+def reported_assembly_versions(stdout: str) -> dict[str, str | None]:
+    versions: dict[str, str | None] = {}
+    for line in stdout.splitlines():
+        if line.startswith("ASSEMBLY\t"):
+            _, name, informational = (line.split("\t", 2) + [""])[:3]
+            versions[name] = informational or None
+    return versions
 
 
 def verify(artifacts: Path, version: str, dotnet: str) -> None:
@@ -266,11 +321,18 @@ def verify(artifacts: Path, version: str, dotnet: str) -> None:
 
         result = subprocess.run(
             [dotnet, "run", "--configuration", "Release", "--no-restore", "--",
-             str(CORPUS_V08), str(CORPUS_V09), version],
+             str(CORPUS_V08), str(CORPUS_V09)],
             cwd=consumer, env=env, text=True, capture_output=True, check=False, timeout=900)
         print(result.stdout.strip())
         if result.returncode or "candidate-consumer=passed" not in result.stdout:
             raise SmokeError(f"candidate consumer failed ({result.returncode}):\n{result.stderr[-2000:]}")
+        mismatches = version_mismatches(reported_assembly_versions(result.stdout), version)
+        if mismatches:
+            raise SmokeError("assemblies do not carry the candidate version: " + "; ".join(mismatches))
+        print(f"assembly-versions=passed expected={version} assemblies={len(ASSEMBLIES)}")
+        runtime_problem = runtime_mismatch(result.stdout, os.environ.get("OFFICEAGENT_EXPECT_RUNTIME_MAJOR"))
+        if runtime_problem:
+            raise SmokeError(runtime_problem)
 
 
 def main() -> int:
