@@ -111,6 +111,28 @@ def run(command: list[str], cwd: Path, env: dict[str, str], timeout: int = 600) 
     return result
 
 
+def resolved_package_problems(assets: dict, version: str, packages: tuple[str, ...]) -> list[str]:
+    """Every package that restore did not resolve as a package at exactly the version.
+
+    Reads a restored project's obj/project.assets.json. Package ids compare case-insensitively, as
+    NuGet does; versions compare exactly. A missing package, another version, or a project reference
+    in place of the package is a problem.
+    """
+    libraries = assets.get("libraries") or {}
+    problems = []
+    for package in packages:
+        resolved = sorted(
+            key for key in libraries if key.split("/", 1)[0].lower() == package.lower()
+        )
+        expected = f"{package}/{version}"
+        exact = [key for key in resolved if key.split("/", 1)[1] == version]
+        if not exact or len(resolved) != 1:
+            problems.append(f"{package}: resolved {resolved or 'nothing'}, expected {expected!r}")
+        elif libraries[exact[0]].get("type") != "package":
+            problems.append(f"{package}: resolved {exact[0]!r} as {libraries[exact[0]].get('type')!r}, not a package")
+    return problems
+
+
 def isolated_env(cache: Path, nuget_config: Path) -> dict[str, str]:
     env = dict(os.environ)
     env["NUGET_PACKAGES"] = str(cache)

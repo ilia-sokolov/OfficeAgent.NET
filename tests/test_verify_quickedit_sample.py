@@ -54,6 +54,13 @@ class ResolvedVersionTests(unittest.TestCase):
         problems = quickedit.resolved_version_problems(assets(versions), "1.0.0-rc.5")
         self.assertEqual(["OfficeAgent.Core: resolved nothing, expected 'OfficeAgent.Core/1.0.0-rc.5'"], problems)
 
+    def test_another_version_beside_the_exact_one_fails(self) -> None:
+        resolved = assets(everyone("1.0.0-rc.5"))
+        resolved["libraries"]["OfficeAgent.Core/1.0.0"] = {"type": "package"}
+        problems = quickedit.resolved_version_problems(resolved, "1.0.0-rc.5")
+        self.assertEqual(["OfficeAgent.Core: resolved ['OfficeAgent.Core/1.0.0', 'OfficeAgent.Core/1.0.0-rc.5'], "
+                          "expected 'OfficeAgent.Core/1.0.0-rc.5'"], problems)
+
     def test_a_project_reference_is_not_a_resolved_package(self) -> None:
         problems = quickedit.resolved_version_problems(assets(everyone("1.0.0-rc.5"), kind="project"), "1.0.0-rc.5")
         self.assertEqual(len(quickedit.RESOLVED_PACKAGES), len(problems))

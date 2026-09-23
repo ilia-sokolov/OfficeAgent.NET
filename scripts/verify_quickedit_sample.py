@@ -23,7 +23,12 @@ from pathlib import Path
 from xml.etree import ElementTree as ET
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from smoke_packaged_artifacts import isolated_env, repository_version, write_nuget_config  # noqa: E402
+from smoke_packaged_artifacts import (  # noqa: E402
+    isolated_env,
+    repository_version,
+    resolved_package_problems,
+    write_nuget_config,
+)
 
 
 WORD_NS = "http://schemas.openxmlformats.org/wordprocessingml/2006/main"
@@ -56,24 +61,8 @@ def project_version_problems(project: str, version: str) -> list[str]:
 
 
 def resolved_version_problems(assets: dict, version: str) -> list[str]:
-    """Every OfficeAgent package that restore did not resolve as a package at exactly the version.
-
-    Package ids compare case-insensitively, as NuGet does; versions compare exactly. A missing
-    package, another version, or a project reference in place of the package is a problem.
-    """
-    libraries = assets.get("libraries") or {}
-    problems = []
-    for package in RESOLVED_PACKAGES:
-        resolved = sorted(
-            key for key in libraries if key.split("/", 1)[0].lower() == package.lower()
-        )
-        expected = f"{package}/{version}"
-        exact = [key for key in resolved if key.split("/", 1)[1] == version]
-        if not exact or len(resolved) != 1:
-            problems.append(f"{package}: resolved {resolved or 'nothing'}, expected {expected!r}")
-        elif libraries[exact[0]].get("type") != "package":
-            problems.append(f"{package}: resolved {exact[0]!r} as {libraries[exact[0]].get('type')!r}, not a package")
-    return problems
+    """Every OfficeAgent package the sample restore did not resolve as a package at exactly the version."""
+    return resolved_package_problems(assets, version, RESOLVED_PACKAGES)
 
 
 def restore_environment(root: Path, artifacts: Path) -> tuple[dict[str, str], Path]:

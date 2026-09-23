@@ -1,5 +1,11 @@
 #!/usr/bin/env python3
-"""Verify the integration skill in a disposable installed-package consumer."""
+"""Verify the integration skill in a disposable installed-package consumer.
+
+The recipes are candidate evidence only when they ran on exactly the requested packages: restore uses
+a fresh package cache inside the temporary directory, the artifacts folder first and nuget.org only
+for third-party dependencies, and obj/project.assets.json must resolve OfficeAgent.Abstractions, Core
+and Word as packages at exactly that version before the recipes run.
+"""
 
 from __future__ import annotations
 
@@ -13,6 +19,9 @@ import tempfile
 import zipfile
 from pathlib import Path, PurePosixPath
 
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from smoke_packaged_artifacts import isolated_env, resolved_package_problems  # noqa: E402
+
 
 ROOT = Path(__file__).resolve().parents[1]
 LINK_RE = re.compile(r"!?\[[^\]]*\]\(([^\s)]+)(?:\s+[^)]*)?\)")
@@ -25,6 +34,8 @@ EXPECTED_OUTPUT = {
     "sdk-conflict=version-conflict document-unchanged=True",
     "all-recipes=passed",
 }
+# The OfficeAgent packages the recipes must resolve at the requested version.
+RESOLVED_PACKAGES = ("OfficeAgent.Abstractions", "OfficeAgent.Core", "OfficeAgent.Word")
 
 
 class VerificationError(ValueError):
@@ -39,8 +50,8 @@ def repository_version() -> str:
     return match.group(1)
 
 
-def run(command: list[str], cwd: Path) -> subprocess.CompletedProcess[str]:
-    result = subprocess.run(command, cwd=cwd, text=True, capture_output=True, check=False)
+def run(command: list[str], cwd: Path, env: dict[str, str]) -> subprocess.CompletedProcess[str]:
+    result = subprocess.run(command, cwd=cwd, env=env, text=True, capture_output=True, check=False)
     if result.returncode:
         raise VerificationError(
             f"command failed ({result.returncode}): {' '.join(command)}\n{result.stdout}\n{result.stderr}"
@@ -84,9 +95,19 @@ def write_nuget_config(path: Path, package_source: Path) -> None:
     )
 
 
+def restore_environment(root: Path, consumer: Path, artifacts: Path) -> dict[str, str]:
+    """An environment whose package cache is new and inside root, restoring through the consumer's
+    NuGet.Config: the artifacts folder first, nuget.org second for third-party dependencies."""
+    cache = root / "nuget-packages"
+    cache.mkdir()
+    config = consumer / "NuGet.Config"
+    write_nuget_config(config, artifacts)
+    return isolated_env(cache, config)
+
+
 def verify(artifacts: Path, version: str, dotnet: str) -> None:
     archive = artifacts / "officeagent-integration.zip"
-    required_packages = [artifacts / f"OfficeAgent.{name}.{version}.nupkg" for name in ("Abstractions", "Core", "Word")]
+    required_packages = [artifacts / f"{package}.{version}.nupkg" for package in RESOLVED_PACKAGES]
     missing = [path.name for path in [archive, *required_packages] if not path.is_file()]
     if missing:
         raise VerificationError(f"missing verification artifacts: {', '.join(missing)}")
@@ -113,29 +134,29 @@ def verify(artifacts: Path, version: str, dotnet: str) -> None:
         consumer.mkdir()
         for name in ("IntegrationRecipes.csproj", "Program.cs"):
             shutil.copy2(installed / "assets" / name, consumer / name)
-        write_nuget_config(consumer / "NuGet.Config", artifacts.resolve())
+        env = restore_environment(fixture, consumer, artifacts.resolve())
         package_property = f"-p:OfficeAgentPackageVersion={version}"
-        run([dotnet, "restore", "--configfile", "NuGet.Config", package_property], consumer)
+        run([dotnet, "restore", "--configfile", "NuGet.Config", package_property], consumer, env)
+        assets = json.loads((consumer / "obj" / "project.assets.json").read_text(encoding="utf-8"))
+        problems = resolved_package_problems(assets, version, RESOLVED_PACKAGES)
+        if problems:
+            raise VerificationError("restore did not resolve the candidate packages: " + "; ".join(problems))
         execution = run(
             [dotnet, "run", "--configuration", "Release", "--no-restore", package_property],
             consumer,
+            env,
         )
         observed = set(execution.stdout.splitlines())
         missing_output = sorted(EXPECTED_OUTPUT - observed)
         if missing_output:
             raise VerificationError(f"recipe output assertions were not observed: {missing_output}\n{execution.stdout}")
 
-        assets = json.loads((consumer / "obj" / "project.assets.json").read_text(encoding="utf-8"))
-        resolved = set(assets.get("libraries", {}))
-        for package in ("OfficeAgent.Abstractions", "OfficeAgent.Core", "OfficeAgent.Word"):
-            if f"{package}/{version}" not in resolved:
-                raise VerificationError(f"consumer did not resolve {package} {version}")
-
         shutil.rmtree(installed)
         if installed.exists():
             raise VerificationError("skill removal did not remove the installed directory")
         print(f"install-layout={install_home}")
         print(f"package-version={version}")
+        print(f"resolved-packages=passed expected={version} packages={len(RESOLVED_PACKAGES)}")
         print("relative-references=passed")
         print(execution.stdout.strip())
         print("removal=passed")
