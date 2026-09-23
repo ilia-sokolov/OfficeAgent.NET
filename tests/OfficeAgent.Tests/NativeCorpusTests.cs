@@ -275,6 +275,8 @@ public sealed class NativeCorpusTests
     [InlineData("result-case-duplicated", "results list")]
     [InlineData("check-failed-under-a-passing-case", "check '")]
     [InlineData("control-missing", "controls recorded")]
+    [InlineData("result-for-another-operation", "result family differs")]
+    [InlineData("control-checked-by-the-wrong-application", "checked by the wrong application")]
     public void The_native_record_guard_rejects_a_stale_or_altered_record(string tamper, string expectedProblem)
     {
         var copy = Path.Combine(Path.GetTempPath(), $"officeagent-native-record-{Guid.NewGuid():N}");
@@ -321,6 +323,15 @@ public sealed class NativeCorpusTests
                 case "control-missing":
                     results["controls"]!.AsArray().RemoveAt(0);
                     break;
+                case "result-for-another-operation":
+                    cases[0]!["family"] = "someOtherOperation";
+                    break;
+                case "control-checked-by-the-wrong-application":
+                {
+                    var control = results["controls"]!.AsArray()[0]!;
+                    control["format"] = control["format"]!.GetValue<string>() == "excel" ? "word" : "excel";
+                    break;
+                }
             }
             if (tamper != "output-regenerated-with-its-hash")
                 File.WriteAllText(resultsPath, results.ToJsonString(new JsonSerializerOptions { WriteIndented = true }).Replace("\r\n", "\n"));

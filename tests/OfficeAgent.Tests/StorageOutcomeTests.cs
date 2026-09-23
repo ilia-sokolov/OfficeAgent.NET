@@ -300,6 +300,25 @@ public sealed class StorageOutcomeTests : IDisposable
         Assert.Matches("^[0-9a-f]{64}$", locator.GetProperty("expectedSha256").GetString()!);
     }
 
+    /// <summary>
+    /// Giving the unknown-outcome exception a base class must not change how its frozen public
+    /// constructor behaves: it never validated its arguments, so a provider that builds one keeps
+    /// raising that exception rather than an <see cref="ArgumentNullException"/>. Only the new
+    /// registration type, which has no earlier behaviour to keep, requires its locator.
+    /// </summary>
+    [Fact]
+    public void The_new_base_leaves_the_frozen_constructor_unchanged_and_the_new_type_requires_its_locator()
+    {
+        var unknown = new DocumentWriteOutcomeUnknownException("m", "p", "c", itemId: null, outputName: null, outputSha256: null!);
+        Assert.Null(unknown.OutputSha256);
+        Assert.Equal(ProviderErrorCode.OutcomeUnknown, unknown.Code);
+
+        Assert.Throws<ArgumentNullException>(() =>
+            new DocumentRegistrationFailedException("m", "p", "c", null, outputName: null!, outputSha256: new string('0', 64)));
+        Assert.Throws<ArgumentNullException>(() =>
+            new DocumentRegistrationFailedException("m", "p", "c", null, outputName: "a.docx", outputSha256: null!));
+    }
+
     private void BreakRegistrationIndex()
     {
         // Replace the registration index with a directory, so persisting it fails.

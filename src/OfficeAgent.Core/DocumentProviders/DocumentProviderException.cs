@@ -123,8 +123,10 @@ public abstract class DocumentWriteRecoveryException : DocumentProviderException
         Exception? innerException)
         : base(code, message, provider, connectionId, itemId, innerException)
     {
+        // No validation here: DocumentWriteOutcomeUnknownException, frozen before this base
+        // existed, never validated its arguments, and a base class must not change that.
         OutputName = outputName;
-        OutputSha256 = outputSha256 ?? throw new ArgumentNullException(nameof(outputSha256));
+        OutputSha256 = outputSha256;
     }
 
     /// <summary>
@@ -189,7 +191,8 @@ public sealed class DocumentRegistrationFailedException : DocumentWriteRecoveryE
         string outputSha256,
         Exception? innerException = null)
         : base(ProviderErrorCode.RegistrationFailed, message, provider, connectionId, itemId,
-            outputName ?? throw new ArgumentNullException(nameof(outputName)), outputSha256, innerException)
+            outputName ?? throw new ArgumentNullException(nameof(outputName)),
+            outputSha256 ?? throw new ArgumentNullException(nameof(outputSha256)), innerException)
     {
     }
 }
