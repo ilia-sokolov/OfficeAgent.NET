@@ -15,6 +15,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "scripts"))
 import smoke_packaged_artifacts as smoke  # noqa: E402
+import verify_candidate_consumer as consumer  # noqa: E402
 
 
 def fake_server(script: str) -> list[str]:
@@ -431,6 +432,28 @@ class ReportedVersionTests(unittest.TestCase):
     def test_no_version_does_not(self) -> None:
         self.assertFalse(smoke.reported_version_matches(None, "1.0.0"))
         self.assertFalse(smoke.reported_version_matches("", "1.0.0"))
+
+    def test_whitespace_anywhere_does_not(self) -> None:
+        for reported in (" 1.0.0-rc.6+1973da1", "1.0.0-rc.6 +1973da1", "1.0.0-rc.6 ", "1.0.0-rc.6+1973da1 ",
+                         "1.0.0-rc.6+ ", "   "):
+            with self.subTest(reported=reported):
+                self.assertFalse(smoke.reported_version_matches(reported, "1.0.0-rc.6"))
+
+    def test_malformed_build_metadata_does_not(self) -> None:
+        for reported in ("1.0.0-rc.6+", "1.0.0-rc.6+abc..def", "1.0.0-rc.6+abc+def", "1.0.0-rc.6+abc_def"):
+            with self.subTest(reported=reported):
+                self.assertFalse(smoke.reported_version_matches(reported, "1.0.0-rc.6"))
+
+    def test_case_is_significant(self) -> None:
+        self.assertFalse(smoke.reported_version_matches("1.0.0-RC.6+1973da1", "1.0.0-rc.6"))
+
+    def test_dotted_build_metadata_matches(self) -> None:
+        self.assertTrue(smoke.reported_version_matches("1.0.0-rc.6+sha.1973da1.build-7", "1.0.0-rc.6"))
+
+    def test_the_assembly_check_uses_the_same_rule(self) -> None:
+        for value in ("1.0.0-rc.6+1973da1", "1.0.0-rc.6+1973da1 ", " 1.0.0-rc.6", "", None):
+            with self.subTest(value=value):
+                self.assertEqual(smoke.package_version_of(value), consumer.normalized_informational_version(value))
 
 
 if __name__ == "__main__":

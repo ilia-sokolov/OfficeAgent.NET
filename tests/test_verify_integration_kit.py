@@ -94,5 +94,19 @@ class IntegrationKitRestoreTests(unittest.TestCase):
         self.assertEqual(["restore", "run"], calls)
 
 
+class CommandTests(unittest.TestCase):
+    """Every workflow that verifies installed packages names the version it packed."""
+
+    def test_the_candidate_job_passes_the_candidate_version(self) -> None:
+        workflow = (ROOT / ".github" / "workflows" / "build.yml").read_text(encoding="utf-8")
+        job = workflow[workflow.index("  candidate-packages:"):workflow.index("  renderer-sandbox:")]
+        self.assertIn('verify_integration_kit.py --artifacts ./candidate --version "$CANDIDATE_VERSION"', job)
+
+    def test_the_release_workflow_passes_the_released_version(self) -> None:
+        workflow = (ROOT / ".github" / "workflows" / "publish.yml").read_text(encoding="utf-8")
+        self.assertIn('verify_integration_kit.py --artifacts artifacts --version "${{ steps.release.outputs.version }}"',
+                      workflow)
+
+
 if __name__ == "__main__":
     unittest.main()

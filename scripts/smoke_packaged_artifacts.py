@@ -321,9 +321,27 @@ def initialize(server: StdioServer) -> dict:
     return result
 
 
+# SemVer 2.0 build metadata: dot-separated, non-empty identifiers of ASCII alphanumerics and hyphens.
+BUILD_METADATA = re.compile(r"[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*")
+
+
+def package_version_of(informational: str | None) -> str | None:
+    """The package version an informational version claims: the value without the source-control
+    suffix from the first '+'. Nothing else is normalized: no trimming and no case folding, so
+    whitespace anywhere makes the version unequal. The removed suffix must itself be SemVer build
+    metadata; otherwise, as for whitespace after the commit or an empty suffix, the value is returned
+    whole, so it cannot equal a package version and is reported as it was read. None or "" is None."""
+    if not informational:
+        return None
+    version, plus, metadata = informational.partition("+")
+    if plus and not BUILD_METADATA.fullmatch(metadata):
+        return informational
+    return version
+
+
 def reported_version_matches(reported: str | None, expected: str) -> bool:
-    """Exact after removing the source-control suffix: 1.0.0-rc.30 is not 1.0.0-rc.3."""
-    return bool(reported) and reported.split("+", 1)[0] == expected
+    """Exact after removing well-formed build metadata: 1.0.0-rc.30 is not 1.0.0-rc.3."""
+    return package_version_of(reported) == expected
 
 
 def verify_document_workflow(server: StdioServer, version: str) -> None:

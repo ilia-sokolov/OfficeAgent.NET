@@ -25,7 +25,6 @@ from __future__ import annotations
 import argparse
 import json
 import os
-import re
 import subprocess
 import sys
 import tempfile
@@ -35,6 +34,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from smoke_packaged_artifacts import (  # noqa: E402
     SmokeError,
     isolated_env,
+    package_version_of,
     repository_version,
     run,
     write_nuget_config,
@@ -58,9 +58,6 @@ REQUIRED_RECORDS = (
 
 PACKAGES = ("OfficeAgent.Core", "OfficeAgent.Word", "OfficeAgent.PowerPoint", "OfficeAgent.Excel",
             "OfficeAgent.AgentFramework")
-
-# SemVer 2.0 build metadata: dot-separated, non-empty identifiers of ASCII alphanumerics and hyphens.
-BUILD_METADATA = re.compile(r"[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*")
 
 # The assemblies whose version the consumer reports. Abstractions arrives transitively.
 ASSEMBLIES = ("OfficeAgent.Abstractions",) + PACKAGES
@@ -247,17 +244,9 @@ return failures.Count == 0 ? 0 : 1;
 
 
 def normalized_informational_version(value: str | None) -> str | None:
-    """The package version an assembly claims: its informational version without the
-    source-control suffix from the first '+'. Nothing else is normalized: no trimming and no case
-    folding, so whitespace anywhere makes the version unequal. The removed suffix must itself be
-    SemVer build metadata; otherwise, as for whitespace after the commit or an empty suffix, the
-    value is returned whole, so it cannot equal a package version and is reported as it was read."""
-    if not value:
-        return None
-    version, plus, metadata = value.partition("+")
-    if plus and not BUILD_METADATA.fullmatch(metadata):
-        return value
-    return version
+    """The package version an assembly claims; the same rule as serverInfo and /healthz
+    (smoke_packaged_artifacts.package_version_of)."""
+    return package_version_of(value)
 
 
 def version_mismatches(observed: dict[str, str | None], expected: str) -> list[str]:

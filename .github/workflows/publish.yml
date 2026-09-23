@@ -107,7 +107,7 @@ jobs:
         run: python scripts/verify_quickedit_sample.py --artifacts artifacts --version "${{ steps.release.outputs.version }}"
 
       - name: Verify integration kit with installed packages
-        run: python scripts/verify_integration_kit.py --artifacts artifacts
+        run: python scripts/verify_integration_kit.py --artifacts artifacts --version "${{ steps.release.outputs.version }}"
 
       - name: Attest release build provenance
         uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2
