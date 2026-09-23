@@ -35,7 +35,7 @@ enforces it.
 The NuGet packages and MCP Registry entry are released as one versioned set. Do not mix
 OfficeAgent assemblies from different minor versions. Security fixes are provided for the
 latest published minor version only, which from 1.0 is the latest 1.x minor; all 0.x versions
-become unsupported when 1.0.0 is published. See [SECURITY.md](SECURITY.md#supported-versions).
+are unsupported. See [SECURITY.md](SECURITY.md#supported-versions).
 
 A deprecated member keeps working until the next major version and is marked `[Obsolete]`, with
 its replacement named, at least one minor release before it is removed. A change of supported

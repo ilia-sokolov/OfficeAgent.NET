@@ -1,9 +1,10 @@
 # Word preservation evidence
 
-This matrix shows what the current `v0.9.0` candidate does to a fixed fictional
-Word package for two supported operations and two unsupported operations. It is
+This matrix preserves the historical `v0.9.0` corpus evidence for a fixed fictional
+Word package across two supported operations and two unsupported operations. It is
 operation-specific evidence, not a claim that every Word feature or document is
-preserved.
+preserved. For the broader 1.0 corpus and desktop-application results, see
+[native Office compatibility](native-compatibility.md).
 
 The recorded run is based on commit
 `a687bc15a1d7af87790333984be4721055bdb90e`. The input fixture SHA-256 is
@@ -71,5 +72,5 @@ Microsoft Word 16.0.20326.20144 opened the tracked result in Compatibility Mode.
 The tracked replacement, prior revisions, classic comment, nested controls,
 numbering, field, and two-page section layout were visible. This is one native
 opening observation, not a visual-parity guarantee. Native accept and reject
-were not performed and remain explicitly `NOT_RUN` for the v1.0 compatibility
-matrix.
+were not performed for this historical corpus. The separate 1.0 compatibility
+corpus includes those checks.

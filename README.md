@@ -80,9 +80,7 @@ This small workflow demonstrates that OfficeAgent can change an existing OOXML f
 without flattening its structure. It uses tracked changes because the result is easy to
 verify in Word; review is one part of the broader document operation set.
 
-Install the server version documented by this branch. This command succeeds after `1.0.0`
-has been published; while testing an unpublished candidate, use the locally packed tool from
-the release workflow instead of silently falling back to an older package.
+Install the exact server version documented by this release:
 
 ```bash
 dotnet tool install --global OfficeAgent.Mcp --version 1.0.0

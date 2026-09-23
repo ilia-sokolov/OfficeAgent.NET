@@ -6,9 +6,8 @@ and its direct .NET API does not require MCP, an LLM, or an agent framework.
 
 > [!IMPORTANT]
 > This guide is versioned for OfficeAgent.NET `1.0.0`. Its executable recipe pins
-> `1.0.0` and must be verified against the release packages before publication.
-> Before the release appears on NuGet, use the locally packed candidate feed described
-> in the release runbook. Keep every OfficeAgent package on the same version.
+> `1.0.0` and is exercised against locally packed packages by the release pipeline.
+> Keep every OfficeAgent package on the same version.
 
 The supported-job summaries and recipe describe the source and package contract in
 the `v1.0.0` tag. For another release, use the documentation from that release's tag.
