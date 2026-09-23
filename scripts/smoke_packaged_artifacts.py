@@ -114,6 +114,8 @@ def run(command: list[str], cwd: Path, env: dict[str, str], timeout: int = 600) 
 def isolated_env(cache: Path, nuget_config: Path) -> dict[str, str]:
     env = dict(os.environ)
     env["NUGET_PACKAGES"] = str(cache)
+    # A fallback folder would satisfy a restore from outside the fresh cache.
+    env.pop("NUGET_FALLBACK_PACKAGES", None)
     env["DOTNET_NOLOGO"] = "1"
     env["DOTNET_CLI_TELEMETRY_OPTOUT"] = "1"
     env["DOTNET_SKIP_FIRST_TIME_EXPERIENCE"] = "1"

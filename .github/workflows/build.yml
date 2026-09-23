@@ -218,7 +218,7 @@ jobs:
       - name: Verify the QuickEdit sample with the installed candidate
         run: |
           python scripts/package_samples.py --output ./candidate --version "$CANDIDATE_VERSION"
-          python scripts/verify_quickedit_sample.py --artifacts ./candidate
+          python scripts/verify_quickedit_sample.py --artifacts ./candidate --version "$CANDIDATE_VERSION"
 
       - name: Verify the integration kit with the installed candidate
         run: |

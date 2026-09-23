@@ -104,7 +104,7 @@ jobs:
         run: python -m unittest tests/test_agent_evaluation.py tests/test_package_samples.py tests/test_package_skills.py tests/test_release_evidence.py -v
 
       - name: Verify standalone QuickEdit sample with installed packages
-        run: python scripts/verify_quickedit_sample.py --artifacts artifacts
+        run: python scripts/verify_quickedit_sample.py --artifacts artifacts --version "${{ steps.release.outputs.version }}"
 
       - name: Verify integration kit with installed packages
         run: python scripts/verify_integration_kit.py --artifacts artifacts

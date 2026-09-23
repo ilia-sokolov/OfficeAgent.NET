@@ -68,6 +68,51 @@ class ExactVersionTests(unittest.TestCase):
         del observed["OfficeAgent.Core"]
         self.assertEqual(["OfficeAgent.Core: not reported by the consumer"], consumer.version_mismatches(observed, "1.0.0"))
 
+    def test_leading_whitespace_fails(self) -> None:
+        self.assertEqual(len(consumer.ASSEMBLIES),
+                         len(consumer.version_mismatches(everyone(" 1.0.0-rc.4+8264f64"), "1.0.0-rc.4")))
+
+    def test_trailing_whitespace_before_the_suffix_fails(self) -> None:
+        self.assertEqual(len(consumer.ASSEMBLIES),
+                         len(consumer.version_mismatches(everyone("1.0.0-rc.4 +8264f64"), "1.0.0-rc.4")))
+
+    def test_trailing_whitespace_without_a_suffix_fails(self) -> None:
+        self.assertEqual(len(consumer.ASSEMBLIES),
+                         len(consumer.version_mismatches(everyone("1.0.0-rc.4 "), "1.0.0-rc.4")))
+
+    def test_trailing_whitespace_after_the_build_metadata_fails(self) -> None:
+        problems = consumer.version_mismatches(everyone("1.0.0-rc.4+8264f64 "), "1.0.0-rc.4")
+        self.assertEqual(len(consumer.ASSEMBLIES), len(problems))
+        self.assertIn("'1.0.0-rc.4+8264f64 '", problems[0])
+
+    def test_whitespace_only_build_metadata_fails(self) -> None:
+        self.assertEqual("1.0.0-rc.4+ ", consumer.normalized_informational_version("1.0.0-rc.4+ "))
+        self.assertEqual(len(consumer.ASSEMBLIES),
+                         len(consumer.version_mismatches(everyone("1.0.0-rc.4+ "), "1.0.0-rc.4")))
+
+    def test_empty_build_metadata_fails(self) -> None:
+        self.assertEqual(len(consumer.ASSEMBLIES),
+                         len(consumer.version_mismatches(everyone("1.0.0-rc.4+"), "1.0.0-rc.4")))
+
+    def test_a_whitespace_only_version_fails_as_a_mismatch(self) -> None:
+        problems = consumer.version_mismatches(everyone("   "), "1.0.0-rc.4")
+        self.assertEqual(len(consumer.ASSEMBLIES), len(problems))
+        self.assertIn("informational version '   '", problems[0])
+
+    def test_dotted_build_metadata_passes(self) -> None:
+        self.assertEqual("1.0.0-rc.4", consumer.normalized_informational_version("1.0.0-rc.4+sha.032a68a.build-7"))
+
+    def test_an_empty_informational_version_is_missing(self) -> None:
+        self.assertIsNone(consumer.normalized_informational_version(""))
+        self.assertIsNone(consumer.normalized_informational_version(None))
+
+    def test_case_is_significant(self) -> None:
+        self.assertEqual(len(consumer.ASSEMBLIES),
+                         len(consumer.version_mismatches(everyone("1.0.0-RC.4+8264f64"), "1.0.0-rc.4")))
+
+    def test_the_rc4_candidate_with_its_commit_passes(self) -> None:
+        self.assertEqual([], consumer.version_mismatches(everyone("1.0.0-rc.4+032a68a"), "1.0.0-rc.4"))
+
     def test_reported_lines_are_parsed_per_assembly(self) -> None:
         stdout = "PASS x\nASSEMBLY\tOfficeAgent.Core\t1.0.0-rc.3+abc\nASSEMBLY\tOfficeAgent.Word\t\n"
         self.assertEqual({"OfficeAgent.Core": "1.0.0-rc.3+abc", "OfficeAgent.Word": None},
@@ -100,6 +145,7 @@ class CandidateWorkflowTests(unittest.TestCase):
                      'smoke_packaged_artifacts.py --artifacts ./candidate --version "$CANDIDATE_VERSION"',
                      'verify_candidate_consumer.py --artifacts ./candidate --version "$CANDIDATE_VERSION"',
                      'package_samples.py --output ./candidate --version "$CANDIDATE_VERSION"',
+                     'verify_quickedit_sample.py --artifacts ./candidate --version "$CANDIDATE_VERSION"',
                      'verify_integration_kit.py --artifacts ./candidate --version "$CANDIDATE_VERSION"'):
             self.assertIn(step, job)
 

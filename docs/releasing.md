@@ -68,7 +68,7 @@ dotnet test OfficeAgent.NET.sln --no-build --configuration Release
 python scripts/check_vulnerable_packages.py
 python scripts/validate_docs.py
 python scripts/validate_server_manifest.py
-python -m unittest tests/test_agent_evaluation.py tests/test_package_samples.py tests/test_package_skills.py tests/test_release_evidence.py tests/test_support_policy.py tests/test_verify_candidate_consumer.py -v
+python -m unittest tests/test_agent_evaluation.py tests/test_package_samples.py tests/test_package_skills.py tests/test_release_evidence.py tests/test_support_policy.py tests/test_verify_candidate_consumer.py tests/test_verify_quickedit_sample.py -v
 ```
 
 Verify the candidate as a consumer sees it, from locally packed packages. The version can be a
@@ -79,7 +79,7 @@ dotnet pack OfficeAgent.NET.sln --configuration Release -p:Version="$CANDIDATE" 
 python scripts/smoke_packaged_artifacts.py --artifacts ./candidate --version "$CANDIDATE"
 python scripts/verify_candidate_consumer.py --artifacts ./candidate --version "$CANDIDATE"
 python scripts/package_samples.py --output ./candidate --version "$CANDIDATE"
-python scripts/verify_quickedit_sample.py --artifacts ./candidate
+python scripts/verify_quickedit_sample.py --artifacts ./candidate --version "$CANDIDATE"
 python scripts/package_skills.py --output ./candidate
 python scripts/verify_integration_kit.py --artifacts ./candidate --version "$CANDIDATE"
 ```
@@ -94,7 +94,9 @@ gh workflow run build.yml --ref v1.0.0 -f candidate_version="$CANDIDATE"
 
 Its `candidate-packages` job covers .NET 8 on Ubuntu, Windows and macOS and .NET 10 on Ubuntu and
 Windows, and fails unless every installed assembly, `serverInfo` and `/healthz` carry exactly
-`$CANDIDATE`. Record the run URL and its commit as the candidate's installed-package evidence.
+`$CANDIDATE`, and the QuickEdit sample fails before it runs unless restore, from a fresh package
+cache, resolved `OfficeAgent.Core` and `OfficeAgent.Word` at exactly `$CANDIDATE`. Record the run URL
+and its commit as the candidate's installed-package evidence.
 
 Update the supported-versions table in [`SECURITY.md`](../SECURITY.md#supported-versions) so its
 supported row names this minor version; `tests/test_support_policy.py` fails until it does.
