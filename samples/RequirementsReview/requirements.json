@@ -1,0 +1,49 @@
+{
+  "id": "MS-REQ",
+  "title": "Method statement requirements, Building B project",
+  "version": "2026.4",
+  "requirements": [
+    {
+      "id": "REQ-GOV-01",
+      "version": "1",
+      "kind": "deterministic",
+      "title": "Installation window and site supervisor",
+      "text": "The method statement states the installation window as a date range and names the site supervisor.",
+      "section": "Programme and approvals",
+      "patterns": [
+        "\\b\\d{4}-\\d{2}-\\d{2}\\s*(?:to|-|–)\\s*\\d{4}-\\d{2}-\\d{2}\\b",
+        "\\bsite supervisor\\b"
+      ],
+      "onFail": "stop"
+    },
+    {
+      "id": "REQ-INS-01",
+      "version": "1",
+      "kind": "semantic",
+      "title": "Hold-point inspections",
+      "text": "Each hold-point inspection names the inspecting role and the acceptance criteria, and work does not continue until the inspection is signed off.",
+      "section": "Inspections",
+      "passRequires": [ "\\bsign" ],
+      "proposal": "commentOnly"
+    },
+    {
+      "id": "REQ-REC-01",
+      "version": "1",
+      "kind": "semantic",
+      "title": "Recovery actions and owner",
+      "text": "If installation fails, the method statement defines specific recovery actions and names the role responsible for them.",
+      "section": "Recovery procedure",
+      "passRequires": [ "\\b(responsible|owner|supervisor|manager|engineer)\\b" ],
+      "proposal": "commentOnly"
+    },
+    {
+      "id": "REQ-RSP-01",
+      "version": "1",
+      "kind": "semantic",
+      "title": "Named responsibilities",
+      "text": "The method statement names the role responsible for lifting, for electrical isolation, and for inspection sign-off.",
+      "section": "Responsibilities",
+      "proposal": "commentOnly"
+    }
+  ]
+}

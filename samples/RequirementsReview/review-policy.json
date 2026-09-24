@@ -1,0 +1,15 @@
+{
+  "version": "rp-2026.09.1",
+  "evaluator": {
+    "model": "jev-latest",
+    "timeoutSeconds": 30,
+    "maxEvidenceCharacters": 4000
+  },
+  "thresholds": {
+    "minEvidenceConfidence": 0.80,
+    "minResultConfidence": 0.80,
+    "materialityProposalScore": 1.5,
+    "minMaterialityConfidence": 0.60
+  },
+  "authorizedReviewers": [ "ops-lead@example.com" ]
+}

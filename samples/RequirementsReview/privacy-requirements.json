@@ -1,0 +1,34 @@
+{
+  "id": "SUPPLIER-PRIVACY",
+  "title": "Supplier proposal data-privacy requirements",
+  "version": "2026.1",
+  "requirements": [
+    {
+      "id": "REQ-PRIV-ACCESS",
+      "version": "1",
+      "kind": "semantic",
+      "title": "Access limited to named roles",
+      "text": "Access to identifiable site access logs is limited to named project roles, not every project member.",
+      "section": "Data privacy",
+      "proposal": "commentOnly"
+    },
+    {
+      "id": "REQ-PRIV-STORAGE",
+      "version": "1",
+      "kind": "semantic",
+      "title": "Restricted storage location",
+      "text": "The proposal identifies a restricted storage location for site access logs containing names and mobile numbers.",
+      "section": "Data privacy",
+      "proposal": "commentOnly"
+    },
+    {
+      "id": "REQ-PRIV-RETENTION",
+      "version": "1",
+      "kind": "semantic",
+      "title": "Defined deletion date",
+      "text": "The proposal states when identifiable site access logs will be deleted after the project.",
+      "section": "Data privacy",
+      "proposal": "commentOnly"
+    }
+  ]
+}
