@@ -173,6 +173,6 @@ Word may lock the file for editing if it was recently modified. Close and reopen
 ## References
 
 - [OfficeAgent.NET Documentation](https://github.com/dotaction/OfficeAgent.NET#readme)
-- [Document Plans](../../../docs/document-plans.md)
-- [Getting Started](../../../docs/getting-started.md)
-- [C# API Reference](../../../docs/csharp-api.md)
+- [Document Plans](../../docs/document-plans.md)
+- [Getting Started](../../docs/getting-started.md)
+- [C# API Reference](../../docs/csharp-api.md)
