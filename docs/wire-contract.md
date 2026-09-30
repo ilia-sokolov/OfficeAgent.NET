@@ -2730,6 +2730,31 @@ $.sourceDocumentId: null
 $.writeOutcome: string
 ```
 
+State: snapshot required
+
+```text
+$: object
+$.changes: array
+$.committed: boolean
+$.errors: array
+$.errors[]: object
+$.errors[].code: string
+$.errors[].connectionId: string
+$.errors[].itemId: string
+$.errors[].message: string
+$.errors[].target: null
+$.isValid: boolean
+$.outputConnectionId: null
+$.outputContentType: null
+$.outputDocumentId: null
+$.outputName: null
+$.outputVersion: null
+$.possibleOutput: null
+$.receipt: null
+$.sourceDocumentId: string
+$.writeOutcome: string
+```
+
 State: stale version at save
 
 ```text
@@ -3454,6 +3479,31 @@ $.outputVersion: null
 $.possibleOutput: null
 $.receipt: null
 $.sourceDocumentId: string
+$.writeOutcome: string
+```
+
+State: snapshot required
+
+```text
+$: object
+$.changes: array
+$.committed: boolean
+$.errors: array
+$.errors[]: object
+$.errors[].code: string
+$.errors[].connectionId: string
+$.errors[].itemId: null
+$.errors[].message: string
+$.errors[].target: null
+$.isValid: boolean
+$.outputConnectionId: null
+$.outputContentType: null
+$.outputDocumentId: null
+$.outputName: null
+$.outputVersion: null
+$.possibleOutput: null
+$.receipt: null
+$.sourceDocumentId: null
 $.writeOutcome: string
 ```
 
@@ -4463,6 +4513,31 @@ $.sourceDocumentId: null
 $.writeOutcome: string
 ```
 
+State: snapshot required
+
+```text
+$: object
+$.changes: array
+$.committed: boolean
+$.errors: array
+$.errors[]: object
+$.errors[].code: string
+$.errors[].connectionId: string
+$.errors[].itemId: string
+$.errors[].message: string
+$.errors[].target: null
+$.isValid: boolean
+$.outputConnectionId: null
+$.outputContentType: null
+$.outputDocumentId: null
+$.outputName: null
+$.outputVersion: null
+$.possibleOutput: null
+$.receipt: null
+$.sourceDocumentId: string
+$.writeOutcome: string
+```
+
 #### `preview_template_batch`
 
 State: valid
@@ -4656,6 +4731,7 @@ OfficeAgent:FileSystemConnections[]:ConnectionId: String = ""
 OfficeAgent:FileSystemConnections[]:DefaultChangeMode: String = "Tracked"
 OfficeAgent:FileSystemConnections[]:MaximumBytes: Int64 = 104857600
 OfficeAgent:FileSystemConnections[]:RootPath: String = ""
+OfficeAgent:RequirePlanSnapshot: Boolean = false
 OfficeAgent:SharePointConnections[]:AllowedExtensions: IList<String> = [".docx"]
 OfficeAgent:SharePointConnections[]:AppOnlyScope: String = "https://graph.microsoft.com/.default"
 OfficeAgent:SharePointConnections[]:AuthMode: String = "appOnly"
@@ -4671,6 +4747,7 @@ OfficeAgent:SharePointConnections[]:MaximumBytes: Int64 = 104857600
 OfficeAgent:SharePointConnections[]:OnBehalfOfScope: String = "https://graph.microsoft.com/.default"
 OfficeAgent:SharePointConnections[]:RegistrationIndexPath: String = ""
 OfficeAgent:SharePointConnections[]:TenantId: String = ""
+OfficeAgent:StrictToolSchemas: Boolean = true
 OfficeAgent:Transport: String = "http"
 ```
 
@@ -5508,6 +5585,7 @@ Tables = []
 
 ```text
 AllowConnectionAddressing = true
+StrictToolSchemas = true
 ```
 
 ### `OfficeAgent.Core.DocumentProviders.FileSystemDocumentProviderOptions`

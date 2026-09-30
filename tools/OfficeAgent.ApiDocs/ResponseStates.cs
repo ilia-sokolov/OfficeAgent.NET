@@ -62,6 +62,8 @@ internal static class ResponseStates
         var client = provider.GetRequiredService<OfficeAgentClient>();
         var tools = new OfficeAgentTools(client);
         var denied = new OfficeAgentTools(client, new DenyAll());
+        var guarded = new OfficeAgentTools(client) { RequirePlanSnapshot = true };
+        const string unboundPlan = "{\"operations\":[]}";
         using var cancelled = new CancellationTokenSource();
         cancelled.Cancel();
 
@@ -137,6 +139,8 @@ internal static class ResponseStates
             "errors with a target");
         await Record("preview_plan", "unreadable plan", tools.PreviewPlan("memory", contract, "{\"bogus\":1}"),
             n => HasCode(n, ToolErrorCodes.InvalidJson), "invalid-json");
+        await Record("preview_plan", "snapshot required", guarded.PreviewPlan("memory", contract, unboundPlan),
+            n => HasCode(n, ToolErrorCodes.SnapshotRequired) && n["sourceDocumentId"] is not null, "snapshot-required naming the document");
 
         // apply_plan: success, rejection and every storage boundary the faulting provider can reach
         await Record("apply_plan", "committed, anonymous caller", tools.ApplyPlan("memory", contract, editPlan),
@@ -153,6 +157,8 @@ internal static class ResponseStates
             IsError, "an error envelope");
         await Record("apply_plan", "connection denied", denied.ApplyPlan("memory", contract, editPlan),
             n => HasCode(n, ToolErrorCodes.ConnectionForbidden), "connection-forbidden");
+        await Record("apply_plan", "snapshot required", guarded.ApplyPlan("memory", contract, unboundPlan),
+            n => HasCode(n, ToolErrorCodes.SnapshotRequired) && Str(n, "writeOutcome") == "notWritten", "snapshot-required, nothing written");
 
         foreach (var (fault, name, code) in new[]
                  {
@@ -226,6 +232,9 @@ internal static class ResponseStates
                 "{\"operations\":[{\"op\":\"changeText\",\"target\":{\"find\":\"zzzz-absent\"},\"with\":\"x\"}]}"),
             n => !Bool(n, "committed") && Arr(n, "errors").Count > 0 && Arr(n, "errors")[0]!["itemId"] is not null,
             "binding errors naming the source document");
+        // Refused before registration, so there is no source document to name.
+        await Record("edit_document", "snapshot required", guarded.EditDocument("workspace", "contract.docx", unboundPlan),
+            n => HasCode(n, ToolErrorCodes.SnapshotRequired) && n["sourceDocumentId"] is null, "snapshot-required before registration");
         var removable = Str(JsonNode.Parse(await tools.CreateDocument("memory", "removable.docx"))!, "outputDocumentId");
         await Record("remove_document", "removed", tools.RemoveDocument("memory", removable),
             n => n["removed"]?.GetValue<bool>() == true, "removed");

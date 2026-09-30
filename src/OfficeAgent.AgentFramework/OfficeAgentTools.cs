@@ -82,6 +82,22 @@ public sealed class OfficeAgentToolsOptions
     /// back and forth is not.
     /// </remarks>
     public bool AllowEphemeralDocuments { get; init; }
+
+    /// <summary>
+    /// Gets whether every tool parameter is listed as required, including the parameters
+    /// that have a default. The default is <see langword="true"/>: OpenAI and Azure OpenAI
+    /// strict function calling refuse a schema that leaves any property out of
+    /// <c>required</c>.
+    /// </summary>
+    /// <remarks>
+    /// Set it to <see langword="false"/> for a client that asks its user for every required
+    /// input the model leaves out and cannot send an empty string, such as Microsoft Copilot
+    /// Studio. There a required <c>newName</c> whose default is empty cannot be satisfied,
+    /// so <c>apply_plan</c> never runs. With this off, parameters that have a default are
+    /// optional and a call that omits one gets the default. Nothing else in the schemas
+    /// changes: properties a tool does not define are still refused.
+    /// </remarks>
+    public bool StrictToolSchemas { get; init; } = true;
 }
 
 /// <summary>
@@ -150,6 +166,18 @@ public sealed class OfficeAgentTools
         }
     };
 
+    /// <summary>
+    /// The schemas <see cref="OfficeAgentToolsOptions.StrictToolSchemas"/> selects when it is
+    /// off: identical except that a parameter with a default is not listed as required.
+    /// </summary>
+    internal static readonly AIJsonSchemaCreateOptions RelaxedSchemaOptions = new()
+    {
+        TransformOptions = new AIJsonSchemaTransformOptions
+        {
+            DisallowAdditionalProperties = true
+        }
+    };
+
     private readonly OfficeAgentClient _client;
     private readonly IConnectionAccessPolicy _connectionAccess;
     private readonly ITrustedPrincipalAccessor _principalAccessor;
@@ -164,6 +192,31 @@ public sealed class OfficeAgentTools
         _connectionAccess = connectionAccess ?? new AllowAllConnectionAccessPolicy();
         _principalAccessor = principalAccessor ?? new AnonymousPrincipalAccessor();
     }
+
+    /// <summary>
+    /// Gets whether <c>preview_plan</c>, <c>apply_plan</c> and <c>edit_document</c> refuse a
+    /// plan that does not carry the snapshot from inspection. The default is
+    /// <see langword="false"/>.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// A plan that carries the snapshot it was built against is refused with
+    /// <c>stale-snapshot</c> once the document has changed, which covers two cases an agent
+    /// cannot tell apart from the inside: a colleague edited the document after it was
+    /// inspected, and the same plan was already applied - for example, when a timed-out call
+    /// is retried and the first attempt had in fact been saved. Without the snapshot the
+    /// retry is applied again, and an appended row is appended twice.
+    /// </para>
+    /// <para>
+    /// The engine does not add the snapshot for the caller, so this protection holds only
+    /// while the model remembers to copy it. Turning this on makes it hold regardless: a plan
+    /// without a non-empty <c>snapshot.eTag</c> is refused with <c>snapshot-required</c>
+    /// before the document is read, and nothing is written. Tools that create documents or
+    /// return edited content inline, rather than editing a stored document in place, are
+    /// not affected.
+    /// </para>
+    /// </remarks>
+    public bool RequirePlanSnapshot { get; init; }
 
     /// <summary>Tests a capability for connection discovery without disclosing a denial.</summary>
     public ValueTask<bool> CanAccessConnectionAsync(
@@ -243,7 +296,7 @@ public sealed class OfficeAgentTools
         - After any write call, decide storage state from writeOutcome, not from committed alone. committed means use the returned output. notWritten means storage was not changed. unknown means the provider may have accepted the bytes; writtenNotRegistered means it did accept them but registration failed. For unknown or writtenNotRegistered, do not retry blindly and do not tell the user the document is unchanged: preserve possibleOutput and ask the host/operator to reconcile its name and expectedSha256 first.
 
         Plan shape, anchors, safety loop
-        - Plan body is { "snapshot": { "eTag": "<snapshot from inspect_document>" }, "operations": [ ... ] }. Copy the scalar snapshot string returned by inspect_document into snapshot.eTag to detect drift in Word body/header/footer/footnote/endnote XML or PowerPoint slide/notes XML. It does not cover properties, comments, sections, media/image bytes, masters, or layouts; their anchors and provider version checks still apply. Omit snapshot only deliberately. Omit contractVersion for legacy 0.2 behavior, or set it to exactly "0.2". Other values fail with contract-mismatch.
+        - Plan body is { "snapshot": { "eTag": "<snapshot from inspect_document>" }, "operations": [ ... ] }. Copy the scalar snapshot string returned by inspect_document into snapshot.eTag to detect drift in Word body/header/footer/footnote/endnote XML, PowerPoint slide/notes XML, or Excel workbook, worksheet, table and note XML. It does not cover properties, Word comments, sections, media/image bytes, masters, layouts, or Excel styles, charts and pivot tables; their anchors and provider version checks still apply. Omit snapshot only deliberately. Omit contractVersion for legacy 0.2 behavior, or set it to exactly "0.2". Other values fail with contract-mismatch.
         - Available operations (the JSON shape of each is in the preview_plan description): Word and PowerPoint use the document operations below; decks additionally support insertChart/updateChart; workbooks support setCell, appendTableRows, and comment Add/Remove on a cell. These are plan operations inside preview_plan/apply_plan, not separate tools.
         - populate_template_batch resolves named slots and repeating Word rows into plans and saves one independent output per item. compare_documents reads two Word documents and returns a snapshot-bound redline plan only when every detected change is covered; preview that plan before applying it to the original.
         - preview_document_merge assembles ordered whole Word documents in memory and returns a separate merge plan plus compatibility diagnostics. Pass that complete plan to merge_documents when available. A merge creates a new document and never edits its sources. It does not reconcile independently edited versions. Respect unsupported-content diagnostics and do not substitute a text-only copy.
@@ -290,6 +343,17 @@ public sealed class OfficeAgentTools
         - setCell writes a scalar or a formula: { "op": "setCell", "target": { "sheetId": 7, "address": "B2" }, "value": "42" } or use "formula": "SUM(B2:B8)". OfficeAgent clears the cached result and asks Excel to recalculate on open; it does not calculate formulas.
         - appendTableRows targets a spreadsheetTable node from inspection and requires one value per table column. It refuses to overwrite populated cells below the table and preserves other worksheet content.
         - Excel comments are legacy cell notes. Add one with a cell target and action Add; remove one with the cellComment node returned by inspection and action Remove.
+        """;
+
+    /// <summary>
+    /// System-prompt guidance to append to <see cref="SystemPromptGuidance"/> when the
+    /// host turns on <see cref="RequirePlanSnapshot"/>.
+    /// </summary>
+    public const string SnapshotRequiredPromptGuidance = """
+
+        Required snapshot
+        - This host refuses a plan without its snapshot. Call inspect_document first and copy its snapshot into snapshot.eTag in every plan you preview or apply, including a plan you rebuild after stale-snapshot or version-conflict.
+        - A plan refused with snapshot-required changed nothing: inspect the document, copy the snapshot into the plan, and send it again.
         """;
 
     /// <summary>
@@ -369,27 +433,28 @@ public sealed class OfficeAgentTools
     {
         if (options is null) throw new ArgumentNullException(nameof(options));
 
+        var schema = options.StrictToolSchemas ? StrictSchemaOptions : RelaxedSchemaOptions;
         var functions = new List<AIFunction>();
-        if (options.AllowConnectionAddressing) functions.AddRange(CoreFunctions());
+        if (options.AllowConnectionAddressing) functions.AddRange(CoreFunctions(schema));
 
         if (options.AllowRegistration && options.AllowConnectionAddressing)
         {
-            functions.Add(AIFunctionFactory.Create(RegisterDocument, Opts(
+            functions.Add(AIFunctionFactory.Create(RegisterDocument, Opts(schema,
                 "register_document",
                 "Register an existing document with a host-configured provider connection and return its opaque documentId. " +
                 "source is connection-specific: for a filesystem connection, a path under its root; for a SharePoint connection, the document's SharePoint/OneDrive URL (e.g. 'https://contoso.sharepoint.com/:w:/s/…') or a 'driveId/itemId' pair (e.g. 'b!9a3f…/01ABCDEF'). " +
                 "Never pass credentials. Returns {connectionId, documentId, name, contentType, version}.")));
-            functions.Add(AIFunctionFactory.Create(RemoveDocument, Opts(
+            functions.Add(AIFunctionFactory.Create(RemoveDocument, Opts(schema,
                 "remove_document",
                 "Remove a document registration from a provider connection by (connectionId, documentId). " +
                 "Only the registration is removed - the underlying file is never deleted. Returns {removed, connectionId, documentId}.")));
-            functions.Add(AIFunctionFactory.Create(OpenDocument, Opts(
+            functions.Add(AIFunctionFactory.Create(OpenDocument, Opts(schema,
                 "open_document",
                 "Open a document the user named by source: registers it and returns its inspection in one call - use this instead of register_document followed by inspect_document. " +
                 "source is connection-specific, exactly as for register_document: a path under a filesystem connection's root, or a SharePoint/OneDrive URL or 'driveId/itemId' pair. " +
                 "Returns {connectionId, documentId, name, contentType, version} followed by the inspect_document payload (snapshot, outline, paragraphs, contentControls, nodes, styles). " +
                 "Keep documentId for follow-up calls; paging works as in inspect_document.")));
-            functions.Add(AIFunctionFactory.Create(EditDocument, Opts(
+            functions.Add(AIFunctionFactory.Create(EditDocument, Opts(schema,
                 "edit_document",
                 "Edit a document the user named by source, in one call: registers it, resolves targets, and applies the operations - use this instead of register_document + find_in_document + apply_plan. " +
                 "planJson is an operations array [ … ] or { \"operations\": [ … ] }, the same operations preview_plan documents.\n" +
@@ -402,7 +467,7 @@ public sealed class OfficeAgentTools
         }
         if (options.AllowCreation && options.AllowConnectionAddressing)
         {
-            functions.Add(AIFunctionFactory.Create(CreateDocument, Opts(
+            functions.Add(AIFunctionFactory.Create(CreateDocument, Opts(schema,
                 "create_document",
                 "Create and register a new document in a host-configured connection, optionally applying an initial plan before writing. " +
                 "name is a bare file name such as 'quarterly-report.docx'; an existing name is never overwritten. " +
@@ -410,29 +475,29 @@ public sealed class OfficeAgentTools
                 "Pass planJson \"\" for a minimal document. The starting anchor differs by format: a Word document has one empty paragraph at { \"paraId\": \"auto-0000\", \"expect\": \"\" }; a deck has one empty title placeholder at { \"paraId\": \"slide256/shape2/p0\", \"expect\": \"\" }, and its slide-targeted verbs use { \"kind\": \"slide\", \"path\": \"slide#256\" }. " +
                 "Plan-validation errors guarantee no write. Provider and cancellation errors may occur after storage accepted the file, so do not retry the same name; report the possibly unregistered name to the host for recovery. " +
                 "Returns {isValid, committed, receipt, sourceDocumentId, outputConnectionId, outputDocumentId, outputVersion, outputName, outputContentType, changes, errors}; non-applicable values are null.")));
-            functions.Add(AIFunctionFactory.Create(DiscoverTemplate, Opts(
+            functions.Add(AIFunctionFactory.Create(DiscoverTemplate, Opts(schema,
                 "discover_template",
                 "Read a Word or PowerPoint template and report what it can be bound to, without writing anything. " +
                 "Returns {slots, mediaSlots, repeatingRows, diagnostics, templateSha256}: scalar slots are content-control tags or PowerPoint shape names, mediaSlots are image placements and native charts already in the template, and repeatingRows are Word-only {{Field}} rows. " +
                 "Call this before building a batch instead of guessing tag names: a name that does not exist is a binding error at commit time. Diagnostics report ambiguity, such as one tag used twice, which still reads but cannot be bound.")));
-            functions.Add(AIFunctionFactory.Create(PreviewTemplateBatch, Opts(
+            functions.Add(AIFunctionFactory.Create(PreviewTemplateBatch, Opts(schema,
                 "preview_template_batch",
                 "Validate a whole template batch and write nothing. Same requestJson as populate_template_batch. " +
                 "Returns {isValid, items, diagnostics, token, limits}; every item is validated even after an earlier one fails, so one call reports all the problems rather than the first. Each item reports operationCount, rowCount, imageCount and imageBytes so an oversized batch is visible before it is committed. " +
                 "token binds this preview to the exact template bytes and the exact normalized batch, including the bytes any image id resolved to. Pass it back as populate_template_batch's expectedTokenJson to refuse a commit if either changed after you reviewed it.")));
-            functions.Add(AIFunctionFactory.Create(PopulateTemplateBatch, Opts(
+            functions.Add(AIFunctionFactory.Create(PopulateTemplateBatch, Opts(schema,
                 "populate_template_batch",
                 "Populate one Word or PowerPoint template into separate new documents. requestJson contains items with outputName and binding. " +
                 "Scalar values address content-control tags or PowerPoint shape names. Bindings may also place an image or set the data of a native chart the template already contains; discover_template lists those slots. Repeating rows are Word-only and replace {{Field}} placeholders in an explicitly selected row. " +
                 "The batch is preflighted whether or not you asked for a preview, so a batch that cannot validate writes nothing rather than leaving part of itself in storage. Pass expectedTokenJson from preview_template_batch to additionally refuse a commit whose template or batch changed since that preview. " +
                 "Every output validates and saves atomically and returns its own receipt.")));
-            functions.Add(AIFunctionFactory.Create(MergeDocuments, Opts(
+            functions.Add(AIFunctionFactory.Create(MergeDocuments, Opts(schema,
                 "merge_documents",
                 "Commit a Word assembly plan from preview_document_merge. planJson is the complete returned plan, including all source hashes. Revalidates every input and creates one new .docx in destinationConnectionId. Requires read access to every source and create access to the destination. Provider errors can indicate an uncertain write; do not retry blindly.")));
         }
         if (options.AllowInlineContent)
         {
-            functions.Add(AIFunctionFactory.Create(CreateDocumentContent, Opts(
+            functions.Add(AIFunctionFactory.Create(CreateDocumentContent, Opts(schema,
                 "create_document_content",
                 "Create a new document from nothing and get its bytes back, with no storage connection involved. " +
                 "name is a bare file name whose extension picks the format: '.docx' makes Word, '.pptx' PowerPoint, and '.xlsx' Excel. " +
@@ -440,13 +505,13 @@ public sealed class OfficeAgentTools
                 "Pass planJson \"\" for an empty document. The starting anchor differs by format: a Word document has one empty paragraph at { \"paraId\": \"auto-0000\", \"expect\": \"\" }; a deck has one empty title placeholder at { \"paraId\": \"slide256/shape2/p0\", \"expect\": \"\" }. " +
                 "Returns {isValid, committed, receipt, name, contentBase64, contentBytes, changes, errors}. contentBase64 is the finished document - hand it to the host to save, or pass it straight back to edit_document_content to keep working. It is null when the plan failed, and then nothing was created.\n\n" +
                 PlanOperations)));
-            functions.Add(AIFunctionFactory.Create(InspectDocumentContent, Opts(
+            functions.Add(AIFunctionFactory.Create(InspectDocumentContent, Opts(schema,
                 "inspect_document_content",
                 "Inspect a document supplied inline as base64, with no storage connection involved. " +
                 "Returns exactly what inspect_document returns - outline, paragraphs, content controls, nodes, styles, and a snapshot etag - for a document you hold the bytes of rather than one the host registered. " +
                 "Use paragraphOffset/paragraphLimit to page; fidelity='outline'|'structure'|'content' to control payload size. " +
                 "Prefer fidelity 'outline' or 'structure' on a large document: the bytes already cost you once on the way in.")));
-            functions.Add(AIFunctionFactory.Create(EditDocumentContent, Opts(
+            functions.Add(AIFunctionFactory.Create(EditDocumentContent, Opts(schema,
                 "edit_document_content",
                 "Edit a document supplied inline as base64 and get the edited document back, with no storage connection involved. " +
                 "planJson is an operations array [ … ] or { \"operations\": [ … ] }.\n" +
@@ -461,14 +526,14 @@ public sealed class OfficeAgentTools
         }
         if (options.AllowEphemeralDocuments)
         {
-            functions.Add(AIFunctionFactory.Create(ImportDocumentContent, Opts(
+            functions.Add(AIFunctionFactory.Create(ImportDocumentContent, Opts(schema,
                 "import_document_content",
                 "Put a document you hold the bytes of into a session connection and get back an opaque documentId. " +
                 "From then on use that id with the ordinary document tools - inspect_document, find_in_document, preview_plan, apply_plan - and never send the bytes again. " +
                 "Prefer this over edit_document_content whenever more than one edit is coming: passing a document back as base64 requires reproducing it exactly, and a long one will not survive that. " +
                 "The document is held by the server for this session only and is not written to any storage. " +
                 "Returns {connectionId, documentId, name, contentType, version}.")));
-            functions.Add(AIFunctionFactory.Create(ExportDocumentContent, Opts(
+            functions.Add(AIFunctionFactory.Create(ExportDocumentContent, Opts(schema,
                 "export_document_content",
                 "Return the current bytes of a document held in a session connection, as base64, so the host can save or deliver it. " +
                 "Do this once, at the end - each call spends the whole document in context. Works only on session connections; a document in real storage is already saved where it belongs. " +
@@ -544,42 +609,42 @@ public sealed class OfficeAgentTools
             "{ \"op\": \"setCell\", \"target\": { \"sheetId\": 7, \"address\": \"B2\" }, \"formula\": \"SUM(B3:B8)\" }\n" +
             "{ \"op\": \"appendTableRows\", \"target\": { \"kind\": \"spreadsheetTable\", \"path\": \"table#7/Sales\" }, \"rows\": [[\"APAC\",\"15\"]] }";
 
-    private AIFunction[] CoreFunctions() => new[]
+    private AIFunction[] CoreFunctions(AIJsonSchemaCreateOptions schema) => new[]
     {
-        AIFunctionFactory.Create(DescribeCapabilities, Opts(
+        AIFunctionFactory.Create(DescribeCapabilities, Opts(schema,
             "describe_capabilities",
             "List what this server actually supports before planning an edit: the accepted edit-plan " +
             "contract version, every registered format with the plan verbs and change modes it takes, " +
             "the host's document size and expansion ceilings, and the connections you may use with the " +
             "capabilities you hold on each. A verb missing from a format is not supported there and will " +
             "be refused. Anchor ids are never listed: they come from inspect_document for the document in hand.")),
-        AIFunctionFactory.Create(InspectDocument, Opts(
+        AIFunctionFactory.Create(InspectDocument, Opts(schema,
             "inspect_document",
             "Inspect a Word, PowerPoint, or Excel document. Excel returns worksheets, tables, and a bounded cell list; use sheetId, range, and maximumCells to narrow it. Other formats return their outline, paragraphs, content controls, nodes, and styles. Copy anchors and node paths from this result.")),
-        AIFunctionFactory.Create(FindInDocument, Opts(
+        AIFunctionFactory.Create(FindInDocument, Opts(schema,
             "find_in_document",
             "Find content in Word, PowerPoint, or Excel. Excel can search displayed, raw, or both cell representations and returns sheetId plus A1 address anchors.")),
-        AIFunctionFactory.Create(PreviewPlan, Opts(
+        AIFunctionFactory.Create(PreviewPlan, Opts(schema,
             "preview_plan",
             "Dry-run a DocumentPlan JSON against (connectionId, documentId). Returns {isValid, committed, receipt, sourceDocumentId, outputConnectionId, outputDocumentId, outputVersion, outputName, outputContentType, changes, errors}; the output fields are null and committed is false. " +
-            "Plan shape: { \"snapshot\": { \"eTag\": \"<snapshot string from inspect_document>\" }, \"revision\": { \"author\": \"Review Bot\", \"timestampUtc\": \"2026-09-09T10:00:00Z\" }, \"operations\": [ ... ] }. revision controls Word's displayed revision identity; omit timestampUtc to use one engine timestamp for the whole apply. The snapshot detects drift in Word text-host XML or PowerPoint slide/notes XML; other parts rely on anchors and provider version checks. Omit it only intentionally. Omit contractVersion for legacy 0.2 behavior, or set it to exactly \"0.2\". Other values fail with contract-mismatch. Unknown properties and enum values fail with invalid-json. " +
+            "Plan shape: { \"snapshot\": { \"eTag\": \"<snapshot string from inspect_document>\" }, \"revision\": { \"author\": \"Review Bot\", \"timestampUtc\": \"2026-09-09T10:00:00Z\" }, \"operations\": [ ... ] }. revision controls Word's displayed revision identity; omit timestampUtc to use one engine timestamp for the whole apply. The snapshot detects drift in Word text-host XML, PowerPoint slide/notes XML, and Excel workbook, worksheet, table and note XML; other parts rely on anchors and provider version checks. Omit it only intentionally. Omit contractVersion for legacy 0.2 behavior, or set it to exactly \"0.2\". Other values fail with contract-mismatch. Unknown properties and enum values fail with invalid-json. " +
             PlanOperations)),
-        AIFunctionFactory.Create(ApplyPlan, Opts(
+        AIFunctionFactory.Create(ApplyPlan, Opts(schema,
             "apply_plan",
             "Apply a DocumentPlan JSON to (connectionId, documentId) and save through the provider. Returns {isValid, committed, writeOutcome, possibleOutput, receipt, sourceDocumentId, outputConnectionId, outputDocumentId, outputVersion, outputName, outputContentType, changes, errors}; non-applicable values are null. The receipt hashes the effective plan and exact input/output bytes and keeps the host-authenticated actor separate from the plan's display revision author. saveMode: 'Replace' (default, overwrites the source after an optimistic version check), 'NewVersion' (keeps the source and mints a new id under the same connection), 'NewDocument' (mints a fresh id with an optional newName for display). Plan-validation and operation-conflict failures have writeOutcome 'notWritten'. A provider failure after a write began may instead return 'unknown' or 'writtenNotRegistered' with possibleOutput; never retry those blindly or report the document unchanged until the host reconciles the possible output.")),
-        AIFunctionFactory.Create(CompareDocuments, Opts(
+        AIFunctionFactory.Create(CompareDocuments, Opts(schema,
             "compare_documents",
             "Read two Word documents and return paragraph differences, exact input SHA-256 hashes, coverage diagnostics, and a tracked-change plan bound to the original snapshot. " +
             "Covered: text added, removed or changed in free body paragraphs, and text changed inside a table cell when the table's geometry is unchanged. The same words split differently across equally formatted runs are not a difference, because Word re-segments runs constantly. " +
             "Refused, with a per-area diagnostic and no plan: changed table geometry, a cell whose formatting changed along with its words, paragraph formatting or style changes, and changes in headers, footers, notes, images, numbering or other parts. Differences found in the areas that are covered are still reported when another area blocks the plan, so a refusal tells you what it saw. " +
             "Unsupported changes make isComplete false and plan null. This tool writes nothing; preview and apply the returned plan against the original document.")),
-        AIFunctionFactory.Create(PreviewDocumentMerge, Opts(
+        AIFunctionFactory.Create(PreviewDocumentMerge, Opts(schema,
             "preview_document_merge",
             "Preview ordered whole-document Word assembly without saving. requestJson contains sources [{connectionId, documentId}] in output order and optional options {title, author}. Returns a merge plan bound to exact input hashes, source counts, identifier remapping decisions, and blocking diagnostics. Source formatting is preserved within the documented compatibility scope; each document starts on a new page. This is assembly, not reconciliation of edited versions."))
     };
 
     /// <summary>Previews assembly after authorizing every source before opening any source.</summary>
-    public Task<string> PreviewDocumentMerge(string requestJson, CancellationToken cancellationToken = default) => SafeAsync(async () =>
+    public Task<string> PreviewDocumentMerge(string requestJson, CancellationToken cancellationToken = default) => SafeAsync("a connectionId or documentId in requestJson", async () =>
     {
         var wireRequest = JsonSerializer.Deserialize<MergeToolRequest>(requestJson, PlanJson)
             ?? throw new JsonException("Merge request was null.");
@@ -611,7 +676,7 @@ public sealed class OfficeAgentTools
 
     /// <summary>Creates an assembled document after authorizing all input and output connections.</summary>
     public Task<string> MergeDocuments(string planJson, string destinationConnectionId, string outputName,
-        CancellationToken cancellationToken = default) => SafeAsync(async () =>
+        CancellationToken cancellationToken = default) => SafeAsync("destinationConnectionId, outputName, or a connectionId or documentId in planJson", async () =>
     {
         var plan = JsonSerializer.Deserialize<DocumentMergePlan>(planJson, PlanJson)
             ?? throw new JsonException("Merge plan was null.");
@@ -633,7 +698,7 @@ public sealed class OfficeAgentTools
     public Task<string> DiscoverTemplate(
         string connectionId,
         string documentId,
-        CancellationToken cancellationToken = default) => SafeAsync(async () =>
+        CancellationToken cancellationToken = default) => SafeAsync("connectionId or documentId", async () =>
         {
             await DemandAccessAsync(connectionId, ConnectionCapability.Read, cancellationToken).ConfigureAwait(false);
             var result = await _client.DiscoverTemplateAsync(
@@ -654,7 +719,7 @@ public sealed class OfficeAgentTools
         string connectionId,
         string documentId,
         string requestJson,
-        CancellationToken cancellationToken = default) => SafeAsync(async () =>
+        CancellationToken cancellationToken = default) => SafeAsync("connectionId, documentId, or a name or document in requestJson", async () =>
         {
             await DemandAccessAsync(connectionId, ConnectionCapability.Read, cancellationToken).ConfigureAwait(false);
             var request = JsonSerializer.Deserialize<TemplateBatchRequest>(requestJson, PlanJson)
@@ -677,7 +742,7 @@ public sealed class OfficeAgentTools
         string documentId,
         string requestJson,
         string expectedTokenJson = "",
-        CancellationToken cancellationToken = default) => SafeAsync(async () =>
+        CancellationToken cancellationToken = default) => SafeAsync("connectionId, documentId, or a name or document in requestJson", async () =>
         {
             await DemandAccessAsync(connectionId, ConnectionCapability.Read, cancellationToken).ConfigureAwait(false);
             await DemandAccessAsync(connectionId, ConnectionCapability.Create, cancellationToken).ConfigureAwait(false);
@@ -699,7 +764,7 @@ public sealed class OfficeAgentTools
         string revisedConnectionId,
         string revisedDocumentId,
         string revisionAuthor = "OfficeAgent Compare",
-        CancellationToken cancellationToken = default) => SafeAsync(async () =>
+        CancellationToken cancellationToken = default) => SafeAsync("originalConnectionId, originalDocumentId, revisedConnectionId, or revisedDocumentId", async () =>
         {
             await DemandAccessAsync(originalConnectionId, ConnectionCapability.Read, cancellationToken).ConfigureAwait(false);
             await DemandAccessAsync(revisedConnectionId, ConnectionCapability.Read, cancellationToken).ConfigureAwait(false);
@@ -727,7 +792,7 @@ public sealed class OfficeAgentTools
         string range = "",
         int maximumCells = 1000,
         CancellationToken cancellationToken = default)
-        => SafeAsync(async () =>
+        => SafeAsync("connectionId or documentId", async () =>
         {
             await DemandAccessAsync(connectionId, ConnectionCapability.Read, cancellationToken).ConfigureAwait(false);
             var options = new InspectOptions
@@ -780,7 +845,7 @@ public sealed class OfficeAgentTools
         bool caseSensitive = false,
         string spreadsheetValueView = "both",
         CancellationToken cancellationToken = default)
-        => SafeAsync(async () =>
+        => SafeAsync("connectionId or documentId", async () =>
         {
             await DemandAccessAsync(connectionId, ConnectionCapability.Read, cancellationToken).ConfigureAwait(false);
             var query = new FindQuery
@@ -813,10 +878,12 @@ public sealed class OfficeAgentTools
         string documentId,
         string planJson,
         CancellationToken cancellationToken = default)
-        => SafeAsync(async () =>
+        => SafeAsync("connectionId, documentId, or a document the plan references", async () =>
         {
             await DemandAccessAsync(connectionId, ConnectionCapability.Read, cancellationToken).ConfigureAwait(false);
             var plan = DeserializePlan(planJson, connectionId);
+            if (MissingRequiredSnapshot(plan.Snapshot))
+                return SnapshotRequired(connectionId, documentId);
             await DemandReferencedContentAccessAsync(plan, cancellationToken).ConfigureAwait(false);
             using var result = await _client.PreviewWithReceiptAsync(
                 connectionId, documentId, plan, cancellationToken).ConfigureAwait(false);
@@ -832,20 +899,23 @@ public sealed class OfficeAgentTools
         string saveMode = "Replace",
         string newName = "",
         CancellationToken cancellationToken = default)
-        => SafeAsync(async () =>
+        => SafeAsync("connectionId, documentId, newName, or a document the plan references", async () =>
         {
             var parsedSaveMode = ParseSaveMode(saveMode);
+            var outputName = ParseNewName(parsedSaveMode, newName);
             await DemandAccessAsync(connectionId, ConnectionCapability.Read, cancellationToken).ConfigureAwait(false);
             await DemandAccessAsync(
                 connectionId,
                 parsedSaveMode == SaveMode.Replace ? ConnectionCapability.Edit : ConnectionCapability.Create,
                 cancellationToken).ConfigureAwait(false);
             var plan = DeserializePlan(planJson, connectionId);
+            if (MissingRequiredSnapshot(plan.Snapshot))
+                return SnapshotRequired(connectionId, documentId);
             await DemandReferencedContentAccessAsync(plan, cancellationToken).ConfigureAwait(false);
             var options = new SaveDocumentOptions
             {
                 Mode = parsedSaveMode,
-                NewName = string.IsNullOrEmpty(newName) ? null : newName
+                NewName = outputName
             };
             var result = await _client.CommitAsync(connectionId, documentId, plan, options, cancellationToken).ConfigureAwait(false);
             return SerializeReport(
@@ -858,7 +928,7 @@ public sealed class OfficeAgentTools
         string connectionId,
         string source,
         CancellationToken cancellationToken = default)
-        => SafeAsync(async () =>
+        => SafeAsync("connectionId or source", async () =>
         {
             await DemandAccessAsync(connectionId, ConnectionCapability.Register, cancellationToken).ConfigureAwait(false);
             var reference = await _client.RegisterAsync(connectionId, source, cancellationToken).ConfigureAwait(false);
@@ -881,7 +951,7 @@ public sealed class OfficeAgentTools
         string name,
         string planJson = "",
         CancellationToken cancellationToken = default)
-        => SafeAsync(async () =>
+        => SafeAsync("connectionId, name, or a document the plan references", async () =>
         {
             await DemandAccessAsync(connectionId, ConnectionCapability.Create, cancellationToken).ConfigureAwait(false);
             var plan = string.IsNullOrWhiteSpace(planJson) ? null : DeserializePlan(planJson, connectionId);
@@ -907,7 +977,7 @@ public sealed class OfficeAgentTools
         string range = "",
         int maximumCells = 1000,
         CancellationToken cancellationToken = default)
-        => SafeAsync(async () =>
+        => SafeAsync("connectionId or source", async () =>
         {
             await DemandAccessAsync(connectionId, ConnectionCapability.Register, cancellationToken).ConfigureAwait(false);
             await DemandAccessAsync(connectionId, ConnectionCapability.Read, cancellationToken).ConfigureAwait(false);
@@ -947,17 +1017,22 @@ public sealed class OfficeAgentTools
         string saveMode = "Replace",
         string newName = "",
         CancellationToken cancellationToken = default)
-        => SafeAsync(async () =>
+        => SafeAsync("connectionId, source, newName, or a document the plan references", async () =>
         {
             var parsedSaveMode = ParseSaveMode(saveMode);
+            var outputName = ParseNewName(parsedSaveMode, newName);
             await DemandAccessAsync(connectionId, ConnectionCapability.Register, cancellationToken).ConfigureAwait(false);
             await DemandAccessAsync(connectionId, ConnectionCapability.Read, cancellationToken).ConfigureAwait(false);
             await DemandAccessAsync(
                 connectionId,
                 parsedSaveMode == SaveMode.Replace ? ConnectionCapability.Edit : ConnectionCapability.Create,
                 cancellationToken).ConfigureAwait(false);
-            var reference = await _client.RegisterAsync(connectionId, source, cancellationToken).ConfigureAwait(false);
+
+            // Parsed before registration so a plan this server will refuse registers nothing.
             var planObject = ParsePlanObject(planJson);
+            if (MissingRequiredSnapshot(planObject))
+                return SnapshotRequired(connectionId, sourceDocumentId: null);
+            var reference = await _client.RegisterAsync(connectionId, source, cancellationToken).ConfigureAwait(false);
 
             // Anchor binding happens against the freshly registered document, so the text
             // an operation names is verified against live content before anything is applied.
@@ -971,7 +1046,7 @@ public sealed class OfficeAgentTools
             var options = new SaveDocumentOptions
             {
                 Mode = parsedSaveMode,
-                NewName = string.IsNullOrEmpty(newName) ? null : newName
+                NewName = outputName
             };
             var plan = DeserializePlan(planObject, connectionId);
             await DemandReferencedContentAccessAsync(plan, cancellationToken).ConfigureAwait(false);
@@ -1172,7 +1247,7 @@ public sealed class OfficeAgentTools
         string name,
         string contentBase64,
         CancellationToken cancellationToken = default)
-        => SafeAsync(async () =>
+        => SafeAsync("connectionId or name", async () =>
         {
             await DemandAccessAsync(connectionId, ConnectionCapability.Create, cancellationToken).ConfigureAwait(false);
             var store = Ephemeral(connectionId);
@@ -1202,7 +1277,7 @@ public sealed class OfficeAgentTools
         string connectionId,
         string documentId,
         CancellationToken cancellationToken = default)
-        => SafeAsync(async () =>
+        => SafeAsync("connectionId or documentId", async () =>
         {
             await DemandAccessAsync(connectionId, ConnectionCapability.Read, cancellationToken).ConfigureAwait(false);
             // Restricted to ephemeral connections on purpose. Exporting from a filesystem
@@ -1274,14 +1349,25 @@ public sealed class OfficeAgentTools
         string connectionId,
         string documentId,
         CancellationToken cancellationToken = default)
-        => SafeAsync(async () =>
+        => SafeAsync("connectionId or documentId", async () =>
         {
             await DemandAccessAsync(connectionId, ConnectionCapability.Delete, cancellationToken).ConfigureAwait(false);
             await _client.RemoveAsync(connectionId, documentId, cancellationToken).ConfigureAwait(false);
             return JsonSerializer.Serialize(new { removed = true, connectionId, documentId }, Json);
         });
 
-    private static async Task<string> SafeAsync(Func<Task<string>> work)
+    private static Task<string> SafeAsync(Func<Task<string>> work) => SafeAsync(null, work);
+
+    /// <summary>
+    /// Runs a tool and turns its failures into the error envelope.
+    /// </summary>
+    /// <param name="storageArguments">
+    /// The tool's own arguments that reach storage, named when the provider refuses one. The
+    /// provider's message is not forwarded, because it can carry paths or upstream text, so
+    /// without these names the caller learns only that some argument was wrong.
+    /// </param>
+    /// <param name="work">The tool body.</param>
+    private static async Task<string> SafeAsync(string? storageArguments, Func<Task<string>> work)
     {
         try { return await work().ConfigureAwait(false); }
         catch (OperationCanceledException) { return SerializeError(ToolErrorCodes.Cancelled, "Operation was cancelled."); }
@@ -1295,7 +1381,7 @@ public sealed class OfficeAgentTools
         {
             return SerializeError(
                 ProviderCodeToWire(ex.Code),
-                ProviderMessage(ex.Code),
+                ProviderMessage(ex.Code, storageArguments),
                 ex.Provider, ex.ConnectionId, ex.ItemId,
                 WriteOutcome(ex.Code), PossibleOutput(ex));
         }
@@ -1357,11 +1443,11 @@ public sealed class OfficeAgentTools
             await DemandAccessAsync(connectionId!, ConnectionCapability.Read, cancellationToken).ConfigureAwait(false);
     }
 
-    private static AIFunctionFactoryOptions Opts(string name, string description) => new()
+    private static AIFunctionFactoryOptions Opts(AIJsonSchemaCreateOptions schema, string name, string description) => new()
     {
         Name = name,
         Description = description,
-        JsonSchemaCreateOptions = StrictSchemaOptions
+        JsonSchemaCreateOptions = schema
     };
 
     private static Fidelity ParseFidelity(string fidelity) => fidelity?.ToLowerInvariant() switch
@@ -1402,6 +1488,54 @@ public sealed class OfficeAgentTools
         };
     }
 
+    /// <summary>
+    /// The output name to save under, or <see langword="null"/> for the default. Replace
+    /// overwrites the document where it is, so there is no name to give it, and a name sent
+    /// with Replace is refused here, naming the argument. It used to reach the provider,
+    /// whose message the tool layer does not forward, so the caller learned only that an
+    /// argument was wrong. A blank name means the default, as it does for the providers.
+    /// </summary>
+    private static string? ParseNewName(SaveMode mode, string newName)
+    {
+        if (string.IsNullOrWhiteSpace(newName)) return null;
+        if (mode == SaveMode.Replace)
+            throw new ArgumentException(
+                "newName applies only to saveMode NewVersion or NewDocument. Replace overwrites the " +
+                "document in place and keeps its name: send newName empty or leave it out, or use " +
+                "NewVersion to save a renamed copy.",
+                nameof(newName));
+        return newName;
+    }
+
+    /// <summary>Whether this server requires a snapshot and the plan does not carry one.</summary>
+    private bool MissingRequiredSnapshot(SnapshotToken? snapshot) =>
+        RequirePlanSnapshot && string.IsNullOrWhiteSpace(snapshot?.ETag);
+
+    /// <summary>
+    /// The same test on a plan still in JSON form. <c>edit_document</c> reads its plan before
+    /// registering the document, so a plan it refuses registers nothing. Names are matched
+    /// case-insensitively, as the plan reader matches them.
+    /// </summary>
+    private bool MissingRequiredSnapshot(JsonObject plan) =>
+        RequirePlanSnapshot &&
+        !(Member(Member(plan, "snapshot") as JsonObject, "eTag") is JsonValue etag
+          && etag.TryGetValue<string>(out var value)
+          && !string.IsNullOrWhiteSpace(value));
+
+    private static JsonNode? Member(JsonObject? node, string name) =>
+        node?.FirstOrDefault(pair => string.Equals(pair.Key, name, StringComparison.OrdinalIgnoreCase)).Value;
+
+    /// <summary>The refusal <see cref="RequirePlanSnapshot"/> produces. Nothing was read or written.</summary>
+    private static string SnapshotRequired(string connectionId, string? sourceDocumentId) =>
+        SerializeErrors(
+            new[]
+            {
+                (ToolErrorCodes.SnapshotRequired,
+                 "This server requires every plan to carry the snapshot it was built against. Call " +
+                 "inspect_document, copy its snapshot into the plan as snapshot.eTag, and send the plan again.")
+            },
+            connectionId, sourceDocumentId);
+
     internal static string ProviderCodeToWire(ProviderErrorCode code) => code switch
     {
         ProviderErrorCode.NotFound => ToolErrorCodes.NotFound,
@@ -1422,10 +1556,14 @@ public sealed class OfficeAgentTools
     /// <summary>
     /// Provider exceptions are host diagnostics and may contain absolute paths,
     /// tenant details, or upstream response text. Tool callers receive a stable,
-    /// actionable message keyed only by the public provider error code.
+    /// actionable message keyed by the public provider error code. An invalid-argument
+    /// refusal adds the names of the tool's own arguments that reach storage, which are
+    /// the caller's words rather than the provider's.
     /// </summary>
-    private static string ProviderMessage(ProviderErrorCode code) => code switch
+    private static string ProviderMessage(ProviderErrorCode code, string? storageArguments) => code switch
     {
+        ProviderErrorCode.InvalidArgument when storageArguments is not null =>
+            $"The document provider rejected an argument. Check {storageArguments}.",
         ProviderErrorCode.NotFound => "The document or registration was not found.",
         ProviderErrorCode.AccessDenied => "The source is outside the connection boundary or access was denied.",
         ProviderErrorCode.ContentTooLarge => "The document exceeds the connection's size limit.",
@@ -1615,7 +1753,7 @@ public sealed class OfficeAgentTools
     private static string SerializeErrors(
         IReadOnlyList<(string Code, string Message)> failures,
         string connectionId,
-        string sourceDocumentId) =>
+        string? sourceDocumentId) =>
         JsonSerializer.Serialize(new
         {
             isValid = false,

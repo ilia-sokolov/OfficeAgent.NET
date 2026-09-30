@@ -53,6 +53,7 @@ public static class OfficeAgentMcpServer
         var registrationEnabled = RegistrationEnabled(options);
 
         return OfficeAgentTools.SystemPromptGuidance
+            + (options.RequirePlanSnapshot ? OfficeAgentTools.SnapshotRequiredPromptGuidance : string.Empty)
             + (registrationEnabled ? OfficeAgentTools.RegistrationPromptGuidance : string.Empty)
             + (creationEnabled ? OfficeAgentTools.CreationPromptGuidance : string.Empty)
             + (HasEphemeral(options) ? OfficeAgentTools.EphemeralPromptGuidance : string.Empty)
@@ -163,7 +164,10 @@ public static class OfficeAgentMcpServer
         services.AddSingleton(sp => new OfficeAgentTools(
             sp.GetRequiredService<OfficeAgentClient>(),
             sp.GetRequiredService<IConnectionAccessPolicy>(),
-            sp.GetRequiredService<ITrustedPrincipalAccessor>()));
+            sp.GetRequiredService<ITrustedPrincipalAccessor>())
+        {
+            RequirePlanSnapshot = options.RequirePlanSnapshot
+        });
         return services;
     }
 
@@ -185,7 +189,8 @@ public static class OfficeAgentMcpServer
                 // With no connection configured there is no connectionId any of the
                 // document tools could be given, so they are left out rather than offered
                 // and failed on first use.
-                AllowConnectionAddressing = hasConnections
+                AllowConnectionAddressing = hasConnections,
+                StrictToolSchemas = options.StrictToolSchemas
             })
             .Select(function => McpServerTool.Create(function))
             .ToList();

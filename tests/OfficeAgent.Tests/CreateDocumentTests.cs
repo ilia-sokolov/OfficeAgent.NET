@@ -321,7 +321,8 @@ public class CreateDocumentTests
             badName.RootElement.GetProperty("errors")[0].GetProperty("code").GetString());
         Assert.Equal("invalid-argument",
             invalidCharacter.RootElement.GetProperty("errors")[0].GetProperty("code").GetString());
-        Assert.Equal("The document provider rejected an argument.",
+        // The provider's own message is withheld; the tool names its arguments that reached storage.
+        Assert.Equal("The document provider rejected an argument. Check connectionId, name, or a document the plan references.",
             invalidCharacter.RootElement.GetProperty("errors")[0].GetProperty("message").GetString());
         Assert.Equal("already-exists",
             duplicate.RootElement.GetProperty("errors")[0].GetProperty("code").GetString());

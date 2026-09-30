@@ -3,6 +3,51 @@
 Notable changes per release. The body of each version section is also the text used for the
 corresponding GitHub release.
 
+## unreleased
+
+### Added
+
+- **Relaxed tool schemas for clients that ask the user for required inputs.**
+  `OfficeAgentToolsOptions.StrictToolSchemas` and the MCP setting
+  `OfficeAgent__StrictToolSchemas` default to `true`, which keeps every parameter required, as
+  OpenAI strict function calling needs. Microsoft Copilot Studio asks its user for every required
+  input the model leaves out and cannot send an empty string, so it asked for a `newName` before
+  every in-place `apply_plan` and never completed one. With `false`, parameters that have a
+  default are optional and a call that omits one gets the default; nothing else in the schemas
+  changes. See [the MCP server settings](docs/mcp-server.md#settings).
+
+- **A host can require every plan to carry its snapshot.** `OfficeAgentTools.RequirePlanSnapshot`
+  and the MCP setting `OfficeAgent__RequirePlanSnapshot` (default `false`) make `preview_plan`,
+  `apply_plan` and `edit_document` refuse a plan without a non-empty `snapshot.eTag`, with the
+  new code `snapshot-required` (`ToolErrorCodes.SnapshotRequired`), before the document is read.
+  A plan bound to its snapshot is refused as `stale-snapshot` once it has been applied, so a
+  retried call cannot apply it twice; the setting makes that hold even when the model forgets to
+  copy the snapshot. `OfficeAgentTools.SnapshotRequiredPromptGuidance` tells the agent, and the
+  MCP server adds it to its instructions when the setting is on.
+
+### Changed
+
+- **An argument refused by storage is named.** A `newName` sent with `saveMode` `Replace` is now
+  refused by the tool layer with a message naming `newName`, before storage is touched; it used
+  to reach the provider and come back as "The document provider rejected an argument." Other
+  provider `invalid-argument` refusals keep withholding the provider's own message and now add
+  the call's arguments that reached storage, for example "Check connectionId, documentId,
+  newName, or a document the plan references." A blank `newName` with `Replace` means no name.
+
+- **The snapshot guidance covers Excel.** `SystemPromptGuidance` and the `preview_plan`
+  description now say the snapshot detects drift in Excel workbook, worksheet, table and note
+  XML, as the Excel format has since 0.9.
+
+### Contract decision
+
+The regenerated [C# API reference](docs/csharp-api.md) and [wire contract](docs/wire-contract.md)
+change only by addition, apart from the text of `SystemPromptGuidance`: two members
+(`OfficeAgentToolsOptions.StrictToolSchemas`, `OfficeAgentTools.RequirePlanSnapshot`), two
+constants (`ToolErrorCodes.SnapshotRequired`, `OfficeAgentTools.SnapshotRequiredPromptGuidance`),
+two configuration keys, one default, and three response states (`snapshot required` for
+`preview_plan`, `apply_plan` and `edit_document`). Every default keeps 1.0 behaviour, so this is
+a minor-version change under the [compatibility policy](docs/compatibility.md).
+
 ## 1.0.0 — 2026-09-23
 
 ### Breaking changes and migration

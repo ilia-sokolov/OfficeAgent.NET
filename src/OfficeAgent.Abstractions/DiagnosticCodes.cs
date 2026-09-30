@@ -72,6 +72,13 @@ public static class ToolErrorCodes
     /// <summary>A regular expression search exceeded its time limit.</summary>
     public const string RegexTimeout = "regex-timeout";
 
+    /// <summary>
+    /// The host requires every plan to carry the snapshot from inspection, and this plan did
+    /// not. Nothing was read or written: inspect the document, copy its snapshot into the plan,
+    /// and send it again.
+    /// </summary>
+    public const string SnapshotRequired = "snapshot-required";
+
     /// <summary>The document changed since the version the caller supplied.</summary>
     public const string VersionConflict = "version-conflict";
 }

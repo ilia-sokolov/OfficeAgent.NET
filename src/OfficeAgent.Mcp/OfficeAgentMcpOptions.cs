@@ -88,6 +88,33 @@ public sealed class OfficeAgentMcpOptions
     /// <summary>Gets or sets the total the session connection may hold at once. Defaults to 100 MB.</summary>
     public long EphemeralMaximumTotalBytes { get; set; } = 100L * 1024 * 1024;
 
+    /// <summary>
+    /// Gets or sets whether every tool parameter is listed as required, including the
+    /// parameters that have a default. Defaults to <see langword="true"/>, which OpenAI and
+    /// Azure OpenAI strict function calling require.
+    /// </summary>
+    /// <remarks>
+    /// Set it to <see langword="false"/> for Microsoft Copilot Studio. Copilot Studio asks the
+    /// user for every required input the model leaves out and cannot send an empty string,
+    /// so a required <c>newName</c> whose default is empty stops <c>apply_plan</c> from ever
+    /// running. With this off, parameters that have a default are optional. See
+    /// <c>OfficeAgentToolsOptions.StrictToolSchemas</c>.
+    /// </remarks>
+    public bool StrictToolSchemas { get; set; } = true;
+
+    /// <summary>
+    /// Gets or sets whether <c>preview_plan</c>, <c>apply_plan</c> and <c>edit_document</c>
+    /// refuse a plan that does not carry the snapshot from inspection, with
+    /// <c>snapshot-required</c>. Defaults to <see langword="false"/>.
+    /// </summary>
+    /// <remarks>
+    /// A plan bound to its snapshot cannot be applied twice: once the first attempt is saved,
+    /// the same plan is refused as stale, so a retried call cannot, for example, append a table
+    /// row a second time. Models do not always copy the snapshot, so turn this on when an
+    /// agent edits documents people rely on. See <c>OfficeAgentTools.RequirePlanSnapshot</c>.
+    /// </remarks>
+    public bool RequirePlanSnapshot { get; set; }
+
     /// <summary>Gets or sets the filesystem connections to expose.</summary>
     public IList<FileSystemConnectionOptions> FileSystemConnections { get; set; } =
         new List<FileSystemConnectionOptions>();

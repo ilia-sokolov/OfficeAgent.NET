@@ -21,7 +21,7 @@ Responses are frozen in three layers, and only what they list is frozen:
   member in every state;
 - the parts anonymous envelopes share are enumerated: the change-target summary of each of the 6
   anchor types, and the receipt payload with its optional members absent and present;
-- 69 named response states across all 22 tools, among them success, validation failure,
+- 74 named response states across all 22 tools, among them success, validation failure,
   provider failure, access denied, cancellation, storage accepting a write and then failing,
   a partial and an uncertain template batch, and empty and populated collections. Generation
   fails unless each response is in the state it is named after.

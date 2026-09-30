@@ -1803,6 +1803,7 @@ public const string OutcomeUnknown = "outcome-unknown";
 public const string ProviderError = "provider-error";
 public const string RegexTimeout = "regex-timeout";
 public const string RegistrationFailed = "registration-failed";
+public const string SnapshotRequired = "snapshot-required";
 public const string VersionConflict = "version-conflict";
 public const string WriteRejected = "write-rejected";
 ```
@@ -2052,6 +2053,10 @@ Working from a source in one call
 - edit_document(connectionId, source, planJson) = register_document + find + apply_plan. Prefer it when you already know the text to change; it returns sourceDocumentId for follow-up work.
 - In edit_document a target may name text directly - { \"find\": \"Acme Corp\" } - instead of a paraId, so no lookup call is needed. Text matching more than once fails with \"ambiguous-anchor\" and lists the candidates: re-issue with { \"find\": \"Acme Corp\", \"match\": 2 } (zero-based) or use more surrounding text. Never guess a match index; use the one the error listed.
 - Reach for the single-purpose tools when the composites do not fit: an id you already hold, a plan you want to preview before applying, or targets that need regex or case-sensitive search (find_in_document, then paraId targets).";
+public const string SnapshotRequiredPromptGuidance = "
+Required snapshot
+- This host refuses a plan without its snapshot. Call inspect_document first and copy its snapshot into snapshot.eTag in every plan you preview or apply, including a plan you rebuild after stale-snapshot or version-conflict.
+- A plan refused with snapshot-required changed nothing: inspect the document, copy the snapshot into the plan, and send it again.";
 public const string SystemPromptGuidance = "You are editing Microsoft Office documents through the OfficeAgent tools - a Word document (.docx), PowerPoint deck (.pptx), or Excel workbook (.xlsx). inspect_document reports which format it found.
 
 Document addressing
@@ -2062,7 +2067,7 @@ Document addressing
 - After any write call, decide storage state from writeOutcome, not from committed alone. committed means use the returned output. notWritten means storage was not changed. unknown means the provider may have accepted the bytes; writtenNotRegistered means it did accept them but registration failed. For unknown or writtenNotRegistered, do not retry blindly and do not tell the user the document is unchanged: preserve possibleOutput and ask the host/operator to reconcile its name and expectedSha256 first.
 
 Plan shape, anchors, safety loop
-- Plan body is { \"snapshot\": { \"eTag\": \"<snapshot from inspect_document>\" }, \"operations\": [ ... ] }. Copy the scalar snapshot string returned by inspect_document into snapshot.eTag to detect drift in Word body/header/footer/footnote/endnote XML or PowerPoint slide/notes XML. It does not cover properties, comments, sections, media/image bytes, masters, or layouts; their anchors and provider version checks still apply. Omit snapshot only deliberately. Omit contractVersion for legacy 0.2 behavior, or set it to exactly \"0.2\". Other values fail with contract-mismatch.
+- Plan body is { \"snapshot\": { \"eTag\": \"<snapshot from inspect_document>\" }, \"operations\": [ ... ] }. Copy the scalar snapshot string returned by inspect_document into snapshot.eTag to detect drift in Word body/header/footer/footnote/endnote XML, PowerPoint slide/notes XML, or Excel workbook, worksheet, table and note XML. It does not cover properties, Word comments, sections, media/image bytes, masters, layouts, or Excel styles, charts and pivot tables; their anchors and provider version checks still apply. Omit snapshot only deliberately. Omit contractVersion for legacy 0.2 behavior, or set it to exactly \"0.2\". Other values fail with contract-mismatch.
 - Available operations (the JSON shape of each is in the preview_plan description): Word and PowerPoint use the document operations below; decks additionally support insertChart/updateChart; workbooks support setCell, appendTableRows, and comment Add/Remove on a cell. These are plan operations inside preview_plan/apply_plan, not separate tools.
 - populate_template_batch resolves named slots and repeating Word rows into plans and saves one independent output per item. compare_documents reads two Word documents and returns a snapshot-bound redline plan only when every detected change is covered; preview that plan before applying it to the original.
 - preview_document_merge assembles ordered whole Word documents in memory and returns a separate merge plan plus compatibility diagnostics. Pass that complete plan to merge_documents when available. A merge creates a new document and never edits its sources. It does not reconcile independently edited versions. Respect unsupported-content diagnostics and do not substitute a text-only copy.
@@ -2109,6 +2114,7 @@ Working with an Excel workbook
 - setCell writes a scalar or a formula: { \"op\": \"setCell\", \"target\": { \"sheetId\": 7, \"address\": \"B2\" }, \"value\": \"42\" } or use \"formula\": \"SUM(B2:B8)\". OfficeAgent clears the cached result and asks Excel to recalculate on open; it does not calculate formulas.
 - appendTableRows targets a spreadsheetTable node from inspection and requires one value per table column. It refuses to overwrite populated cells below the table and preserves other worksheet content.
 - Excel comments are legacy cell notes. Add one with a cell target and action Add; remove one with the cellComment node returned by inspection and action Remove.";
+public bool RequirePlanSnapshot { get; init; }
 public AIFunction[] AsAIFunctions();
 public AIFunction[] AsAIFunctions(OfficeAgentToolsOptions options);
 public Task<EngineCapabilities> DescribeCapabilitiesAsync(CancellationToken cancellationToken = default);
@@ -2146,6 +2152,7 @@ public bool AllowCreation { get; init; }
 public bool AllowEphemeralDocuments { get; init; }
 public bool AllowInlineContent { get; init; }
 public bool AllowRegistration { get; init; }
+public bool StrictToolSchemas { get; init; }
 ```
 
 ## OfficeAgent.Core

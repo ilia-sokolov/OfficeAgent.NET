@@ -177,11 +177,12 @@ bearer_token_env_var = "OFFICEAGENT_TOKEN"
 
 **Copilot Studio:**
 
-1. Make sure the agent uses **generative orchestration** (Settings) - MCP tools require it.
-2. **Tools → Add a tool → New tool → Model Context Protocol.**
-3. Enter a name, description, and the **server URL** (your gateway endpoint).
-4. Pick the auth type matching your gateway: API key for `appOnly`, or OAuth 2.0 for `onBehalfOf` (dynamic client registration is supported).
-5. Add it - the wizard lists the advertised tools; toggle off any you don't want (for example `register_document`).
+1. Start the server with `OfficeAgent__StrictToolSchemas=false`. Copilot Studio asks the user for every required tool input the model leaves out and cannot send an empty string, so with the default strict schemas it asks for a `newName` before every in-place save and never completes one. For agents that edit documents people rely on, also set `OfficeAgent__RequirePlanSnapshot=true` so a retried call cannot apply the same plan twice. See [the MCP server settings](mcp-server.md#settings).
+2. Make sure the agent uses **generative orchestration** (Settings) - MCP tools require it.
+3. **Tools → Add a tool → New tool → Model Context Protocol.**
+4. Enter a name, description, and the **server URL** (your gateway endpoint).
+5. Pick the auth type matching your gateway: API key for `appOnly`, or OAuth 2.0 for `onBehalfOf` (dynamic client registration is supported).
+6. Add it - the wizard lists the advertised tools; toggle off any you don't want (for example `register_document`).
 
 **Microsoft 365 Copilot** (declarative agent - MCP support is GA via the
 Microsoft 365 Agents Toolkit; the toolkit writes the manifests, no hand-editing):

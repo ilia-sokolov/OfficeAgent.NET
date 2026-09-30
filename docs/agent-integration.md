@@ -133,6 +133,24 @@ drawings, charts, external links, and pivot parts are also excluded. Omit `snaps
 when per-anchor and provider-version checks are sufficient. The engine does not insert it
 automatically.
 
+A plan that carries its snapshot is also safe to retry: once it has been applied, the
+document no longer matches the snapshot, so sending the same plan again is refused with
+`stale-snapshot` and a table row cannot be appended twice. That holds only while the model
+remembers to copy the snapshot. Set `RequirePlanSnapshot = true` on `OfficeAgentTools` (or
+`OfficeAgent__RequirePlanSnapshot=true` on the MCP server) to refuse any `preview_plan`,
+`apply_plan` or `edit_document` plan without one, with `snapshot-required`, and append
+`OfficeAgentTools.SnapshotRequiredPromptGuidance` to the agent's instructions.
+
+### Clients that ask the user for required inputs
+
+The tool schemas list every parameter as required by default, because OpenAI strict
+function calling refuses anything else. Microsoft Copilot Studio instead asks the user for
+each required input the model leaves out, and it cannot send an empty string, so it asks
+for a `newName` before every in-place `apply_plan` and never completes one. For such a
+client, set `StrictToolSchemas = false` in `OfficeAgentToolsOptions` (or
+`OfficeAgent__StrictToolSchemas=false` on the MCP server). Parameters with a default then
+become optional, and a call that omits one gets the default.
+
 ## Let the agent stage its own documents
 
 When the user names files the host has not staged - "open the contract in the
@@ -289,7 +307,8 @@ work is two calls or one:
 
 | Code | Meaning |
 | --- | --- |
-| `stale-snapshot` | Covered text-host or slide/notes XML drifted since inspection. Call `inspect_document` again before retrying. |
+| `stale-snapshot` | Covered text-host or slide/notes XML, or Excel workbook, worksheet, table or note XML, drifted since inspection - including because this same plan was already applied. Call `inspect_document` again before retrying. |
+| `snapshot-required` | The host set `RequirePlanSnapshot` and the plan carried no `snapshot.eTag`. Nothing was read or written. Inspect the document, copy its snapshot into the plan, and send it again. |
 | `expect-mismatch` | A text anchor's expected content is no longer in the live document. Re-find that anchor. |
 | `not-found` / `access-denied` | The supplied `documentId` is wrong or outside the connection's reach. |
 | `version-conflict` | A `Replace` save lost a race. Re-inspect and re-author the plan. |
@@ -298,7 +317,7 @@ work is two calls or one:
 | `ambiguous-anchor` | An `edit_document` `find` target matched several times. The message lists each candidate; re-issue with `"match": <index>` or more surrounding text. Nothing was written. |
 | `anchor-not-found` | A `find` target matched nothing, or its `match` index was out of range. Check the wording with `inspect_document` rather than retrying the same text. |
 | `contract-mismatch` | The edit plan must omit `contractVersion` for legacy `0.2` behavior or set it to `"0.2"`. Null, empty, malformed, and unknown versions are refused before saving. |
-| `invalid-argument`, `invalid-json` | The plan or arguments were malformed. Unknown properties, operations, enum names, integer enum values, and non-string versions are refused. The error message says what to fix. |
+| `invalid-argument`, `invalid-json` | The plan or arguments were malformed. Unknown properties, operations, enum names, integer enum values, and non-string versions are refused. The error message says what to fix; when storage refused an argument, it names the call's arguments that reached storage, and a `newName` sent with `Replace` is refused by name. |
 | `configuration-error` | The `connectionId` is not registered on this host, or - for `create_document` - that connection cannot create documents. Try another connection rather than retrying. |
 | `outcome-unknown` | A write began but the provider could not confirm whether it landed. Do not retry or report the document unchanged; reconcile `possibleOutput.expectedSha256`. |
 | `registration-failed` | The bytes were written but the output registration failed. Do not write again; recover the named output from `possibleOutput`. |
