@@ -5,12 +5,12 @@ structured way to inspect and edit OOXML files. It is built on the Open XML SDK,
 and its direct .NET API does not require MCP, an LLM, or an agent framework.
 
 > [!IMPORTANT]
-> This guide is versioned for OfficeAgent.NET `1.0.0`. Its executable recipe pins
-> `1.0.0` and is exercised against locally packed packages by the release pipeline.
+> This guide is versioned for OfficeAgent.NET `1.1.0`. Its executable recipe pins
+> `1.1.0` and is exercised against locally packed packages by the release pipeline.
 > Keep every OfficeAgent package on the same version.
 
 The supported-job summaries and recipe describe the source and package contract in
-the `v1.0.0` tag. For another release, use the documentation from that release's tag.
+the `v1.1.0` tag. For another release, use the documentation from that release's tag.
 
 ## Use OfficeAgent.NET when
 
@@ -106,8 +106,8 @@ Create the project and install the exact packages:
 ```bash
 dotnet new console -n OfficeAgentSelectionTrial
 cd OfficeAgentSelectionTrial
-dotnet add package OfficeAgent.Core --version 1.0.0
-dotnet add package OfficeAgent.Word --version 1.0.0
+dotnet add package OfficeAgent.Core --version 1.1.0
+dotnet add package OfficeAgent.Word --version 1.1.0
 ```
 
 Replace `Program.cs` with:

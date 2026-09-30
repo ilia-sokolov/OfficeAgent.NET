@@ -3,7 +3,7 @@
 Notable changes per release. The body of each version section is also the text used for the
 corresponding GitHub release.
 
-## unreleased
+## 1.1.0 — 2026-09-30
 
 ### Added
 
@@ -34,19 +34,21 @@ corresponding GitHub release.
   the call's arguments that reached storage, for example "Check connectionId, documentId,
   newName, or a document the plan references." A blank `newName` with `Replace` means no name.
 
+- **The contract baselines grow only by addition.** The regenerated
+  [C# API reference](docs/csharp-api.md) and [wire contract](docs/wire-contract.md) add two
+  members (`OfficeAgentToolsOptions.StrictToolSchemas`, `OfficeAgentTools.RequirePlanSnapshot`),
+  two constants (`ToolErrorCodes.SnapshotRequired`,
+  `OfficeAgentTools.SnapshotRequiredPromptGuidance`), two configuration keys, one default, and
+  three response states (`snapshot required` for `preview_plan`, `apply_plan` and
+  `edit_document`). The text of `SystemPromptGuidance` changes as described under Fixed. Every
+  default keeps 1.0 behaviour, so this is a minor release under the
+  [compatibility policy](docs/compatibility.md).
+
+### Fixed
+
 - **The snapshot guidance covers Excel.** `SystemPromptGuidance` and the `preview_plan`
-  description now say the snapshot detects drift in Excel workbook, worksheet, table and note
-  XML, as the Excel format has since 0.9.
-
-### Contract decision
-
-The regenerated [C# API reference](docs/csharp-api.md) and [wire contract](docs/wire-contract.md)
-change only by addition, apart from the text of `SystemPromptGuidance`: two members
-(`OfficeAgentToolsOptions.StrictToolSchemas`, `OfficeAgentTools.RequirePlanSnapshot`), two
-constants (`ToolErrorCodes.SnapshotRequired`, `OfficeAgentTools.SnapshotRequiredPromptGuidance`),
-two configuration keys, one default, and three response states (`snapshot required` for
-`preview_plan`, `apply_plan` and `edit_document`). Every default keeps 1.0 behaviour, so this is
-a minor-version change under the [compatibility policy](docs/compatibility.md).
+  description said the snapshot detects drift only in Word and PowerPoint XML. They now include
+  Excel workbook, worksheet, table and note XML, as the Excel format has covered since 0.9.
 
 ## 1.0.0 — 2026-09-23
 

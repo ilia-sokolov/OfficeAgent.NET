@@ -6,7 +6,7 @@ rich content operations, review workflows, and several hosting and storage model
 this page to choose the shortest path for your scenario.
 
 > [!IMPORTANT]
-> This documentation targets OfficeAgent.NET 1.0.0. Pin package and container versions in
+> This documentation targets OfficeAgent.NET 1.1.0. Pin package and container versions in
 > production, review release notes before upgrading, and test representative documents.
 
 ## Choose by role

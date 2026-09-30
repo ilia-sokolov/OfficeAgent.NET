@@ -10,11 +10,11 @@ reproducing an issue when possible.
 
 | Version | Security support |
 | --- | --- |
-| 1.0.x | Supported |
-| 0.9.x and earlier | Unsupported |
+| 1.1.x | Supported |
+| 1.0.x and earlier | Unsupported |
 
-Every 0.x version is unsupported. This table is updated with each minor release, and a test
-checks that it names the version the repository builds.
+Every earlier 1.x minor and every 0.x version is unsupported. This table is updated with each
+minor release, and a test checks that it names the version the repository builds.
 
 Fixes also depend on the .NET runtime underneath. A problem that reproduces only on a runtime
 Microsoft no longer supports is not guaranteed a fix; see
