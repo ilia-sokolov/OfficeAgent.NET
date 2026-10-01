@@ -3,7 +3,11 @@
 
 [![build](https://img.shields.io/github/actions/workflow/status/ilia-sokolov/OfficeAgent.NET/build.yml?branch=main)](https://github.com/ilia-sokolov/OfficeAgent.NET/actions/workflows/build.yml)
 [![NuGet](https://img.shields.io/nuget/v/OfficeAgent.Core.svg)](https://www.nuget.org/packages/OfficeAgent.Core)
-[![downloads](https://img.shields.io/nuget/dt/OfficeAgent.Core.svg)](https://www.nuget.org/packages/OfficeAgent.Core)
+[![.NET 8 | 10](https://img.shields.io/badge/.NET-8%20%7C%2010-512BD4)](https://github.com/ilia-sokolov/OfficeAgent.NET/blob/main/docs/compatibility.md)
+[![API: SemVer 1.x stable](https://img.shields.io/badge/API-SemVer%201.x%20stable-2ea44f)](https://github.com/ilia-sokolov/OfficeAgent.NET/blob/main/docs/compatibility.md)
+[![native Office: 70/70 cases verified](https://img.shields.io/badge/native%20Office-70%2F70%20cases%20verified-2ea44f)](https://github.com/ilia-sokolov/OfficeAgent.NET/blob/main/docs/native-compatibility.md)
+[![OpenSSF Scorecard](https://img.shields.io/ossf-scorecard/github.com/ilia-sokolov/OfficeAgent.NET?label=openssf%20scorecard)](https://securityscorecards.dev/viewer/?uri=github.com/ilia-sokolov/OfficeAgent.NET)
+[![good first issues](https://img.shields.io/github/issues/ilia-sokolov/OfficeAgent.NET/good%20first%20issue?label=good%20first%20issues)](https://github.com/ilia-sokolov/OfficeAgent.NET/labels/good%20first%20issue)
 [![license](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
 OfficeAgent.NET is a .NET document-automation library built on the
