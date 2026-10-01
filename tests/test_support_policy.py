@@ -125,7 +125,7 @@ class SupportPolicyTests(unittest.TestCase):
         self.assertIn("smoke_packaged_artifacts.py", job)
 
     def test_the_container_runs_on_the_runtime_the_documents_state(self) -> None:
-        runtime_image = re.search(r"^FROM mcr\.microsoft\.com/dotnet/aspnet:(\d+)\.\d+ AS runtime$",
+        runtime_image = re.search(r"^FROM mcr\.microsoft\.com/dotnet/aspnet:(\d+)\.\d+(?:@sha256:[0-9a-f]{64})? AS runtime$",
                                   read("Dockerfile"), re.MULTILINE)
         self.assertIsNotNone(runtime_image)
         self.assertEqual("10", runtime_image.group(1))

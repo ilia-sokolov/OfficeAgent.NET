@@ -1,0 +1,43 @@
+# Keeps pinned dependencies current: NuGet packages, the hash-pinned GitHub Actions, the
+# digest-pinned container base images and the hash-pinned CI Python packages. Updates arrive as
+# weekly grouped pull requests. Major NuGet versions are left alone because the library targets
+# netstandard2.0 and net8.0, and a new major of a Microsoft.Extensions or System package can drop
+# those targets; take such updates deliberately.
+
+version: 2
+updates:
+  - package-ecosystem: nuget
+    directory: /
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+    ignore:
+      - dependency-name: "*"
+        update-types: ["version-update:semver-major"]
+    groups:
+      nuget:
+        patterns: ["*"]
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    groups:
+      github-actions:
+        patterns: ["*"]
+
+  - package-ecosystem: docker
+    directories: ["/", "/deploy/renderer"]
+    schedule:
+      interval: weekly
+    groups:
+      docker:
+        patterns: ["*"]
+
+  - package-ecosystem: pip
+    directory: /scripts
+    schedule:
+      interval: monthly
+    groups:
+      pip:
+        patterns: ["*"]

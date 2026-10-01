@@ -17,7 +17,7 @@ Tools on the maintainer's machine:
 
 - the .NET SDK that [`global.json`](../global.json) selects (a stable 8.0 feature band at or
   above 8.0.100), and the .NET 10 runtime to repeat the CI runtime leg locally;
-- Python 3 with `jsonschema==4.25.1` for `scripts/validate_server_manifest.py`;
+- Python 3 with the hash-pinned packages in `scripts/requirements-ci.txt` (`python -m pip install --require-hashes -r scripts/requirements-ci.txt`) for `scripts/validate_server_manifest.py`;
 - `git`, and the GitHub CLI `gh` signed in to an account with the access below;
 - `mcp-publisher`, the Model Context Protocol Registry CLI, for step 3;
 - Docker with `buildx`, for step 4.

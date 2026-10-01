@@ -9,14 +9,16 @@ on:
 
 permissions:
   contents: read
-  packages: write
-  id-token: write
-  attestations: write
 
 jobs:
   publish-container:
     runs-on: ubuntu-latest
     environment: nuget
+    permissions:
+      contents: read
+      packages: write          # push the image to GHCR
+      id-token: write          # sign the image attestation
+      attestations: write      # publish the image attestation
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
