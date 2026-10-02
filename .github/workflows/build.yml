@@ -32,9 +32,12 @@ jobs:
         with:
           fetch-depth: 0   # required for Source Link / deterministic builds
 
+      # global.json selects the .NET 10 SDK; the .NET 8 runtime runs the net8.0 test projects.
       - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
         with:
-          dotnet-version: 8.0.x
+          dotnet-version: |
+            8.0.x
+            10.0.x
 
       - name: Validate documentation
         if: matrix.os == 'ubuntu-latest'
@@ -114,7 +117,7 @@ jobs:
   runtime-dotnet10:
     # .NET 8 support ends 2026-11-10; .NET 10 is the LTS after it. The libraries keep their
     # netstandard2.0 and net8.0 targets, which a .NET 10 application consumes, so this leg builds
-    # with the pinned .NET 8 SDK and runs the same tests and the packaged smoke on the .NET 10
+    # with the SDK global.json pins and runs the same tests and the packaged smoke on the .NET 10
     # runtime. OFFICEAGENT_EXPECT_RUNTIME_MAJOR makes a test fail if the roll-forward did not happen.
     runs-on: ${{ matrix.os }}
     strategy:
@@ -242,7 +245,9 @@ jobs:
 
       - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
         with:
-          dotnet-version: 8.0.x
+          dotnet-version: |
+            8.0.x
+            10.0.x
 
       - name: Renderer sandbox reference tests
         run: dotnet test tests/OfficeAgent.RenderSandbox.Tests --configuration Release --logger "trx" --results-directory ./TestResults

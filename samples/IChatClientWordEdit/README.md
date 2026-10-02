@@ -18,7 +18,7 @@ deleted. Only `reviewed-contract.docx`, or the output path you supply, remains.
 
 ## Prerequisites
 
-- .NET 8 SDK
+- .NET 10 SDK (the repository's `global.json` selects it)
 - An Azure OpenAI deployment whose model supports function calling
 - Azure CLI login with `az login`
 - The signed-in identity must have the `Cognitive Services OpenAI User` role on

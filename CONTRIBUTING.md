@@ -37,8 +37,9 @@ is always fine.
 ## Local development
 
 ```bash
-# Prerequisite: a stable .NET 8 SDK. global.json selects the latest installed
-# 8.0 feature band at or above 8.0.100.
+# Prerequisites: a stable .NET 10 SDK, and the .NET 8 runtime for the net8.0 test
+# projects. global.json selects the latest installed 10.0 feature band at or above
+# 10.0.100.
 dotnet restore OfficeAgent.NET.sln
 dotnet build OfficeAgent.NET.sln --no-restore
 dotnet test OfficeAgent.NET.sln --no-build

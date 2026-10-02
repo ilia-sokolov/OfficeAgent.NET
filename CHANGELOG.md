@@ -3,6 +3,16 @@
 Notable changes per release. The body of each version section is also the text used for the
 corresponding GitHub release.
 
+## 1.1.1 — Unreleased
+
+### Changed
+
+- **Built with the .NET 10 SDK.** .NET 8 support ends on 2026-11-10, so `global.json` now pins
+  the .NET 10 SDK, for CI and for the container image's build stage. The packages still target
+  `netstandard2.0` and `net8.0`, and nothing in the public API, the wire contract or document
+  output changes. Contributors need the .NET 10 SDK, plus the .NET 8 runtime for the `net8.0`
+  test projects.
+
 ## 1.1.0 — 2026-09-30
 
 ### Added

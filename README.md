@@ -388,7 +388,7 @@ document feature involved, the operation you attempted, and the error or
 unexpected result. Do not attach confidential documents; a small sanitised
 reproduction is enough.
 
-To work on the code, install the .NET 8 SDK, fork the repository, and run:
+To work on the code, install the .NET 10 SDK and the .NET 8 runtime, fork the repository, and run:
 
 ```bash
 dotnet build OfficeAgent.NET.sln

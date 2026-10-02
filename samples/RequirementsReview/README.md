@@ -32,9 +32,8 @@ are scripted. They show the mechanism; they are not live Jev or live-model resul
 
 ## Prerequisites
 
-- .NET 8 SDK. The repository's `global.json` pins SDK 8.0.100 with `latestFeature`. On a
-  machine with only SDK 9 or 10, run the commands from outside the repository with the
-  project path, for example from its parent folder.
+- .NET 10 SDK, which the repository's `global.json` selects (10.0.100 or a later 10.0 feature
+  band), and the .NET 8 runtime, which the sample and its tests run on.
 - Nothing else for the offline run: no network, no keys.
 - In your own application, reference the packages instead of this repository's projects:
   `OfficeAgent.Core` and `OfficeAgent.Word` 1.0.0, `Microsoft.Agents.AI` 1.22.0,
@@ -162,7 +161,9 @@ Jev handles best.
 
 Confidence is TypeSafe's value, derived from the probabilities; for a choice it is
 `(options × top probability − 1) / (options − 1)`. The 0.80 thresholds are placeholders to
-calibrate on documents your reviewers have already assessed.
+calibrate on documents your reviewers have already assessed. The materiality question uses
+a requirement-relative rubric for both sample scenarios; recalibrate its 1.5 routing
+threshold if you change that rubric.
 
 ## Audit record
 
@@ -185,7 +186,7 @@ A test recomputes every route from the record alone.
 dotnet test tests/RequirementsReview.Tests
 ```
 
-125 offline tests cover the privacy tool path, missing/duplicate/unknown tool calls and fail-closed routing, the legacy three outcomes, preservation of its existing table, comment and
+126 offline tests cover the privacy tool path, missing/duplicate/unknown tool calls and fail-closed routing, the legacy three outcomes, preservation of its existing table, comment and
 tracked change, the tracked-change option, the Jev request and response contract, every HTTP
 failure class, retries and `Retry-After`, timeouts, malformed answers, thresholds, disagreement, stale documents
 before and after approval, unauthorized and tampered commits, existing reviewed copies, the

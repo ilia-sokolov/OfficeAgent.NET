@@ -58,7 +58,8 @@ longer supports is not guaranteed a fix. .NET 9 is a short-term release, support
 2026-11-10, and is not tested separately.
 
 The build workflow compiles, tests, and runs an installed-package smoke on current
-GitHub-hosted Ubuntu, Windows, and macOS runners with the .NET 8 SDK and runtime. A second leg,
+GitHub-hosted Ubuntu, Windows, and macOS runners, built with the .NET 10 SDK and tested on the
+.NET 8 runtime. A second leg,
 on Ubuntu and Windows, builds with the same SDK and runs the test suite and the packaged smoke on
 the .NET 10 runtime; a test fails that leg if the suite did not actually run on .NET 10. The smoke installs
 the packed `officeagent-mcp` tool into an empty tool directory backed by a fresh package
