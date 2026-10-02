@@ -2,6 +2,38 @@
 
 Thank you for considering a contribution. Bug reports, design discussion, and pull requests are welcome.
 
+## Finding something to work on
+
+- [`good first issue`](https://github.com/ilia-sokolov/OfficeAgent.NET/labels/good%20first%20issue)
+  issues are small and fully specified: each names the files to change, the test or check that
+  proves it, and the documentation to update.
+- [`help wanted`](https://github.com/ilia-sokolov/OfficeAgent.NET/labels/help%20wanted) issues
+  are larger, and some need more context about the engine.
+- [`corpus`](https://github.com/ilia-sokolov/OfficeAgent.NET/labels/corpus) issues need no code:
+  a real document that breaks naive editing, or a run of the native Office checks on your Office
+  build, is a valuable contribution on its own.
+- Questions and early ideas go to
+  [Discussions](https://github.com/ilia-sokolov/OfficeAgent.NET/discussions), not issues.
+
+An issue labelled `needs-decision` is waiting for a maintainer decision, recorded in the issue.
+Please don't start on it until that decision is there.
+
+## Claiming an issue
+
+Comment on the issue to ask for it. The first person to ask is assigned, and each person holds
+one open claim at a time. If no pull request has appeared after 14 days, the claim lapses and the
+issue is freed, unless you have said you are still working on it. Saying "I can't get to this"
+is always fine.
+
+## Your pull request
+
+- The first time you open a pull request here, CI waits for a maintainer to approve the run. That
+  is a GitHub rule for first-time contributors, not a judgement on the change.
+- The `build` and `analyze (csharp)` checks must pass before a pull request can merge.
+- Expect a first review within two working days.
+- Documentation changes are checked with `python scripts/validate_docs.py` (Python 3), which
+  checks links and code fences.
+
 ## Local development
 
 ```bash

@@ -3,6 +3,12 @@ contact_links:
   - name: Report a security vulnerability privately
     url: https://github.com/ilia-sokolov/OfficeAgent.NET/security/advisories/new
     about: Do not open a public issue for a suspected vulnerability. See SECURITY.md.
+  - name: Ask a question
+    url: https://github.com/ilia-sokolov/OfficeAgent.NET/discussions/categories/q-a
+    about: How do I...? Questions about using OfficeAgent go to Discussions, where answers stay findable.
+  - name: Propose or discuss an idea
+    url: https://github.com/ilia-sokolov/OfficeAgent.NET/discussions/categories/ideas
+    about: Talk through a design before it becomes an issue.
   - name: Support policy and documentation
     url: https://github.com/ilia-sokolov/OfficeAgent.NET/blob/main/SUPPORT.md
     about: What community support covers, supported versions and runtimes.
