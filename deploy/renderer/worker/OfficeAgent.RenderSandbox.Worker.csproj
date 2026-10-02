@@ -2,10 +2,15 @@
 
   <PropertyGroup>
     <OutputType>Exe</OutputType>
-    <TargetFramework>net8.0</TargetFramework>
+    <TargetFramework>net10.0</TargetFramework>
     <IsPackable>false</IsPackable>
     <GenerateDocumentationFile>false</GenerateDocumentationFile>
     <AssemblyName>officeagent-render-worker</AssemblyName>
+    <!-- The worker runs only inside the renderer image. Microsoft publishes no .NET 10 image on
+         Debian 12, whose LibreOffice and Poppler builds the image pins, so the worker carries its
+         own .NET 10 runtime instead of relying on a runtime image. -->
+    <RuntimeIdentifier>linux-x64</RuntimeIdentifier>
+    <SelfContained>true</SelfContained>
   </PropertyGroup>
 
   <ItemGroup>

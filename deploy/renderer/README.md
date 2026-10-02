@@ -26,6 +26,12 @@ dotnet publish deploy/renderer/worker -c Release -o deploy/renderer/worker/bin/p
 docker build --target hardened -t officeagent-renderer:reference deploy/renderer
 ```
 
+The worker publishes self-contained for `linux-x64`: it carries its own .NET 10 runtime, so the
+image needs no .NET runtime image. Microsoft publishes no .NET 10 image on Debian 12, whose
+LibreOffice and Poppler builds the image pins. The bundled runtime is the one that ships with
+the SDK doing the publish, so runtime security fixes reach the image only when you rebuild it
+with a current .NET 10 SDK.
+
 Build the image yourself. It contains GPL-licensed Poppler, so redistributing it carries GPL
 obligations; see [Provenance](#provenance).
 
@@ -84,7 +90,8 @@ claimed.
 
 | Component | Version | Licence |
 | --- | --- | --- |
-| `mcr.microsoft.com/dotnet/runtime:8.0-bookworm-slim` | `sha256:37466ea190f696105c1c3ae67c15e32d4e199face9a0b2ad5b9a37c464db8f30` (Debian 12.15) | MIT (.NET); Debian packages under their own licences |
+| `debian:bookworm-slim` | `sha256:3783cc01769c7b2b1b83a5c5ad96c815348e28ed7da68e2e3687004faa906251` (Debian 12.15) | Debian packages under their own licences |
+| .NET runtime, bundled with the worker | The runtime of the SDK that publishes it (10.0.5 with SDK 10.0.201) | MIT |
 | LibreOffice (`libreoffice-*-nogui`) | `4:7.4.7-1+deb12u14`, reporting `LibreOffice 7.4.7.2` | MPL-2.0, Apache-2.0 |
 | Poppler (`poppler-utils`) | `22.12.0-2+deb12u3`, reporting `pdftoppm version 22.12.0` | GPL-2 or GPL-3 |
 | `fonts-dejavu-core` | `2.37-6` | Bitstream Vera, GPL-2+ |

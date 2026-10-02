@@ -7,8 +7,12 @@
 # Every input is pinned. The base image is pinned by digest, and every package by exact
 # version. When Debian supersedes a pinned security update the build fails rather than
 # drifting; update the pins and rerun the reference tests, as a recorded change.
+#
+# The worker is published self-contained for linux-x64 and carries its own .NET 10 runtime.
+# Microsoft publishes no .NET 10 image on Debian 12, and the LibreOffice and Poppler pins below
+# are Debian 12 builds, so the base is plain Debian rather than a .NET runtime image.
 
-FROM mcr.microsoft.com/dotnet/runtime:8.0-bookworm-slim@sha256:37466ea190f696105c1c3ae67c15e32d4e199face9a0b2ad5b9a37c464db8f30 AS base
+FROM debian:bookworm-slim@sha256:3783cc01769c7b2b1b83a5c5ad96c815348e28ed7da68e2e3687004faa906251 AS base
 
 ARG LIBREOFFICE_VERSION=4:7.4.7-1+deb12u14
 ARG POPPLER_VERSION=22.12.0-2+deb12u3
@@ -26,11 +30,12 @@ RUN apt-get update \
  && useradd --uid 10001 --no-create-home --home-dir /tmp --shell /usr/sbin/nologin renderer
 
 COPY worker/bin/publish/ /opt/officeagent/worker/
+RUN chmod 0755 /opt/officeagent/worker/officeagent-render-worker
 ENV HOME=/tmp \
     DOTNET_CLI_TELEMETRY_OPTOUT=1 \
     DOTNET_NOLOGO=1
 WORKDIR /tmp
-ENTRYPOINT ["dotnet", "/opt/officeagent/worker/officeagent-render-worker.dll"]
+ENTRYPOINT ["/opt/officeagent/worker/officeagent-render-worker"]
 
 # TEST ONLY: the control image for the hardening tests. Never deploy this stage.
 FROM base AS permissive

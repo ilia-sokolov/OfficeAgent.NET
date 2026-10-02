@@ -12,6 +12,19 @@ corresponding GitHub release.
   `netstandard2.0` and `net8.0`, and nothing in the public API, the wire contract or document
   output changes. Contributors need the .NET 10 SDK, plus the .NET 8 runtime for the `net8.0`
   test projects.
+- **The renderer reference image runs on .NET 10.** Its worker is now published self-contained
+  for `linux-x64`, carrying its own .NET 10 runtime, on a digest-pinned `debian:bookworm-slim`
+  base. Microsoft publishes no .NET 10 image on Debian 12, and the image's LibreOffice and
+  Poppler pins are Debian 12 builds, so those pins, the hardening and the reference tests are
+  unchanged. Rebuild the image to pick this up, and rebuild it with a current .NET 10 SDK to pick
+  up .NET runtime security fixes; see [the renderer reference](deploy/renderer/README.md).
+
+### Fixed
+
+- **A render that times out during container start-up no longer leaves a container behind.** The
+  renderer reference stopped a timed-out render with `docker kill`, which refuses a container that
+  was created but never started, so `--rm` never removed it. It now removes the container with
+  `docker rm -f`, once at the deadline and again after the client process has exited.
 
 ## 1.1.0 — 2026-09-30
 
