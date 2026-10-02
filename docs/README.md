@@ -36,7 +36,9 @@ corpora and evaluations remain evidence for that release, not instructions for a
 | Look up a public C# type or member | [Generated C# API reference](csharp-api.md) | [Getting started](getting-started.md), [document plans](document-plans.md) |
 | Create a Word document from scratch | [Create a document](getting-started.md#create-a-document-instead) | [Document plans](document-plans.md) |
 | Create or update a PowerPoint deck | [PowerPoint support](powerpoint.md#creating-a-deck) | [Generating a deck](powerpoint.md#generating-a-deck) |
+| Edit a deck for review, which has no tracked changes | [PowerPointReviewEdits sample](../samples/PowerPointReviewEdits/) | [PowerPoint support](powerpoint.md#addressing) |
 | Inspect or update an Excel workbook | [Excel support](excel.md) | [Document plans](document-plans.md) |
+| Update workbook inputs and get the new totals | [ExcelInputUpdate sample](../samples/ExcelInputUpdate/) | [Excel support](excel.md) |
 | Generate many documents from a template | [Template population](document-workflows.md#populate-a-template-batch) | [TemplateBatch sample](../samples/TemplateBatch/) |
 | Check a template batch before it writes | [Template preflight](document-workflows.md#preflight-a-template-batch) | [Capability discovery](capability-discovery.md) |
 | Compare two Word documents and create a redline | [Document comparison](document-workflows.md#compare-two-word-documents) | [DocumentComparison sample](../samples/DocumentComparison/) |

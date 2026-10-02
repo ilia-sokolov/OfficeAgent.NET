@@ -99,3 +99,13 @@ that the package contains the expected revisions and comments.
 It was authored by OfficeAgent itself, through a plan of `changeText`, `insert`,
 `insertTable`, `comment` and tracked `changeText` operations — the same verbs documented in
 [Document plans](../../docs/document-plans.md). Nothing about it needed Word.
+
+## The deck and the workbook
+
+Two more files, saved by desktop PowerPoint and Excel so they carry what those applications
+write, back the non-Word samples:
+
+| File | Contents | Used by |
+| --- | --- | --- |
+| `quarterly-review.pptx` | A title slide and a "Commercials" slide with three bullets: payment within thirty days, a fixed fee of 58,000, and a go-live date | [PowerPointReviewEdits](../PowerPointReviewEdits/) |
+| `pricing-model.xlsx` | One sheet, "Pricing": quantities in `B2:B4`, unit prices in `C2:C4`, line totals `D2:D4`, and Subtotal, Discount, VAT and Total formulas in `D5:D8`, with the results Excel calculated stored in the file | [ExcelInputUpdate](../ExcelInputUpdate/) |

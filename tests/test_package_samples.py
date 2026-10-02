@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 import sys
 import tempfile
 import unittest
@@ -37,6 +38,38 @@ class PackageSamplesTests(unittest.TestCase):
             self.assertIn('Include="OfficeAgent.Core" Version="0.9.0"', project)
             self.assertIn('Include="OfficeAgent.Word" Version="0.9.0"', project)
             self.assertIn('Author = "QuickEdit"', program)
+
+
+# Sample projects CI does not build, each with its reason. Keep this short: a sample outside
+# the solution stops compiling unnoticed, as samples/ExcelRecalculation did when an API it
+# called became internal in 1.0.
+NOT_IN_SOLUTION = {
+    "samples/RequirementsReview/RequirementsReview.csproj": "in progress; add it to the solution when it lands",
+}
+
+
+class SampleSolutionTests(unittest.TestCase):
+    def test_every_sample_project_is_built_by_the_solution(self) -> None:
+        solution = (ROOT / "OfficeAgent.NET.sln").read_text(encoding="utf-8-sig")
+        listed = {
+            path.replace("\\", "/")
+            for path in re.findall(r'"(samples\\[^"]+?\.csproj)"', solution)
+        }
+        projects = {
+            path.relative_to(ROOT).as_posix() for path in (ROOT / "samples").glob("*/*.csproj")
+        }
+
+        self.assertEqual(
+            [],
+            sorted(projects - listed - set(NOT_IN_SOLUTION)),
+            "Add these sample projects to OfficeAgent.NET.sln so CI builds them, "
+            "or list them in NOT_IN_SOLUTION with a reason",
+        )
+        self.assertEqual(
+            [],
+            sorted(path for path in NOT_IN_SOLUTION if path not in projects or path in listed),
+            "Remove these entries from NOT_IN_SOLUTION: the project is gone or already built",
+        )
 
 
 if __name__ == "__main__":
