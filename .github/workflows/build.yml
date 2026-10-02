@@ -258,3 +258,30 @@ jobs:
         with:
           name: test-results-renderer-sandbox
           path: ./TestResults
+
+  container:
+    # The MCP server image (Dockerfile) is otherwise built only when a release is published.
+    # Build it here without pushing, start it, and check its health endpoint, so a broken image
+    # fails this build rather than a release.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Build the MCP server image
+        run: docker build --tag officeagent-mcp:ci .
+
+      - name: Start the server and check its health endpoint
+        run: |
+          docker run --detach --name officeagent-mcp-ci --publish 8080:8080 officeagent-mcp:ci
+          for attempt in $(seq 1 30); do
+            if curl --fail --silent http://localhost:8080/healthz; then
+              echo
+              docker rm --force officeagent-mcp-ci
+              exit 0
+            fi
+            sleep 2
+          done
+          echo "The server did not answer /healthz within 60 seconds."
+          docker logs officeagent-mcp-ci
+          docker rm --force officeagent-mcp-ci
+          exit 1
