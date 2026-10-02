@@ -1,8 +1,9 @@
 # Keeps pinned dependencies current: NuGet packages, the hash-pinned GitHub Actions, the
 # digest-pinned container base images and the hash-pinned CI Python packages. Updates arrive as
-# weekly grouped pull requests. Major NuGet versions are left alone because the library targets
-# netstandard2.0 and net8.0, and a new major of a Microsoft.Extensions or System package can drop
-# those targets; take such updates deliberately.
+# weekly grouped pull requests. Major NuGet and container image versions are left alone because
+# the library targets netstandard2.0 and net8.0: a new major of a Microsoft.Extensions or System
+# package can drop those targets, and a new .NET image changes the SDK or runtime. Take such
+# updates deliberately.
 
 version: 2
 updates:
@@ -26,10 +27,16 @@ updates:
       github-actions:
         patterns: ["*"]
 
+  # Digest and patch updates only. A new .NET major changes the SDK or runtime the image
+  # targets (the renderer's .NET 8 app does not start on a .NET 9 runtime), so take those
+  # deliberately, together with the project and documentation changes they need.
   - package-ecosystem: docker
     directories: ["/", "/deploy/renderer"]
     schedule:
       interval: weekly
+    ignore:
+      - dependency-name: "*"
+        update-types: ["version-update:semver-major"]
     groups:
       docker:
         patterns: ["*"]
