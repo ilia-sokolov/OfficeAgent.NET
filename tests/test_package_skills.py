@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import hashlib
-import re
 import shutil
 import sys
 import tempfile
@@ -51,10 +50,7 @@ class PackageSkillsTests(unittest.TestCase):
 
     def test_packaged_skills_match_release_version_and_write_safety_contract(self) -> None:
         package_skills.package_skills(self.inventory, self.output)
-        changelog = (ROOT / "CHANGELOG.md").read_text(encoding="utf-8")
-        version = re.search(r"^## (\d+\.\d+\.\d+) —", changelog, re.MULTILINE)
-        self.assertIsNotNone(version)
-        release = version.group(1)
+        release = package_skills.documented_release_version()
 
         with zipfile.ZipFile(self.output / "officeagent-integration.zip") as archive:
             integration = "\n".join(
