@@ -77,7 +77,7 @@ internal static class SpreadsheetPartUtility
     public static (Sheet Sheet, WorksheetPart Part)? ResolveSheet(SpreadsheetDocument document, uint sheetId)
     {
         var workbookPart = document.WorkbookPart;
-        var sheet = workbookPart?.Workbook.Sheets?.Elements<Sheet>()
+        var sheet = workbookPart?.WorkbookRoot().Sheets?.Elements<Sheet>()
             .FirstOrDefault(candidate => candidate.SheetId?.Value == sheetId);
         if (sheet?.Id?.Value is not { Length: > 0 } relationshipId) return null;
         return workbookPart!.GetPartById(relationshipId) is WorksheetPart part
@@ -90,11 +90,11 @@ internal static class SpreadsheetPartUtility
     {
         if (!TryParseCell(address, out var column, out var rowIndex)) return null;
         var normalized = ColumnName(column) + rowIndex.ToString(CultureInfo.InvariantCulture);
-        var sheetData = part.Worksheet.GetFirstChild<SheetData>();
+        var sheetData = part.WorksheetRoot().GetFirstChild<SheetData>();
         if (sheetData is null)
         {
             if (!create) return null;
-            sheetData = part.Worksheet.AppendChild(new SheetData());
+            sheetData = part.WorksheetRoot().AppendChild(new SheetData());
         }
 
         var row = sheetData.Elements<Row>().FirstOrDefault(r => r.RowIndex?.Value == rowIndex);

@@ -101,7 +101,7 @@ internal sealed class SlideInsertMediaHandler : IOperationHandler
 
         var slide = SlideList.Target(context, anchor)
             ?? throw new InvalidOperationException($"Slide '{anchor.Path}' vanished before apply.");
-        var tree = slide.Part.Slide.CommonSlideData?.ShapeTree
+        var tree = slide.Part.SlideRoot().CommonSlideData?.ShapeTree
             ?? throw new InvalidOperationException($"Slide '{anchor.Path}' has no shape tree.");
 
         var descriptor = Types[op.MediaType.TrimStart('.')];
@@ -178,7 +178,7 @@ internal sealed class SlideMediaNodeProvider : IPowerPointNodeProvider
     {
         foreach (var slide in PowerPointModel.Slides(map.Package))
         {
-            var tree = slide.Part.Slide.CommonSlideData?.ShapeTree;
+            var tree = slide.Part.SlideRoot().CommonSlideData?.ShapeTree;
             if (tree is null) continue;
 
             foreach (var picture in tree.Elements<Picture>())

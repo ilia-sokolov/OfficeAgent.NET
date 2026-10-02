@@ -19,6 +19,12 @@ corresponding GitHub release.
   unchanged. Rebuild the image to pick this up, and rebuild it with a current .NET 10 SDK to pick
   up .NET runtime security fixes; see [the renderer reference](deploy/renderer/README.md).
 
+- **The libraries build without warnings, and a new warning fails the build.** Every public
+  member now has XML documentation, and the nullable-reference warnings are fixed. A package whose
+  slide, worksheet, workbook or main document part has no root element now fails with an
+  `InvalidOperationException` naming the part, instead of a `NullReferenceException` later on.
+  The public API and wire contract are unchanged.
+
 ### Fixed
 
 - **A render that times out during container start-up no longer leaves a container behind.** The

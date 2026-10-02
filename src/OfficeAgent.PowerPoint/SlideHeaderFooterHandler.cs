@@ -128,7 +128,7 @@ internal sealed class SlideHeaderFooterHandler : IOperationHandler
     /// </summary>
     private static void Set(SlideRef slide, PlaceholderValues type, bool show, string? text, string? field)
     {
-        var tree = slide.Part.Slide.CommonSlideData?.ShapeTree;
+        var tree = slide.Part.SlideRoot().CommonSlideData?.ShapeTree;
         if (tree is null) return;
 
         var existing = tree.Elements<Shape>().FirstOrDefault(s =>

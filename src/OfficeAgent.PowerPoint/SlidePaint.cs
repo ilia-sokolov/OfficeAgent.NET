@@ -1,5 +1,6 @@
 using DocumentFormat.OpenXml;
 using DocumentFormat.OpenXml.Presentation;
+using OfficeAgent.Core;
 using A = DocumentFormat.OpenXml.Drawing;
 
 namespace OfficeAgent.PowerPoint;
@@ -36,7 +37,7 @@ internal static class SlidePaint
     /// </summary>
     public static void SetBackground(SlideRef slide, string color)
     {
-        var common = slide.Part.Slide.CommonSlideData
+        var common = slide.Part.SlideRoot().CommonSlideData
             ?? throw new InvalidOperationException("Slide has no common slide data.");
 
         common.Background?.Remove();
@@ -60,7 +61,7 @@ internal static class SlidePaint
     /// </remarks>
     public static void SetBackgroundImage(SlideRef slide, string relationshipId, double? opacity)
     {
-        var common = slide.Part.Slide.CommonSlideData
+        var common = slide.Part.SlideRoot().CommonSlideData
             ?? throw new InvalidOperationException("Slide has no common slide data.");
 
         common.Background?.Remove();
@@ -79,7 +80,7 @@ internal static class SlidePaint
 
     /// <summary>Removes whatever background the slide has, colour or image.</summary>
     public static void ClearBackground(SlideRef slide) =>
-        slide.Part.Slide.CommonSlideData?.Background?.Remove();
+        slide.Part.SlideRoot().CommonSlideData?.Background?.Remove();
 
     /// <summary>Whether the value is a usable opacity.</summary>
     public static bool IsOpacity(double? value) => value is null or (>= 0 and <= 1);

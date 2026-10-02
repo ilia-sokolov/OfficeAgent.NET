@@ -1,6 +1,7 @@
 using DocumentFormat.OpenXml;
 using DocumentFormat.OpenXml.Presentation;
 using OfficeAgent.Abstractions;
+using OfficeAgent.Core;
 
 namespace OfficeAgent.PowerPoint;
 
@@ -102,7 +103,7 @@ internal static class SlideTiming
     /// <summary>Removes every effect targeting one shape, and the scaffold if nothing is left.</summary>
     public static bool Remove(SlideRef slide, uint shapeId)
     {
-        var timing = slide.Part.Slide.Timing;
+        var timing = slide.Part.SlideRoot().Timing;
         if (timing is null) return false;
 
         var removed = false;
@@ -133,13 +134,13 @@ internal static class SlideTiming
 
     /// <summary>Whether any effect on the slide targets the shape.</summary>
     public static bool Animates(SlideRef slide, uint shapeId) =>
-        slide.Part.Slide.Timing?.Descendants<ShapeTarget>()
+        slide.Part.SlideRoot().Timing?.Descendants<ShapeTarget>()
             .Any(t => t.ShapeId?.Value == shapeId.ToString()) == true;
 
     /// <summary>The slide's main sequence, built along with the tree above it when missing.</summary>
     private static SequenceTimeNode MainSequence(SlideRef slide)
     {
-        var slideElement = slide.Part.Slide;
+        var slideElement = slide.Part.SlideRoot();
         var existing = slideElement.Timing?.Descendants<SequenceTimeNode>().FirstOrDefault();
         if (existing is not null) return existing;
 
@@ -253,7 +254,7 @@ internal static class SlideTiming
     private static void Renumber(SlideRef slide)
     {
         uint next = 1;
-        foreach (var node in slide.Part.Slide.Timing?.Descendants<CommonTimeNode>()
+        foreach (var node in slide.Part.SlideRoot().Timing?.Descendants<CommonTimeNode>()
                  ?? Enumerable.Empty<CommonTimeNode>())
             node.Id = next++;
     }

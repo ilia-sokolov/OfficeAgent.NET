@@ -69,6 +69,8 @@ The [maintenance guide](docs/maintenance.md) describes the checks, the release p
 ## Style
 
 - C# 12; nullable enabled; XML docs on every public member.
+- The libraries under `src/` build with warnings as errors (`src/Directory.Build.props`), so a
+  change that adds a compiler warning fails CI. Tests and samples are not held to this.
 - Prefer struct/record DTOs for plan-shaped objects, classes for handler implementations.
 - No `// TODO` comments - open an issue instead.
 - Tests use xUnit; helper workspaces live inside the test class.

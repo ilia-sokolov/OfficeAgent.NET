@@ -386,7 +386,7 @@ internal sealed class SlideDuplicateHandler : IOperationHandler
 
         var main = PowerPointModel.Main(context.Package);
         var copyPart = main.AddNewPart<SlidePart>();
-        copyPart.Slide = (Slide)slide.Part.Slide.CloneNode(deep: true);
+        copyPart.Slide = (Slide)slide.Part.SlideRoot().CloneNode(deep: true);
 
         // Share the layout and any images: parts are immutable content addressed by
         // relationship id, so two slides pointing at one image is what PowerPoint itself

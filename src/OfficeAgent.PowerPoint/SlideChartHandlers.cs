@@ -38,8 +38,8 @@ internal sealed class SlideInsertChartHandler : IOperationHandler
             ?? throw new InvalidOperationException($"Slide '{anchor.Path}' vanished before apply.");
         var id = PowerPointModel.NextShapeId(slide.Part);
         var frame = SlideChartBuilder.Add(slide.Part, id, op);
-        slide.Part.Slide.CommonSlideData!.ShapeTree!.Append(frame);
-        slide.Part.Slide.Save();
+        slide.Part.SlideRoot().CommonSlideData!.ShapeTree!.Append(frame);
+        slide.Part.SlideRoot().Save();
     }
 
     internal static string? Validate(ChartKind kind, IReadOnlyList<string> categories, IReadOnlyList<ChartSeries> series, int width = 1, int height = 1)
@@ -94,7 +94,7 @@ internal sealed class SlideUpdateChartHandler : IOperationHandler
             ?? throw new InvalidOperationException($"Chart '{anchor.Path}' vanished before apply.");
         SlideChartBuilder.Write(located.Part, op.Kind, op.Categories, op.Series, op.Title, op.ShowLegend);
         located.Frame.NonVisualGraphicFrameProperties!.NonVisualDrawingProperties!.Description = op.Description;
-        located.Slide.Part.Slide.Save();
+        located.Slide.Part.SlideRoot().Save();
     }
 
     private static OperationPreview Fail(string message, Anchor anchor, string code = ValidationErrorCodes.InvalidOperation) =>
@@ -108,7 +108,7 @@ internal sealed class SlideChartNodeProvider : IPowerPointNodeProvider
     public IEnumerable<NodeInfo> Enumerate(PowerPointObjectMap map)
     {
         foreach (var slide in PowerPointModel.Slides(map.Package))
-            foreach (var frame in slide.Part.Slide.Descendants<P.GraphicFrame>())
+            foreach (var frame in slide.Part.SlideRoot().Descendants<P.GraphicFrame>())
             {
                 var reference = frame.Descendants<C.ChartReference>().FirstOrDefault();
                 var id = PowerPointModel.ShapeIdOf(frame);
@@ -142,7 +142,7 @@ internal sealed class SlideChartNodeProvider : IPowerPointNodeProvider
         if (slash <= 0 || !uint.TryParse(value.Substring(0, slash), out var slideId) ||
             !uint.TryParse(value.Substring(slash + 1), out var shapeId)) return null;
         var slide = PowerPointModel.Slide(package, slideId);
-        var frame = slide?.Part.Slide.Descendants<P.GraphicFrame>()
+        var frame = slide?.Part.SlideRoot().Descendants<P.GraphicFrame>()
             .FirstOrDefault(candidate => PowerPointModel.ShapeIdOf(candidate) == shapeId);
         var reference = frame?.Descendants<C.ChartReference>().FirstOrDefault();
         if (slide is null || frame is null || reference?.Id?.Value is not { Length: > 0 } relationshipId ||

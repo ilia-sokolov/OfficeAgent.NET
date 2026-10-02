@@ -1,0 +1,13 @@
+<Project>
+  <!-- The repository-wide settings, then stricter rules for the shipped libraries only. -->
+  <Import Project="$([MSBuild]::GetPathOfFileAbove('Directory.Build.props', '$(MSBuildThisFileDirectory)../'))" />
+
+  <PropertyGroup>
+    <!-- The packages build without warnings, and a new one fails the build rather than
+         accumulating. NuGet vulnerability-audit warnings stay warnings: CI gates on them through
+         scripts/check_vulnerable_packages.py, which has documented, expiring exceptions, and a
+         newly published advisory must not break every build at restore. -->
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <WarningsNotAsErrors>$(WarningsNotAsErrors);NU1901;NU1902;NU1903;NU1904</WarningsNotAsErrors>
+  </PropertyGroup>
+</Project>

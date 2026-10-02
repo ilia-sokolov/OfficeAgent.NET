@@ -202,7 +202,7 @@ public sealed class ApplyContext
     /// <c>anchor-not-found</c> against the anchor that is actually wrong.
     /// </remarks>
     public string ResolveAlias(string anchorId) =>
-        anchorId is not null && _aliases.TryGetValue(anchorId, out var stable) ? stable : anchorId;
+        anchorId is not null && _aliases.TryGetValue(anchorId, out var stable) ? stable : anchorId!;
 
     private static readonly IReadOnlyDictionary<string, string> EmptyAliases =
         new Dictionary<string, string>(0);

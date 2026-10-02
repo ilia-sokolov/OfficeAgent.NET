@@ -104,7 +104,7 @@ internal sealed class SlideFillHandler : IOperationHandler
     {
         foreach (var slide in PowerPointModel.Slides(package))
         {
-            var tree = slide.Part.Slide.CommonSlideData?.ShapeTree;
+            var tree = slide.Part.SlideRoot().CommonSlideData?.ShapeTree;
             if (tree is null) continue;
 
             foreach (var shape in tree.Elements<Shape>())

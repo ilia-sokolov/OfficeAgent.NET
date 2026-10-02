@@ -1,6 +1,7 @@
 using DocumentFormat.OpenXml;
 using DocumentFormat.OpenXml.Presentation;
 using OfficeAgent.Abstractions;
+using OfficeAgent.Core;
 using A = DocumentFormat.OpenXml.Drawing;
 
 namespace OfficeAgent.PowerPoint;
@@ -65,7 +66,7 @@ internal sealed class SlideTableNodeProvider : IPowerPointNodeProvider
     internal static IEnumerable<TableRef> Tables(PowerPointObjectMap map)
     {
         foreach (var slide in PowerPointModel.Slides(map.Package))
-            foreach (var frame in slide.Part.Slide.Descendants<GraphicFrame>())
+            foreach (var frame in slide.Part.SlideRoot().Descendants<GraphicFrame>())
             {
                 var shapeId = PowerPointModel.ShapeIdOf(frame);
                 var table = frame.Graphic?.GraphicData?.GetFirstChild<A.Table>();

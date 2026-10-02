@@ -63,7 +63,7 @@ internal sealed class SlideImageNodeProvider : IPowerPointNodeProvider
     internal static IEnumerable<PictureRef> Pictures(PowerPointObjectMap map)
     {
         foreach (var slide in PowerPointModel.Slides(map.Package))
-            foreach (var picture in slide.Part.Slide.Descendants<P.Picture>())
+            foreach (var picture in slide.Part.SlideRoot().Descendants<P.Picture>())
             {
                 var shapeId = PowerPointModel.ShapeIdOf(picture);
                 if (shapeId is null) continue;
@@ -170,7 +170,7 @@ internal sealed class SlideInsertImageHandler : IOperationHandler
         var relationshipId = slide.Part.GetIdOfPart(imagePart);
 
         var shapeId = PowerPointModel.NextShapeId(slide.Part);
-        var tree = slide.Part.Slide.CommonSlideData?.ShapeTree
+        var tree = slide.Part.SlideRoot().CommonSlideData?.ShapeTree
             ?? throw new InvalidOperationException($"Slide '{anchor.Path}' has no shape tree.");
 
         tree.Append(new P.Picture(
@@ -207,13 +207,13 @@ internal sealed class SlideInsertImageHandler : IOperationHandler
     private static long LowestEdge(SlideRef slide)
     {
         long lowest = 0;
-        foreach (var transform in slide.Part.Slide.Descendants<A.Transform2D>())
+        foreach (var transform in slide.Part.SlideRoot().Descendants<A.Transform2D>())
         {
             var y = transform.Offset?.Y?.Value ?? 0L;
             var height = transform.Extents?.Cy?.Value ?? 0L;
             if (y + height > lowest) lowest = y + height;
         }
-        foreach (var transform in slide.Part.Slide.Descendants<P.Transform>())
+        foreach (var transform in slide.Part.SlideRoot().Descendants<P.Transform>())
         {
             var y = transform.Offset?.Y?.Value ?? 0L;
             var height = transform.Extents?.Cy?.Value ?? 0L;
