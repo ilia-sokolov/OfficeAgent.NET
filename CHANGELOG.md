@@ -45,6 +45,13 @@ corresponding GitHub release.
 
 ### Fixed
 
+- **Resolving a tracked move removes its range markers.** Accepting or rejecting a move removed
+  or unwrapped the moved text but left the `w:moveFromRangeStart`/`End` and
+  `w:moveToRangeStart`/`End` markers that bracketed it, so the output still named a move that no
+  longer existed. A range is now removed once nothing in it is still a pending move; resolving
+  only one half of a move keeps the other half and its range. Found by running the
+  [docx-platform-tests](https://github.com/open-agreements/docx-platform-tests) conformance
+  suite.
 - **A render that times out during container start-up no longer leaves a container behind.** The
   renderer reference stopped a timed-out render with `docker kill`, which refuses a container that
   was created but never started, so `--rm` never removed it. It now removes the container with

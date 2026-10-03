@@ -67,6 +67,8 @@ internal sealed class RevisionHandler : IOperationHandler
 
         var main = WordModel.Main(context.Package);
         var notesBefore = NoteNodeProvider.ReferencedIds(main);
+        var movedIn = node.Elements.Where(e => e is MoveFromRun or MoveToRun && IsLive(e))
+            .Select(RootOf).Distinct().ToList();
 
         // Runs first, then paragraph marks, then the structures that can carry both away
         // with them. Resolving a row before the runs inside it would leave those runs
@@ -79,6 +81,9 @@ internal sealed class RevisionHandler : IOperationHandler
 
         foreach (var element in node.Elements.Where(IsStructural).ToList())
             Resolve(element, accept);
+
+        foreach (var root in movedIn)
+            RemoveEmptyMoveRanges(root);
 
         // Accepting the deletion of a footnote reference deletes the footnote, the way Word
         // does: a note with nothing pointing at it renders nowhere, and leaving one behind
@@ -172,11 +177,73 @@ internal sealed class RevisionHandler : IOperationHandler
     /// revisions inside it without clearing their parent pointers, so reachability is what
     /// distinguishes a live marker from one already carried away.
     /// </summary>
-    private static bool IsLive(OpenXmlElement element)
+    private static bool IsLive(OpenXmlElement element) =>
+        RootOf(element) is Document or Footnotes or Endnotes or Header or Footer;
+
+    private static OpenXmlElement RootOf(OpenXmlElement element)
     {
         var root = element;
         while (root.Parent is not null) root = root.Parent;
-        return root is Document or Footnotes or Endnotes or Header or Footer;
+        return root;
+    }
+
+    /// <summary>
+    /// Removes the range markers of every move whose content is gone. A
+    /// <c>w:moveFromRangeStart</c>/<c>End</c> pair (and its <c>moveTo</c> counterpart) only
+    /// brackets the moved content and names the move; once the move is accepted or rejected
+    /// there is nothing left to bracket, and Word drops the pair too. A range that still
+    /// holds an unresolved move - the other half, or a different move - is kept.
+    /// </summary>
+    private static void RemoveEmptyMoveRanges(OpenXmlElement root)
+    {
+        var open = new Dictionary<string, (OpenXmlElement Start, bool HoldsMove)>();
+        var empty = new List<(OpenXmlElement Start, OpenXmlElement End)>();
+
+        void Close(string key, OpenXmlElement end)
+        {
+            if (open.TryGetValue(key, out var range))
+            {
+                open.Remove(key);
+                if (!range.HoldsMove) empty.Add((range.Start, end));
+            }
+        }
+
+        void MarkOpen(string prefix)
+        {
+            foreach (var key in open.Keys.Where(k => k.StartsWith(prefix, StringComparison.Ordinal)).ToList())
+                open[key] = (open[key].Start, true);
+        }
+
+        foreach (var element in root.Descendants())
+        {
+            switch (element)
+            {
+                case MoveFromRangeStart start when start.Id?.Value is { } id:
+                    open["from:" + id] = (start, false);
+                    break;
+                case MoveToRangeStart start when start.Id?.Value is { } id:
+                    open["to:" + id] = (start, false);
+                    break;
+                case MoveFromRun:
+                    MarkOpen("from:");
+                    break;
+                case MoveToRun:
+                    MarkOpen("to:");
+                    break;
+                case MoveFromRangeEnd end when end.Id?.Value is { } id:
+                    Close("from:" + id, end);
+                    break;
+                case MoveToRangeEnd end when end.Id?.Value is { } id:
+                    Close("to:" + id, end);
+                    break;
+            }
+        }
+
+        foreach (var (start, end) in empty)
+        {
+            start.Remove();
+            end.Remove();
+        }
     }
 
     /// <summary>
