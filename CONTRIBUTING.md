@@ -34,6 +34,18 @@ is always fine.
 - Documentation changes are checked with `python scripts/validate_docs.py` (Python 3), which
   checks links and code fences.
 
+## Hacktoberfest
+
+The repository takes part in [Hacktoberfest](https://hacktoberfest.com). A pull request counts
+once it is merged or approved in review. The rules above still apply, and matter more in October:
+
+- Start from an issue and claim it before you write code, so two people don't do the same work.
+  Unclaimed fixes for something no issue describes may be closed.
+- One issue per pull request.
+- Run the build and tests (below) before you push.
+- Pull requests that only reformat, rename, or add filler text are labelled `spam` and don't
+  count. Small documentation fixes that correct something are welcome.
+
 ## Local development
 
 ```bash
