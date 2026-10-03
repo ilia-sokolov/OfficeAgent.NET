@@ -45,6 +45,12 @@ corresponding GitHub release.
 
 ### Fixed
 
+- **A tracked deletion is one revision.** `changeText` with an empty `with` under `Tracked`
+  wrote the expected `w:del` and, beside it, an empty `w:ins` by the same author. Word's
+  Review pane counted two changes for one deletion, and stepping through them landed on an
+  insertion with no text. A tracked deletion now writes only the `w:del`. The `Direct` path
+  no longer leaves an empty run behind where the text was. Replacements with text are
+  unchanged ([#18](https://github.com/ilia-sokolov/OfficeAgent.NET/issues/18)).
 - **Resolving a tracked move removes its range markers.** Accepting or rejecting a move removed
   or unwrapped the moved text but left the `w:moveFromRangeStart`/`End` and
   `w:moveToRangeStart`/`End` markers that bracketed it, so the output still named a move that no

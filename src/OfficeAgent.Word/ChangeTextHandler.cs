@@ -234,6 +234,15 @@ internal sealed class ChangeTextHandler : IOperationHandler
 
     private static void ApplyDirect(IReadOnlyList<OpenXmlElement> covered, string replacement)
     {
+        // Deleting the span outright: leaving the first run behind with an empty w:t would
+        // keep a run that holds nothing.
+        if (replacement.Length == 0)
+        {
+            foreach (var element in covered)
+                element.Remove();
+            return;
+        }
+
         WordModel.Dialect.SetRunText(covered[0], replacement);
         for (int i = 1; i < covered.Count; i++)
             covered[i].Remove();
@@ -263,14 +272,19 @@ internal sealed class ChangeTextHandler : IOperationHandler
             deleted.AppendChild(clone);
         }
 
-        var insertRun = (Run)first.CloneNode(deep: true);
-        WordModel.Dialect.SetRunText(insertRun, replacement);
-        var inserted = WordRevisions.Stamp(
-            new InsertedRun(), allocator.Next().ToString(), author, stamp);
-        inserted.AppendChild(insertRun);
-
         parent.InsertBefore(deleted, first);
-        parent.InsertBefore(inserted, first);
+
+        // A deletion is one revision. An empty insertion beside it would be a second one that
+        // changes nothing, which Word's Review pane still counts and steps through.
+        if (replacement.Length > 0)
+        {
+            var insertRun = (Run)first.CloneNode(deep: true);
+            WordModel.Dialect.SetRunText(insertRun, replacement);
+            var inserted = WordRevisions.Stamp(
+                new InsertedRun(), allocator.Next().ToString(), author, stamp);
+            inserted.AppendChild(insertRun);
+            parent.InsertBefore(inserted, first);
+        }
 
         foreach (var element in covered)
             element.Remove();
