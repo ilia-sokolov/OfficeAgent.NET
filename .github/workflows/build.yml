@@ -45,7 +45,7 @@ jobs:
 
       - name: Test skill packaging, agent evaluation, and release inventory
         if: matrix.os == 'ubuntu-latest'
-        run: python -m unittest tests/test_agent_evaluation.py tests/test_package_samples.py tests/test_package_skills.py tests/test_release_evidence.py tests/test_smoke_packaged_artifacts.py tests/test_benchmark_report.py tests/test_byte_exact_fixtures.py tests/test_support_policy.py tests/test_verify_candidate_consumer.py -v
+        run: python -m unittest tests/test_agent_evaluation.py tests/test_package_samples.py tests/test_package_skills.py tests/test_package_standalone.py tests/test_release_evidence.py tests/test_smoke_packaged_artifacts.py tests/test_benchmark_report.py tests/test_byte_exact_fixtures.py tests/test_support_policy.py tests/test_verify_candidate_consumer.py -v
 
       - name: Validate MCP Registry manifest
         if: matrix.os == 'ubuntu-latest'
@@ -258,6 +258,45 @@ jobs:
         with:
           name: test-results-renderer-sandbox
           path: ./TestResults
+
+  standalone:
+    # The self-contained downloads and Claude Desktop bundles are otherwise built only when a
+    # release is published. Each runner packages the build for its own machine and runs it with
+    # no .NET on the path. The macOS runner is Apple silicon, which refuses to start an unsigned
+    # executable, so a cross-built binary that lost its signature fails here. The other runtimes
+    # are cross-built at release and checked for format, architecture, and signature then.
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { os: ubuntu-latest, runtime: linux-x64 }
+          - { os: windows-latest, runtime: win-x64 }
+          - { os: macos-latest, runtime: osx-arm64 }
+    env:
+      DOTNET_NOLOGO: true
+      DOTNET_CLI_TELEMETRY_OPTOUT: true
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
+        with:
+          dotnet-version: 10.0.x
+
+      - name: Package the standalone server for this machine
+        run: python scripts/package_standalone.py --output ./standalone --runtime ${{ matrix.runtime }}
+
+      - name: Smoke the standalone server and bundle with no .NET on the path
+        run: python scripts/smoke_packaged_artifacts.py --standalone --artifacts ./standalone
+
+      - name: Upload the standalone build for manual checks
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: standalone-${{ matrix.runtime }}
+          path: ./standalone
+          retention-days: 7
 
   container:
     # The MCP server image (Dockerfile) is otherwise built only when a release is published.

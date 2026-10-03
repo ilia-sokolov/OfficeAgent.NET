@@ -6,6 +6,7 @@
 [![.NET 8 | 10](https://img.shields.io/badge/.NET-8%20%7C%2010-512BD4)](https://github.com/ilia-sokolov/OfficeAgent.NET/blob/main/docs/compatibility.md)
 [![API: SemVer 1.x stable](https://img.shields.io/badge/API-SemVer%201.x%20stable-2ea44f)](https://github.com/ilia-sokolov/OfficeAgent.NET/blob/main/docs/compatibility.md)
 [![native Office: 70/70 cases verified](https://img.shields.io/badge/native%20Office-70%2F70%20cases%20verified-2ea44f)](https://github.com/ilia-sokolov/OfficeAgent.NET/blob/main/docs/native-compatibility.md)
+[![OpenSSF Best Practices](https://img.shields.io/cii/level/15172?label=openssf%20best%20practices)](https://www.bestpractices.dev/projects/15172)
 [![OpenSSF Scorecard](https://img.shields.io/ossf-scorecard/github.com/ilia-sokolov/OfficeAgent.NET?label=openssf%20scorecard)](https://securityscorecards.dev/viewer/?uri=github.com/ilia-sokolov/OfficeAgent.NET)
 [![good first issues](https://img.shields.io/github/issues/ilia-sokolov/OfficeAgent.NET/good%20first%20issue?label=good%20first%20issues)](https://github.com/ilia-sokolov/OfficeAgent.NET/labels/good%20first%20issue)
 [![license](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
@@ -61,6 +62,7 @@ it for a workflow that depends on Office's layout or calculation engine.
 | --- | --- |
 | Decide whether OfficeAgent fits my application | [Library selection guide](docs/choose-officeagent.md) |
 | Try a targeted Word edit | [Try a Word edit](#try-a-word-edit) |
+| Use OfficeAgent in Claude Desktop, or run the server without .NET (from 1.2.0) | [Standalone downloads](docs/mcp-server.md#standalone-downloads) |
 | Create a Word document from scratch | [Create a document](docs/getting-started.md#create-a-document-instead) |
 | Create or edit a PowerPoint deck | [PowerPoint support](docs/powerpoint.md) |
 | Inspect or edit an Excel workbook | [Excel support](docs/excel.md) |

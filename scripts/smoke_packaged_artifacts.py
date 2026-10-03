@@ -23,6 +23,7 @@ import socket
 import re
 import subprocess
 import sys
+import tarfile
 import tempfile
 import urllib.error
 import urllib.request
@@ -30,6 +31,14 @@ import threading
 import time
 import zipfile
 from pathlib import Path
+
+from release_evidence import (
+    DEFAULT_INVENTORY,
+    load_inventory,
+    standalone_archive,
+    standalone_archive_member,
+    standalone_bundle,
+)
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -918,15 +927,203 @@ def smoke(artifacts: Path, version: str, dotnet: str) -> None:
     print("packaged-smoke=passed")
 
 
+def host_runtime() -> str:
+    systems = {"Windows": "win", "Darwin": "osx", "Linux": "linux"}
+    architectures = {"x86_64": "x64", "amd64": "x64", "arm64": "arm64", "aarch64": "arm64"}
+    system = systems.get(platform.system())
+    architecture = architectures.get(platform.machine().lower())
+    if not system or not architecture:
+        raise SmokeError(f"no standalone runtime for {platform.system()} {platform.machine()}")
+    return f"{system}-{architecture}"
+
+
+def extract_standalone(archive: Path, destination: Path) -> None:
+    """Unpack a download the way a user would, keeping the execute bit Unix needs."""
+    if archive.name.endswith(".tar.gz"):
+        with tarfile.open(archive, "r:gz") as package:
+            package.extractall(destination, filter="data")
+        return
+    with zipfile.ZipFile(archive) as package:
+        for info in package.infolist():
+            target = Path(package.extract(info, destination))
+            if os.name != "nt" and (info.external_attr >> 16) & 0o111:
+                target.chmod(target.stat().st_mode | 0o755)
+
+
+def resolve_bundle_command(
+    manifest: dict, root: Path, user_config: dict[str, str]
+) -> tuple[list[str], dict[str, str]]:
+    """The command and environment a host builds from an MCPB manifest.
+
+    Mirrors the MCPB reference resolver: ${__dirname} is the unpacked bundle and
+    ${user_config.KEY} is the user's setting. A placeholder left over would reach the
+    server verbatim, so it fails here instead.
+    """
+    variables = {"__dirname": str(root)}
+    variables.update((f"user_config.{key}", value) for key, value in user_config.items())
+
+    def resolve(value: str) -> str:
+        resolved = re.sub(r"\$\{([^}]+)\}", lambda match: variables.get(match.group(1), match.group(0)), value)
+        if "${" in resolved:
+            raise SmokeError(f"bundle manifest leaves {resolved!r} unresolved")
+        return resolved
+
+    config = manifest["server"]["mcp_config"]
+    command = [resolve(config["command"]), *(resolve(argument) for argument in config.get("args", []))]
+    env = {name: resolve(value) for name, value in config.get("env", {}).items()}
+    return command, env
+
+
+def verify_bundle_edit(server: StdioServer, documents: Path) -> None:
+    """Edit a file the user already has in the chosen folder, and find the edit on disk."""
+    opened = server.call_tool("open_document", {"connectionId": "documents", "source": "quote.docx"})
+    document_id = opened.get("documentId")
+    if not document_id:
+        raise SmokeError(f"open_document returned no documentId: {json.dumps(opened)[:400]}")
+    hits = server.call_tool_json(
+        "find_in_document",
+        {"connectionId": "documents", "documentId": document_id, "pattern": "Quote for"},
+    )
+    if not isinstance(hits, list) or not hits:
+        raise SmokeError(f"find_in_document returned no hits: {json.dumps(hits)[:400]}")
+    plan_json = json.dumps({"operations": [{
+        "op": "changeText",
+        "target": {"paraId": hits[0]["paraId"], "expect": hits[0]["expect"],
+                   "occurrence": hits[0].get("occurrence", 0)},
+        "with": "Quotation for",
+    }]})
+    applied = server.call_tool(
+        "apply_plan", {"connectionId": "documents", "documentId": document_id, "planJson": plan_json}
+    )
+    if not applied.get("committed"):
+        raise SmokeError(f"apply_plan did not commit: {json.dumps(applied)[:800]}")
+    verify_docx_bytes((documents / "quote.docx").read_bytes(), "Quotation")
+
+
+def verify_bundle_creation(server: StdioServer, documents: Path) -> None:
+    created = server.call_tool("create_document", {
+        "connectionId": "documents",
+        "name": "created.docx",
+        "planJson": json.dumps({"operations": [{
+            "op": "changeText",
+            "target": {"paraId": "auto-0000", "expect": ""},
+            "with": "Created from the bundle.",
+        }]}),
+    })
+    if not created.get("committed"):
+        raise SmokeError(f"create_document did not commit: {json.dumps(created)[:800]}")
+    verify_docx_bytes((documents / "created.docx").read_bytes(), "Created from the bundle.")
+
+
+def verify_bundle(bundle: Path, version: str, workdir: Path, env: dict[str, str]) -> None:
+    """Run the server the way Claude Desktop runs an installed bundle.
+
+    The manifest's own command, arguments, and environment are resolved against a chosen
+    folder, so a wrong path, a misspelled setting, or a tool list that drifted from the
+    server fails here rather than on a user's machine.
+    """
+    root = workdir / "bundle"
+    root.mkdir()
+    extract_standalone(bundle, root)
+    manifest = json.loads((root / "manifest.json").read_text(encoding="utf-8"))
+    if manifest.get("version") != version:
+        raise SmokeError(f"bundle manifest names version {manifest.get('version')!r}, expected {version!r}")
+    if not (root / manifest["server"]["entry_point"]).is_file():
+        raise SmokeError(f"bundle entry point {manifest['server']['entry_point']} is missing")
+    settings = manifest.get("user_config", {})
+    if settings.get("allow_creation", {}).get("default") is not False:
+        raise SmokeError("a bundle must not allow creating documents unless the user turns it on")
+    advertised = {tool["name"] for tool in manifest.get("tools", [])}
+
+    documents = workdir / "bundle-documents"
+    documents.mkdir()
+    (documents / "quote.docx").write_bytes(build_template_docx())
+    cwd = workdir / "bundle-cwd"
+    cwd.mkdir()
+    for allow_creation in ("false", "true"):
+        command, bundle_env = resolve_bundle_command(
+            manifest, root, {"documents_folder": str(documents), "allow_creation": allow_creation}
+        )
+        with StdioServer(command, cwd, {**env, **bundle_env}) as server:
+            reported = initialize(server).get("serverInfo", {}).get("version", "")
+            if not reported_version_matches(reported, version):
+                raise SmokeError(f"bundled server reports version {reported!r}, expected {version!r}")
+            tools = {tool["name"] for tool in server.request("tools/list").get("tools", [])}
+            if allow_creation == "false":
+                if tools != advertised:
+                    raise SmokeError(
+                        f"bundle manifest lists {sorted(advertised)}, the server offers {sorted(tools)}"
+                    )
+                verify_bundle_edit(server, documents)
+            else:
+                if not advertised < tools or "create_document" not in tools:
+                    raise SmokeError(f"allowing creation did not add create_document: {sorted(tools)}")
+                verify_bundle_creation(server, documents)
+    print(f"bundle=passed tools={len(advertised)}")
+
+
+def smoke_standalone(artifacts: Path, version: str, rid: str) -> None:
+    """The self-contained download for this machine, run with no .NET on the path."""
+    standalone = load_inventory(DEFAULT_INVENTORY).get("standalone")
+    if not standalone or rid not in standalone["runtimes"]:
+        raise SmokeError(f"the release inventory ships no standalone build for {rid}")
+    archive = artifacts / standalone_archive(standalone, rid)
+    if not archive.is_file():
+        raise SmokeError(f"missing standalone archive: {archive.name}")
+
+    with tempfile.TemporaryDirectory(prefix="officeagent-standalone-smoke-") as temporary:
+        fixture = Path(temporary)
+        extract_standalone(archive, fixture / "download")
+        executable = fixture / "download" / standalone_archive_member(standalone, rid)
+        if not executable.is_file():
+            raise SmokeError(f"{archive.name} has no {standalone_archive_member(standalone, rid)}")
+        if os.name != "nt" and not os.access(executable, os.X_OK):
+            raise SmokeError(f"{executable.name} is not executable after extraction")
+
+        # Nothing from an installed .NET may be found: the download has to carry its runtime.
+        env = dict(os.environ)
+        for name in ("DOTNET_ROOT", "DOTNET_ROOT_X64", "DOTNET_ROOT_ARM64", "DOTNET_HOST_PATH"):
+            env.pop(name, None)
+        env["PATH"] = os.pathsep.join(
+            entry for entry in env.get("PATH", "").split(os.pathsep)
+            if entry and not (Path(entry) / ("dotnet.exe" if os.name == "nt" else "dotnet")).exists()
+        )
+        print(f"platform={platform.system()} arch={platform.machine()} runtime={rid}")
+
+        command = [str(executable), "--stdio"]
+        workdir = fixture / "empty"
+        workdir.mkdir()
+        with StdioServer(command, workdir, env) as server:
+            verify_document_workflow(server, version)
+        verify_http_health(executable, workdir, env, version)
+        verify_stdin_eof_exit(command, workdir, env)
+        verify_malformed_request(command, workdir, env)
+        verify_missing_configuration(command, workdir, env)
+
+        if rid in standalone.get("bundles", []):
+            verify_bundle(artifacts / standalone_bundle(standalone, rid), version, fixture, env)
+        else:
+            print(f"bundle=not-shipped runtime={rid}")
+    print("standalone-smoke=passed")
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--artifacts", type=Path, required=True)
     parser.add_argument("--version", default=None)
     parser.add_argument("--dotnet", default="dotnet")
+    parser.add_argument(
+        "--standalone", action="store_true",
+        help="smoke the self-contained download and bundle for this machine instead of the packages",
+    )
     args = parser.parse_args()
     try:
-        smoke(args.artifacts.resolve(), args.version or repository_version(), args.dotnet)
-    except (OSError, SmokeError, subprocess.TimeoutExpired, zipfile.BadZipFile) as exc:
+        version = args.version or repository_version()
+        if args.standalone:
+            smoke_standalone(args.artifacts.resolve(), version, host_runtime())
+        else:
+            smoke(args.artifacts.resolve(), version, args.dotnet)
+    except (OSError, SmokeError, subprocess.TimeoutExpired, zipfile.BadZipFile, tarfile.TarError) as exc:
         print(f"ERROR: {exc}", file=sys.stderr)
         return 1
     print("Packaged artifact smoke completed successfully.")

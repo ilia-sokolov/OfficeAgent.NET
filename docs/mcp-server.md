@@ -38,11 +38,99 @@ Or from source:
 dotnet run --project src/OfficeAgent.Mcp -- --stdio
 ```
 
+No .NET installed? Use a [standalone download](#standalone-downloads) instead of the tool.
+
 During initialization the server advertises its tools and the OfficeAgent prompt guidance as MCP server instructions, so a connected client passes the `(connectionId, documentId)` contract and the safety loop to its model.
+
+## Standalone downloads
+
+Every release from 1.2.0 attaches the server as one self-contained executable per platform, so it
+runs where .NET is not installed. Get them from the
+[latest release](https://github.com/ilia-sokolov/OfficeAgent.NET/releases/latest):
+
+| Platform | Archive | Claude Desktop bundle |
+| --- | --- | --- |
+| Windows x64 | `officeagent-mcp-win-x64.zip` | `officeagent-mcp-win-x64.mcpb` |
+| Windows Arm64 | `officeagent-mcp-win-arm64.zip` | `officeagent-mcp-win-arm64.mcpb` |
+| macOS, Apple silicon | `officeagent-mcp-osx-arm64.tar.gz` | `officeagent-mcp-osx-arm64.mcpb` |
+| macOS, Intel | `officeagent-mcp-osx-x64.tar.gz` | `officeagent-mcp-osx-x64.mcpb` |
+| Linux x64 | `officeagent-mcp-linux-x64.tar.gz` | |
+| Linux Arm64 | `officeagent-mcp-linux-arm64.tar.gz` | |
+
+### Claude Desktop
+
+Open the `.mcpb` file for your machine with Claude Desktop, or drag it onto Settings >
+Extensions, then pick the folder OfficeAgent may work in. The bundle runs the server over stdio
+with one filesystem connection, `documents`:
+
+| Setting | Default | Effect |
+| --- | --- | --- |
+| Documents folder | Your Documents folder | The connection root. `.docx`, `.pptx`, and `.xlsx` files inside it are reachable; nothing outside it is. |
+| Allow creating new documents | Off | Sets `AllowCreation`, which adds `create_document` and the template tools. |
+
+Word edits are tracked changes unless the agent asks for `Direct`. PowerPoint has no tracked
+changes, so the server refuses a tracked text edit to a deck and tells the agent to send it again
+with `"mode": "Direct"`.
+
+### Other clients
+
+Extract the archive and give the client the executable's absolute path where the examples on this
+page say `officeagent-mcp`:
+
+```json
+{
+  "mcpServers": {
+    "officeagent": {
+      "command": "/opt/officeagent-mcp-linux-x64/officeagent-mcp",
+      "args": ["--stdio"],
+      "env": {
+        "OfficeAgent__FileSystemConnections__0__ConnectionId": "documents",
+        "OfficeAgent__FileSystemConnections__0__RootPath": "/home/me/officeagent-documents"
+      }
+    }
+  }
+}
+```
+
+Every setting on this page applies, and started without `--stdio` the executable serves
+streamable HTTP like the tool does.
+
+### Unsigned executables
+
+The executables carry no publisher signature. The macOS builds have the ad-hoc signature the
+.NET SDK applies, which Apple silicon requires to run them at all, but not a Developer ID, so:
+
+- On macOS, Gatekeeper refuses to start an executable extracted from an archive a browser
+  downloaded. Download with `curl`, or clear the quarantine flag on the extracted file with
+  `xattr -d com.apple.quarantine officeagent-mcp`.
+- On Windows, SmartScreen or Smart App Control can block an executable from an archive downloaded
+  from the internet. Run `Unblock-File officeagent-mcp-win-x64.zip` before extracting it, or check
+  **Unblock** in the zip file's properties.
+
+Remove the flag only from a download you have verified, as below.
+
+### Verify a download
+
+Each archive and bundle is covered by the release's `SHA256SUMS`, a GitHub build provenance
+attestation, and a CycloneDX SBOM, `officeagent-mcp-<runtime>.<version>.cdx.json`, which lists
+the packages and the .NET runtime pack compiled into the executable:
+
+```bash
+gh attestation verify officeagent-mcp-linux-x64.tar.gz --repo ilia-sokolov/OfficeAgent.NET
+sha256sum --check --ignore-missing SHA256SUMS
+```
+
+### Runtime updates
+
+A standalone executable contains the .NET runtime it was built with, and its SBOM names that
+runtime's version. A .NET security update reaches it only with the next OfficeAgent release. The
+.NET tool runs on whichever runtime is installed, and the container image follows its base image,
+so prefer one of those where you already keep .NET up to date.
 
 ## Local hosting (stdio)
 
-Claude Desktop and many agent SDKs use an `mcpServers` object:
+Claude Desktop can install the server as a [bundle](#claude-desktop) with no JSON to edit. Configured
+by hand, Claude Desktop and many agent SDKs use an `mcpServers` object:
 
 ```json
 {

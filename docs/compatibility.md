@@ -179,8 +179,8 @@ working until then. Nothing is removed within 1.x.
 
 ## Platforms
 
-The libraries target `netstandard2.0` and `net8.0`; `OfficeAgent.Rendering` and the MCP server
-target `net8.0`. Both library targets expose the same public surface, and the gate checks this on
+The libraries target `netstandard2.0` and `net8.0`; `OfficeAgent.Rendering` targets `net8.0`, and
+the MCP server targets `net8.0` and `net10.0`. Both library targets expose the same public surface, and the gate checks this on
 every build. It loads the netstandard2.0 binaries, renders them with the same renderer as the
 baseline, and fails on any type or member that exists in only one target.
 [SUPPORT.md](../SUPPORT.md#runtime-and-platform-compatibility) states which targets CI executes as

@@ -456,5 +456,51 @@ class ReportedVersionTests(unittest.TestCase):
                 self.assertEqual(smoke.package_version_of(value), consumer.normalized_informational_version(value))
 
 
+class StandaloneBundleTests(unittest.TestCase):
+    MANIFEST = {
+        "server": {
+            "mcp_config": {
+                "command": "${__dirname}/server/officeagent-mcp",
+                "args": ["--stdio"],
+                "env": {
+                    "OfficeAgent__FileSystemConnections__0__RootPath": "${user_config.documents_folder}",
+                    "OfficeAgent__AllowCreation": "${user_config.allow_creation}",
+                },
+            }
+        }
+    }
+
+    def test_bundle_command_resolves_like_a_host(self) -> None:
+        root = Path("/extensions/officeagent")
+        command, env = smoke.resolve_bundle_command(
+            self.MANIFEST, root, {"documents_folder": "/Users/me/Documents", "allow_creation": "false"}
+        )
+        self.assertEqual(command, [f"{root}/server/officeagent-mcp", "--stdio"])
+        self.assertEqual(env["OfficeAgent__FileSystemConnections__0__RootPath"], "/Users/me/Documents")
+        self.assertEqual(env["OfficeAgent__AllowCreation"], "false")
+
+    def test_an_undeclared_setting_fails(self) -> None:
+        with self.assertRaisesRegex(smoke.SmokeError, "unresolved"):
+            smoke.resolve_bundle_command(self.MANIFEST, Path("/x"), {"documents_folder": "/docs"})
+
+    def test_this_machine_maps_to_a_runtime_identifier(self) -> None:
+        self.assertRegex(smoke.host_runtime(), r"^(win|osx|linux)-(x64|arm64)$")
+
+    def test_extraction_keeps_the_execute_bit_from_a_zip(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            bundle = root / "test.mcpb"
+            with zipfile.ZipFile(bundle, "w") as archive:
+                info = zipfile.ZipInfo("server/officeagent-mcp")
+                info.create_system = 3
+                info.external_attr = 0o100755 << 16
+                archive.writestr(info, b"#!/bin/sh\n")
+            smoke.extract_standalone(bundle, root / "out")
+            executable = root / "out" / "server" / "officeagent-mcp"
+            self.assertTrue(executable.is_file())
+            if sys.platform != "win32":
+                self.assertTrue(executable.stat().st_mode & 0o100)
+
+
 if __name__ == "__main__":
     unittest.main()

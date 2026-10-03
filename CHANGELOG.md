@@ -3,9 +3,27 @@
 Notable changes per release. The body of each version section is also the text used for the
 corresponding GitHub release.
 
-## 1.1.1 — Unreleased
+## 1.2.0 — Unreleased
+
+### Added
+
+- **The MCP server runs without .NET installed.** Each release now attaches the server as one
+  self-contained executable for Windows, macOS and Linux on x64 and Arm64
+  (`officeagent-mcp-<runtime>.zip` or `.tar.gz`), and as an MCPB bundle for Claude Desktop on
+  Windows and macOS (`officeagent-mcp-<runtime>.mcpb`). The bundle asks for a documents folder and
+  edits `.docx`, `.pptx` and `.xlsx` files in it; creating new documents stays off until the user
+  turns it on. Every archive and bundle is in `SHA256SUMS`, carries a build provenance
+  attestation, and has a CycloneDX SBOM read from the executable itself, which names the .NET
+  runtime it contains. The executables carry no publisher signature; see
+  [standalone downloads](docs/mcp-server.md#standalone-downloads) for Gatekeeper and SmartScreen,
+  and for how .NET runtime updates reach them.
 
 ### Changed
+
+- **The MCP server also targets `net10.0`.** `OfficeAgent.Mcp` now targets `net8.0` and
+  `net10.0`, so the tool runs its `net10.0` build where .NET 10 is installed and keeps running on
+  .NET 8 elsewhere. The container image and the standalone downloads run the `net10.0` build on
+  the .NET 10 runtime.
 
 - **Built with the .NET 10 SDK.** .NET 8 support ends on 2026-11-10, so `global.json` now pins
   the .NET 10 SDK, for CI and for the container image's build stage. The packages still target

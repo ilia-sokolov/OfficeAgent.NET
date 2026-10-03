@@ -6,10 +6,10 @@ COPY src/ ./src/
 RUN dotnet restore src/OfficeAgent.Mcp/OfficeAgent.Mcp.csproj
 
 RUN dotnet publish src/OfficeAgent.Mcp/OfficeAgent.Mcp.csproj \
-    -c Release --no-restore -o /app
+    -c Release -f net10.0 --no-restore -o /app
 
-# The server targets net8.0 with RollForward=LatestMajor. .NET 8 support ends 2026-11-10, so
-# the image runs it on the .NET 10 LTS runtime, and builds it with the .NET 10 SDK global.json pins.
+# The server targets net8.0 and net10.0. .NET 8 support ends 2026-11-10, so the image publishes
+# the net10.0 build and runs it on the .NET 10 LTS runtime, built with the SDK global.json pins.
 FROM mcr.microsoft.com/dotnet/aspnet:10.0@sha256:2d584d8147faddb0d678c5748d47953e5b8e18621ed4fb7049a91381d9d7746f AS runtime
 WORKDIR /app
 COPY --from=build /app ./

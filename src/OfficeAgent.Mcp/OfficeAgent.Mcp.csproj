@@ -2,7 +2,9 @@
 
   <PropertyGroup>
     <OutputType>Exe</OutputType>
-    <TargetFramework>net8.0</TargetFramework>
+    <!-- net8.0 keeps the dotnet tool working where only .NET 8 is installed; net10.0 is what the
+         container and the self-contained downloads run, so they ship a supported runtime. -->
+    <TargetFrameworks>net8.0;net10.0</TargetFrameworks>
     <RollForward>LatestMajor</RollForward>
     <PackAsTool>true</PackAsTool>
     <ToolCommandName>officeagent-mcp</ToolCommandName>
