@@ -13,7 +13,8 @@ Estimated time: 10 minutes.
 
 ## Prerequisites
 
-- [.NET 8 SDK](https://dotnet.microsoft.com/download/dotnet/8.0) or later.
+- The [.NET 10 SDK](https://dotnet.microsoft.com/download/dotnet/10.0), or the .NET 8 SDK until its
+  support ends on 2026-11-10.
 - A Word `.docx` file containing the text `Acme Corp`.
 
 Create a console project and install the engine, Word module, and concrete

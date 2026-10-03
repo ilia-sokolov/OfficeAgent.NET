@@ -171,7 +171,7 @@ internal sealed class RepeatTableRowHandler : IOperationHandler
 
     private static void RefreshIdentifiers(ApplyContext context, OpenXmlElement row)
     {
-        var document = WordModel.Main(context.Package).Document;
+        var document = WordModel.Main(context.Package).DocumentRoot();
         var ids = ImageNodeProvider.EnumerateDrawings(context.Package)
             .SelectMany(drawing => drawing.Descendants<Wp.DocProperties>())
             .Select(p => p.Id?.Value ?? 0U).ToList();

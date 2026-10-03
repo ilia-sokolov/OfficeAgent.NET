@@ -304,7 +304,7 @@ internal static class SlideCommentWriter
     /// </summary>
     private static uint CreationIdOf(SlideRef slide)
     {
-        foreach (var creationId in slide.Part.Slide
+        foreach (var creationId in slide.Part.SlideRoot()
                      .Descendants<DocumentFormat.OpenXml.Office2010.PowerPoint.CreationId>())
             if (creationId.Val?.Value is { } value) return value;
         return 0U;

@@ -504,6 +504,78 @@ public class WordRedlineTests
         });
     }
 
+    [Theory]
+    [InlineData(RevisionAction.Accept, "Before After moved clause")]
+    [InlineData(RevisionAction.Reject, "Before moved clauseAfter ")]
+    public void Resolving_a_move_removes_its_range_markers(RevisionAction action, string text)
+    {
+        var resolved = Apply(Moved(), new RevisionOp
+        {
+            Target = new NodeAnchor { Kind = "revision", Path = "all" },
+            Action = action
+        });
+
+        AssertValid(resolved);
+        Assert.Empty(RevisionPaths(resolved));
+        using var body = Body(resolved);
+        Assert.Empty(body.Root.Descendants<MoveFromRangeStart>());
+        Assert.Empty(body.Root.Descendants<MoveFromRangeEnd>());
+        Assert.Empty(body.Root.Descendants<MoveToRangeStart>());
+        Assert.Empty(body.Root.Descendants<MoveToRangeEnd>());
+        Assert.Equal(text, body.Root.InnerText);
+    }
+
+    [Fact]
+    public void Resolving_one_half_of_a_move_keeps_the_other_half_and_its_range()
+    {
+        var path = RevisionNodePaths(Moved()).Single(p => p.StartsWith("moveFrom#", StringComparison.Ordinal));
+
+        var resolved = Apply(Moved(), new RevisionOp
+        {
+            Target = new NodeAnchor { Kind = "revision", Path = path },
+            Action = RevisionAction.Accept
+        });
+
+        using var body = Body(resolved);
+        Assert.Empty(body.Root.Descendants<MoveFromRangeStart>());
+        Assert.Empty(body.Root.Descendants<MoveFromRangeEnd>());
+        Assert.Single(body.Root.Descendants<MoveToRun>());
+        Assert.Single(body.Root.Descendants<MoveToRangeStart>());
+        Assert.Single(body.Root.Descendants<MoveToRangeEnd>());
+    }
+
+    /// <summary>
+    /// A tracked move as Word writes it: each half wrapped in its run-level revision and
+    /// bracketed by a named range, the two ranges sharing the move's name.
+    /// </summary>
+    private static byte[] Moved()
+    {
+        var buffer = new MemoryStream();
+        using (var package = WordprocessingDocument.Create(buffer, WordprocessingDocumentType.Document))
+        {
+            var date = new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc);
+            Run Plain(string text) => new(new Text(text) { Space = SpaceProcessingModeValues.Preserve });
+            package.AddMainDocumentPart().Document = new Document(new Body(
+                new Paragraph(
+                    Plain("Before "),
+                    new MoveFromRangeStart { Id = "1", Author = "Mover", Date = date, Name = "move1" },
+                    new MoveFromRun(new Run(new DeletedText("moved clause"))) { Id = "2", Author = "Mover", Date = date },
+                    new MoveFromRangeEnd { Id = "1" }),
+                new Paragraph(
+                    Plain("After "),
+                    new MoveToRangeStart { Id = "3", Author = "Mover", Date = date, Name = "move1" },
+                    new MoveToRun(Plain("moved clause")) { Id = "4", Author = "Mover", Date = date },
+                    new MoveToRangeEnd { Id = "3" })));
+        }
+        return buffer.ToArray();
+    }
+
+    private static IReadOnlyList<string> RevisionNodePaths(byte[] document) =>
+        Client().Inspect(new StreamHandle(new MemoryStream(document))).Nodes
+            .Where(n => n.Kind == "revision")
+            .Select(n => n.Path)
+            .ToList();
+
     /// <summary>
     /// An insertion by someone else, written straight into the package - the author filter
     /// is only interesting when more than one author is present.

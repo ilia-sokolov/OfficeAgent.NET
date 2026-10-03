@@ -65,11 +65,11 @@ internal sealed class SetCellHandler : IOperationHandler
             return Fail($"Worksheet id {anchor.SheetId} does not exist.", anchor, ValidationErrorCodes.AnchorNotFound);
         if (target.Value.Cell?.CellFormula is { } formula &&
             formula.FormulaType?.Value == S.CellFormulaValues.Shared &&
-            target.Value.Part.Worksheet.Descendants<S.CellFormula>().Count(candidate =>
+            target.Value.Part.WorksheetRoot().Descendants<S.CellFormula>().Count(candidate =>
                 candidate.FormulaType?.Value == S.CellFormulaValues.Shared &&
                 candidate.SharedIndex?.Value == formula.SharedIndex?.Value) > 1)
             return Fail("setCell cannot replace one member of a shared-formula group; expand the group to independent formulas first.", anchor);
-        if (target.Value.Part.Worksheet.Descendants<S.CellFormula>().Any(candidate =>
+        if (target.Value.Part.WorksheetRoot().Descendants<S.CellFormula>().Any(candidate =>
                 candidate.FormulaType?.Value == S.CellFormulaValues.Array &&
                 SpreadsheetPartUtility.TryParseRange(candidate.Reference?.Value ?? string.Empty,
                     out var left, out var top, out var right, out var bottom) &&
@@ -107,8 +107,8 @@ internal sealed class SetCellHandler : IOperationHandler
         else if (op.Value is { } value)
             SpreadsheetPartUtility.WriteValue(cell, value, op.ValueKind);
         SpreadsheetPartUtility.RecalculateOnOpen(target.Document);
-        target.Part.Worksheet.Save();
-        target.Document.WorkbookPart!.Workbook.Save();
+        target.Part.WorksheetRoot().Save();
+        target.Document.WorkbookPart!.WorkbookRoot().Save();
     }
 
     private static OperationPreview Fail(string message, Anchor anchor, string code = ValidationErrorCodes.InvalidOperation) =>
@@ -182,7 +182,7 @@ internal sealed class AppendTableRowsHandler : IOperationHandler
             SpreadsheetPartUtility.ColumnName(right) + newBottom.ToString(CultureInfo.InvariantCulture);
         table.Reference = updated;
         if (table.AutoFilter is not null) table.AutoFilter.Reference = updated;
-        target.Part.Worksheet.Save();
+        target.Part.WorksheetRoot().Save();
         table.Save();
     }
 
@@ -235,7 +235,7 @@ internal sealed class CellCommentHandler : IOperationHandler
             ?? throw new InvalidOperationException("Comment worksheet vanished before apply.");
         if (op.Action == CommentAction.Add) Add(target.Part, anchor.Address, op.Author, op.Text);
         else Remove(target.Part, anchor.Address);
-        target.Part.Worksheet.Save();
+        target.Part.WorksheetRoot().Save();
     }
 
     private static void Add(WorksheetPart part, string address, string author, string text)
@@ -278,8 +278,8 @@ internal sealed class CellCommentHandler : IOperationHandler
                 "<xml xmlns:v='urn:schemas-microsoft-com:vml' xmlns:o='urn:schemas-microsoft-com:office:office' xmlns:x='urn:schemas-microsoft-com:office:excel'><o:shapelayout v:ext='edit'><o:idmap v:ext='edit' data='1'/></o:shapelayout><v:shapetype id='_x0000_t202' coordsize='21600,21600' o:spt='202' path='m,l,21600r21600,l21600,xe'><v:stroke joinstyle='miter'/><v:path gradientshapeok='t' o:connecttype='rect'/></v:shapetype></xml>"));
             vmlPart.FeedData(initial);
             var legacy = new S.LegacyDrawing { Id = part.GetIdOfPart(vmlPart) };
-            var tableParts = part.Worksheet.GetFirstChild<S.TableParts>();
-            if (tableParts is null) part.Worksheet.Append(legacy); else part.Worksheet.InsertBefore(legacy, tableParts);
+            var tableParts = part.WorksheetRoot().GetFirstChild<S.TableParts>();
+            if (tableParts is null) part.WorksheetRoot().Append(legacy); else part.WorksheetRoot().InsertBefore(legacy, tableParts);
         }
 
         XDocument xml;

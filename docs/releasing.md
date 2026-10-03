@@ -15,8 +15,8 @@ elsewhere. [Maintenance and continuity](maintenance.md) lists who holds each acc
 
 Tools on the maintainer's machine:
 
-- the .NET SDK that [`global.json`](../global.json) selects (a stable 8.0 feature band at or
-  above 8.0.100), and the .NET 10 runtime to repeat the CI runtime leg locally;
+- the .NET SDK that [`global.json`](../global.json) selects (a stable 10.0 feature band at or
+  above 10.0.100), and the .NET 8 runtime for the net8.0 test projects;
 - Python 3 with the hash-pinned packages in `scripts/requirements-ci.txt` (`python -m pip install --require-hashes -r scripts/requirements-ci.txt`) for `scripts/validate_server_manifest.py`;
 - `git`, and the GitHub CLI `gh` signed in to an account with the access below;
 - `mcp-publisher`, the Model Context Protocol Registry CLI, for step 3;
@@ -192,8 +192,8 @@ gh release create $officeAgentTag `
 Publishing the GitHub release triggers [the publish workflow](../.github/workflows/publish.yml).
 That workflow checks out the release tag, validates the metadata, packs the packages, pushes
 the libraries before `OfficeAgent.Mcp`, and attaches the original packages, symbol packages,
-skill archives, the standalone QuickEdit sample, CycloneDX SBOMs, `release-manifest.json`, and
-`SHA256SUMS` to the same release. It creates GitHub build provenance and product-specific SBOM
+skill archives, the standalone QuickEdit sample, the self-contained MCP server archives and Claude
+Desktop bundles, CycloneDX SBOMs, `release-manifest.json`, and `SHA256SUMS` to the same release. It creates GitHub build provenance and product-specific SBOM
 attestations, then publishes NuGet packages and the versioned and `latest` GHCR image. It is the
 only NuGet publisher. Do not publish the same NuGet version manually.
 
@@ -228,6 +228,7 @@ The exact source ref must still be a release tag, even during this unpublished d
 dotnet tool restore
 python scripts/package_samples.py --output artifacts
 python scripts/package_skills.py --output artifacts
+python scripts/package_standalone.py --output artifacts --version "$VERSION"
 python scripts/release_evidence.py sbom --version "$VERSION" --artifacts artifacts
 python scripts/release_evidence.py create \
   --version "$VERSION" \
@@ -287,9 +288,12 @@ gh attestation verify "$VERIFY_DIR/OfficeAgent.Core.$VERSION.nupkg" \
   --predicate-type https://cyclonedx.org/bom
 ```
 
-Repeat both commands for every `.nupkg`, `.snupkg`, skill archive, and sample archive. The manifest maps each
-artifact to its aggregate SBOM and, for multi-targeted packages, separate `netstandard2.0` and
-`net8.0` inventories. Missing license values mean upstream NuGet metadata did not supply them;
+Repeat both commands for every `.nupkg`, `.snupkg`, skill archive, sample archive, standalone
+server archive, and `.mcpb` bundle. The manifest maps each artifact to its aggregate SBOM and, for
+multi-targeted packages, one inventory per target framework. A standalone archive and the bundle
+for the same runtime share one SBOM, read from the deps.json embedded in the executable: it names
+the packages and the .NET runtime pack compiled into that file, and the verifier checks that both
+artifacts carry the executable it describes. Missing license values mean upstream NuGet metadata did not supply them;
 they are not inferred.
 
 Verify all of the following before publishing the MCP Registry entry:
@@ -300,6 +304,7 @@ Verify all of the following before publishing the MCP Registry entry:
 - `word-document-review.zip` contains `word-document-review/SKILL.md`;
 - `officeagent-integration.zip` contains `officeagent-integration/SKILL.md`, its recipe reference, and its recipe assets;
 - `quickedit-sample.zip` restores, builds, and edits its included fictional contract outside the repository;
+- the `.mcpb` bundle for your machine installs in Claude Desktop and edits a document in the folder it is given;
 - the release notes render correctly and their links resolve;
 - the global tool installs from NuGet on a clean machine.
 

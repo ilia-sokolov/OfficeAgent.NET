@@ -38,7 +38,7 @@ OfficeAgent.NET is a .NET document-automation library built on the Open XML SDK 
 
 ### Prerequisites
 
-- .NET 8 SDK or later
+- .NET 10 SDK (the repository's `global.json` selects it)
 - A Word document (`.docx`) containing a value to modify
 
 ### Modify a Document

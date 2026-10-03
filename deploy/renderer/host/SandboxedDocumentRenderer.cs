@@ -155,9 +155,14 @@ public sealed class SandboxedDocumentRenderer : IDocumentRenderer
             catch (OperationCanceledException)
             {
                 killed = true;
-                await KillAsync(name).ConfigureAwait(false);
+                await RemoveContainerAsync(name).ConfigureAwait(false);
                 try { process.Kill(entireProcessTree: true); } catch (InvalidOperationException) { }
                 await process.WaitForExitAsync(CancellationToken.None).ConfigureAwait(false);
+                // The deadline can fall while the engine is still creating the container. A
+                // container that never started is not removed by --rm, and one whose creation
+                // finished after the first removal would be left behind, so remove it again now
+                // that the client that asked for it has exited.
+                await RemoveContainerAsync(name).ConfigureAwait(false);
                 if (cancellationToken.IsCancellationRequested) throw;
             }
 
@@ -199,14 +204,17 @@ public sealed class SandboxedDocumentRenderer : IDocumentRenderer
         return RenderResult.Success(pages.Select((content, index) => new RenderedPage { PageNumber = index + 1, Content = content }).ToArray());
     }
 
-    private async Task KillAsync(string containerName)
+    // rm -f stops a running container and removes it in any state, including one that was
+    // created but never started, which docker kill refuses.
+    private async Task RemoveContainerAsync(string containerName)
     {
-        var kill = new ProcessStartInfo(_limits.DockerExecutable) { UseShellExecute = false, RedirectStandardOutput = true, RedirectStandardError = true };
-        kill.ArgumentList.Add("kill");
-        kill.ArgumentList.Add(containerName);
+        var remove = new ProcessStartInfo(_limits.DockerExecutable) { UseShellExecute = false, RedirectStandardOutput = true, RedirectStandardError = true };
+        remove.ArgumentList.Add("rm");
+        remove.ArgumentList.Add("-f");
+        remove.ArgumentList.Add(containerName);
         try
         {
-            using var process = Process.Start(kill);
+            using var process = Process.Start(remove);
             if (process is not null) await process.WaitForExitAsync().ConfigureAwait(false);
         }
         catch (System.ComponentModel.Win32Exception) { }

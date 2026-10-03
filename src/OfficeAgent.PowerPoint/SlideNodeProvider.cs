@@ -1,4 +1,5 @@
 using OfficeAgent.Abstractions;
+using OfficeAgent.Core;
 
 namespace OfficeAgent.PowerPoint;
 
@@ -49,7 +50,7 @@ internal sealed class SlideNodeProvider : IPowerPointNodeProvider
         return new ResolvedNode
         {
             Kind = Kind,
-            Elements = new[] { (DocumentFormat.OpenXml.OpenXmlElement)slide.Part.Slide },
+            Elements = new[] { (DocumentFormat.OpenXml.OpenXmlElement)slide.Part.SlideRoot() },
             Value = slide.Number.ToString()
         };
     }

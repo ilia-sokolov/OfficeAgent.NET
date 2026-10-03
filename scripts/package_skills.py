@@ -20,7 +20,14 @@ ARCHIVE_TIMESTAMP = (1980, 1, 1, 0, 0, 0)
 
 def documented_release_version() -> str:
     changelog = (ROOT / "CHANGELOG.md").read_text(encoding="utf-8")
-    match = re.search(r"^## (\d+\.\d+\.\d+) —", changelog, re.MULTILINE)
+    # The newest released version; a heading marked "Unreleased" is the next release in
+    # preparation, which validate_docs skips the same way.
+    released = (
+        match
+        for match in re.finditer(r"^## (\d+\.\d+\.\d+) — (.+)$", changelog, re.MULTILINE)
+        if match.group(2).strip().lower() != "unreleased"
+    )
+    match = next(released, None)
     if not match:
         raise release_evidence.EvidenceError("CHANGELOG.md has no release heading")
     return match.group(1)

@@ -677,8 +677,8 @@ internal static class NativeCorpus
             var crc = BitConverter.GetBytes(Crc32(typed)); Array.Reverse(crc); png.Write(crc);
         }
         var header = new byte[13];
-        BitConverter.GetBytes(width).Reverse().ToArray().CopyTo(header, 0);
-        BitConverter.GetBytes(height).Reverse().ToArray().CopyTo(header, 4);
+        var size = BitConverter.GetBytes(width); Array.Reverse(size); size.CopyTo(header, 0);
+        size = BitConverter.GetBytes(height); Array.Reverse(size); size.CopyTo(header, 4);
         header[8] = 8; header[9] = 2;
         Chunk("IHDR", header);
         using (var compressed = new MemoryStream())

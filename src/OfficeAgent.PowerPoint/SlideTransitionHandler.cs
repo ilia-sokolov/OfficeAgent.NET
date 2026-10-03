@@ -79,7 +79,7 @@ internal sealed class SlideTransitionHandler : IOperationHandler
 
         foreach (var slide in Scope(context, op.Target, "transition", out _))
         {
-            slide.Part.Slide.Transition?.Remove();
+            slide.Part.SlideRoot().Transition?.Remove();
             if (string.Equals(op.Effect, "none", StringComparison.OrdinalIgnoreCase)) continue;
 
             var transition = new Transition();
@@ -98,9 +98,9 @@ internal sealed class SlideTransitionHandler : IOperationHandler
             if (op.AdvanceAfterMs is { } after) transition.AdvanceAfterTime = after.ToString();
 
             // p:transition must follow p:clrMapOvr and precede p:timing.
-            var timing = slide.Part.Slide.Timing;
-            if (timing is not null) slide.Part.Slide.InsertBefore(transition, timing);
-            else slide.Part.Slide.Append(transition);
+            var timing = slide.Part.SlideRoot().Timing;
+            if (timing is not null) slide.Part.SlideRoot().InsertBefore(transition, timing);
+            else slide.Part.SlideRoot().Append(transition);
         }
     }
 

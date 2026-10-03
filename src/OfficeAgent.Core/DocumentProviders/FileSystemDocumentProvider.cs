@@ -798,7 +798,7 @@ public sealed class FileSystemDocumentProvider : IDocumentProvider, IDocumentCre
     /// <para>
     /// On Windows this is where a save fails for a reason that has nothing to do with the
     /// caller: an antivirus scanner, the search indexer, or a preview handler opens the
-    /// destination for a moment after it was last written, and <see cref="File.Replace"/>
+    /// destination for a moment after it was last written, and <see cref="File.Replace(string, string, string)"/>
     /// answers <c>"Unable to remove the file to be replaced"</c>. It is transient by
     /// definition - the interfering process lets go - so the fix is to wait and try again
     /// rather than to fail an edit the engine had already completed.

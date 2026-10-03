@@ -40,8 +40,9 @@ a new container path and a new registry namespace, and users would switch to tho
 
 ## Building and verifying
 
-- **Toolchain.** [`global.json`](../global.json) pins the .NET 8 SDK (8.0.100 or a later 8.0
-  feature band). CI installs it with `actions/setup-dotnet`.
+- **Toolchain.** [`global.json`](../global.json) pins the .NET 10 SDK (10.0.100 or a later 10.0
+  feature band). CI installs it with `actions/setup-dotnet`, together with the .NET 8 runtime
+  the net8.0 test projects run on. The libraries still target netstandard2.0 and net8.0.
 - **Reproducible output.** Builds are deterministic, with Source Link and embedded untracked
   sources, and CI builds set `ContinuousIntegrationBuild`. Package references name exact
   versions, which NuGet resolves to that version while it is available; there are no lock files.

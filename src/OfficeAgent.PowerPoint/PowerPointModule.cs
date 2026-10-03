@@ -335,7 +335,7 @@ public sealed class PowerPointModule : IFormatModule, IBlankDocumentFactory, IPl
     /// <summary>The text of the slide's title placeholder, for the outline entry.</summary>
     private static string TitleOf(SlideRef slide)
     {
-        foreach (var shape in slide.Part.Slide.Descendants<Shape>())
+        foreach (var shape in slide.Part.SlideRoot().Descendants<Shape>())
         {
             var placeholder = shape.NonVisualShapeProperties?
                 .ApplicationNonVisualDrawingProperties?.PlaceholderShape;

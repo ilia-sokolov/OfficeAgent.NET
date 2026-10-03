@@ -68,7 +68,7 @@ public sealed class ExcelModule : IFormatModule, IBlankDocumentFactory, IApplyTi
         var anchors = new List<Anchor>();
         var limit = Math.Max(1, Math.Min(options.MaximumCells, 10000));
 
-        foreach (var sheet in workbookPart.Workbook.Sheets?.Elements<S.Sheet>() ?? Enumerable.Empty<S.Sheet>())
+        foreach (var sheet in workbookPart.WorkbookRoot().Sheets?.Elements<S.Sheet>() ?? Enumerable.Empty<S.Sheet>())
         {
             var sheetId = sheet.SheetId?.Value ?? 0;
             if (options.SheetId is { } selected && selected != sheetId) continue;
@@ -85,7 +85,7 @@ public sealed class ExcelModule : IFormatModule, IBlankDocumentFactory, IApplyTi
             {
                 SheetId = sheetId,
                 Name = sheet.Name?.Value ?? string.Empty,
-                Dimension = part.Worksheet.SheetDimension?.Reference?.Value,
+                Dimension = part.WorksheetRoot().SheetDimension?.Reference?.Value,
                 Tables = tables
             });
 
@@ -107,11 +107,11 @@ public sealed class ExcelModule : IFormatModule, IBlankDocumentFactory, IApplyTi
 
             if (options.Fidelity == Fidelity.Content)
             {
-                foreach (var cell in part.Worksheet.Descendants<S.Cell>())
+                foreach (var cell in part.WorksheetRoot().Descendants<S.Cell>())
                 {
                     if (cells.Count >= limit) break;
                     var address = cell.CellReference?.Value;
-                    if (string.IsNullOrEmpty(address) ||
+                    if (address is not { Length: > 0 } ||
                         !SpreadsheetPartUtility.TryParseCell(address, out var column, out var row)) continue;
                     if (hasRange && (column < left || column > right || row < top || row > bottom)) continue;
                     var anchor = new CellAnchor { Id = $"cell#{sheetId}/{address}", SheetId = sheetId, Address = address };
@@ -164,14 +164,14 @@ public sealed class ExcelModule : IFormatModule, IBlankDocumentFactory, IApplyTi
                 TimeSpan.FromMilliseconds(250));
         var comparison = query.Options.CaseSensitive ? StringComparison.Ordinal : StringComparison.OrdinalIgnoreCase;
 
-        foreach (var sheet in workbook.Workbook.Sheets?.Elements<S.Sheet>() ?? Enumerable.Empty<S.Sheet>())
+        foreach (var sheet in workbook.WorkbookRoot().Sheets?.Elements<S.Sheet>() ?? Enumerable.Empty<S.Sheet>())
         {
             var sheetId = sheet.SheetId?.Value ?? 0;
             if (sheet.Id?.Value is not { Length: > 0 } rel || workbook.GetPartById(rel) is not WorksheetPart part) continue;
-            foreach (var cell in part.Worksheet.Descendants<S.Cell>())
+            foreach (var cell in part.WorksheetRoot().Descendants<S.Cell>())
             {
                 var address = cell.CellReference?.Value;
-                if (string.IsNullOrEmpty(address)) continue;
+                if (address is not { Length: > 0 }) continue;
                 var raw = cell.CellValue?.InnerText ?? string.Empty;
                 var displayed = SpreadsheetPartUtility.DisplayValue(document, cell);
                 IEnumerable<string> candidates = query.Options.SpreadsheetValueView switch
@@ -205,14 +205,14 @@ public sealed class ExcelModule : IFormatModule, IBlankDocumentFactory, IApplyTi
     private static string Snapshot(SpreadsheetDocument document)
     {
         using var hash = SHA256.Create();
-        var parts = new List<string> { document.WorkbookPart?.Workbook.OuterXml ?? string.Empty };
+        var parts = new List<string> { document.WorkbookPart?.WorkbookRoot().OuterXml ?? string.Empty };
         if (document.WorkbookPart is { } workbook)
         {
             if (workbook.SharedStringTablePart?.SharedStringTable is { } sharedStrings)
                 parts.Add(sharedStrings.OuterXml);
             foreach (var sheet in workbook.WorksheetParts)
             {
-                parts.Add(sheet.Worksheet.OuterXml);
+                parts.Add(sheet.WorksheetRoot().OuterXml);
                 parts.AddRange(sheet.TableDefinitionParts.Select(p => p.Table?.OuterXml ?? string.Empty));
                 if (sheet.WorksheetCommentsPart?.Comments is { } comments) parts.Add(comments.OuterXml);
             }

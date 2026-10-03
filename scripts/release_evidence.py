@@ -9,6 +9,7 @@ import json
 import re
 import subprocess
 import sys
+import tarfile
 import uuid
 import zipfile
 from pathlib import Path
@@ -21,6 +22,15 @@ DEFAULT_INVENTORY = ROOT / ".config" / "release-artifacts.json"
 SHA256_RE = re.compile(r"^[0-9a-f]{64}$")
 VERSION_RE = re.compile(r"^\d+\.\d+\.\d+$")
 SHA_RE = re.compile(r"^[0-9a-f]{40}$")
+STANDALONE_RID_RE = re.compile(r"^(win|osx|linux)-(x64|arm64)$")
+# Claude Desktop, the host MCPB bundles are for, runs on Windows and macOS only.
+BUNDLE_RID_RE = re.compile(r"^(win|osx)-(x64|arm64)$")
+# The .NET single-file host carries this marker, preceded by the offset of the bundle header
+# (see Microsoft.NET.HostModel's HostWriter). The header locates the embedded deps.json.
+SINGLE_FILE_MARKER = bytes([
+    0x8B, 0x12, 0x02, 0xB9, 0x6A, 0x61, 0x20, 0x38, 0x72, 0x7B, 0x93, 0x02, 0x14, 0xD7, 0xA0, 0x32,
+    0x13, 0xF5, 0xB9, 0xE6, 0xEF, 0xAE, 0x33, 0x18, 0xEE, 0x3B, 0x2D, 0xCE, 0x24, 0xB3, 0x6A, 0xAE,
+])
 
 
 class EvidenceError(ValueError):
@@ -76,7 +86,70 @@ def load_inventory(path: Path) -> dict[str, Any]:
             raise EvidenceError(f"release artifact sample {field} values must be non-empty strings")
         if field != "license" and len(values) != len(set(values)):
             raise EvidenceError(f"release artifact sample {field} values must be unique")
+    standalone = value.get("standalone")
+    if standalone is not None:
+        validate_standalone_inventory(standalone, packages)
     return value
+
+
+def validate_standalone_inventory(standalone: Any, packages: list[dict[str, Any]]) -> None:
+    if not isinstance(standalone, dict):
+        raise EvidenceError("release artifact standalone entry must be an object")
+    for field in ("name", "project", "framework", "license"):
+        if not isinstance(standalone.get(field), str) or not standalone[field]:
+            raise EvidenceError(f"release artifact standalone {field} must be a non-empty string")
+    package = next((item for item in packages if item.get("project") == standalone["project"]), None)
+    if package is None or standalone["framework"] not in package.get("frameworks", []):
+        raise EvidenceError("release artifact standalone build must be a framework of a packaged project")
+    runtimes = standalone.get("runtimes")
+    if (
+        not isinstance(runtimes, list) or not runtimes or len(runtimes) != len(set(runtimes))
+        or any(not isinstance(rid, str) or not STANDALONE_RID_RE.fullmatch(rid) for rid in runtimes)
+    ):
+        raise EvidenceError("release artifact standalone runtimes must be unique runtime identifiers")
+    bundles = standalone.get("bundles", [])
+    if (
+        not isinstance(bundles, list) or len(bundles) != len(set(bundles))
+        or any(rid not in runtimes or not BUNDLE_RID_RE.fullmatch(rid) for rid in bundles)
+    ):
+        raise EvidenceError(
+            "release artifact standalone bundles must be Windows or macOS runtimes it also ships"
+        )
+
+
+def standalone_runtimes(inventory: dict[str, Any]) -> list[str]:
+    standalone = inventory.get("standalone")
+    return list(standalone["runtimes"]) if standalone else []
+
+
+def standalone_bundle_runtimes(inventory: dict[str, Any]) -> list[str]:
+    standalone = inventory.get("standalone")
+    return list(standalone.get("bundles", [])) if standalone else []
+
+
+def standalone_executable(standalone: dict[str, Any], rid: str) -> str:
+    return f"{standalone['name']}.exe" if rid.startswith("win-") else standalone["name"]
+
+
+def standalone_archive(standalone: dict[str, Any], rid: str) -> str:
+    extension = "zip" if rid.startswith("win-") else "tar.gz"
+    return f"{standalone['name']}-{rid}.{extension}"
+
+
+def standalone_archive_member(standalone: dict[str, Any], rid: str) -> str:
+    return f"{standalone['name']}-{rid}/{standalone_executable(standalone, rid)}"
+
+
+def standalone_bundle(standalone: dict[str, Any], rid: str) -> str:
+    return f"{standalone['name']}-{rid}.mcpb"
+
+
+def standalone_bundle_member(standalone: dict[str, Any], rid: str) -> str:
+    return f"server/{standalone_executable(standalone, rid)}"
+
+
+def standalone_sbom(standalone: dict[str, Any], rid: str, version: str) -> str:
+    return f"{standalone['name']}-{rid}.{version}.cdx.json"
 
 
 def sbom_names(package: dict[str, Any], version: str) -> list[str]:
@@ -118,6 +191,25 @@ def expected_products(inventory: dict[str, Any], version: str) -> list[dict[str,
                 "dependencyInventory": [f"{sample['name']}.{version}.cdx.json"],
             }
         )
+    standalone = inventory.get("standalone")
+    for rid in standalone_runtimes(inventory):
+        products.append(
+            {
+                "name": standalone_archive(standalone, rid),
+                "kind": "standalone-executable",
+                "distribution": "github-original",
+                "dependencyInventory": [standalone_sbom(standalone, rid, version)],
+            }
+        )
+    for rid in standalone_bundle_runtimes(inventory):
+        products.append(
+            {
+                "name": standalone_bundle(standalone, rid),
+                "kind": "mcpb-bundle",
+                "distribution": "github-original",
+                "dependencyInventory": [standalone_sbom(standalone, rid, version)],
+            }
+        )
     return products
 
 
@@ -126,6 +218,10 @@ def expected_sboms(inventory: dict[str, Any], version: str) -> list[str]:
     names.extend(f"{skill['name']}.{version}.cdx.json" for skill in inventory["skills"])
     names.extend(
         f"{sample['name']}.{version}.cdx.json" for sample in inventory.get("samples", [])
+    )
+    names.extend(
+        standalone_sbom(inventory["standalone"], rid, version)
+        for rid in standalone_runtimes(inventory)
     )
     return sorted(names)
 
@@ -139,6 +235,10 @@ def sbom_identity(
     for sample in inventory.get("samples", []):
         if filename == f"{sample['name']}.{version}.cdx.json":
             return sample["name"], "not-applicable"
+    for rid in standalone_runtimes(inventory):
+        standalone = inventory["standalone"]
+        if filename == standalone_sbom(standalone, rid, version):
+            return f"{standalone['name']}-{rid}", standalone["framework"]
     for package in inventory["packages"]:
         package_id = package["id"]
         if filename == f"{package_id}.{version}.cdx.json":
@@ -237,7 +337,196 @@ def expected_sbom_dependencies(
     for sample in inventory.get("samples", []):
         if filename == f"{sample['name']}.{version}.cdx.json":
             return sample_dependencies(output / sample["archive"])
+    for rid in standalone_runtimes(inventory):
+        standalone = inventory["standalone"]
+        if filename == standalone_sbom(standalone, rid, version):
+            executable = read_standalone_executable(
+                output / standalone_archive(standalone, rid),
+                standalone_archive_member(standalone, rid),
+                rid,
+            )
+            return single_file_dependencies(executable, standalone, rid)
     return {}
+
+
+def read_standalone_executable(path: Path, member: str, rid: str) -> bytes:
+    """Read the server executable from a release archive or bundle, with its mode checked.
+
+    A Unix executable that lost its execute bit in packaging fails with "permission denied"
+    on the user's machine, so the bit is part of what a release must get right.
+    """
+    executable_bit_required = not rid.startswith("win-")
+    try:
+        if path.name.endswith(".tar.gz"):
+            with tarfile.open(path, "r:gz") as archive:
+                info = archive.getmember(member)
+                stream = archive.extractfile(info) if info.isfile() else None
+                if stream is None:
+                    raise EvidenceError(f"{path.name} entry {member} is not a regular file")
+                mode = info.mode
+                content = stream.read()
+        else:
+            with zipfile.ZipFile(path) as archive:
+                info = archive.getinfo(member)
+                mode = info.external_attr >> 16
+                content = archive.read(info)
+    except KeyError as exc:
+        raise EvidenceError(f"{path.name} has no {member}") from exc
+    except (OSError, tarfile.TarError, zipfile.BadZipFile) as exc:
+        raise EvidenceError(f"cannot read {member} from {path.name}: {exc}") from exc
+    if executable_bit_required and not mode & 0o111:
+        raise EvidenceError(f"{path.name} entry {member} is not executable")
+    return content
+
+
+def single_file_deps(executable: bytes, name: str) -> dict[str, Any]:
+    """Return the deps.json a .NET single-file executable carries.
+
+    It is the build's own record of every package, project, and runtime pack inside the
+    file, so the SBOM describes the bytes users run rather than a separate restore.
+    """
+    marker = executable.find(SINGLE_FILE_MARKER)
+    if marker < 8 or executable.find(SINGLE_FILE_MARKER, marker + 1) != -1:
+        raise EvidenceError(f"{name} is not a .NET single-file executable")
+    header = int.from_bytes(executable[marker - 8:marker], "little")
+    if not 0 < header < len(executable) - 12:
+        raise EvidenceError(f"{name} has no single-file bundle header")
+    if int.from_bytes(executable[header:header + 4], "little") < 2:
+        raise EvidenceError(f"{name} uses a single-file format older than .NET 5")
+    position, length, shift = header + 12, 0, 0
+    while True:
+        if position >= len(executable) or shift > 28:
+            raise EvidenceError(f"{name} has a malformed single-file bundle header")
+        byte = executable[position]
+        position += 1
+        length |= (byte & 0x7F) << shift
+        shift += 7
+        if byte < 0x80:
+            break
+    position += length
+    offset = int.from_bytes(executable[position:position + 8], "little", signed=True)
+    size = int.from_bytes(executable[position + 8:position + 16], "little", signed=True)
+    if offset <= 0 or size <= 0 or offset + size > len(executable):
+        raise EvidenceError(f"{name} carries no deps.json")
+    try:
+        deps = json.loads(executable[offset:offset + size])
+    except (UnicodeDecodeError, json.JSONDecodeError) as exc:
+        raise EvidenceError(f"{name} carries an unreadable deps.json: {exc}") from exc
+    if not isinstance(deps, dict) or not isinstance(deps.get("libraries"), dict):
+        raise EvidenceError(f"{name} carries a deps.json with no libraries")
+    return deps
+
+
+def single_file_dependencies(
+    executable: bytes, standalone: dict[str, Any], rid: str,
+) -> dict[str, str]:
+    """Packages, first-party projects, and runtime packs compiled into one executable."""
+    name = f"{standalone['name']}-{rid}"
+    deps = single_file_deps(executable, name)
+    target = deps.get("runtimeTarget", {})
+    expected_target = f"{standalone['framework']}/{rid}"
+    framework_version = standalone["framework"].removeprefix("net")
+    if not isinstance(target, dict) or target.get("name") != f".NETCoreApp,Version=v{framework_version}/{rid}":
+        raise EvidenceError(f"{name} was not built for {expected_target}")
+    application = Path(standalone["project"]).stem
+    dependencies: dict[str, str] = {}
+    for key, library in deps["libraries"].items():
+        library_name, _, library_version = key.partition("/")
+        kind = library.get("type") if isinstance(library, dict) else None
+        if kind == "runtimepack":
+            library_name = library_name.removeprefix("runtimepack.")
+        elif kind == "project" and library_name == application:
+            continue
+        elif kind not in ("package", "project"):
+            continue
+        if not library_name or not library_version:
+            raise EvidenceError(f"{name} deps.json has an incomplete library entry {key!r}")
+        dependencies[library_name] = library_version
+    runtime_pack = f"Microsoft.NETCore.App.Runtime.{rid}"
+    if runtime_pack not in dependencies:
+        raise EvidenceError(f"{name} does not carry the {runtime_pack} runtime")
+    return dependencies
+
+
+def build_standalone_sbom(
+    inventory: dict[str, Any], rid: str, version: str, executable: bytes,
+) -> dict[str, Any]:
+    standalone = inventory["standalone"]
+    name = f"{standalone['name']}-{rid}"
+    dependencies = single_file_dependencies(executable, standalone, rid)
+    root_ref = f"pkg:generic/{name}@{version}"
+    components = [
+        {
+            "bom-ref": f"pkg:nuget/{package_id}@{package_version}",
+            "type": "library",
+            "name": package_id,
+            "version": package_version,
+            "purl": f"pkg:nuget/{package_id}@{package_version}",
+        }
+        for package_id, package_version in sorted(dependencies.items())
+    ]
+    return {
+        "bomFormat": "CycloneDX",
+        "specVersion": inventory["sbomTool"]["specVersion"],
+        "serialNumber": sbom_serial_number(standalone_sbom(standalone, rid, version)),
+        "version": 1,
+        "metadata": {
+            "tools": {"components": [{
+                "type": "application",
+                "name": "scripts/release_evidence.py",
+            }]},
+            "component": {
+                "bom-ref": root_ref,
+                "type": "application",
+                "name": name,
+                "version": version,
+                "hashes": [{"alg": "SHA-256", "content": hashlib.sha256(executable).hexdigest()}],
+                "licenses": [{"license": {"id": standalone["license"]}}],
+                "properties": [
+                    {"name": "officeagent:targetFramework", "value": standalone["framework"]},
+                    {"name": "officeagent:runtimeIdentifier", "value": rid},
+                ],
+            },
+        },
+        "components": components,
+        "dependencies": [{
+            "ref": root_ref,
+            "dependsOn": [item["bom-ref"] for item in components],
+        }],
+    }
+
+
+def verify_standalone_payloads(inventory: dict[str, Any], output: Path, version: str) -> None:
+    """Each archive's executable is the one its SBOM names, and each bundle ships the same bytes."""
+    standalone = inventory.get("standalone")
+    for rid in standalone_runtimes(inventory):
+        archive = output / standalone_archive(standalone, rid)
+        executable = read_standalone_executable(
+            archive, standalone_archive_member(standalone, rid), rid
+        )
+        digest = hashlib.sha256(executable).hexdigest()
+        bom = read_json(output / standalone_sbom(standalone, rid, version))
+        hashes = bom.get("metadata", {}).get("component", {}).get("hashes", [])
+        if hashes != [{"alg": "SHA-256", "content": digest}]:
+            raise EvidenceError(f"{archive.name} executable does not match its SBOM")
+        if rid not in standalone_bundle_runtimes(inventory):
+            continue
+        bundle = output / standalone_bundle(standalone, rid)
+        bundled = read_standalone_executable(bundle, standalone_bundle_member(standalone, rid), rid)
+        if hashlib.sha256(bundled).hexdigest() != digest:
+            raise EvidenceError(f"{bundle.name} ships a different executable than {archive.name}")
+        try:
+            with zipfile.ZipFile(bundle) as package:
+                manifest = json.loads(package.read("manifest.json"))
+        except (OSError, KeyError, zipfile.BadZipFile, json.JSONDecodeError) as exc:
+            raise EvidenceError(f"cannot read the manifest of {bundle.name}: {exc}") from exc
+        server = manifest.get("server") if isinstance(manifest, dict) else None
+        if (
+            not isinstance(server, dict)
+            or manifest.get("version") != version
+            or server.get("entry_point") != standalone_bundle_member(standalone, rid)
+        ):
+            raise EvidenceError(f"{bundle.name} manifest does not name version {version} and its executable")
 
 
 def reconcile_first_party_dependencies(
@@ -459,6 +748,19 @@ def run_cyclonedx(
             json.dumps(sample_bom, indent=2, sort_keys=True) + "\n", encoding="utf-8"
         )
 
+    standalone = inventory.get("standalone")
+    for rid in standalone_runtimes(inventory):
+        archive = output / standalone_archive(standalone, rid)
+        if not archive.is_file():
+            raise EvidenceError(f"missing standalone archive: {archive.name}")
+        executable = read_standalone_executable(
+            archive, standalone_archive_member(standalone, rid), rid
+        )
+        standalone_bom = build_standalone_sbom(inventory, rid, version, executable)
+        (output / standalone_sbom(standalone, rid, version)).write_text(
+            json.dumps(standalone_bom, indent=2, sort_keys=True) + "\n", encoding="utf-8"
+        )
+
 
 def validate_sbom(
     path: Path, expected_name: str, version: str, spec_version: str,
@@ -543,6 +845,7 @@ def create_evidence(
             path, component_name, version, inventory["sbomTool"]["specVersion"], framework,
             dependencies,
         )
+    verify_standalone_payloads(inventory, output, version)
 
     release_assets = sorted(
         [product["name"] for product in products]
@@ -579,6 +882,7 @@ def create_evidence(
             "Runtime-selected native assets are not predicted beyond restored NuGet graphs.",
             "License fields remain absent when upstream package metadata does not provide them.",
             "NuGet repository signatures are added after upload and are not present in the attached original packages.",
+            "Standalone executables are inventoried from the deps.json they embed: the bundled .NET runtime is named by its runtime pack version, not file by file.",
         ],
     }
     manifest_path = output / "release-manifest.json"
@@ -674,6 +978,7 @@ def verify_evidence(
             output / sbom, component_name, version,
             inventory["sbomTool"]["specVersion"], framework, dependencies,
         )
+    verify_standalone_payloads(inventory, output, version)
 
     expected_assets = sorted(
         list(expected_product_map) + sboms + ["release-manifest.json", "SHA256SUMS"]

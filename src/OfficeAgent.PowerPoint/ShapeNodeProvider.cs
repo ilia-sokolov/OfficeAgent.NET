@@ -27,7 +27,7 @@ internal sealed class ShapeNodeProvider : IPowerPointNodeProvider
     {
         foreach (var slide in PowerPointModel.Slides(map.Package))
         {
-            var tree = slide.Part.Slide.CommonSlideData?.ShapeTree;
+            var tree = slide.Part.SlideRoot().CommonSlideData?.ShapeTree;
             if (tree is null) continue;
 
             foreach (var element in tree.ChildElements)
@@ -67,7 +67,7 @@ internal sealed class ShapeNodeProvider : IPowerPointNodeProvider
         if (!TryParse(path, out var slideId, out var shapeId)) return null;
 
         var slide = PowerPointModel.Slide(package, slideId);
-        var tree = slide?.Part.Slide.CommonSlideData?.ShapeTree;
+        var tree = slide?.Part.SlideRoot().CommonSlideData?.ShapeTree;
         if (slide is null || tree is null) return null;
 
         foreach (var element in tree.ChildElements)

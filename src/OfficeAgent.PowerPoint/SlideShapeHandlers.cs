@@ -151,7 +151,7 @@ internal sealed class SlideInsertShapeHandler : IOperationHandler
         var slide = SlideList.Target(context, anchor)
             ?? throw new InvalidOperationException($"Slide '{anchor.Path}' vanished before apply.");
 
-        var tree = slide.Part.Slide.CommonSlideData?.ShapeTree
+        var tree = slide.Part.SlideRoot().CommonSlideData?.ShapeTree
             ?? throw new InvalidOperationException($"Slide '{anchor.Path}' has no shape tree.");
 
         var body = new TextBody(new A.BodyProperties(), new A.ListStyle());
@@ -193,7 +193,7 @@ internal sealed class SlideInsertShapeHandler : IOperationHandler
     private static long BelowEverything(SlideRef slide)
     {
         long lowest = 0;
-        foreach (var transform in slide.Part.Slide.Descendants<A.Transform2D>())
+        foreach (var transform in slide.Part.SlideRoot().Descendants<A.Transform2D>())
         {
             var bottom = (transform.Offset?.Y?.Value ?? 0L) + (transform.Extents?.Cy?.Value ?? 0L);
             if (bottom > lowest) lowest = bottom;

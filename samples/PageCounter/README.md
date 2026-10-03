@@ -122,10 +122,7 @@ brew install libreoffice poppler
 ### Compile
 
 ```bash
-# Remove global.json constraint if using .NET 10
-mv global.json global.json.bak
 dotnet build PageCounter.csproj -c Release
-mv global.json.bak global.json
 ```
 
 ### Run

@@ -19,10 +19,12 @@ public sealed class WordModule : IFormatModule, IBlankDocumentFactory, IPlanVali
         DocumentMergeLimits limits, CancellationToken cancellationToken) =>
         WordDocumentAssembler.Assemble(sources, options, limits, cancellationToken);
 
+    /// <inheritdoc />
     public DocFormat Format => DocFormat.Word;
 
     private readonly IReadOnlyList<IWordNodeProvider> _providers;
 
+    /// <inheritdoc />
     public IReadOnlyList<IOperationHandler> Handlers { get; }
 
     /// <inheritdoc />
@@ -35,6 +37,7 @@ public sealed class WordModule : IFormatModule, IBlankDocumentFactory, IPlanVali
     /// <inheritdoc />
     public TimeProvider Clock { get; }
 
+    /// <summary>Initializes the Word module with the system clock and the built-in node providers.</summary>
     public WordModule() : this(TimeProvider.System) { }
 
     /// <summary>
@@ -94,6 +97,7 @@ public sealed class WordModule : IFormatModule, IBlankDocumentFactory, IPlanVali
         .ToList();
     }
 
+    /// <inheritdoc />
     public bool CanHandle(IOpenXmlPackage package) => package.Format == DocFormat.Word;
 
     /// <inheritdoc />
@@ -277,9 +281,11 @@ public sealed class WordModule : IFormatModule, IBlankDocumentFactory, IPlanVali
         }
     }
 
+    /// <inheritdoc />
     public IReadOnlyDictionary<string, string> Stabilize(IOpenXmlPackage package) =>
         WordModel.Stabilize(package);
 
+    /// <inheritdoc />
     public InspectResult Inspect(IOpenXmlPackage package, InspectOptions options)
     {
         var styleNames = StyleNameMap(package);
@@ -341,6 +347,7 @@ public sealed class WordModule : IFormatModule, IBlankDocumentFactory, IPlanVali
         };
     }
 
+    /// <inheritdoc />
     public IReadOnlyList<FindHit> Find(IOpenXmlPackage package, FindQuery query)
     {
         var hits = new List<FindHit>();
@@ -424,14 +431,14 @@ public sealed class WordModule : IFormatModule, IBlankDocumentFactory, IPlanVali
             foreach (var sdt in root.Descendants<SdtElement>())
             {
                 var tag = sdt.SdtProperties?.GetFirstChild<Tag>()?.Val?.Value;
-                if (!string.IsNullOrEmpty(tag))
+                if (tag is { Length: > 0 })
                     yield return new StructuralAnchor { Id = $"cc:{tag}", Tag = tag, Kind = "contentControl" };
             }
 
             foreach (var bookmark in root.Descendants<BookmarkStart>())
             {
                 var name = bookmark.Name?.Value;
-                if (!string.IsNullOrEmpty(name) && name != "_GoBack")
+                if (name is { Length: > 0 } && name != "_GoBack")
                     yield return new StructuralAnchor { Id = $"bm:{name}", Tag = name, Kind = "bookmark" };
             }
         }

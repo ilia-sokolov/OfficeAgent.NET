@@ -1,7 +1,9 @@
 from __future__ import annotations
 
+import io
 import json
 import sys
+import tarfile
 import tempfile
 import unittest
 import zipfile
@@ -12,6 +14,48 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "scripts"))
 import release_evidence  # noqa: E402
+
+
+def fake_single_file(rid: str, version: str, framework: str = "net10.0") -> bytes:
+    """Bytes laid out like a .NET single-file executable: host, marker, deps.json, header."""
+    deps = json.dumps({
+        "runtimeTarget": {"name": f".NETCoreApp,Version=v{framework.removeprefix('net')}/{rid}"},
+        "libraries": {
+            f"OfficeAgent.Test/{version}": {"type": "project"},
+            f"OfficeAgent.Dependency/{version}": {"type": "project"},
+            "ModelContextProtocol/1.4.0": {"type": "package"},
+            f"runtimepack.Microsoft.NETCore.App.Runtime.{rid}/10.0.5": {"type": "runtimepack"},
+            "Reference.Only/1.0.0": {"type": "reference"},
+        },
+    }).encode()
+    host = b"host" + bytes(8) + release_evidence.SINGLE_FILE_MARKER + b"code"
+    header_offset = len(host) + len(deps)
+    header = (
+        (6).to_bytes(4, "little") + (0).to_bytes(4, "little") + (1).to_bytes(4, "little")
+        + bytes([3]) + b"abc"
+        + len(host).to_bytes(8, "little") + len(deps).to_bytes(8, "little") + bytes(24)
+    )
+    content = bytearray(host + deps + header)
+    content[4:12] = header_offset.to_bytes(8, "little")
+    return bytes(content)
+
+
+def write_standalone(path: Path, member: str, content: bytes, mode: int = 0o755) -> None:
+    if path.name.endswith(".tar.gz"):
+        with tarfile.open(path, "w:gz") as archive:
+            info = tarfile.TarInfo(member)
+            info.size, info.mode = len(content), mode
+            archive.addfile(info, io.BytesIO(content))
+        return
+    with zipfile.ZipFile(path, "w") as archive:
+        info = zipfile.ZipInfo(member)
+        info.create_system = 3
+        info.external_attr = (0o100000 | mode) << 16
+        archive.writestr(info, content)
+        if path.suffix == ".mcpb":
+            archive.writestr("manifest.json", json.dumps({
+                "version": ReleaseEvidenceTests.VERSION, "server": {"entry_point": member},
+            }))
 
 
 class ReleaseEvidenceTests(unittest.TestCase):
@@ -66,14 +110,32 @@ class ReleaseEvidenceTests(unittest.TestCase):
                     "license": "MIT",
                 }
             ],
+            "standalone": {
+                "name": "test-server",
+                "project": "src/OfficeAgent.Test/OfficeAgent.Test.csproj",
+                "framework": "net8.0",
+                "license": "MIT",
+                "runtimes": ["win-x64", "linux-x64"],
+                "bundles": ["win-x64"],
+            },
             "container": {
                 "name": "ghcr.io/owner/test",
                 "workflow": ".github/workflows/publish.yml",
             },
         }
+        standalone = self.inventory["standalone"]
+        standalone_files = {}
+        for rid in standalone["runtimes"]:
+            standalone_files[release_evidence.standalone_archive(standalone, rid)] = (
+                release_evidence.standalone_archive_member(standalone, rid), rid)
+            standalone_files[release_evidence.standalone_bundle(standalone, rid)] = (
+                release_evidence.standalone_bundle_member(standalone, rid), rid)
         for product in release_evidence.expected_products(self.inventory, self.VERSION):
             path = self.output / product["name"]
-            if product["name"] == "test-sample.zip":
+            if product["name"] in standalone_files:
+                member, rid = standalone_files[product["name"]]
+                write_standalone(path, member, fake_single_file(rid, self.VERSION, "net8.0"))
+            elif product["name"] == "test-sample.zip":
                 with zipfile.ZipFile(path, "w") as archive:
                     archive.writestr(
                         "test-sample/Test.csproj",
@@ -98,6 +160,13 @@ class ReleaseEvidenceTests(unittest.TestCase):
             else:
                 path.write_bytes(product["name"].encode())
         for name in release_evidence.expected_sboms(self.inventory, self.VERSION):
+            rid = next((rid for rid in standalone["runtimes"]
+                        if name == release_evidence.standalone_sbom(standalone, rid, self.VERSION)), None)
+            if rid:
+                bom = release_evidence.build_standalone_sbom(
+                    self.inventory, rid, self.VERSION, fake_single_file(rid, self.VERSION, "net8.0"))
+                (self.output / name).write_text(json.dumps(bom), encoding="utf-8")
+                continue
             component, framework = release_evidence.sbom_identity(
                 self.inventory, name, self.VERSION
             )
@@ -264,6 +333,84 @@ class ReleaseEvidenceTests(unittest.TestCase):
             [f"test-sample.{self.VERSION}.cdx.json"],
         )
 
+    def test_standalone_archive_and_bundle_share_the_runtime_sbom(self) -> None:
+        manifest = release_evidence.read_json(self.output / "release-manifest.json")
+        artifacts = {item["name"]: item for item in manifest["artifacts"]}
+        expected = [f"test-server-win-x64.{self.VERSION}.cdx.json"]
+        self.assertEqual(artifacts["test-server-win-x64.zip"]["kind"], "standalone-executable")
+        self.assertEqual(artifacts["test-server-win-x64.zip"]["dependencyInventory"], expected)
+        self.assertEqual(artifacts["test-server-win-x64.mcpb"]["kind"], "mcpb-bundle")
+        self.assertEqual(artifacts["test-server-win-x64.mcpb"]["dependencyInventory"], expected)
+        self.assertIn("test-server-linux-x64.tar.gz", artifacts)
+        self.assertNotIn("test-server-linux-x64.mcpb", artifacts)
+
+    def test_standalone_sbom_is_read_from_the_executable(self) -> None:
+        bom = release_evidence.read_json(self.output / f"test-server-linux-x64.{self.VERSION}.cdx.json")
+        components = {item["name"]: item["version"] for item in bom["components"]}
+        self.assertEqual(components, {
+            "Microsoft.NETCore.App.Runtime.linux-x64": "10.0.5",
+            "ModelContextProtocol": "1.4.0",
+            "OfficeAgent.Dependency": self.VERSION,
+        })
+        properties = bom["metadata"]["component"]["properties"]
+        self.assertIn({"name": "officeagent:runtimeIdentifier", "value": "linux-x64"}, properties)
+
+    def test_bundle_with_a_different_executable_fails(self) -> None:
+        standalone = self.inventory["standalone"]
+        write_standalone(
+            self.output / "test-server-win-x64.mcpb",
+            release_evidence.standalone_bundle_member(standalone, "win-x64"),
+            fake_single_file("win-x64", self.VERSION, "net8.0") + b"other",
+        )
+        with self.assertRaisesRegex(release_evidence.EvidenceError, "different executable"):
+            release_evidence.verify_standalone_payloads(self.inventory, self.output, self.VERSION)
+
+    def test_executable_that_differs_from_its_sbom_fails(self) -> None:
+        standalone = self.inventory["standalone"]
+        write_standalone(
+            self.output / "test-server-linux-x64.tar.gz",
+            release_evidence.standalone_archive_member(standalone, "linux-x64"),
+            fake_single_file("linux-x64", self.VERSION, "net8.0") + b"rebuilt",
+        )
+        with self.assertRaisesRegex(release_evidence.EvidenceError, "does not match its SBOM"):
+            release_evidence.verify_standalone_payloads(self.inventory, self.output, self.VERSION)
+
+    def test_unix_executable_without_execute_bit_fails(self) -> None:
+        standalone = self.inventory["standalone"]
+        write_standalone(
+            self.output / "test-server-linux-x64.tar.gz",
+            release_evidence.standalone_archive_member(standalone, "linux-x64"),
+            fake_single_file("linux-x64", self.VERSION, "net8.0"),
+            mode=0o644,
+        )
+        with self.assertRaisesRegex(release_evidence.EvidenceError, "not executable"):
+            release_evidence.verify_standalone_payloads(self.inventory, self.output, self.VERSION)
+
+    def test_executable_for_another_runtime_fails(self) -> None:
+        with self.assertRaisesRegex(release_evidence.EvidenceError, "not built for"):
+            release_evidence.single_file_dependencies(
+                fake_single_file("osx-arm64", self.VERSION, "net8.0"),
+                self.inventory["standalone"],
+                "linux-x64",
+            )
+
+    def test_framework_dependent_executable_fails(self) -> None:
+        with self.assertRaisesRegex(release_evidence.EvidenceError, "not a .NET single-file"):
+            release_evidence.single_file_deps(b"MZ" + bytes(64), "apphost")
+
+    def test_standalone_inventory_rejects_a_linux_bundle(self) -> None:
+        self.inventory["standalone"]["bundles"] = ["linux-x64"]
+        with self.assertRaisesRegex(release_evidence.EvidenceError, "Windows or macOS"):
+            release_evidence.validate_standalone_inventory(
+                self.inventory["standalone"], self.inventory["packages"])
+
+    def test_standalone_inventory_rejects_an_unbuilt_framework(self) -> None:
+        self.inventory["standalone"]["framework"] = "net10.0"
+        with self.assertRaisesRegex(release_evidence.EvidenceError, "framework of a packaged project"):
+            release_evidence.validate_standalone_inventory(
+                self.inventory["standalone"], self.inventory["packages"])
+
+
 
 class RepositoryReleaseInventoryTests(unittest.TestCase):
     def test_inventory_covers_every_packable_source_project_and_framework(self) -> None:
@@ -294,6 +441,20 @@ class RepositoryReleaseInventoryTests(unittest.TestCase):
             self.assertEqual(skill["archive"], f"{skill['name']}.zip")
             self.assertEqual(skill["source"], f"skills/{skill['name']}")
             self.assertTrue((ROOT / skill["source"] / "SKILL.md").is_file())
+
+    def test_standalone_server_ships_six_runtimes_and_desktop_bundles(self) -> None:
+        inventory = release_evidence.load_inventory(release_evidence.DEFAULT_INVENTORY)
+        standalone = inventory["standalone"]
+        self.assertEqual(standalone["project"], "src/OfficeAgent.Mcp/OfficeAgent.Mcp.csproj")
+        self.assertEqual(standalone["framework"], "net10.0")
+        self.assertEqual(
+            set(standalone["runtimes"]),
+            {f"{system}-{arch}" for system in ("win", "osx", "linux") for arch in ("x64", "arm64")},
+        )
+        self.assertEqual(
+            set(standalone["bundles"]),
+            {rid for rid in standalone["runtimes"] if not rid.startswith("linux-")},
+        )
 
 
 if __name__ == "__main__":

@@ -297,7 +297,7 @@ internal sealed class SlideFormatHandler : IOperationHandler
         {
             Target = anchor,
             Verb = "format",
-            Before = slide.Part.Slide.CommonSlideData?.Background is null ? "inherited" : "painted",
+            Before = slide.Part.SlideRoot().CommonSlideData?.Background is null ? "inherited" : "painted",
             After = SlidePaint.IsNone(op.FillColor) ? "background cleared" : $"background #{SlidePaint.Hex(op.FillColor)}",
             Context = $"slide {slide.Number}",
             BlastRadius = 1

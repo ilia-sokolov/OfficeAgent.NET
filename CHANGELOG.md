@@ -3,6 +3,60 @@
 Notable changes per release. The body of each version section is also the text used for the
 corresponding GitHub release.
 
+## 1.2.0 — Unreleased
+
+### Added
+
+- **The MCP server runs without .NET installed.** Each release now attaches the server as one
+  self-contained executable for Windows, macOS and Linux on x64 and Arm64
+  (`officeagent-mcp-<runtime>.zip` or `.tar.gz`), and as an MCPB bundle for Claude Desktop on
+  Windows and macOS (`officeagent-mcp-<runtime>.mcpb`). The bundle asks for a documents folder and
+  edits `.docx`, `.pptx` and `.xlsx` files in it; creating new documents stays off until the user
+  turns it on. Every archive and bundle is in `SHA256SUMS`, carries a build provenance
+  attestation, and has a CycloneDX SBOM read from the executable itself, which names the .NET
+  runtime it contains. The executables carry no publisher signature; see
+  [standalone downloads](docs/mcp-server.md#standalone-downloads) for Gatekeeper and SmartScreen,
+  and for how .NET runtime updates reach them.
+
+### Changed
+
+- **The MCP server also targets `net10.0`.** `OfficeAgent.Mcp` now targets `net8.0` and
+  `net10.0`, so the tool runs its `net10.0` build where .NET 10 is installed and keeps running on
+  .NET 8 elsewhere. The container image and the standalone downloads run the `net10.0` build on
+  the .NET 10 runtime.
+
+- **Built with the .NET 10 SDK.** .NET 8 support ends on 2026-11-10, so `global.json` now pins
+  the .NET 10 SDK, for CI and for the container image's build stage. The packages still target
+  `netstandard2.0` and `net8.0`, and nothing in the public API, the wire contract or document
+  output changes. Contributors need the .NET 10 SDK, plus the .NET 8 runtime for the `net8.0`
+  test projects.
+- **The renderer reference image runs on .NET 10.** Its worker is now published self-contained
+  for `linux-x64`, carrying its own .NET 10 runtime, on a digest-pinned `debian:bookworm-slim`
+  base. Microsoft publishes no .NET 10 image on Debian 12, and the image's LibreOffice and
+  Poppler pins are Debian 12 builds, so those pins, the hardening and the reference tests are
+  unchanged. Rebuild the image to pick this up, and rebuild it with a current .NET 10 SDK to pick
+  up .NET runtime security fixes; see [the renderer reference](deploy/renderer/README.md).
+
+- **The libraries build without warnings, and a new warning fails the build.** Every public
+  member now has XML documentation, and the nullable-reference warnings are fixed. A package whose
+  slide, worksheet, workbook or main document part has no root element now fails with an
+  `InvalidOperationException` naming the part, instead of a `NullReferenceException` later on.
+  The public API and wire contract are unchanged.
+
+### Fixed
+
+- **Resolving a tracked move removes its range markers.** Accepting or rejecting a move removed
+  or unwrapped the moved text but left the `w:moveFromRangeStart`/`End` and
+  `w:moveToRangeStart`/`End` markers that bracketed it, so the output still named a move that no
+  longer existed. A range is now removed once nothing in it is still a pending move; resolving
+  only one half of a move keeps the other half and its range. Found by running the
+  [docx-platform-tests](https://github.com/open-agreements/docx-platform-tests) conformance
+  suite.
+- **A render that times out during container start-up no longer leaves a container behind.** The
+  renderer reference stopped a timed-out render with `docker kill`, which refuses a container that
+  was created but never started, so `--rm` never removed it. It now removes the container with
+  `docker rm -f`, once at the deadline and again after the client process has exited.
+
 ## 1.1.0 — 2026-09-30
 
 ### Added

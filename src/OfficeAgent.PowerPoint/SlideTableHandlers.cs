@@ -72,7 +72,7 @@ internal sealed class SlideInsertTableHandler : IOperationHandler
         var shapeId = PowerPointModel.NextShapeId(slide.Part);
         var frame = SlideTableBuilder.BuildFrame(op.Table, shapeId, LowestEdge(slide));
 
-        var tree = slide.Part.Slide.CommonSlideData?.ShapeTree
+        var tree = slide.Part.SlideRoot().CommonSlideData?.ShapeTree
             ?? throw new InvalidOperationException($"Slide '{anchor.Path}' has no shape tree.");
         tree.Append(frame);
     }
@@ -90,13 +90,13 @@ internal sealed class SlideInsertTableHandler : IOperationHandler
     private static long LowestEdge(SlideRef slide)
     {
         long lowest = 0;
-        foreach (var transform in slide.Part.Slide.Descendants<A.Transform2D>())
+        foreach (var transform in slide.Part.SlideRoot().Descendants<A.Transform2D>())
         {
             var y = transform.Offset?.Y?.Value ?? 0L;
             var height = transform.Extents?.Cy?.Value ?? 0L;
             if (y + height > lowest) lowest = y + height;
         }
-        foreach (var transform in slide.Part.Slide.Descendants<DocumentFormat.OpenXml.Presentation.Transform>())
+        foreach (var transform in slide.Part.SlideRoot().Descendants<DocumentFormat.OpenXml.Presentation.Transform>())
         {
             var y = transform.Offset?.Y?.Value ?? 0L;
             var height = transform.Extents?.Cy?.Value ?? 0L;

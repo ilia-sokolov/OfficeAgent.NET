@@ -152,7 +152,7 @@ internal sealed class WordHeaderFooterHandler : IOperationHandler
         const int defaultMargin = 1440;
 
         if (container.OpenXmlPart?.OpenXmlPackage is DocumentFormat.OpenXml.Packaging.WordprocessingDocument doc &&
-            doc.MainDocumentPart?.Document.Body?.GetFirstChild<SectionProperties>() is { } section)
+            doc.MainDocumentPart?.DocumentRoot().Body?.GetFirstChild<SectionProperties>() is { } section)
         {
             var size = section.GetFirstChild<PageSize>()?.Width?.Value ?? letterWidth;
             var margin = section.GetFirstChild<PageMargin>();

@@ -22,14 +22,16 @@ jobs:
       id-token: write          # NuGet OIDC and GitHub artifact attestations
       attestations: write      # publish build and SBOM attestations
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0   # Source Link / deterministic builds
           ref: ${{ github.event.release.tag_name || format('v{0}', inputs.version) }}
 
-      - uses: actions/setup-dotnet@67a3573c9a986a3f9c594539f4ab511d57bb3ce9 # v4
+      - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
         with:
-          dotnet-version: 8.0.x
+          dotnet-version: |
+            8.0.x
+            10.0.x
 
       - name: Validate release metadata and documentation
         id: release
@@ -79,6 +81,19 @@ jobs:
       - name: Package agent skills
         run: python scripts/package_skills.py --output artifacts
 
+      # Last of the builds: publishing for a runtime identifier restores the server project for it.
+      - name: Package standalone server downloads and Claude Desktop bundles
+        run: >-
+          python scripts/package_standalone.py
+          --output artifacts
+          --version "${{ steps.release.outputs.version }}"
+
+      - name: Smoke the standalone Linux server with no .NET on the path
+        run: >-
+          python scripts/smoke_packaged_artifacts.py --standalone
+          --artifacts artifacts
+          --version "${{ steps.release.outputs.version }}"
+
       - name: Restore pinned release tools
         run: dotnet tool restore
 
@@ -103,7 +118,7 @@ jobs:
             --artifacts artifacts
 
       - name: Test sample, skill, and release evidence failure boundaries
-        run: python -m unittest tests/test_agent_evaluation.py tests/test_package_samples.py tests/test_package_skills.py tests/test_release_evidence.py -v
+        run: python -m unittest tests/test_agent_evaluation.py tests/test_package_samples.py tests/test_package_skills.py tests/test_package_standalone.py tests/test_release_evidence.py -v
 
       - name: Verify standalone QuickEdit sample with installed packages
         run: python scripts/verify_quickedit_sample.py --artifacts artifacts --version "${{ steps.release.outputs.version }}"
@@ -206,6 +221,50 @@ jobs:
           subject-path: artifacts/quickedit-sample.zip
           sbom-path: artifacts/quickedit-sample.${{ steps.release.outputs.version }}.cdx.json
 
+      - name: Attest standalone Windows x64 server SBOM
+        uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2
+        with:
+          subject-path: |
+            artifacts/officeagent-mcp-win-x64.zip
+            artifacts/officeagent-mcp-win-x64.mcpb
+          sbom-path: artifacts/officeagent-mcp-win-x64.${{ steps.release.outputs.version }}.cdx.json
+
+      - name: Attest standalone Windows Arm64 server SBOM
+        uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2
+        with:
+          subject-path: |
+            artifacts/officeagent-mcp-win-arm64.zip
+            artifacts/officeagent-mcp-win-arm64.mcpb
+          sbom-path: artifacts/officeagent-mcp-win-arm64.${{ steps.release.outputs.version }}.cdx.json
+
+      - name: Attest standalone macOS x64 server SBOM
+        uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2
+        with:
+          subject-path: |
+            artifacts/officeagent-mcp-osx-x64.tar.gz
+            artifacts/officeagent-mcp-osx-x64.mcpb
+          sbom-path: artifacts/officeagent-mcp-osx-x64.${{ steps.release.outputs.version }}.cdx.json
+
+      - name: Attest standalone macOS Arm64 server SBOM
+        uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2
+        with:
+          subject-path: |
+            artifacts/officeagent-mcp-osx-arm64.tar.gz
+            artifacts/officeagent-mcp-osx-arm64.mcpb
+          sbom-path: artifacts/officeagent-mcp-osx-arm64.${{ steps.release.outputs.version }}.cdx.json
+
+      - name: Attest standalone Linux x64 server SBOM
+        uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2
+        with:
+          subject-path: artifacts/officeagent-mcp-linux-x64.tar.gz
+          sbom-path: artifacts/officeagent-mcp-linux-x64.${{ steps.release.outputs.version }}.cdx.json
+
+      - name: Attest standalone Linux Arm64 server SBOM
+        uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2
+        with:
+          subject-path: artifacts/officeagent-mcp-linux-arm64.tar.gz
+          sbom-path: artifacts/officeagent-mcp-linux-arm64.${{ steps.release.outputs.version }}.cdx.json
+
       - name: Attach original artifacts and verification materials to release
         env:
           GH_TOKEN: ${{ github.token }}
@@ -254,7 +313,7 @@ jobs:
           done
 
       - name: Log in to GHCR
-        uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3
+        uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
@@ -265,7 +324,7 @@ jobs:
 
       - name: Build and publish validated container image
         id: container
-        uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a # v7.3.0
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
         with:
           context: .
           push: true

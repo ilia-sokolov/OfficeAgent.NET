@@ -64,7 +64,7 @@ internal static class PowerPointModel
     /// </summary>
     public static IEnumerable<TextHost> TextHosts(SlideRef slide)
     {
-        foreach (var host in TextHostsIn(slide.Part.Slide, notes: false))
+        foreach (var host in TextHostsIn(slide.Part.SlideRoot(), notes: false))
             yield return host;
 
         if (slide.Part.NotesSlidePart?.NotesSlide is { } notes)
@@ -187,7 +187,7 @@ internal static class PowerPointModel
     public static uint NextShapeId(SlidePart part)
     {
         uint highest = 1;
-        foreach (var element in part.Slide.Descendants<NonVisualDrawingProperties>())
+        foreach (var element in part.SlideRoot().Descendants<NonVisualDrawingProperties>())
             if (element.Id?.Value is { } id && id > highest) highest = id;
         return highest + 1;
     }
@@ -202,7 +202,7 @@ internal static class PowerPointModel
         foreach (var slide in Slides(package))
         {
             builder.Append(slide.SlideId).Append('\n');
-            builder.Append(slide.Part.Slide.OuterXml).Append('\n');
+            builder.Append(slide.Part.SlideRoot().OuterXml).Append('\n');
             if (slide.Part.NotesSlidePart?.NotesSlide is { } notes)
                 builder.Append(notes.OuterXml).Append('\n');
         }

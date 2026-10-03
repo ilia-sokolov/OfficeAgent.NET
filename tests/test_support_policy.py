@@ -42,7 +42,14 @@ def repository_version() -> tuple[int, int]:
 
 
 def documented_release_version() -> str:
-    match = re.search(r"^## (\d+\.\d+\.\d+) —", read("CHANGELOG.md"), re.MULTILINE)
+    # The newest released version. A heading marked "Unreleased" is the next release in
+    # preparation, which the guidance must not pin yet; validate_docs skips it the same way.
+    released = (
+        match
+        for match in re.finditer(r"^## (\d+\.\d+\.\d+) — (.+)$", read("CHANGELOG.md"), re.MULTILINE)
+        if match.group(2).strip().lower() != "unreleased"
+    )
+    match = next(released, None)
     assert match, "CHANGELOG.md has no release heading"
     return match.group(1)
 

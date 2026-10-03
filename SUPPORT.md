@@ -44,21 +44,24 @@ runtime is announced in the changelog before the release that makes it.
 ## Runtime and platform compatibility
 
 The abstractions, core, format, SharePoint, and Agent Framework libraries target
-`netstandard2.0` and `net8.0`. `OfficeAgent.Rendering` and the standalone MCP tool target
-`net8.0`.
+`netstandard2.0` and `net8.0`. `OfficeAgent.Rendering` targets `net8.0`, and the standalone MCP
+tool targets `net8.0` and `net10.0`.
 
 OfficeAgent supports running on .NET versions that Microsoft supports and that CI executes. Today
 those are .NET 8 and .NET 10, the two long-term-support releases.
 [Microsoft's support policy](https://dotnet.microsoft.com/platform/support/policy/dotnet-core)
 ends .NET 8 support on 2026-11-10 and .NET 10 support on 2028-11-14. After 2026-11-10, run
 OfficeAgent on .NET 10: a .NET 10 application consumes the `net8.0` assets unchanged, the MCP
-tool rolls forward to the newest installed runtime (`RollForward=LatestMajor`), and the container
-image runs on the .NET 10 runtime. A problem that reproduces only on a runtime Microsoft no
+tool runs its `net10.0` build there (and rolls forward with `RollForward=LatestMajor`), and the
+container image runs on the .NET 10 runtime. The standalone MCP server downloads contain the .NET 10
+runtime they were built with, so a .NET security fix reaches them with the next OfficeAgent
+release rather than through a runtime update. A problem that reproduces only on a runtime Microsoft no
 longer supports is not guaranteed a fix. .NET 9 is a short-term release, supported until
 2026-11-10, and is not tested separately.
 
 The build workflow compiles, tests, and runs an installed-package smoke on current
-GitHub-hosted Ubuntu, Windows, and macOS runners with the .NET 8 SDK and runtime. A second leg,
+GitHub-hosted Ubuntu, Windows, and macOS runners, built with the .NET 10 SDK and tested on the
+.NET 8 runtime. A second leg,
 on Ubuntu and Windows, builds with the same SDK and runs the test suite and the packaged smoke on
 the .NET 10 runtime; a test fails that leg if the suite did not actually run on .NET 10. The smoke installs
 the packed `officeagent-mcp` tool into an empty tool directory backed by a fresh package
@@ -98,6 +101,8 @@ Every release is expected to provide:
 - SHA-256 manifests for original release files, machine-readable CycloneDX dependency inventories,
   and GitHub build and SBOM attestations bound to the release workflow, tag, and source commit;
 - BuildKit SBOM and provenance attestations plus GitHub build provenance for the container digest;
+- self-contained MCP server archives and Claude Desktop bundles, each smoke-tested on Linux x64 at
+  release and covered by the same checksums, SBOMs, and attestations;
 - version alignment across the GitHub release, NuGet package, and MCP Registry entry.
 
 NuGet trusted publishing authenticates the release workflow without a long-lived API key.

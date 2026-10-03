@@ -27,6 +27,10 @@ public interface IPowerPointOperationHandler : IOperationHandler
 {
 }
 
+/// <summary>
+/// Surfaces and resolves one kind of PowerPoint object behind a uniform seam: enumerate for
+/// inspect, and a content-verified resolve for apply.
+/// </summary>
 [Experimental(EngineExtensibility.DiagnosticId, UrlFormat = EngineExtensibility.UrlFormat)]
 public interface IPowerPointNodeProvider
 {

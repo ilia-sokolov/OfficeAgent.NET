@@ -32,7 +32,7 @@
     {
       "id": "OfficeAgent.Mcp",
       "project": "src/OfficeAgent.Mcp/OfficeAgent.Mcp.csproj",
-      "frameworks": ["net8.0"],
+      "frameworks": ["net8.0", "net10.0"],
       "packageKind": "dotnet-tool"
     },
     {
@@ -77,6 +77,14 @@
       "license": "MIT"
     }
   ],
+  "standalone": {
+    "name": "officeagent-mcp",
+    "project": "src/OfficeAgent.Mcp/OfficeAgent.Mcp.csproj",
+    "framework": "net10.0",
+    "license": "MIT",
+    "runtimes": ["win-x64", "win-arm64", "osx-x64", "osx-arm64", "linux-x64", "linux-arm64"],
+    "bundles": ["win-x64", "win-arm64", "osx-x64", "osx-arm64"]
+  },
   "container": {
     "name": "ghcr.io/ilia-sokolov/officeagent-mcp",
     "workflow": ".github/workflows/publish.yml"

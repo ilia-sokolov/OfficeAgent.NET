@@ -34,6 +34,11 @@ public sealed partial class OfficeAgentClient
     private readonly ILogger _logger;
     private readonly IAuditActorProvider? _auditActorProvider;
 
+    /// <summary>
+    /// Initializes a client over format modules, for documents passed in as handles or bytes,
+    /// with no storage provider. Modules that can create blank documents are used for creation.
+    /// </summary>
+    /// <param name="modules">The format modules to register, for example a <c>WordModule</c>.</param>
     public OfficeAgentClient(params IFormatModule[] modules)
         : this(
             new OfficeAgentEngine(modules),
@@ -43,6 +48,8 @@ public sealed partial class OfficeAgentClient
     {
     }
 
+    /// <summary>Initializes a client over a custom document service, with no storage provider.</summary>
+    /// <param name="service">The engine the client delegates to.</param>
     public OfficeAgentClient(IDocumentService service)
         : this(service, new DocumentProviderRegistry(Array.Empty<IDocumentProvider>()), NullLoggerFactory.Instance)
     {
@@ -98,36 +105,83 @@ public sealed partial class OfficeAgentClient
 
     // ---- Core surface (DocumentHandle) ----
 
+    /// <summary>Reads a document's structure, text and anchors without changing it.</summary>
+    /// <param name="handle">The document to read.</param>
+    /// <param name="options">What to include; <see langword="null"/> uses the defaults.</param>
+    /// <returns>The inspection, including the snapshot a plan can bind to.</returns>
     public InspectResult Inspect(DocumentHandle handle, InspectOptions? options = null) =>
         _service.Inspect(handle, options ?? InspectOptions.Default);
 
+    /// <summary>Finds text in a document and returns content-verified anchors for each match.</summary>
+    /// <param name="handle">The document to search.</param>
+    /// <param name="query">The text or pattern to find.</param>
+    /// <returns>Every match, in document order; empty when nothing matches.</returns>
     public IReadOnlyList<FindHit> Find(DocumentHandle handle, FindQuery query) =>
         _service.Find(handle, query);
 
+    /// <summary>Validates a plan against a document and reports the changes it would make, writing nothing.</summary>
+    /// <param name="handle">The document the plan targets.</param>
+    /// <param name="plan">The plan to validate.</param>
+    /// <returns>The proposed changes, or the validation errors that would stop the plan.</returns>
     public ChangeReport Preview(DocumentHandle handle, DocumentPlan plan) =>
         DocumentPlanCompatibility.InvalidReport(plan) ?? _service.Validate(handle, plan);
 
+    /// <summary>Applies a plan and produces the edited document; nothing is applied if any operation fails.</summary>
+    /// <param name="handle">The document the plan targets.</param>
+    /// <param name="plan">The plan to apply.</param>
+    /// <returns>The result, carrying the edited document when it committed.</returns>
     public ApplyResult Commit(DocumentHandle handle, DocumentPlan plan) =>
         Apply(handle, plan, ApplyOptions.Commit);
 
+    /// <summary>Applies a plan with explicit options, for example to preview or to commit.</summary>
+    /// <param name="handle">The document the plan targets.</param>
+    /// <param name="plan">The plan to apply.</param>
+    /// <param name="options">How to apply; <see langword="null"/> previews without committing.</param>
+    /// <returns>The result of the apply.</returns>
     public ApplyResult Apply(DocumentHandle handle, DocumentPlan plan, ApplyOptions? options = null) =>
         DocumentPlanCompatibility.RejectedResult(plan) ??
         _service.Apply(handle, plan, options ?? ApplyOptions.Preview);
 
+    /// <summary>Reads a document's structure, text and anchors without changing it.</summary>
+    /// <param name="handle">The document to read.</param>
+    /// <param name="options">What to include; <see langword="null"/> uses the defaults.</param>
+    /// <param name="cancellationToken">Cancels the read.</param>
+    /// <returns>The inspection, including the snapshot a plan can bind to.</returns>
     public Task<InspectResult> InspectAsync(DocumentHandle handle, InspectOptions? options = null, CancellationToken cancellationToken = default) =>
         _service.InspectAsync(handle, options ?? InspectOptions.Default, cancellationToken);
 
+    /// <summary>Finds text in a document and returns content-verified anchors for each match.</summary>
+    /// <param name="handle">The document to search.</param>
+    /// <param name="query">The text or pattern to find.</param>
+    /// <param name="cancellationToken">Cancels the search.</param>
+    /// <returns>Every match, in document order; empty when nothing matches.</returns>
     public Task<IReadOnlyList<FindHit>> FindAsync(DocumentHandle handle, FindQuery query, CancellationToken cancellationToken = default) =>
         _service.FindAsync(handle, query, cancellationToken);
 
+    /// <summary>Validates a plan against a document and reports the changes it would make, writing nothing.</summary>
+    /// <param name="handle">The document the plan targets.</param>
+    /// <param name="plan">The plan to validate.</param>
+    /// <param name="cancellationToken">Cancels the validation.</param>
+    /// <returns>The proposed changes, or the validation errors that would stop the plan.</returns>
     public Task<ChangeReport> PreviewAsync(DocumentHandle handle, DocumentPlan plan, CancellationToken cancellationToken = default) =>
         DocumentPlanCompatibility.InvalidReport(plan) is { } report
             ? Task.FromResult(report)
             : _service.ValidateAsync(handle, plan, cancellationToken);
 
+    /// <summary>Applies a plan and produces the edited document; nothing is applied if any operation fails.</summary>
+    /// <param name="handle">The document the plan targets.</param>
+    /// <param name="plan">The plan to apply.</param>
+    /// <param name="cancellationToken">Cancels the apply.</param>
+    /// <returns>The result, carrying the edited document when it committed.</returns>
     public Task<ApplyResult> CommitAsync(DocumentHandle handle, DocumentPlan plan, CancellationToken cancellationToken = default) =>
         ApplyAsync(handle, plan, ApplyOptions.Commit, cancellationToken);
 
+    /// <summary>Applies a plan with explicit options, for example to preview or to commit.</summary>
+    /// <param name="handle">The document the plan targets.</param>
+    /// <param name="plan">The plan to apply.</param>
+    /// <param name="options">How to apply; <see langword="null"/> previews without committing.</param>
+    /// <param name="cancellationToken">Cancels the apply.</param>
+    /// <returns>The result of the apply.</returns>
     public Task<ApplyResult> ApplyAsync(DocumentHandle handle, DocumentPlan plan, ApplyOptions? options = null, CancellationToken cancellationToken = default) =>
         DocumentPlanCompatibility.RejectedResult(plan) is { } result
             ? Task.FromResult(result)
@@ -135,6 +189,10 @@ public sealed partial class OfficeAgentClient
 
     // ---- In-memory byte overload ----
 
+    /// <summary>Reads a document held in memory, without changing it.</summary>
+    /// <param name="document">The document's bytes.</param>
+    /// <param name="options">What to include; <see langword="null"/> uses the defaults.</param>
+    /// <returns>The inspection, including the snapshot a plan can bind to.</returns>
     public InspectResult Inspect(byte[] document, InspectOptions? options = null) =>
         Inspect(new StreamHandle(new MemoryStream(document, writable: false)), options);
 

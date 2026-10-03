@@ -1,6 +1,7 @@
 using DocumentFormat.OpenXml;
 using DocumentFormat.OpenXml.Packaging;
 using DocumentFormat.OpenXml.Wordprocessing;
+using OfficeAgent.Core;
 
 namespace OfficeAgent.Word;
 
@@ -42,7 +43,7 @@ internal static class WordSections
     /// </summary>
     public static SectionProperties Require(MainDocumentPart main)
     {
-        var body = main.Document.Body
+        var body = main.DocumentRoot().Body
             ?? throw new InvalidOperationException("Document has no body.");
 
         var existing = body.GetFirstChild<SectionProperties>();
