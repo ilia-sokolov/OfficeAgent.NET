@@ -75,9 +75,11 @@ public IReadOnlyList<IReadOnlyList<string>> Rows { get; init; }
 public sealed class ApplyOptions
 public ApplyOptions();
 public AuditActor? Actor { get; init; }
+public bool CalculateFormulas { get; init; }
 public static ApplyOptions Commit { get; }
 public bool DryRun { get; init; }
 public static ApplyOptions Preview { get; }
+public bool RejectFormulaErrors { get; init; }
 ```
 
 ### `OfficeAgent.Abstractions.ApplyOutcome`
@@ -218,6 +220,7 @@ Direct = 1
 ```csharp
 public sealed class ChangeReport
 public ChangeReport();
+public FormulaCalculationReport? Calculation { get; init; }
 public IReadOnlyList<ProposedChange> Changes { get; init; }
 public IReadOnlyList<ValidationError> Errors { get; init; }
 public bool IsValid { get; init; }
@@ -332,6 +335,7 @@ public const string UnsupportedTableMarkupChange = "unsupported-table-markup-cha
 public sealed class ConnectionCapabilities
 public ConnectionCapabilities();
 public IReadOnlyList<string> Allowed { get; init; }
+public bool CalculatesFormulas { get; init; }
 public string ConnectionId { get; init; }
 public string Provider { get; init; }
 ```
@@ -598,6 +602,7 @@ public EngineCapabilities();
 public IReadOnlyList<ConnectionCapabilities> Connections { get; init; }
 public ContractVersions Contracts { get; init; }
 public IReadOnlyList<FormatCapabilities> Formats { get; init; }
+public FormulaCalculationCapabilities? FormulaCalculation { get; init; }
 public OpenXmlIngestionLimits Limits { get; init; }
 public bool RenderingAvailable { get; init; }
 public IReadOnlyList<string> RequiresInspection { get; init; }
@@ -638,6 +643,7 @@ public FindHit();
 public Anchor Anchor { get; init; }
 public string Context { get; init; }
 public string? Location { get; init; }
+public string? ParaId { get; }
 public string Text { get; init; }
 ```
 
@@ -689,6 +695,7 @@ public int? ListId { get; init; }
 public int? ListLevel { get; init; }
 public string? ListStyle { get; init; }
 public ChangeMode? Mode { get; init; }
+public int? NumberingId { get; init; }
 public bool? PageBreakBefore { get; init; }
 public int? SizeHalfPoints { get; init; }
 public int? SpacingAfterTwips { get; init; }
@@ -699,6 +706,70 @@ public string? VerticalAlignment { get; init; }
 public int? WidthPx { get; init; }
 public int? XPx { get; init; }
 public int? YPx { get; init; }
+```
+
+### `OfficeAgent.Abstractions.FormulaCalculationCapabilities`
+
+```csharp
+public sealed class FormulaCalculationCapabilities
+public FormulaCalculationCapabilities();
+public string Engine { get; init; }
+public IReadOnlyList<string> SupportedFunctions { get; init; }
+```
+
+### `OfficeAgent.Abstractions.FormulaCalculationReport`
+
+```csharp
+public sealed class FormulaCalculationReport
+public FormulaCalculationReport();
+public IReadOnlyList<FormulaCellResult> Cells { get; init; }
+public bool CircularReference { get; init; }
+public string Engine { get; init; }
+public bool HasFormulaErrors { get; }
+public IReadOnlyList<FormulaCellResult> NewErrors { get; init; }
+public string? NotCalculatedReason { get; init; }
+```
+
+### `OfficeAgent.Abstractions.FormulaCellResult`
+
+```csharp
+public sealed class FormulaCellResult
+public FormulaCellResult();
+public string Address { get; init; }
+public string Formula { get; init; }
+public FormulaOutcome Outcome { get; init; }
+public string? Reason { get; init; }
+public uint SheetId { get; init; }
+public string? Value { get; init; }
+public FormulaValueKind? ValueKind { get; init; }
+```
+
+### `OfficeAgent.Abstractions.FormulaEvaluation`
+
+```csharp
+public sealed class FormulaEvaluation
+public FormulaEvaluation();
+public IReadOnlyList<FormulaCellResult> Cells { get; init; }
+public bool CircularReference { get; init; }
+public string? NotCalculatedReason { get; init; }
+```
+
+### `OfficeAgent.Abstractions.FormulaOutcome`
+
+```csharp
+public enum FormulaOutcome : System.IComparable, System.IConvertible, System.IFormattable, System.ISpanFormattable
+Calculated = 0
+NotCalculated = 1
+```
+
+### `OfficeAgent.Abstractions.FormulaValueKind`
+
+```csharp
+public enum FormulaValueKind : System.IComparable, System.IConvertible, System.IFormattable, System.ISpanFormattable
+Number = 0
+Text = 1
+Boolean = 2
+Error = 3
 ```
 
 ### `OfficeAgent.Abstractions.HeaderFooterOp`
@@ -723,6 +794,15 @@ public bool? ShowSlideNumber { get; init; }
 ```csharp
 public interface IDocumentRenderer
 public Task<RenderResult> RenderAsync(Stream document, RenderOptions options, CancellationToken cancellationToken = default);
+```
+
+### `OfficeAgent.Abstractions.IFormulaEvaluator`
+
+```csharp
+public interface IFormulaEvaluator
+public string Name { get; }
+public IReadOnlyList<string> SupportedFunctions { get; }
+public FormulaEvaluation Evaluate(byte[] workbook, CancellationToken cancellationToken = default);
 ```
 
 ### `OfficeAgent.Abstractions.ITextFormat`
@@ -928,6 +1008,15 @@ public StyleCatalog Styles { get; init; }
 public IReadOnlyList<WorksheetInfo> Worksheets { get; init; }
 ```
 
+### `OfficeAgent.Abstractions.LinkOp`
+
+```csharp
+public sealed class LinkOp : OfficeAgent.Abstractions.PlanOperation, OfficeAgent.Abstractions.ITrackedOperation
+public LinkOp();
+public ChangeMode? Mode { get; init; }
+public string Url { get; init; }
+```
+
 ### `OfficeAgent.Abstractions.MatchOptions`
 
 ```csharp
@@ -945,6 +1034,15 @@ public bool WholeWord { get; init; }
 public enum MediaKind : System.IComparable, System.IConvertible, System.IFormattable, System.ISpanFormattable
 Video = 0
 Audio = 1
+```
+
+### `OfficeAgent.Abstractions.MergeTableCellsOp`
+
+```csharp
+public sealed class MergeTableCellsOp : OfficeAgent.Abstractions.PlanOperation, OfficeAgent.Abstractions.ITrackedOperation
+public MergeTableCellsOp();
+public int ColumnSpan { get; init; }
+public ChangeMode? Mode { get; init; }
 ```
 
 ### `OfficeAgent.Abstractions.MissingTemplateValueBehavior`
@@ -1861,6 +1959,7 @@ InvalidOperation = 7
 RequiresRenderer = 8
 OperationConflict = 9
 RevisionOverlap = 10
+FormulaError = 11
 ```
 
 ### `OfficeAgent.Abstractions.ValidationErrorCodes`
@@ -1871,6 +1970,7 @@ public const string AmbiguousAnchor = "ambiguous-anchor";
 public const string AnchorNotFound = "anchor-not-found";
 public const string ContractMismatch = "contract-mismatch";
 public const string ExpectMismatch = "expect-mismatch";
+public const string FormulaError = "formula-error";
 public const string InvalidOperation = "invalid-operation";
 public const string OperationConflict = "operation-conflict";
 public const string RequiresRenderer = "requires-renderer";
@@ -2003,6 +2103,11 @@ public const string PlanOperations = "Each operation is one object. Concrete exa
 { \"op\": \"comment\", \"target\": { \"kind\": \"comment\", \"path\": \"comment#1\" }, \"action\": \"Resolve\" }
 { \"op\": \"comment\", \"target\": { \"kind\": \"comment\", \"path\": \"comment#1\" }, \"action\": \"Remove\" }
 
+// Link existing text (Word only, Direct; http, https or mailto):
+{ \"op\": \"link\", \"target\": { \"paraId\": \"w14:...\", \"expect\": \"the price list\" }, \"url\": \"https://example.com/prices\" }
+// Continue a list the document already defines (numbering id from a \"list#N\" node in inspect_document.nodes):
+{ \"op\": \"format\", \"target\": { \"paraId\": \"w14:...\", \"expect\": \"\" }, \"numberingId\": 42, \"listLevel\": 1 }
+
 // Define a style once instead of repeating direct formatting on every paragraph. Word only.
 // Define it first, then apply it with format's styleId - both can sit in the same plan:
 { \"op\": \"defineStyle\", \"styleId\": \"Quote\", \"name\": \"Pull Quote\", \"basedOn\": \"Normal\", \"next\": \"Normal\",
@@ -2029,6 +2134,7 @@ public const string PlanOperations = "Each operation is one object. Concrete exa
 { \"op\": \"insertTableRows\", \"target\": { \"kind\": \"table\", \"path\": \"table#0\" }, \"rows\": [[\"NL\",\"17\",\"41850\"]], \"position\": \"End\" }
 { \"op\": \"repeatTableRow\", \"target\": { \"kind\": \"table\", \"path\": \"table#0\" }, \"templateRowIndex\": 1, \"records\": [{ \"Description\": \"Consulting\", \"Amount\": \"1200.00\" }] }
 { \"op\": \"removeTableRows\", \"target\": { \"kind\": \"table\", \"path\": \"table#0\" }, \"onlyIfEmpty\": true }
+{ \"op\": \"mergeTableCells\", \"target\": { \"kind\": \"tableCell\", \"path\": \"table#0/cell#0/1\" }, \"columnSpan\": 2 }   // Word only, Direct: merges with the cells to its right
 { \"op\": \"insertImage\", \"target\": { \"paraId\": \"w14:...\", \"expect\": \"...\" }, \"base64Bytes\": \"iVBORw0KGgo...\", \"imageType\": \"png\", \"widthPx\": 200, \"heightPx\": 80 }
 { \"op\": \"insertImage\", \"target\": { \"paraId\": \"w14:...\", \"expect\": \"...\" }, \"imageConnectionId\": \"images\", \"imageDocumentId\": \"<opaque id from a prior add>\", \"imageType\": \"png\", \"widthPx\": 200, \"heightPx\": 80 }
 { \"op\": \"removeImage\", \"target\": { \"kind\": \"image\", \"path\": \"image#0\" } }
@@ -2068,19 +2174,20 @@ Document addressing
 
 Plan shape, anchors, safety loop
 - Plan body is { \"snapshot\": { \"eTag\": \"<snapshot from inspect_document>\" }, \"operations\": [ ... ] }. Copy the scalar snapshot string returned by inspect_document into snapshot.eTag to detect drift in Word body/header/footer/footnote/endnote XML, PowerPoint slide/notes XML, or Excel workbook, worksheet, table and note XML. It does not cover properties, Word comments, sections, media/image bytes, masters, layouts, or Excel styles, charts and pivot tables; their anchors and provider version checks still apply. Omit snapshot only deliberately. Omit contractVersion for legacy 0.2 behavior, or set it to exactly \"0.2\". Other values fail with contract-mismatch.
-- Available operations (the JSON shape of each is in the preview_plan description): Word and PowerPoint use the document operations below; decks additionally support insertChart/updateChart; workbooks support setCell, appendTableRows, and comment Add/Remove on a cell. These are plan operations inside preview_plan/apply_plan, not separate tools.
+- Available operations (the JSON shape of each is in the preview_plan description): Word and PowerPoint use the document operations below; decks additionally support insertChart/updateChart; workbooks support setCell, appendTableRows, comment Add/Remove on a cell, and setProperty on core document properties. These are plan operations inside preview_plan/apply_plan, not separate tools.
 - populate_template_batch resolves named slots and repeating Word rows into plans and saves one independent output per item. compare_documents reads two Word documents and returns a snapshot-bound redline plan only when every detected change is covered; preview that plan before applying it to the original.
 - preview_document_merge assembles ordered whole Word documents in memory and returns a separate merge plan plus compatibility diagnostics. Pass that complete plan to merge_documents when available. A merge creates a new document and never edits its sources. It does not reconcile independently edited versions. Respect unsupported-content diagnostics and do not substitute a text-only copy.
 - Call inspect_document or find_in_document before building a plan to obtain anchor ids; never invent paragraph ids, occurrence numbers, content-control tags, or node paths.
 - Tables and images only appear in inspect_document.nodes, never in the paragraphs list. Copy the path from there rather than composing one: Word uses \"table#N\"/\"image#N\", a deck uses \"table#{slideId}/{shapeId}\"/\"image#{slideId}/{shapeId}\". To recognise table content, look for paragraphs whose `in` field matches a table path.
 - Preview before you apply. If preview reports stale-snapshot, re-inspect and rebuild. If preview reports expect-mismatch, the document drifted - re-inspect/find that operation. If preview reports revision-overlap, the edit spans somebody else's pending tracked change: resolve that revision first with a revision operation, re-inspect, then reissue the edit, or target a narrower span that lies wholly inside or wholly outside it.
 - Change mode: in a Word document default to \"Tracked\" unless the user explicitly approves direct edits. \"mode\" is not only for changeText - it belongs on every verb that changes content (insert, insertParagraphs, removeParagraph, insertTable, removeTable, the table row/column verbs including repeatTableRow, insertImage, removeImage, format, fill, insertBreak, note), and Word tracks all of them when it is omitted. A tracked structural edit is a real redline: an added paragraph and its paragraph mark come back as insertions, a removed row stays in place struck through until someone accepts it, and a format records what it replaced. A PowerPoint deck has no tracked-changes representation and REFUSES mode \"Tracked\" on any of these, so use \"Direct\" there and say that edits to a deck cannot be redlined; add a comment if the change needs to be flagged for review.
+- To delete text, use changeText with an empty \"with\": { \"op\": \"changeText\", \"target\": { \"paraId\": \"w14:…\", \"expect\": \" unless terminated earlier\" }, \"with\": \"\", \"mode\": \"Tracked\" }. Under Tracked it is one deletion a reviewer can accept or reject. Include the space next to the deleted words in expect so the sentence keeps one space. There is no separate delete verb; to remove a whole paragraph use removeParagraph.
 - Reviewing an existing Word redline: inspect_document.nodes lists every revision (kind \"revision\") with its author and date, under paths like \"ins#7\", \"del#7\", \"markIns#7\" (a paragraph split), \"rowIns#7\"/\"rowDel#7\", \"cellIns#7\"/\"cellDel#7\", and \"runFormat#7\"/\"paraFormat#7\" (formatting changes). Resolve them with { \"op\": \"revision\", \"target\": { \"kind\": \"revision\", \"path\": \"…\" }, \"action\": \"Accept\" | \"Reject\" } - \"all\" takes every revision in the document and \"author:<name>\" takes one person's.
 - Editing a document that already has tracked changes: inspect_document and find_in_document show the text as it would read if every pending change were accepted, so pending insertions are visible and pending deletions are not. An edit clear of the existing revisions, or wholly inside one pending insertion, is applied normally. An edit that spans a pending deletion, or reaches out of one revision into ordinary text, is refused with revision-overlap and nothing is written, because the resulting redline would no longer reject back to the original text. Resolving somebody else's revision is always an explicit revision operation, never a side effect of an edit.
 - Word comments are a conversation, not a write-only log: inspect_document.nodes lists each one (kind \"comment\") with its author, its text, whether it is resolved, and which comment it replies to. Answer one with action \"Reply\", close it with \"Resolve\", delete it with \"Remove\". Read the open comments before editing a document under review - they usually say what the edit should be.
 - Reject operations that need a renderer (pagination, field recalculation); explain the limitation instead.
 - An image behind the content is backgroundImage, not insertImage: { \"op\": \"backgroundImage\", \"base64Bytes\": \"iVBORw0KGgo...\", \"imageType\": \"png\", \"opacity\": 0.2 }. On a deck a slide target paints one slide and no target paints every slide; in Word there is no target and the image repeats on every page. ALWAYS set opacity for a photograph behind text - at full strength almost any image destroys the contrast the text needs, and 0.1-0.3 is the usable range. Supply no image at all to take an existing background away. A flat colour is format with fillColor instead, and a picture IN the text is still insertImage.
-- Real list numbering (Word only): { \"op\": \"format\", \"target\": {…}, \"listStyle\": \"clause\", \"listLevel\": 0, \"listId\": 0 }. listStyle is bullet, decimal (1./a./i.), clause (1./1.1/1.1.1) or none. listLevel is 0-8. NEVER type the number into the text as well - Word draws it, and a paragraph reading \"1. Connect the drive\" in a numbered list comes out as \"1. 1. Connect the drive\". Paragraphs sharing a listStyle AND a listId are one running sequence; a different listId starts a separate one, which is how a second chapter restarts its steps at 1. This is what makes an inserted clause renumber the rest.
+- Real list numbering (Word only): { \"op\": \"format\", \"target\": {…}, \"listStyle\": \"clause\", \"listLevel\": 0, \"listId\": 0 }. listStyle is bullet, decimal (1./a./i.), clause (1./1.1/1.1.1) or none. listLevel is 0-8. NEVER type the number into the text as well - Word draws it, and a paragraph reading \"1. Connect the drive\" in a numbered list comes out as \"1. 1. Connect the drive\". Paragraphs sharing a listStyle AND a listId are one running sequence; a different listId starts a separate one, which is how a second chapter restarts its steps at 1. This is what makes an inserted clause renumber the rest. To continue a list the document already has - a template's clause numbering - use \"numberingId\": N from an inspect_document node of kind \"list\" (path \"list#N\") instead of listStyle, so the new paragraph joins that sequence rather than starting a look-alike.
 - Word page geometry: { \"op\": \"pageSetup\", \"paperSize\": \"A4\", \"orientation\": \"Landscape\", \"marginTopTwips\": 720 }. Measurements are twips - 1440 to the inch - matching the indents and spacing on format. paperSize is A3, A4, A5, Letter, Legal, Tabloid or Executive; give pageWidthTwips/pageHeightTwips instead for anything else, never both. No target sets the document's final section - the whole document until something splits it; a paragraph target sets the section that paragraph belongs to. Margins you do not name keep their current value.
 - Word breaks: { \"op\": \"insertBreak\", \"target\": {…}, \"kind\": \"Page\", \"position\": \"After\" }. kind is Page, Column, SectionNextPage, SectionContinuous, SectionEvenPage or SectionOddPage. The break lands in a paragraph of its own, so removing it later is removing one paragraph. A landscape run of pages in the middle of a portrait report is insertBreak twice and then pageSetup targeting a paragraph between them. Use format's pageBreakBefore instead when the page must keep starting at a given paragraph however the text above it changes.
 - Word footnotes and endnotes: { \"op\": \"note\", \"target\": { \"paraId\": \"w14:…\", \"expect\": \"thirty days\" }, \"kind\": \"Footnote\", \"text\": \"Subject to clause 8.2.\" } puts the reference right after that text, or at the end of the paragraph when expect is empty. Word owns the numbering, so a note added in the middle renumbers the rest - never type a superscript number into the text yourself. Existing notes appear in inspect_document.nodes as kind \"note\" with paths \"footnote#1\"/\"endnote#1\"; rewrite one with action \"Update\" or delete it with action \"Remove\". A note's body is also an ordinary paragraph (location \"footnote\"/\"endnote\"), so changeText and format edit it in place.
@@ -2089,7 +2196,7 @@ Plan shape, anchors, safety loop
 Working with a PowerPoint deck
 - Each slide is one outline entry. Paragraph ids read \"slide{slideId}/shape{shapeId}/p{n}\", with \"notes/...\" for speaker notes and \".../r{row}c{col}/...\" inside a table cell.
 - A slide has no text flow, so insertTable, insertImage, and an added comment target the SLIDE - { \"kind\": \"slide\", \"path\": \"slide#256\" } - not a paragraph. Resolve a comment with { \"op\": \"comment\", \"action\": \"Resolve\", \"target\": { \"kind\": \"comment\", \"path\": \"comment#256/{id}\" } }.
-- Only these verbs work on a deck: changeText, insert, format, fill, copyStyles, clearStyles, insertTable, removeTable, insertTableRows, removeTableRows, insertTableColumns, removeTableColumns, insertImage, removeImage, backgroundImage, insertShape, removeShape, insertMedia, insertChart, updateChart, comment, section, headerFooter, transition, animate, insertSlide, removeSlide, moveSlide, duplicateSlide.
+- Only these verbs work on a deck: setProperty (core document properties only), changeText, insert, format, fill, copyStyles, clearStyles, insertTable, removeTable, insertTableRows, removeTableRows, insertTableColumns, removeTableColumns, insertImage, removeImage, backgroundImage, insertShape, removeShape, insertMedia, insertChart, updateChart, comment, section, headerFooter, transition, animate, insertSlide, removeSlide, moveSlide, duplicateSlide.
 - Native charts: insertChart targets a slide and takes kind ClusteredColumn, Bar, Line, or Pie, categories, numeric series, title, showLegend, description, and pixel placement. It creates an editable chart with an embedded workbook. updateChart targets a chart node and only edits charts OfficeAgent created.
 - Slide transitions: { \"op\": \"transition\", \"effect\": \"push\", \"direction\": \"up\", \"durationMs\": 700 }. No target applies it to every slide, which is PowerPoint's \"Apply To All\"; a slide target sets just that one. effect \"none\" removes it. Set advanceAfterMs for a self-running deck and advanceOnClick:false to stop clicks skipping ahead.
 - Shape animations target a SHAPE node: { \"op\": \"animate\", \"target\": { \"kind\": \"shape\", \"path\": \"shape#257/2\" }, \"effect\": \"fade\", \"kind\": \"Entrance\", \"trigger\": \"OnClick\", \"durationMs\": 600 }. trigger is OnClick, WithPrevious or AfterPrevious and decides where the effect lands in the slide's sequence - a new click step, alongside the previous effect, or straight after it. Effects play in the order you send the operations. effect \"none\" removes that shape's animations.
@@ -2111,7 +2218,7 @@ Working with a PowerPoint deck
 
 Working with an Excel workbook
 - inspect_document returns worksheets and up to maximumCells populated cells. Each cell anchor carries a durable sheetId plus an A1 address. Pass sheetId and range to inspect only the needed rectangle.
-- setCell writes a scalar or a formula: { \"op\": \"setCell\", \"target\": { \"sheetId\": 7, \"address\": \"B2\" }, \"value\": \"42\" } or use \"formula\": \"SUM(B2:B8)\". OfficeAgent clears the cached result and asks Excel to recalculate on open; it does not calculate formulas.
+- setCell writes a scalar or a formula: { \"op\": \"setCell\", \"target\": { \"sheetId\": 7, \"address\": \"B2\" }, \"value\": \"42\" } or use \"formula\": \"SUM(B2:B8)\". OfficeAgent clears the cached result and asks Excel to recalculate on open. On a connection that calculates formulas (calculatesFormulas in describe_capabilities), the preview_plan/apply_plan result has a calculation section: each formula's value, the formulas left notCalculated and why, and newErrors. Fix a new #DIV/0!, #REF! or #N/A it lists rather than leaving it; such a plan may be refused with formula-error.
 - appendTableRows targets a spreadsheetTable node from inspection and requires one value per table column. It refuses to overwrite populated cells below the table and preserves other worksheet content.
 - Excel comments are legacy cell notes. Add one with a cell target and action Add; remove one with the cellComment node returned by inspection and action Remove.";
 public bool RequirePlanSnapshot { get; init; }
@@ -2175,6 +2282,7 @@ public string ResolveAlias(string anchorId);
 [Experimental("OFFICEAGENT001")]
 public static class CapabilityDiscovery
 public static EngineCapabilities Describe(IEnumerable<IFormatModule> modules, OpenXmlIngestionLimits? limits = null, bool renderingAvailable = false);
+public static EngineCapabilities Describe(IEnumerable<IFormatModule> modules, OpenXmlIngestionLimits? limits, bool renderingAvailable, IFormulaEvaluator? formulaEvaluator);
 ```
 
 ### `OfficeAgent.Core.DocumentAssemblyCandidate`
@@ -2257,12 +2365,14 @@ public string OutputSha256 { get; }
 ### `OfficeAgent.Core.DocumentProviders.FileSystemDocumentProvider`
 
 ```csharp
-public sealed class FileSystemDocumentProvider : OfficeAgent.Core.DocumentProviders.IConnectionEditingDefaults, OfficeAgent.Core.DocumentProviders.IDocumentCreatingProvider, OfficeAgent.Core.DocumentProviders.IDocumentProvider
+public sealed class FileSystemDocumentProvider : OfficeAgent.Core.DocumentProviders.IConnectionCalculationDefaults, OfficeAgent.Core.DocumentProviders.IConnectionEditingDefaults, OfficeAgent.Core.DocumentProviders.IDocumentCreatingProvider, OfficeAgent.Core.DocumentProviders.IDocumentProvider
 public FileSystemDocumentProvider(FileSystemDocumentProviderOptions options);
 public const string ProviderName = "filesystem";
+public bool CalculateFormulas { get; }
 public string ConnectionId { get; }
 public ChangeMode DefaultChangeMode { get; }
 public string Provider { get; }
+public bool RejectFormulaErrors { get; }
 public Task RemoveAsync(DocumentReference reference, CancellationToken cancellationToken = default);
 public Task<DocumentContent> OpenReadAsync(DocumentReference reference, CancellationToken cancellationToken = default);
 public Task<DocumentReference> CreateAsync(string name, Stream content, CancellationToken cancellationToken = default);
@@ -2276,10 +2386,20 @@ public Task<DocumentReference> SaveAsync(DocumentReference source, Stream conten
 public sealed class FileSystemDocumentProviderOptions
 public FileSystemDocumentProviderOptions();
 public IReadOnlyCollection<string> AllowedExtensions { get; set; }
+public bool CalculateFormulas { get; set; }
 public string ConnectionId { get; set; }
 public ChangeMode DefaultChangeMode { get; set; }
 public long MaximumBytes { get; set; }
+public bool RejectFormulaErrors { get; set; }
 public string RootPath { get; set; }
+```
+
+### `OfficeAgent.Core.DocumentProviders.IConnectionCalculationDefaults`
+
+```csharp
+public interface IConnectionCalculationDefaults
+public bool CalculateFormulas { get; }
+public bool RejectFormulaErrors { get; }
 ```
 
 ### `OfficeAgent.Core.DocumentProviders.IConnectionEditingDefaults`
@@ -2311,13 +2431,15 @@ public Task<DocumentReference> SaveAsync(DocumentReference source, Stream conten
 ### `OfficeAgent.Core.DocumentProviders.MemoryDocumentProvider`
 
 ```csharp
-public sealed class MemoryDocumentProvider : OfficeAgent.Core.DocumentProviders.IConnectionEditingDefaults, OfficeAgent.Core.DocumentProviders.IDocumentCreatingProvider, OfficeAgent.Core.DocumentProviders.IDocumentProvider
+public sealed class MemoryDocumentProvider : OfficeAgent.Core.DocumentProviders.IConnectionCalculationDefaults, OfficeAgent.Core.DocumentProviders.IConnectionEditingDefaults, OfficeAgent.Core.DocumentProviders.IDocumentCreatingProvider, OfficeAgent.Core.DocumentProviders.IDocumentProvider
 public MemoryDocumentProvider(string connectionId, MemoryDocumentProviderOptions? options = null);
 public const string ProviderName = "memory";
+public bool CalculateFormulas { get; }
 public string ConnectionId { get; }
 public int Count { get; }
 public ChangeMode DefaultChangeMode { get; }
 public string Provider { get; }
+public bool RejectFormulaErrors { get; }
 public long TotalBytes { get; }
 public DocumentReference Add(string name, byte[] content);
 public DocumentReference Describe(string itemId);
@@ -2336,9 +2458,11 @@ public byte[] Read(string itemId);
 public sealed class MemoryDocumentProviderOptions
 public MemoryDocumentProviderOptions();
 public IList<string> AllowedExtensions { get; set; }
+public bool CalculateFormulas { get; set; }
 public ChangeMode DefaultChangeMode { get; set; }
 public long MaximumBytes { get; set; }
 public long MaximumTotalBytes { get; set; }
+public bool RejectFormulaErrors { get; set; }
 ```
 
 ### `OfficeAgent.Core.DocumentProviders.ProviderApplyResult`
@@ -2644,6 +2768,25 @@ public static class ServiceCollectionExtensions
 public static IServiceCollection AddExcelFormat(IServiceCollection services);
 ```
 
+## OfficeAgent.Excel.Calculation
+
+### `OfficeAgent.Excel.Calculation.ClosedXmlFormulaEvaluator`
+
+```csharp
+public sealed class ClosedXmlFormulaEvaluator : OfficeAgent.Abstractions.IFormulaEvaluator
+public ClosedXmlFormulaEvaluator();
+public string Name { get; }
+public IReadOnlyList<string> SupportedFunctions { get; }
+public FormulaEvaluation Evaluate(byte[] workbook, CancellationToken cancellationToken = default);
+```
+
+### `OfficeAgent.Excel.Calculation.ServiceCollectionExtensions`
+
+```csharp
+public static class ServiceCollectionExtensions
+public static IServiceCollection AddExcelFormulaCalculation(IServiceCollection services);
+```
+
 ## OfficeAgent.PowerPoint
 
 ### `OfficeAgent.PowerPoint.IPowerPointNodeProvider`
@@ -2845,12 +2988,14 @@ public static IServiceCollection AddSharePointOnBehalfOfAuthentication(IServiceC
 ### `OfficeAgent.SharePoint.SharePointDocumentProvider`
 
 ```csharp
-public sealed class SharePointDocumentProvider : OfficeAgent.Core.DocumentProviders.IConnectionEditingDefaults, OfficeAgent.Core.DocumentProviders.IDocumentCreatingProvider, OfficeAgent.Core.DocumentProviders.IDocumentProvider
+public sealed class SharePointDocumentProvider : OfficeAgent.Core.DocumentProviders.IConnectionCalculationDefaults, OfficeAgent.Core.DocumentProviders.IConnectionEditingDefaults, OfficeAgent.Core.DocumentProviders.IDocumentCreatingProvider, OfficeAgent.Core.DocumentProviders.IDocumentProvider
 public SharePointDocumentProvider(SharePointDocumentProviderOptions options, HttpClient httpClient, IAccessTokenProvider tokenProvider, ISharePointRegistrationStore? registrationStore = null);
 public const string ProviderName = "sharepoint";
+public bool CalculateFormulas { get; }
 public string ConnectionId { get; }
 public ChangeMode DefaultChangeMode { get; }
 public string Provider { get; }
+public bool RejectFormulaErrors { get; }
 public Task RemoveAsync(DocumentReference reference, CancellationToken cancellationToken = default);
 public Task<DocumentContent> OpenReadAsync(DocumentReference reference, CancellationToken cancellationToken = default);
 public Task<DocumentReference> CreateAsync(string name, Stream content, CancellationToken cancellationToken = default);
@@ -2864,12 +3009,14 @@ public Task<DocumentReference> SaveAsync(DocumentReference source, Stream conten
 public sealed class SharePointDocumentProviderOptions
 public SharePointDocumentProviderOptions();
 public IReadOnlyCollection<string> AllowedExtensions { get; set; }
+public bool CalculateFormulas { get; set; }
 public string ConnectionId { get; set; }
 public string CreationDriveId { get; set; }
 public string CreationFolderItemId { get; set; }
 public ChangeMode DefaultChangeMode { get; set; }
 public string GraphBaseUrl { get; set; }
 public long MaximumBytes { get; set; }
+public bool RejectFormulaErrors { get; set; }
 ```
 
 ### `OfficeAgent.SharePoint.SharePointItemRef`

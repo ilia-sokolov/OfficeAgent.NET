@@ -36,8 +36,11 @@ operation-specific package evidence and its native Office limits.
 - A general editor for `.docm`, `.xlsm`, `.pptm`, legacy Office formats, PDF, or
   arbitrary OOXML features outside the documented operation set.
 - A Word or PowerPoint layout and pagination engine.
-- An Excel formula calculation or data-refresh engine. Formula operations write
-  formulas and request recalculation when Excel next opens the workbook.
+- An Excel calculation or data-refresh engine. Formula operations write formulas and
+  request recalculation when Excel next opens the workbook. The optional
+  `OfficeAgent.Excel.Calculation` package fills in cached values for a verified set of
+  functions and reports every formula it does not calculate; it is not a replacement for
+  Excel's own calculation.
 - A substitute for native Office opening, rendered visual review, or human review
   of consequential output.
 - An authentication or authorization layer. The host owns identities, credentials,

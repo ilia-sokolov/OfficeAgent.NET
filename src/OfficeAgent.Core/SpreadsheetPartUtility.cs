@@ -190,6 +190,74 @@ internal static class SpreadsheetPartUtility
             document.WorkbookPart.DeletePart(chain);
     }
 
+    /// <summary>
+    /// The Excel error values the workbook's formula cells already carry as cached values,
+    /// keyed by sheet id and address - the errors a plan did not introduce.
+    /// </summary>
+    public static Dictionary<(uint SheetId, string Address), string> CachedFormulaErrors(SpreadsheetDocument document)
+    {
+        var errors = new Dictionary<(uint, string), string>();
+        foreach (var (sheetId, part) in Worksheets(document))
+            foreach (var cell in part.Worksheet!.Descendants<Cell>())
+                if (cell.CellFormula is not null && cell.DataType?.Value == CellValues.Error &&
+                    cell.CellReference?.Value is { } address && cell.CellValue?.Text is { } value)
+                    errors[(sheetId, address)] = value;
+        return errors;
+    }
+
+    /// <summary>
+    /// Writes calculated results into the formula cells' cached values (<c>&lt;v&gt;</c> and
+    /// the type attribute) and nothing else. A cell whose cached value already matches is left
+    /// untouched, and a worksheet is saved only when one of its cells changed. Cells that were
+    /// not calculated keep whatever they had.
+    /// </summary>
+    /// <returns>The number of cells whose cached value was written.</returns>
+    public static int WriteCachedValues(SpreadsheetDocument document, IEnumerable<FormulaCellResult> results)
+    {
+        var calculated = results
+            .Where(r => r.Outcome == FormulaOutcome.Calculated && r.ValueKind is not null && r.Value is not null)
+            .GroupBy(r => r.SheetId)
+            .ToDictionary(g => g.Key, g => g.ToDictionary(r => r.Address, StringComparer.OrdinalIgnoreCase));
+        var written = 0;
+        foreach (var (sheetId, part) in Worksheets(document))
+        {
+            if (!calculated.TryGetValue(sheetId, out var cells)) continue;
+            var changed = false;
+            foreach (var cell in part.Worksheet!.Descendants<Cell>())
+            {
+                if (cell.CellFormula is null || cell.CellReference?.Value is not { } address ||
+                    !cells.TryGetValue(address, out var result)) continue;
+                var type = result.ValueKind switch
+                {
+                    FormulaValueKind.Text => CellValues.String,
+                    FormulaValueKind.Boolean => CellValues.Boolean,
+                    FormulaValueKind.Error => CellValues.Error,
+                    _ => (CellValues?)null
+                };
+                var value = result.ValueKind == FormulaValueKind.Boolean
+                    ? (string.Equals(result.Value, "TRUE", StringComparison.OrdinalIgnoreCase) ? "1" : "0")
+                    : result.Value!;
+                if (cell.CellValue?.Text == value && cell.DataType?.Value == type) continue;
+                cell.DataType = type is null ? null : new EnumValue<CellValues>(type.Value);
+                cell.CellValue = new CellValue(value);
+                changed = true;
+                written++;
+            }
+            if (changed) part.Worksheet.Save();
+        }
+        return written;
+    }
+
+    private static IEnumerable<(uint SheetId, WorksheetPart Part)> Worksheets(SpreadsheetDocument document)
+    {
+        var workbookPart = document.WorkbookPart;
+        if (workbookPart?.Workbook?.Sheets is not { } sheets) yield break;
+        foreach (var sheet in sheets.Elements<Sheet>())
+            if (sheet.SheetId?.Value is { } id && sheet.Id?.Value is { Length: > 0 } relationship &&
+                workbookPart.GetPartById(relationship) is WorksheetPart part && part.Worksheet is not null)
+                yield return (id, part);
+    }
+
     /// <summary>Writes a typed scalar value without changing the cell's style.</summary>
     public static void WriteValue(Cell cell, string value, SpreadsheetCellValueKind kind = SpreadsheetCellValueKind.Auto)
     {

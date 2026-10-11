@@ -101,7 +101,8 @@ internal sealed class SetCellHandler : IOperationHandler
         cell.DataType = null;
         if (op.Formula is { Length: > 0 } formula)
         {
-            cell.CellFormula = new S.CellFormula(formula.StartsWith("=", StringComparison.Ordinal) ? formula.Substring(1) : formula);
+            cell.CellFormula = new S.CellFormula(
+                FutureFunctions.Qualify(formula.StartsWith("=", StringComparison.Ordinal) ? formula.Substring(1) : formula));
             if (op.Value is { } cached) cell.CellValue = new S.CellValue(cached);
         }
         else if (op.Value is { } value)

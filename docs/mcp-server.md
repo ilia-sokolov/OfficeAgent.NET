@@ -254,6 +254,8 @@ A connection whose value cannot be read - a `MaximumBytes` that is not a number,
 | `FileSystemConnections[n]:MaximumBytes` | 100 MB | Size cap per document. |
 | `FileSystemConnections[n]:AllowedExtensions` | `[".docx"]` | Extension allow-list. |
 | `FileSystemConnections[n]:DefaultChangeMode` | `Tracked` | Change mode for a plan operation that does not state one. Set `Direct` for generated or machine-owned documents, or for a connection serving `.pptx` - a deck refuses `Tracked`. |
+| `FileSystemConnections[n]:CalculateFormulas` | `false` | Calculate the formulas of a workbook previewed or committed through this connection, so the saved file carries current values. Only allowlisted functions are calculated; the tool result's `calculation` section names every formula left uncalculated and why. See [formula calculation](excel.md#formula-calculation). |
+| `FileSystemConnections[n]:RejectFormulaErrors` | `false` | With `CalculateFormulas`, refuse a plan that introduces a formula error or a circular reference with `formula-error` instead of saving it with the errors reported. |
 | `SharePointConnections[n]:ConnectionId` | - | Connection id agents address documents under. Documents are registered by URL or `driveId/itemId`, so the connection is not tied to one drive. |
 | `SharePointConnections[n]:AuthMode` | `appOnly` | `onBehalfOf` (act as the signed-in user; hosted HTTP only) or `appOnly` (shared app identity). |
 | `SharePointConnections[n]:TenantId` / `ClientId` / `ClientSecret` | - | Entra app registration. For `onBehalfOf` this is the middle-tier API app. |
@@ -264,6 +266,7 @@ A connection whose value cannot be read - a `MaximumBytes` that is not a number,
 | `SharePointConnections[n]:GraphBaseUrl` / `LoginAuthority` | Graph v1.0 / public Entra | Override for sovereign clouds. |
 | `SharePointConnections[n]:MaximumBytes` / `AllowedExtensions` | 100 MB / `[".docx"]` | Same caps as filesystem connections. |
 | `SharePointConnections[n]:DefaultChangeMode` | `Tracked` | As above, per library. |
+| `SharePointConnections[n]:CalculateFormulas` / `RejectFormulaErrors` | `false` / `false` | As above, per library. |
 
 ### Acting as the signed-in user (On-Behalf-Of)
 

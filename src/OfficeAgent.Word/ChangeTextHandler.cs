@@ -142,7 +142,7 @@ internal sealed class ChangeTextHandler : IOperationHandler
     /// The runs a logical span touches, found without mutating the paragraph. Span
     /// isolation splits runs, which a preview must never do.
     /// </summary>
-    private static List<OpenXmlElement> CoveredRuns(OpenXmlElement paragraph, int start, int length)
+    internal static List<OpenXmlElement> CoveredRuns(OpenXmlElement paragraph, int start, int length)
     {
         var covered = new List<OpenXmlElement>();
         int end = start + length;

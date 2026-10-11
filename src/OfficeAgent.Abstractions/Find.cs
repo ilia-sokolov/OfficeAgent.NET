@@ -71,4 +71,10 @@ public sealed class FindHit
     /// (a deck is all slide or note text).
     /// </summary>
     public string? Location { get; init; }
+
+    /// <summary>
+    /// Gets the paragraph id of a text hit, or <see langword="null"/> when the hit is not a
+    /// text span (a cell, a shape, a node).
+    /// </summary>
+    public string? ParaId => (Anchor as TextSpanAnchor)?.ParaId;
 }

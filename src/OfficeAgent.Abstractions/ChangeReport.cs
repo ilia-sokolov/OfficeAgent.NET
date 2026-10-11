@@ -21,6 +21,12 @@ public sealed class ChangeReport
     public IReadOnlyList<ValidationError> Errors { get; init; } = Array.Empty<ValidationError>();
 
     /// <summary>
+    /// Gets what formula calculation did to the workbook, when the caller asked for
+    /// <see cref="ApplyOptions.CalculateFormulas"/> and an evaluator is registered. Null otherwise.
+    /// </summary>
+    public FormulaCalculationReport? Calculation { get; init; }
+
+    /// <summary>
     /// Creates an invalid report from one or more validation errors.
     /// </summary>
     /// <param name="errors">The validation errors to include in the report.</param>
@@ -164,7 +170,13 @@ public enum ValidationErrorCode
     /// The edit spans a pending tracked revision, so applying it would leave a redline
     /// that cannot be rejected back to the original content.
     /// </summary>
-    RevisionOverlap
+    RevisionOverlap,
+
+    /// <summary>
+    /// Calculation found formula errors the plan introduced, or a circular reference, and the
+    /// caller asked for such plans to be refused.
+    /// </summary>
+    FormulaError
 }
 
 /// <summary>
@@ -206,6 +218,12 @@ public static class ValidationErrorCodes
     /// </summary>
     public const string RevisionOverlap = "revision-overlap";
 
+    /// <summary>
+    /// Calculation found formula errors the plan introduced, or a circular reference, and the
+    /// caller asked for such plans to be refused.
+    /// </summary>
+    public const string FormulaError = "formula-error";
+
     /// <summary>Parses a wire code to its strongly typed enum value.</summary>
     public static ValidationErrorCode Parse(string code) => code switch
     {
@@ -219,6 +237,7 @@ public static class ValidationErrorCodes
         RequiresRenderer => ValidationErrorCode.RequiresRenderer,
         OperationConflict => ValidationErrorCode.OperationConflict,
         RevisionOverlap => ValidationErrorCode.RevisionOverlap,
+        FormulaError => ValidationErrorCode.FormulaError,
         _ => ValidationErrorCode.Unknown
     };
 
@@ -235,6 +254,7 @@ public static class ValidationErrorCodes
         ValidationErrorCode.RequiresRenderer => RequiresRenderer,
         ValidationErrorCode.OperationConflict => OperationConflict,
         ValidationErrorCode.RevisionOverlap => RevisionOverlap,
+        ValidationErrorCode.FormulaError => FormulaError,
         _ => "unknown"
     };
 }

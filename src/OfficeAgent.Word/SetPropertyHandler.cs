@@ -21,6 +21,26 @@ internal sealed class SetPropertyHandler : IOperationHandler
 
         switch (anchor.Kind)
         {
+            case "docProperty" when anchor.Path == DocPropertyNodeProvider.CompatibilityModePath:
+            {
+                if (Array.IndexOf(DocPropertyNodeProvider.CompatibilityModes, op.Value) < 0)
+                    return OperationPreview.Fail(new ValidationError(
+                        ValidationErrorCodes.InvalidOperation,
+                        $"'{op.Value}' is not a Word compatibility mode. Use 11 (Word 2003), 12 (Word 2007), " +
+                        "14 (Word 2010), or 15 (Word 2013 and later).", anchor));
+
+                return OperationPreview.Ok(new ProposedChange
+                {
+                    Target = anchor,
+                    Verb = "setProperty",
+                    Before = DocPropertyNodeProvider.ReadCompatibilityMode(map.Main) ?? string.Empty,
+                    After = op.Value!,
+                    Context = anchor.Path,
+                    BlastRadius = 1,
+                    Capability = Capability.Deterministic
+                });
+            }
+
             case "docProperty":
             {
                 var name = DocPropertyNodeProvider.NameOf(anchor.Path);
@@ -92,6 +112,10 @@ internal sealed class SetPropertyHandler : IOperationHandler
 
         switch (anchor.Kind)
         {
+            case "docProperty" when anchor.Path == DocPropertyNodeProvider.CompatibilityModePath:
+                DocPropertyNodeProvider.WriteCompatibilityMode(map.Main, op.Value!);
+                break;
+
             case "docProperty":
                 DocPropertyNodeProvider.Write(map, DocPropertyNodeProvider.NameOf(anchor.Path), op.Value);
                 break;

@@ -29,6 +29,7 @@ public sealed class StabilityClassificationTests
         typeof(OfficeAgentTools).Assembly,
         typeof(OfficeAgentClient).Assembly,
         typeof(ExcelModule).Assembly,
+        typeof(OfficeAgent.Excel.Calculation.ClosedXmlFormulaEvaluator).Assembly,
         typeof(PowerPointModule).Assembly,
         typeof(LibreOfficeDocumentRenderer).Assembly,
         typeof(SharePointDocumentProvider).Assembly,
@@ -39,8 +40,10 @@ public sealed class StabilityClassificationTests
     private static readonly string[] HostExtensionPoints =
     {
         "OfficeAgent.Abstractions.IDocumentRenderer",
+        "OfficeAgent.Abstractions.IFormulaEvaluator",
         "OfficeAgent.AgentFramework.IConnectionAccessPolicy",
         "OfficeAgent.AgentFramework.ITrustedPrincipalAccessor",
+        "OfficeAgent.Core.DocumentProviders.IConnectionCalculationDefaults",
         "OfficeAgent.Core.DocumentProviders.IConnectionEditingDefaults",
         "OfficeAgent.Core.DocumentProviders.IDocumentCreatingProvider",
         "OfficeAgent.Core.DocumentProviders.IDocumentProvider",

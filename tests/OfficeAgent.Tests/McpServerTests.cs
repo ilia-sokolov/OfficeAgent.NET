@@ -482,6 +482,61 @@ public class McpServerTests
         Assert.Contains("Tracked or Direct", error.Message);
     }
 
+    [Fact]
+    public async Task A_connection_that_calculates_writes_values_and_reports_them()
+    {
+        using var root = new TemporaryRoot();
+        var services = new ServiceCollection();
+        OfficeAgentMcpServer.AddOfficeAgentMcp(services, new OfficeAgentMcpOptions
+        {
+            FileSystemConnections =
+            {
+                new FileSystemConnectionOptions
+                {
+                    ConnectionId = "books", RootPath = root.Path, AllowedExtensions = { ".xlsx" },
+                    DefaultChangeMode = "Direct", CalculateFormulas = true, RejectFormulaErrors = true
+                },
+                new FileSystemConnectionOptions { ConnectionId = "plain", RootPath = root.Path, AllowedExtensions = { ".xlsx" } }
+            }
+        });
+        using var provider = services.BuildServiceProvider();
+        var client = provider.GetRequiredService<OfficeAgentClient>();
+        var tools = provider.GetRequiredService<OfficeAgent.AgentFramework.OfficeAgentTools>();
+        File.WriteAllBytes(System.IO.Path.Combine(root.Path, "book.xlsx"), new OfficeAgent.Excel.ExcelModule().CreateBlank());
+        var book = await client.RegisterAsync("books", "book.xlsx");
+
+        static string Plan(string formula) =>
+            "{\"format\":\"Excel\",\"operations\":[" +
+            "{\"op\":\"setCell\",\"target\":{\"sheetId\":1,\"address\":\"A1\"},\"value\":\"21\"}," +
+            "{\"op\":\"setCell\",\"target\":{\"sheetId\":1,\"address\":\"A2\"},\"formula\":\"" + formula + "\"}]}";
+
+        using (var applied = JsonDocument.Parse(await tools.ApplyPlan("books", book.ItemId, Plan("A1*2"))))
+        {
+            Assert.True(applied.RootElement.GetProperty("committed").GetBoolean(), applied.RootElement.ToString());
+            var cell = applied.RootElement.GetProperty("calculation").GetProperty("cells").EnumerateArray()
+                .Single(c => c.GetProperty("address").GetString() == "A2");
+            Assert.Equal("42", cell.GetProperty("value").GetString());
+        }
+
+        using (var refused = JsonDocument.Parse(await tools.ApplyPlan("books", book.ItemId, Plan("A1/0"))))
+        {
+            Assert.False(refused.RootElement.GetProperty("committed").GetBoolean());
+            Assert.Equal("formula-error", refused.RootElement.GetProperty("errors")[0].GetProperty("code").GetString());
+        }
+
+        var plain = await client.RegisterAsync("plain", "book.xlsx");
+        using (var uncalculated = JsonDocument.Parse(await tools.PreviewPlan("plain", plain.ItemId, Plan("A1*3"))))
+            Assert.Equal(JsonValueKind.Null, uncalculated.RootElement.GetProperty("calculation").ValueKind);
+
+        using var capabilities = JsonDocument.Parse(await tools.DescribeCapabilities());
+        Assert.Contains(capabilities.RootElement.GetProperty("formulaCalculation").GetProperty("supportedFunctions").EnumerateArray(),
+            f => f.GetString() == "SUM");
+        var connections = capabilities.RootElement.GetProperty("connections").EnumerateArray()
+            .ToDictionary(c => c.GetProperty("connectionId").GetString()!, c => c.GetProperty("calculatesFormulas").GetBoolean());
+        Assert.True(connections["books"]);
+        Assert.False(connections["plain"]);
+    }
+
     private static OfficeAgentMcpOptions OptionsFor(TemporaryRoot root) => new()
     {
         FileSystemConnections =

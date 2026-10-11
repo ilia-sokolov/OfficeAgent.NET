@@ -277,6 +277,7 @@ public sealed class NativeCorpusTests
     [InlineData("control-missing", "controls recorded")]
     [InlineData("result-for-another-operation", "result family differs")]
     [InlineData("control-checked-by-the-wrong-application", "checked by the wrong application")]
+    [InlineData("control-never-opened", "Office never opened it")]
     public void The_native_record_guard_rejects_a_stale_or_altered_record(string tamper, string expectedProblem)
     {
         var copy = Path.Combine(Path.GetTempPath(), $"officeagent-native-record-{Guid.NewGuid():N}");
@@ -325,6 +326,11 @@ public sealed class NativeCorpusTests
                     break;
                 case "result-for-another-operation":
                     cases[0]!["family"] = "someOtherOperation";
+                    break;
+                case "control-never-opened":
+                    // The v1.0.0 record looked like this: every worker died before opening its
+                    // control, and the crash was counted as Office refusing the file.
+                    results["controls"]!.AsArray()[0]!["error"] = "worker exited  without a result";
                     break;
                 case "control-checked-by-the-wrong-application":
                 {
@@ -428,6 +434,10 @@ public sealed class NativeCorpusTests
         {
             var file = control.GetProperty("file").GetString()!;
             if (!control.GetProperty("detected").GetBoolean()) problems.Add($"control {file} was not caught");
+            // A worker that died without a result is a harness failure, not a refusal by Office.
+            if (control.TryGetProperty("error", out var error) && error.ValueKind == JsonValueKind.String &&
+                error.GetString()!.StartsWith("worker exited", StringComparison.Ordinal))
+                problems.Add($"control {file}: the harness failed before Office opened it ({error.GetString()}), so Office never opened it");
             if (!control.GetProperty("appOpenedValidCase").GetBoolean()) problems.Add($"control {file}: its application opened no valid case in the run");
             if (!extensionFormat.TryGetValue(Path.GetExtension(file), out var format) || control.GetProperty("format").GetString() != format)
                 problems.Add($"control {file} was checked by the wrong application");

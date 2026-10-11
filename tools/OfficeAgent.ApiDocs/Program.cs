@@ -5,6 +5,7 @@ using OfficeAgent.Abstractions;
 using OfficeAgent.AgentFramework;
 using OfficeAgent.Core;
 using OfficeAgent.Excel;
+using OfficeAgent.Excel.Calculation;
 using OfficeAgent.PowerPoint;
 using OfficeAgent.Rendering;
 using OfficeAgent.SharePoint;
@@ -88,6 +89,7 @@ internal static class ApiSurface
         typeof(OfficeAgentTools).Assembly,
         typeof(OfficeAgentClient).Assembly,
         typeof(ExcelModule).Assembly,
+        typeof(ClosedXmlFormulaEvaluator).Assembly,
         typeof(PowerPointModule).Assembly,
         typeof(LibreOfficeDocumentRenderer).Assembly,
         typeof(SharePointDocumentProvider).Assembly,

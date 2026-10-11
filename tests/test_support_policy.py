@@ -142,7 +142,7 @@ class SupportPolicyTests(unittest.TestCase):
 
     def test_bug_template_lists_every_published_package_and_the_current_version(self) -> None:
         template = read(".github/ISSUE_TEMPLATE/bug.yml")
-        listed = set(re.findall(r"^\s+- (OfficeAgent\.[A-Za-z]+)\s*$", template, re.MULTILINE))
+        listed = set(re.findall(r"^\s+- (OfficeAgent\.[A-Za-z.]+)\s*$", template, re.MULTILINE))
         self.assertEqual(packable_projects(), listed)
         major, minor = repository_version()
         placeholder = re.search(r'placeholder: "(\d+)\.(\d+)\.\d+"', template)

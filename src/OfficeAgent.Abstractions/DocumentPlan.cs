@@ -275,6 +275,27 @@ public enum CommentAction
 }
 
 /// <summary>
+/// Turns an existing, content-verified text span into an external hyperlink. The target is a
+/// <see cref="TextSpanAnchor"/>; the matched runs keep their formatting and are wrapped in a
+/// <c>w:hyperlink</c> whose relationship points at <see cref="Url"/>. Write the text first
+/// with <see cref="ChangeTextOp"/> or <see cref="InsertOp"/> when it does not exist yet.
+/// </summary>
+/// <remarks>
+/// Only <c>http</c>, <c>https</c> and <c>mailto</c> URLs are accepted: a link an agent
+/// writes is one a reader will click. A span already inside a hyperlink is refused rather
+/// than nested. Word records no revision for adding a link to existing text, so an explicit
+/// <see cref="ChangeMode.Tracked"/> is refused and an omitted mode applies directly. Word only.
+/// </remarks>
+public sealed class LinkOp : PlanOperation, ITrackedOperation
+{
+    /// <summary>Gets the absolute URL the link opens.</summary>
+    public string Url { get; init; } = string.Empty;
+
+    /// <inheritdoc />
+    public ChangeMode? Mode { get; init; }
+}
+
+/// <summary>
 /// Performs a review comment action. <see cref="CommentAction.Add"/> takes a
 /// <see cref="TextSpanAnchor"/> naming the span to annotate; every other action takes a
 /// <see cref="NodeAnchor"/> with <c>kind=comment</c> and a path from inspect, such as
@@ -609,6 +630,14 @@ public sealed class FormatOp : PlanOperation, ITrackedOperation, ITextFormat
     public int? ListId { get; init; }
 
     /// <summary>
+    /// The numbering instance (<c>w:numId</c>) to attach the paragraph to, continuing a list
+    /// the document already defines - as inspection lists it, <c>list#42</c> is
+    /// <c>42</c>. Mutually exclusive with <see cref="ListStyle"/>, which writes a new
+    /// definition instead. <see cref="ListLevel"/> sets the depth. Word only.
+    /// </summary>
+    public int? NumberingId { get; init; }
+
+    /// <summary>
     /// Which edges the border is drawn on, as a comma-separated list of
     /// <c>top</c>, <c>left</c>, <c>bottom</c>, <c>right</c> — and, on a table,
     /// <c>insideH</c> and <c>insideV</c>. Unset means every edge, which is what a border
@@ -790,6 +819,28 @@ public sealed class RemoveTableColumnsOp : PlanOperation, ITrackedOperation
 
     /// <summary>The column indices to remove.</summary>
     public IReadOnlyList<int> ColumnIndices { get; init; } = Array.Empty<int>();
+}
+
+/// <summary>
+/// Merges a table cell with the cells to its right in the same row. The target is a
+/// <c>tableCell</c> <see cref="NodeAnchor"/> (<c>table#N/cell#R/C</c>); it takes a
+/// <c>w:gridSpan</c> covering <see cref="ColumnSpan"/> grid columns, and the cells it absorbs
+/// are removed, their paragraphs appended to it. The table grid is unchanged.
+/// </summary>
+/// <remarks>
+/// Word only: decks report it as unsupported. A merge has no tracked form here, so an
+/// explicit <see cref="ChangeMode.Tracked"/> is refused and an omitted mode applies directly.
+/// </remarks>
+public sealed class MergeTableCellsOp : PlanOperation, ITrackedOperation
+{
+    /// <summary>
+    /// Gets how many grid columns the merged cell spans, counting the target's own: at least
+    /// one more than the target already spans.
+    /// </summary>
+    public int ColumnSpan { get; init; } = 2;
+
+    /// <inheritdoc />
+    public ChangeMode? Mode { get; init; }
 }
 
 /// <summary>

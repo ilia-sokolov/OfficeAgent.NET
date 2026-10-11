@@ -29,8 +29,9 @@ names; see [upgrading to 1.0](upgrading-to-1.0.md).
   ],
   "limits": { "maximumCompressedBytes": 134217728, "maximumParts": 4000, "...": 0 },
   "renderingAvailable": false,
+  "formulaCalculation": { "engine": "ClosedXML 0.105.1", "supportedFunctions": ["ABS", "AND", "..."] },
   "connections": [
-    { "connectionId": "workspace", "provider": "filesystem", "allowed": ["Read", "Edit"] }
+    { "connectionId": "workspace", "provider": "filesystem", "allowed": ["Read", "Edit"], "calculatesFormulas": false }
   ],
   "requiresInspection": ["Anchor identifiers. …"]
 }
@@ -44,7 +45,8 @@ names; see [upgrading to 1.0](upgrading-to-1.0.md).
 | `formats[].nodeKinds` | The node kinds that format's inspection surfaces, which are the `kind` values a `NodeAnchor` may use |
 | `limits` | The host [ingestion ceilings](ingestion-limits.md) in force |
 | `renderingAvailable` | Whether an optional page renderer is wired up. Rendering is not part of the core engine |
-| `connections` | Only the connections the caller may use, each with only the capabilities they hold |
+| `formulaCalculation` | The [formula calculation](excel.md#formula-calculation) engine and the functions it calculates, or `null` when none is registered |
+| `connections` | Only the connections the caller may use, each with only the capabilities they hold. `calculatesFormulas` says whether workbooks edited through it are calculated |
 | `requiresInspection` | What discovery deliberately cannot answer |
 
 ## Access is not bypassed

@@ -23,6 +23,7 @@
     <ProjectReference Include="..\OfficeAgent.SharePoint\OfficeAgent.SharePoint.csproj" />
     <ProjectReference Include="..\OfficeAgent.PowerPoint\OfficeAgent.PowerPoint.csproj" />
     <ProjectReference Include="..\OfficeAgent.Excel\OfficeAgent.Excel.csproj" />
+    <ProjectReference Include="..\OfficeAgent.Excel.Calculation\OfficeAgent.Excel.Calculation.csproj" />
   </ItemGroup>
 
   <ItemGroup>

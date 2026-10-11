@@ -158,6 +158,34 @@ cannot be told apart from a caller who left the field out, and the cost of guess
 a rewritten paragraph nobody named. Under `Tracked`, filling an empty paragraph is recorded
 as an insertion.
 
+#### Delete a span
+
+`changeText` with an empty `with` deletes the matched text. Under `Tracked` it is recorded as a
+single deletion (`w:del`) that a reviewer can accept or reject; under `Direct` the text and the
+runs that held only it are removed. There is no separate delete verb.
+
+```json
+{ "op": "changeText",
+  "target": { "paraId": "w14:…", "expect": " unless terminated earlier under clause 6", "occurrence": 0 },
+  "with":   "",
+  "mode":   "Tracked" }
+```
+
+```csharp
+var hit = (await client.FindAsync(handle, new FindQuery(" unless terminated earlier under clause 6")))[0];
+
+var plan = new DocumentPlan
+{
+    Operations = new PlanOperation[]
+    {
+        new ChangeTextOp { Target = hit.Anchor, With = string.Empty, Mode = ChangeMode.Tracked }
+    }
+};
+```
+
+Include the leading or trailing space in `expect` when the deleted words sit between other
+words, so the sentence keeps one space. To remove a whole paragraph, use `removeParagraph`.
+
 ### `format`
 
 Unified styling. Apply any combination of properties to a paragraph or text span, a table, a table row, a table cell, or an image. Properties left unset are not changed.
@@ -201,6 +229,7 @@ Properties (all optional):
 | `alignment` | `left`, `center`, `right`, `justify` |
 | `indentLeftTwips`, `indentRightTwips`, `indentFirstLineTwips` | paragraph indent (1 inch = 1440 twips). A **negative** `indentFirstLineTwips` is a hanging indent — the first line set back from the rest, how a bullet hangs its dash outside the text |
 | `listStyle`, `listLevel`, `listId` | makes the paragraph a real list item (Word only). `bullet`, `decimal` (1. / a. / i.), `clause` (1. / 1.1 / 1.1.1), or `none` to remove it. `listLevel` is 0–8. Paragraphs sharing a style **and** a `listId` form one running sequence; a different `listId` starts a separate one, which is how a second chapter restarts its steps at 1. Word owns the numbers, so inserting an item renumbers the rest — text that merely begins "4.2" does not |
+| `numberingId` | attaches the paragraph to a list the document already defines, at `listLevel` (default 0), so a new clause continues the template's own numbering instead of starting a look-alike list (Word only). The value is the number in a `list#N` path from inspection. If that level names a paragraph style, the style is applied too. Cannot be combined with `listStyle` or `listId`; needs a paragraph target |
 | `pageBreakBefore` | the paragraph starts a new page (Word only). A property of the paragraph, not a character in the text, so the page goes on starting there as the text above it is edited |
 | `spacingBeforeTwips`, `spacingAfterTwips` | paragraph spacing |
 | `borderStyle`, `borderSizeEighths`, `borderColor` | paragraph / table / cell border (8 = 1 pt) |
@@ -210,6 +239,21 @@ Properties (all optional):
 | `fillColor`, `lineColor` | hex RGB, or `none`, on a shape or slide background (PresentationML) |
 | `lineWidthPx` | shape outline width at 96 DPI (PresentationML) |
 | `verticalAlignment` | `top`, `middle`, `bottom` — where text sits in a shape's box (PresentationML) |
+
+Inspection lists every numbering instance a Word document defines as a `list` node, with a
+summary of its first levels:
+
+```text
+list#42  List 42 (Contract clauses): level 0 decimal "%1." style ClauseHeading; level 1 lowerLetter "(%2)"
+```
+
+To add a clause that continues that list at its second level:
+
+```json
+{ "op": "format",
+  "target": { "paraId": "w14:…", "expect": "" },
+  "numberingId": 42, "listLevel": 1 }
+```
 
 ### `copyStyles` / `clearStyles`
 
@@ -285,6 +329,23 @@ Populate a named slot by tag. Slot tags come from `inspect_document.contentContr
 In Word a slot is a content control or bookmark (`kind: "contentControl"`). On a deck it is the **shape name** a template author sets, which PowerPoint shows in its Selection Pane (`kind: "shapeName"`); names repeat across slides, so a tag matching more than one shape is refused as `ambiguous-anchor` rather than filling an arbitrary one, and is qualified as `slide256/ClientName`.
 
 **`fill` populates a slot; it does not create one.** In Word that means the document must already carry the content control — no verb adds one, so `fill` applies to templates the host supplies rather than to documents `create_document` produced. A deck has no such gap: every named shape is a slot, and `insertShape` makes one.
+
+### `link`
+
+Turns a span of Word text into a hyperlink. The target is a text span with a non-empty
+`expect`, resolved as for `changeText`; the text and its formatting are unchanged.
+
+```json
+{ "op": "link",
+  "target": { "paraId": "w14:…", "expect": "the 2026 price list", "occurrence": 0 },
+  "url": "https://example.com/prices/2026" }
+```
+
+`url` must be an absolute `http`, `https` or `mailto` URL; `file:`, `javascript:` and
+relative addresses are refused. The span must not cross a tracked-change, field or
+content-control boundary, and must not already be inside a hyperlink. Linking is a
+`Direct` change; `"mode": "Tracked"` is refused, because Word has no tracked-change record
+for adding a hyperlink.
 
 ### `comment`
 
@@ -439,6 +500,24 @@ builds this operation and scalar `fill` operations from a binding.
   "columnIndices": [-1] }
 ```
 
+### `mergeTableCells`
+
+Merges a Word table cell with the cells to its right in the same row, into one cell spanning
+`columnSpan` grid columns (default 2). The absorbed cells' content is appended to the first
+cell's, unless it is empty, and their widths are added together.
+
+```json
+{ "op": "mergeTableCells",
+  "target":     { "kind": "tableCell", "path": "table#0/cell#0/1" },
+  "columnSpan": 3 }
+```
+
+Refused with `invalid-operation` when `columnSpan` is not larger than the cell's current span,
+when the row ends first, when the cell takes part in a vertical merge, or when the span would
+end part-way through a cell that already spans several columns - the message names the
+`columnSpan` that includes it whole. Merging is a `Direct` change; `"mode": "Tracked"` is
+refused, because OfficeAgent does not record a cell merge as a tracked change.
+
 ### `insertImage` / `removeImage`
 
 Add an inline image and remove one by `image#N` (discover paths via `inspect_document.nodes`).
@@ -539,7 +618,11 @@ The deck-only settings (`showSlideNumber`, `showFooter`, `showDateTime`, `dateTi
 
 ### `setProperty`
 
-Update document metadata or a selected document-level setting.
+Update document metadata or a selected document-level setting. The core properties
+(`core/creator`, `core/title`, `core/subject`, `core/keywords`, `core/lastModifiedBy`,
+`core/revision`, `core/category`, `core/contentStatus`) work in Word documents, decks and
+workbooks alike; `settings/*` and `field` targets are Word only. An unknown property name is
+refused with `anchor-not-found`.
 
 ```json
 { "op": "setProperty",
@@ -550,6 +633,21 @@ Update document metadata or a selected document-level setting.
   "target": { "kind": "field" },
   "name":   "updateOnOpen" }
 ```
+
+The Word compatibility mode is the path `settings/compatibilityMode`:
+
+```json
+{ "op": "setProperty",
+  "target": { "kind": "docProperty", "path": "settings/compatibilityMode" },
+  "value":  "15" }
+```
+
+Word lays a document out according to this mode: `11` is Word 2003, `12` Word 2007, `14` Word
+2010, and `15` Word 2013 and later. A document without it opens in Word as a Word 2007 document,
+titled "Compatibility Mode". Any other value is refused with `invalid-operation`. Inspection lists
+the setting as a `docProperty` node with its current value, empty when the document declares
+none. A document OfficeAgent creates already declares `15`. The setting is created when missing,
+and no other setting changes.
 
 `updateOnOpen` sets `w:updateFields`, which makes Word ask *"This document contains fields that may refer to other files. Do you want to update the fields in this document?"* every time the document is opened. On a document with **no fields** that prompt buys nothing and reads to the user as a damage warning, so it is refused with `invalid-operation` rather than armed. Set it once the document actually contains a field.
 
@@ -792,6 +890,7 @@ Returned by `preview_plan` and `apply_plan` in the `errors` array. Stable wire c
 | `unsupported-operation` | No registered handler supports the verb / anchor combination. |
 | `invalid-operation` | The operation is structurally invalid (e.g. empty `expect` against a paragraph that has text, no formatting properties). |
 | `requires-renderer` | The requested change needs a layout / calculation engine. |
+| `formula-error` | With `RejectFormulaErrors`, calculating the edited workbook produced a formula error the input did not have at that cell, or a circular reference. Nothing was written. See [formula calculation](excel.md#formula-calculation). |
 | `operation-conflict` | Two operations target the same location in one plan. |
 | `revision-overlap` | The Word edit spans a pending tracked revision, so the resulting redline would no longer reject back to the original text. Resolve the pending revisions first, or target a span wholly inside or wholly outside them. See [pending revisions](pending-revisions.md). |
 | `contract-mismatch` | The edit-plan version is not exactly `0.2`, or the plan asserted a `format` the document is not. Omit the version for legacy `0.2` behavior or rebuild it for `0.2`, then preview again. |

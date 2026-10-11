@@ -58,7 +58,7 @@ guessing which line was meant; see [Anchor stability](#anchor-stability).
 
 | Verb | Target | Notes |
 | --- | --- | --- |
-| `changeText` | paragraph | Works across slides, table cells, and notes. An empty `expect` writes into an empty paragraph — the route to filling a new deck's placeholder. `mode: "Tracked"` is **refused** — PresentationML has no redline vocabulary |
+| `changeText` | paragraph | Works across slides, table cells, and notes. An empty `expect` writes into an empty paragraph — the route to filling a new deck's placeholder. An empty `with` deletes the matched text. `mode: "Tracked"` is **refused** — PresentationML has no redline vocabulary |
 | `format` | paragraph / image node / shape node / slide node | bold, italic, underline, `sizeHalfPoints`, `fontFamily`, `color`, `highlight`, `alignment`; `widthPx`/`heightPx` resizes an image; on a **shape** node `xPx`/`yPx`/`widthPx`/`heightPx` move and resize anything - text box, table frame, picture - and `fillColor`, `lineColor`, `lineWidthPx` and `verticalAlignment` (`top`/`middle`/`bottom`) paint it; on a **slide** node `fillColor` paints the background. `none` clears a fill or an outline. An empty `expect` styles the whole paragraph. Word-only measures (`styleId`, indents, spacing, borders, `pageBreakBefore`) are **refused**, not ignored |
 | `backgroundImage` | none (every slide), or slide node | An image behind the slide, stretched to fill it. `opacity` 0–1 — set it for any photograph with text over it. No image at all clears the background. A flat colour is `format` with `fillColor` |
 | `insertTable` | slide node | Placed below existing content. `table.styleId` names a built-in look — `none` (no rules), `grid`, `themed`, `banded`. Left unset, PowerPoint draws its default boxed grid. Resizing the frame with `format` rescales the columns |
@@ -85,8 +85,9 @@ guessing which line was meant; see [Anchor stability](#anchor-stability).
 | `removeSlide` | slide node | Takes the slide's notes with it. Refused when it would empty the deck |
 | `moveSlide` | slide node | `position` + `relativeTo` |
 | `duplicateSlide` | slide node | Copy gets its own slide id, shape ids, and notes; lands after the original by default |
+| `setProperty` | `docProperty` node | The deck's core properties: `core/title`, `core/creator`, `core/subject`, `core/keywords`, `core/category` and the rest, as for a Word document. `field` and `settings/*` targets are Word only |
 
-Verbs the module does not implement — `defineStyle`, `setProperty`, `revision`, `pageSetup`, `insertBreak` and `note` — are reported per-operation as
+Verbs the module does not implement — `defineStyle`, `revision`, `pageSetup`, `insertBreak` and `note` — are reported per-operation as
 `unsupported-operation`, and nothing in the plan is applied. The slide, shape,
 section, header-footer, media, transition and animation verbs run the other way:
 a Word document reports *them* as unsupported.
@@ -396,7 +397,7 @@ already resized.
 - `format` supports shape and slide fills, shape outlines, and shape geometry; it does not directly restyle the cells inside an existing table.
 - Animations are limited to the effects PresentationML expresses as a filtered `p:animEffect`. Fly-in, zoom, grow and the motion paths are refused rather than approximated — see [available effects](#available-effects).
 - A slide has no header. `p:hf` carries one, but it governs notes and handout pages, which is why PowerPoint greys the box out on the Slide tab.
-- `defineStyle`, `setProperty`, `revision`, `pageSetup`, `insertBreak` and `note` are not implemented; a deck has no style catalogue to define into - its look lives in the layout and master - no document-property vocabulary of its own, no redline model, no page geometry to set per slide, and no footnotes.
+- `defineStyle`, `revision`, `pageSetup`, `insertBreak` and `note` are not implemented; a deck has no style catalogue to define into - its look lives in the layout and master - no redline model, no page geometry to set per slide, and no footnotes. `setProperty` covers the core properties only.
 - A deck refuses an explicit `"mode": "Tracked"` on any verb that carries one. An omitted mode is route-specific: inline and direct .NET operations resolve to `Direct`, while connection-addressed agent tools inherit `DefaultChangeMode`. Configure a deck connection as `Direct`; see [change mode](document-plans.md#change-mode).
 - Legacy `p:cm` comments are neither read nor written.
 - SmartArt is not addressable. Existing third-party charts are inspectable but `updateChart` deliberately accepts only charts created by OfficeAgent.

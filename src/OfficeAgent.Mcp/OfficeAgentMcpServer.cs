@@ -10,6 +10,7 @@ using OfficeAgent.Core.DocumentProviders;
 using OfficeAgent.SharePoint;
 using OfficeAgent.PowerPoint;
 using OfficeAgent.Excel;
+using OfficeAgent.Excel.Calculation;
 using OfficeAgent.Word;
 
 namespace OfficeAgent.Mcp;
@@ -152,6 +153,8 @@ public static class OfficeAgentMcpServer
                 o.MaximumBytes = connection.MaximumBytes;
                 o.AllowedExtensions = connection.AllowedExtensions.ToArray();
                 o.DefaultChangeMode = ParseChangeMode(connection.DefaultChangeMode, connection.ConnectionId);
+                o.CalculateFormulas = connection.CalculateFormulas;
+                o.RejectFormulaErrors = connection.RejectFormulaErrors;
             });
         }
 
@@ -413,6 +416,8 @@ public static class OfficeAgentMcpServer
         services.AddWordFormat();
         services.AddPowerPointFormat();
         services.AddExcelFormat();
+        // Registered unconditionally: it runs only for a connection that sets CalculateFormulas.
+        services.AddExcelFormulaCalculation();
     }
 
     /// <summary>
@@ -482,7 +487,9 @@ public static class OfficeAgentMcpServer
             AllowedExtensions = connection.AllowedExtensions.ToArray(),
             CreationDriveId = connection.CreationDriveId,
             CreationFolderItemId = connection.CreationFolderItemId,
-            DefaultChangeMode = ParseChangeMode(connection.DefaultChangeMode, connection.ConnectionId)
+            DefaultChangeMode = ParseChangeMode(connection.DefaultChangeMode, connection.ConnectionId),
+            CalculateFormulas = connection.CalculateFormulas,
+            RejectFormulaErrors = connection.RejectFormulaErrors
         }, http, tokens, store);
     }
 

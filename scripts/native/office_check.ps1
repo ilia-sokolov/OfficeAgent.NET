@@ -46,6 +46,12 @@ function Check([string]$name, $expected, $actual, [bool]$pass) {
     [void]$script:checks.Add([ordered]@{ name = $name; expected = $expected; actual = $actual; pass = $pass })
 }
 function Has($expect, [string]$key) { $null -ne $expect.PSObject.Properties[$key] }
+# Document properties are IDispatch-only in Word, PowerPoint and Excel alike; PowerShell's binder
+# cannot call them directly.
+function TitleOf($file) {
+    $property = [System.__ComObject].InvokeMember('Item', [Reflection.BindingFlags]::GetProperty, $null, $file.BuiltInDocumentProperties, @('Title'))
+    [string][System.__ComObject].InvokeMember('Value', [Reflection.BindingFlags]::GetProperty, $null, $property, $null)
+}
 function ContainsAll([string]$text, $items, [string]$label) {
     foreach ($s in $items) { Check "$label contains '$s'" $true ($text.Contains($s)) ($text.Contains($s)) }
 }
@@ -125,12 +131,16 @@ function Check-Word($app, $case, [string]$path) {
         if (Has $e 'landscape') { $o = $doc.Sections.Item(1).PageSetup.Orientation; Check 'landscape' $true ($o -eq 1) ($o -eq 1) }
         if (Has $e 'headerContains') { $t = $doc.Sections.Item(1).Headers.Item(1).Range.Text; Check "header contains '$($e.headerContains)'" $true $t.Contains($e.headerContains) $t.Contains($e.headerContains) }
         if (Has $e 'footerContains') { $t = $doc.Sections.Item(1).Footers.Item(1).Range.Text; Check "footer contains '$($e.footerContains)'" $true $t.Contains($e.footerContains) $t.Contains($e.footerContains) }
-        if (Has $e 'title') {
-            # Document properties are IDispatch-only; PowerShell's binder cannot call them directly.
-            $property = [System.__ComObject].InvokeMember('Item', [Reflection.BindingFlags]::GetProperty, $null, $doc.BuiltInDocumentProperties, @('Title'))
-            $t = [string][System.__ComObject].InvokeMember('Value', [Reflection.BindingFlags]::GetProperty, $null, $property, $null)
-            Check 'title property' $e.title $t ($t -eq $e.title)
+        if (Has $e 'title') { $t = TitleOf $doc; Check 'title property' $e.title $t ($t -eq $e.title) }
+        if (Has $e 'hyperlinks') { Check 'hyperlinks' $e.hyperlinks $doc.Hyperlinks.Count ($doc.Hyperlinks.Count -eq $e.hyperlinks) }
+        if (Has $e 'hyperlinkAddress') { $a = $doc.Hyperlinks.Item(1).Address; Check 'hyperlink address' $e.hyperlinkAddress $a ($a -eq $e.hyperlinkAddress) }
+        if (Has $e 'hyperlinkText') { $t = $doc.Hyperlinks.Item(1).TextToDisplay; Check 'hyperlink text' $e.hyperlinkText $t ($t -eq $e.hyperlinkText) }
+        if (Has $e 'firstRowCells') { $n = $doc.Tables.Item(1).Rows.Item(1).Cells.Count; Check 'cells in the first row' $e.firstRowCells $n ($n -eq $e.firstRowCells) }
+        if (Has $e 'listStrings') {
+            $strings = @($doc.ListParagraphs | Sort-Object { $_.Range.Start } | ForEach-Object { $_.Range.ListFormat.ListString })
+            Check 'list numbers in document order' ($e.listStrings -join ' ') ($strings -join ' ') ((@($e.listStrings) -join '|') -eq ($strings -join '|'))
         }
+        if (Has $e 'compatibilityMode') { $m = $doc.CompatibilityMode; Check 'compatibility mode' $e.compatibilityMode $m ($m -eq $e.compatibilityMode) }
         if (Has $e 'styleExists') {
             $found = $false; try { $null = $doc.Styles.Item($e.styleExists); $found = $true } catch { }
             Check "style '$($e.styleExists)' exists" $true $found $found
@@ -230,6 +240,7 @@ function Check-Deck($app, $case, [string]$path) {
             $t = (@($deck.Slides.Item(1).Shapes | Where-Object { $_.HasTextFrame -and $_.TextFrame.HasText } | ForEach-Object { $_.TextFrame.TextRange.Text }) -join ' ')
             Check "first slide contains '$($e.firstSlideContains)'" $true $t.Contains($e.firstSlideContains) $t.Contains($e.firstSlideContains)
         }
+        if (Has $e 'title') { $t = TitleOf $deck; Check 'title property' $e.title $t ($t -eq $e.title) }
         $shapes = @(Shapes $deck)
         if (Has $e 'tables') { $n = @($shapes | Where-Object { $_.HasTable }).Count; Check 'tables' $e.tables $n ($n -eq $e.tables) }
         if (Has $e 'pictures') { $n = @($shapes | Where-Object { $_.Type -eq $msoPicture }).Count; Check 'pictures' $e.pictures $n ($n -eq $e.pictures) }
@@ -308,6 +319,7 @@ function Check-Book($app, $case, [string]$path) {
     $book = Open-Book $app $path
     try {
         $sheet = $book.Worksheets.Item(1)
+        if (Has $e 'title') { $t = TitleOf $book; Check 'title property' $e.title $t ($t -eq $e.title) }
         $logs = @(RepairLogs | Where-Object { $before -notcontains $_ })
         Check 'no Excel repair log' 0 $logs.Count ($logs.Count -eq 0)
         if (Has $e 'recalculate') { $app.CalculateFull() }
@@ -323,6 +335,27 @@ function Check-Book($app, $case, [string]$path) {
                     Check "$($cell.address) formula" $cell.formula $f ($f -eq $cell.formula)
                 }
             }
+        }
+        if (Has $e 'calculated') {
+            # Excel's own result for each formula the engine calculated, against the cached value.
+            # Numbers agree to 1e-9 relative: Windows PowerShell prints doubles to 15 digits only.
+            $errors = @{ -2146826281 = '#DIV/0!'; -2146826246 = '#N/A'; -2146826259 = '#NAME?'; -2146826288 = '#NULL!';
+                         -2146826252 = '#NUM!'; -2146826265 = '#REF!'; -2146826273 = '#VALUE!' }
+            $agree = 0
+            foreach ($cell in $e.calculated) {
+                $v = $sheet.Range($cell.address).Value2
+                switch ($cell.kind) {
+                    'Number' {
+                        $want = [double]::Parse($cell.value, [Globalization.CultureInfo]::InvariantCulture)
+                        $ok = ($v -is [double]) -and ([math]::Abs($v - $want) -le 1e-9 * [math]::Max(1, [math]::Abs($want)))
+                        $got = if ($v -is [double]) { $v.ToString('R', [Globalization.CultureInfo]::InvariantCulture) } else { [string]$v } }
+                    'Boolean' { $got = if ($v -is [bool]) { if ($v) { 'TRUE' } else { 'FALSE' } } else { [string]$v }; $ok = $got -eq $cell.value }
+                    'Error' { $got = if ($v -is [int] -and $errors.ContainsKey($v)) { $errors[$v] } else { [string]$v }; $ok = $got -eq $cell.value }
+                    default { $got = [string]$v; $ok = ($v -is [string]) -and $got -eq $cell.value }
+                }
+                if ($ok) { $agree++ } else { Check "$($cell.address) =$($cell.formula)" $cell.value $got $false }
+            }
+            Check 'formulas where Excel agrees with the cached value' $e.calculated.Count $agree ($agree -eq $e.calculated.Count)
         }
         $text = (@($sheet.UsedRange.Value2) | ForEach-Object { [string]$_ }) -join "`n"
         if (Has $e 'textContains') { ContainsAll $text $e.textContains 'cells' }
@@ -387,13 +420,15 @@ function Run-Case($case, [string]$path) {
 
 function Control-Case([IO.FileInfo]$file) {
     $format = @{ '.docx' = 'word'; '.pptx' = 'powerpoint'; '.xlsx' = 'excel' }[$file.Extension]
-    [pscustomobject]@{ id = $file.BaseName; format = $format; family = 'control'; description = 'corrupt control'
+    # The id is the full file name: the controls share a base name across formats, so a base-name
+    # lookup in the worker would match all three and open none.
+    [pscustomobject]@{ id = $file.Name; format = $format; family = 'control'; description = 'corrupt control'
         file = $file.Name; visual = $false; outputSha256 = ''; expect = [pscustomobject]@{} }
 }
 
 # Worker: one case in this process, so a blocking dialog cannot stall the whole run.
 if ($Worker) {
-    $control = Get-Item (Join-Path (Join-Path $Corpus 'controls') "$Id.*") -ErrorAction SilentlyContinue
+    $control = Get-Item -LiteralPath (Join-Path (Join-Path $Corpus 'controls') $Id) -ErrorAction SilentlyContinue
     if ($control) { $case = Control-Case $control; $path = $control.FullName }
     else { $case = $manifest | Where-Object { $_.id -eq $Id }; $path = Join-Path (Join-Path $Corpus 'outputs') $case.file }
     try { $r = Run-Case $case $path }
@@ -442,7 +477,12 @@ foreach ($file in Get-ChildItem (Join-Path $Corpus 'controls')) {
     $case = Control-Case $file
     $r = Run-Isolated $case
     $appWorks = @($results | Where-Object { $_.format -eq $case.format -and $_.openedCleanly }).Count -gt 0
-    $detected = (-not $r.pass) -and $appWorks
+    # A worker that died without a result proves nothing about the file: it is a harness failure,
+    # not Office refusing the control. A hang still counts, since it is a blocking repair dialog.
+    # A hung result is a dictionary built here; a worker result is JSON without the key.
+    $hung = if ($r -is [System.Collections.IDictionary]) { [bool]$r['hung'] } else { [bool]($r.PSObject.Properties['hung'] -and $r.hung) }
+    $harnessFailed = -not $hung -and $r.error -like 'worker exited*'
+    $detected = (-not $r.pass) -and $appWorks -and -not $harnessFailed
     [void]$controls.Add([ordered]@{ file = $file.Name; format = $case.format; detected = $detected; appOpenedValidCase = $appWorks; error = $r.error; checks = $r.checks })
     Write-Host ("{0,-6} {1}" -f ($(if ($detected) { 'CAUGHT' } else { 'MISSED' })), $file.Name)
 }

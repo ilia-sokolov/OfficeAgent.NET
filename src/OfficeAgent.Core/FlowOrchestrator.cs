@@ -55,7 +55,11 @@ internal sealed class FlowOrchestrator
     /// <summary>Whether the host registered an optional page renderer; reported by discovery.</summary>
     internal bool RenderingAvailable { get; init; }
 
-    public EngineCapabilities Describe() => CapabilityDiscovery.Describe(_modules, _limits, RenderingAvailable);
+    /// <summary>The optional formula evaluator; calculation is off without one.</summary>
+    internal IFormulaEvaluator? FormulaEvaluator { get; init; }
+
+    public EngineCapabilities Describe() =>
+        CapabilityDiscovery.Describe(_modules, _limits, RenderingAvailable, FormulaEvaluator);
 
     public InspectResult Inspect(DocumentHandle handle, InspectOptions options) =>
         InspectCore(ReadAll(handle), options);
@@ -127,6 +131,25 @@ internal sealed class FlowOrchestrator
         var planHash = Hash(JsonSerializer.SerializeToUtf8Bytes(plan));
         var inputHash = Hash(bytes);
 
+        // A preview that asks for calculation applies the plan to a scratch copy, so it can
+        // show the results - and any formula errors - that committing would produce.
+        if (options.DryRun && report.IsValid && options.CalculateFormulas && FormulaEvaluator is not null)
+        {
+            using var scratch = _opc.Open(bytes, editable: true);
+            var scratchModule = _router.Route(scratch);
+            if (scratchModule.Format == DocFormatExcel)
+            {
+                var scratchAliases = scratchModule.Stabilize(scratch);
+                var scratchSnapshot = scratchModule.Inspect(scratch, InspectOptions.Default);
+                var scratchContext = new ApplyContext(scratch, scratchSnapshot, scratchAliases, revision);
+                if (_transaction.ApplyAtomic(scratchContext, plan, scratchModule, cancellationToken).Success)
+                {
+                    scratchModule.Stabilize(scratch);
+                    report = WithCalculation(report, Calculate(scratch, bytes, cancellationToken), options.RejectFormulaErrors);
+                }
+            }
+        }
+
         if (options.DryRun || !report.IsValid)
         {
             if (!report.IsValid)
@@ -185,6 +208,22 @@ internal sealed class FlowOrchestrator
         // pass exists to mint ids, and every anchor in this plan was resolved long ago.
         commitModule.Stabilize(commitPackage);
 
+        if (options.CalculateFormulas && FormulaEvaluator is not null && commitModule.Format == DocFormatExcel)
+        {
+            report = WithCalculation(report, Calculate(commitPackage, bytes, cancellationToken), options.RejectFormulaErrors);
+            if (!report.IsValid)
+            {
+                _logger.LogInformation("Apply rejected: calculation found formula errors and they were asked to be refused");
+                return new ApplyResult
+                {
+                    Report = report,
+                    Committed = false,
+                    Output = null,
+                    Receipt = Receipt(planHash, inputHash, outputHash: null, attemptedAt, ApplyOutcome.Rejected, revision, options.Actor)
+                };
+            }
+        }
+
         var outputBytes = commitPackage.ToBytes();
         var output = new StreamHandle(new MemoryStream(outputBytes), OutputName(handle));
 
@@ -198,6 +237,69 @@ internal sealed class FlowOrchestrator
             Receipt = Receipt(
                 planHash, inputHash, Hash(outputBytes), attemptedAt,
                 ApplyOutcome.Committed, revision, options.Actor)
+        };
+    }
+
+    private const OfficeAgent.Abstractions.DocumentFormat DocFormatExcel = OfficeAgent.Abstractions.DocumentFormat.Excel;
+
+    /// <summary>
+    /// Calculates the edited workbook, writes the results into its cached values, and lists
+    /// the errors the plan introduced - those the input did not already carry.
+    /// </summary>
+    private FormulaCalculationReport Calculate(IOpenXmlPackage edited, byte[] input, CancellationToken cancellationToken)
+    {
+        var evaluator = FormulaEvaluator!;
+        var evaluation = evaluator.Evaluate(edited.ToBytes(), cancellationToken);
+
+        using var original = _opc.Open(input, editable: false);
+        var existing = SpreadsheetPartUtility.CachedFormulaErrors(
+            (DocumentFormat.OpenXml.Packaging.SpreadsheetDocument)original.Package);
+        var newErrors = evaluation.Cells
+            .Where(cell => cell.Outcome == FormulaOutcome.Calculated && cell.ValueKind == FormulaValueKind.Error &&
+                           !(existing.TryGetValue((cell.SheetId, cell.Address), out var before) && before == cell.Value))
+            .ToList();
+
+        var written = SpreadsheetPartUtility.WriteCachedValues(
+            (DocumentFormat.OpenXml.Packaging.SpreadsheetDocument)edited.Package, evaluation.Cells);
+        _logger.LogDebug("Calculated {Calculated} of {Cells} formula cell(s) with {Engine}; wrote {Written} cached value(s)",
+            evaluation.Cells.Count(c => c.Outcome == FormulaOutcome.Calculated), evaluation.Cells.Count, evaluator.Name, written);
+
+        return new FormulaCalculationReport
+        {
+            Engine = evaluator.Name,
+            Cells = evaluation.Cells,
+            NotCalculatedReason = evaluation.NotCalculatedReason,
+            NewErrors = newErrors,
+            CircularReference = evaluation.CircularReference
+        };
+    }
+
+    /// <summary>
+    /// Attaches a calculation to the report. With <paramref name="reject"/>, formula errors
+    /// become <see cref="ValidationErrorCodes.FormulaError"/> errors and the report invalid.
+    /// </summary>
+    private static ChangeReport WithCalculation(ChangeReport report, FormulaCalculationReport calculation, bool reject)
+    {
+        if (!reject || !calculation.HasFormulaErrors)
+            return new ChangeReport { IsValid = report.IsValid, Changes = report.Changes, Errors = report.Errors, Calculation = calculation };
+
+        var errors = calculation.NewErrors
+            .Select(cell => new ValidationError(
+                ValidationErrorCodes.FormulaError,
+                $"Sheet {cell.SheetId} cell {cell.Address}: ={cell.Formula} evaluates to {cell.Value}.",
+                new CellAnchor { SheetId = cell.SheetId, Address = cell.Address }))
+            .ToList();
+        if (calculation.CircularReference)
+            errors.Add(new ValidationError(
+                ValidationErrorCodes.FormulaError,
+                "The workbook contains a circular reference, so its formulas could not be calculated."));
+
+        return new ChangeReport
+        {
+            IsValid = false,
+            Changes = report.Changes,
+            Errors = report.Errors.Concat(errors).ToList(),
+            Calculation = calculation
         };
     }
 

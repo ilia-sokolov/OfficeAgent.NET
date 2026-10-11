@@ -30,6 +30,11 @@
       "frameworks": ["netstandard2.0", "net8.0"]
     },
     {
+      "id": "OfficeAgent.Excel.Calculation",
+      "project": "src/OfficeAgent.Excel.Calculation/OfficeAgent.Excel.Calculation.csproj",
+      "frameworks": ["netstandard2.0", "net8.0"]
+    },
+    {
       "id": "OfficeAgent.Mcp",
       "project": "src/OfficeAgent.Mcp/OfficeAgent.Mcp.csproj",
       "frameworks": ["net8.0", "net10.0"],

@@ -18,14 +18,16 @@ internal sealed class OfficeAgentEngine : IDocumentService, ICapabilityReporting
         IEnumerable<IHandleResolver>? resolvers = null,
         ILoggerFactory? loggerFactory = null,
         OpenXmlIngestionLimits? limits = null,
-        bool renderingAvailable = false)
+        bool renderingAvailable = false,
+        IFormulaEvaluator? formulaEvaluator = null)
         => _flow = new FlowOrchestrator(
             modules,
             resolvers ?? DefaultHandleResolver.For(limits ?? OpenXmlIngestionLimits.Default),
             (loggerFactory ?? NullLoggerFactory.Instance).CreateLogger(OfficeAgentTelemetry.LogCategory),
             limits ?? OpenXmlIngestionLimits.Default)
         {
-            RenderingAvailable = renderingAvailable
+            RenderingAvailable = renderingAvailable,
+            FormulaEvaluator = formulaEvaluator
         };
 
     /// <inheritdoc />

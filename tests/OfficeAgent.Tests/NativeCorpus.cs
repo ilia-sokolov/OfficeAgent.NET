@@ -5,7 +5,9 @@ using W = DocumentFormat.OpenXml.Wordprocessing;
 using OfficeAgent.Abstractions;
 using OfficeAgent.Core;
 using OfficeAgent.Core.DocumentProviders;
+using Microsoft.Extensions.DependencyInjection;
 using OfficeAgent.Excel;
+using OfficeAgent.Excel.Calculation;
 using OfficeAgent.PowerPoint;
 using OfficeAgent.Word;
 
@@ -162,6 +164,9 @@ internal static class NativeCorpus
             new PlanOperation[] { new RepeatTableRowOp { Target = new NodeAnchor { Kind = "table", Path = "table#0" }, TemplateRowIndex = 1, Mode = ChangeMode.Direct,
                 Records = new[] { Record("Widget", "2"), Record("Gadget", "1"), Record("Sprocket", "5") } } },
             new() { ["tables"] = 1, ["tableRows"] = 4, ["textContains"] = new[] { "Widget", "Gadget", "Sprocket" }, ["textExcludes"] = new[] { "{{" } }, visual: true);
+        yield return W("w-mergetablecells", "mergeTableCells", "Merge the header row's first two cells", tabled,
+            new PlanOperation[] { new MergeTableCellsOp { Target = new NodeAnchor { Kind = "tableCell", Path = "table#0/cell#0/0" }, ColumnSpan = 2 } },
+            new() { ["tables"] = 1, ["tableRows"] = 3, ["firstRowCells"] = 2, ["textContains"] = new[] { "Item", "Qty", "Widget" } }, visual: true);
         yield return W("w-removetable", "removeTable", "Remove a table", tabled,
             new PlanOperation[] { new RemoveTableOp { Target = table, Mode = ChangeMode.Direct } },
             new() { ["tables"] = 0, ["textExcludes"] = new[] { "Widget" } });
@@ -193,6 +198,24 @@ internal static class NativeCorpus
         yield return W("w-setproperty", "setProperty", "Document title property", contract,
             new PlanOperation[] { new SetPropertyOp { Target = new NodeAnchor { Kind = "docProperty", Path = "core/title" }, Value = "Master services agreement" } },
             new() { ["title"] = "Master services agreement" });
+        yield return W("w-setproperty-compatibility", "setProperty", "Compatibility mode set to Word 2010", contract,
+            new PlanOperation[] { new SetPropertyOp { Target = new NodeAnchor { Kind = "docProperty", Path = "settings/compatibilityMode" }, Value = "14" } },
+            new() { ["compatibilityMode"] = 14 });
+
+        // Links and lists.
+        yield return W("w-link", "link", "Hyperlink on existing text", contract,
+            new PlanOperation[] { new LinkOp { Target = hit, Url = "https://example.com/acme" } },
+            new() { ["hyperlinks"] = 1, ["hyperlinkAddress"] = "https://example.com/acme", ["hyperlinkText"] = "Acme Corp",
+                    ["wordTextSameAsInput"] = true, ["revisions"] = 0 });
+        var listed = Paragraphs(client, contract).Where(p => p.Text.Length > 0).Take(2).ToArray();
+        var withList = Commit(client, contract, "input.docx", new PlanOperation[]
+        {
+            new FormatOp { Target = new TextSpanAnchor { ParaId = listed[0].ParaId, Expect = "" }, ListStyle = "decimal", ListLevel = 0, Mode = ChangeMode.Direct }
+        });
+        var numberingId = int.Parse(Paths(client, withList, "list").Single().Substring("list#".Length), System.Globalization.CultureInfo.InvariantCulture);
+        yield return W("w-format-numberingid", "format", "A paragraph attached to the document's existing list", withList,
+            new PlanOperation[] { new FormatOp { Target = new TextSpanAnchor { ParaId = listed[1].ParaId, Expect = "" }, NumberingId = numberingId, ListLevel = 0, Mode = ChangeMode.Direct } },
+            new() { ["listStrings"] = new[] { "1.", "2." } });
 
         // Styles.
         yield return W("w-definestyle", "defineStyle", "Define and apply a heading style", contract,
@@ -431,6 +454,9 @@ internal static class NativeCorpus
         yield return P("p-comment", "comment", "Modern comment on a slide", deck,
             new PlanOperation[] { new CommentOp { Target = new NodeAnchor { Kind = "slide", Path = "slide#256" }, Text = "Check the figures.", Author = "Reviewer" } },
             new() { ["commentsAtLeast"] = 1 });
+        yield return P("p-setproperty", "setProperty", "Deck title property", deck,
+            new PlanOperation[] { new SetPropertyOp { Target = new NodeAnchor { Kind = "docProperty", Path = "core/title" }, Value = "Quarterly business review" } },
+            new() { ["title"] = "Quarterly business review" });
         var template = SlideTemplate(client, module);
         yield return P("p-fill", "fill", "Fill a named template shape", template,
             new PlanOperation[] { new FillOp { Target = new StructuralAnchor { Tag = "ClientName" }, Value = "Northwind Traders Limited", Mode = ChangeMode.Direct } },
@@ -461,6 +487,10 @@ internal static class NativeCorpus
             {
                 Cell("A1", value: "Verified by OfficeAgent"), Cell("B2", value: "12.5"), Cell("B4", value: "20", formula: "=SUM(B2:B3)")
             }, ["recalculate"] = true }, visual: true);
+        yield return Calculated(blank);
+        yield return X("x-setproperty", "setProperty", "Workbook title property", blank,
+            new PlanOperation[] { new SetPropertyOp { Target = new NodeAnchor { Kind = "docProperty", Path = "core/title" }, Value = "Q2 sales summary" } },
+            new() { ["title"] = "Q2 sales summary" });
         yield return X("x-comment", "comment", "Cell comment", blank,
             new PlanOperation[] { new CommentOp { Target = new CellAnchor { SheetId = 1, Address = "A1" }, Text = "Source: finance export.", Author = "Analyst" } },
             new() { ["commentsAtLeast"] = 1 });
@@ -469,6 +499,68 @@ internal static class NativeCorpus
         yield return X("x-appendtablerows", "appendTableRows", "Append rows to an Excel table", workbook,
             new PlanOperation[] { new AppendTableRowsOp { Target = new NodeAnchor { Kind = "spreadsheetTable", Path = tablePath }, Rows = new[] { new[] { "APAC", "15" } } } },
             new() { ["tables"] = 1, ["tableRowsGrewBy"] = 1, ["textContains"] = new[] { "APAC" } }, visual: true);
+    }
+
+    /// <summary>
+    /// TEXT, FIXED and NUMBERVALUE follow the formatting locale of the Excel that calculates them,
+    /// while the engine caches them with invariant conventions; on an Excel with other separators
+    /// they rightly differ, so they are left out of the native comparison.
+    /// </summary>
+    private static readonly string[] LocaleDependent = { "TEXT(", "FIXED(", "NUMBERVALUE(" };
+
+    /// <summary>
+    /// Every allowlisted function's golden formula, written by setCell into one sheet and
+    /// calculated by the engine. Excel recalculates the workbook and must arrive at the value the
+    /// engine cached in each cell.
+    /// </summary>
+    private static Case Calculated(byte[] blank)
+    {
+        var plain = new OfficeAgentClient(new ExcelModule());
+        static SetCellOp Number(string address, double value) => new()
+        {
+            Target = new CellAnchor { SheetId = 1, Address = address },
+            Value = value.ToString("R", System.Globalization.CultureInfo.InvariantCulture),
+            ValueKind = SpreadsheetCellValueKind.Number
+        };
+        static SetCellOp Text(string address, string value) => new()
+        {
+            Target = new CellAnchor { SheetId = 1, Address = address }, Value = value, ValueKind = SpreadsheetCellValueKind.String
+        };
+        var data = new List<PlanOperation>();
+        for (var i = 1; i <= 5; i++) { data.Add(Number($"A{i}", i)); data.Add(Number($"G{i}", i * 2)); }
+        data.Add(Number("A6", 10.5));
+        data.Add(Text("B1", "apple")); data.Add(Text("B2", "Banana")); data.Add(Text("B3", "  cherry  ")); data.Add(Text("B4", "a,b,c"));
+        data.Add(Number("C1", new DateTime(2026, 10, 6).ToOADate())); data.Add(Number("C2", new DateTime(2026, 1, 31).ToOADate()));
+        string[] keys = { "x", "y", "z" };
+        for (var i = 0; i < 3; i++) { data.Add(Text($"E{i + 1}", keys[i])); data.Add(Number($"F{i + 1}", (i + 1) * 100)); }
+        data.Add(Text("H6", "a")); data.Add(Text("I6", "b")); data.Add(Number("H7", 1)); data.Add(Number("I7", 2));
+        var input = Commit(plain, blank, "input.xlsx", data.ToArray());
+
+        var formulas = FormulaCalculationTests.GoldenCases().Select(row => ((string)row[0]).Replace("Data!", string.Empty))
+            .Where(formula => !LocaleDependent.Any(formula.Contains)).ToArray();
+        var operations = formulas.Select((formula, i) => (PlanOperation)new SetCellOp
+        {
+            Target = new CellAnchor { SheetId = 1, Address = $"Z{i + 1}" }, Formula = formula
+        }).ToArray();
+
+        var calculating = new ServiceCollection().AddExcelFormat().AddExcelFormulaCalculation().AddOfficeAgent()
+            .BuildServiceProvider().GetRequiredService<OfficeAgentClient>();
+        using var result = calculating.Apply(new StreamHandle(new MemoryStream(input, writable: false), "input.xlsx"),
+            new DocumentPlan { Format = OfficeAgent.Abstractions.DocumentFormat.Excel, Operations = operations },
+            new ApplyOptions { DryRun = false, CalculateFormulas = true });
+        if (!result.Committed) throw new InvalidOperationException(string.Join("; ", result.Report.Errors.Select(e => e.Message)));
+        var cells = result.Report.Calculation!.Cells;
+        if (cells.Any(c => c.Outcome != FormulaOutcome.Calculated))
+            throw new InvalidOperationException("A golden formula was not calculated: " +
+                string.Join("; ", cells.Where(c => c.Outcome != FormulaOutcome.Calculated).Select(c => $"{c.Address} {c.Reason}")));
+
+        var expected = cells.Select(c => new Dictionary<string, object>
+        {
+            ["address"] = c.Address, ["kind"] = c.ValueKind!.Value.ToString(), ["value"] = c.Value!, ["formula"] = c.Formula
+        }).ToArray();
+        return new Case("x-calculate", "excel", "calculation",
+            $"{expected.Length} allowlisted formulas calculated by the engine, recalculated by Excel",
+            input, result.ToBytes(), new Dictionary<string, object> { ["recalculate"] = true, ["calculated"] = expected }, AnyPart, false);
     }
 
     // ── refusals ──────────────────────────────────────────────────────────────────────────

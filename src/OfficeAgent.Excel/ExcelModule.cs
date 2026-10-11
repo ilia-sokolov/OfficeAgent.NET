@@ -24,7 +24,8 @@ public sealed class ExcelModule : IFormatModule, IBlankDocumentFactory, IApplyTi
         {
             new SetCellHandler(),
             new AppendTableRowsHandler(),
-            new CellCommentHandler()
+            new CellCommentHandler(),
+            new CorePropertyHandler()
         };
     }
 
@@ -43,11 +44,12 @@ public sealed class ExcelModule : IFormatModule, IBlankDocumentFactory, IApplyTi
 
     /// <inheritdoc />
     /// <remarks>
-    /// The kinds inspection emits: a node per worksheet and per Excel table. Declaring none,
-    /// as before 1.0, hid <c>appendTableRows</c> from discovery, because its target is a
-    /// <c>spreadsheetTable</c> node and discovery offers only declared kinds.
+    /// The kinds inspection emits: a node per worksheet and per Excel table, and the core
+    /// document properties. Declaring none, as before 1.0, hid <c>appendTableRows</c> from
+    /// discovery, because its target is a <c>spreadsheetTable</c> node and discovery offers
+    /// only declared kinds.
     /// </remarks>
-    public IReadOnlyList<string> NodeKinds { get; } = new[] { "spreadsheetTable", "worksheet" };
+    public IReadOnlyList<string> NodeKinds { get; } = new[] { "docProperty", "spreadsheetTable", "worksheet" };
     /// <inheritdoc />
     public bool CanHandle(IOpenXmlPackage package) => package.Format == DocFormat.Excel;
     /// <inheritdoc />
@@ -135,6 +137,8 @@ public sealed class ExcelModule : IFormatModule, IBlankDocumentFactory, IApplyTi
                         ?? Enumerable.Empty<string>())));
             }
         }
+
+        nodes.AddRange(PackageCoreProperties.Nodes(document));
 
         foreach (var node in nodes)
             if (node.Anchor is not null) anchors.Add(node.Anchor);

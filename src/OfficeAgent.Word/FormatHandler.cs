@@ -46,10 +46,36 @@ internal sealed class FormatHandler : IOperationHandler
                 $"listLevel must be between 0 and {WordNumbering.MaxLevel}; got {requested}.",
                 op.Target));
 
-        if (op.ListStyle is null && (op.ListLevel is not null || op.ListId is not null))
+        if (op.NumberingId is not null && op.ListStyle is not null)
             return OperationPreview.Fail(new ValidationError(
                 ValidationErrorCodes.InvalidOperation,
-                "listLevel and listId need a listStyle to belong to.", op.Target));
+                "numberingId and listStyle are mutually exclusive: numberingId continues a list the document " +
+                "already defines, listStyle writes a new one. Send one of them.", op.Target));
+
+        if (op.NumberingId is not null && op.ListId is not null)
+            return OperationPreview.Fail(new ValidationError(
+                ValidationErrorCodes.InvalidOperation,
+                "listId names a sequence of a listStyle; with numberingId the numbering instance is the sequence.",
+                op.Target));
+
+        if (op.ListStyle is null && op.NumberingId is null && (op.ListLevel is not null || op.ListId is not null))
+            return OperationPreview.Fail(new ValidationError(
+                ValidationErrorCodes.InvalidOperation,
+                "listLevel and listId need a listStyle or a numberingId to belong to.", op.Target));
+
+        if (op.NumberingId is { } numberingId)
+        {
+            if (op.Target is not TextSpanAnchor)
+                return OperationPreview.Fail(new ValidationError(
+                    ValidationErrorCodes.InvalidOperation,
+                    "numberingId belongs on a paragraph target.", op.Target));
+
+            if (!WordNumbering.InstanceExists(WordModel.Doc(context.Package).MainDocumentPart!, numberingId))
+                return OperationPreview.Fail(new ValidationError(
+                    ValidationErrorCodes.AnchorNotFound,
+                    $"The document defines no list with numbering id {numberingId}. inspect_document lists the " +
+                    "lists it does define as nodes of kind \"list\" (path list#N).", op.Target));
+        }
 
         if (op.ColumnWidthsPx is { } columns)
         {
@@ -67,7 +93,7 @@ internal sealed class FormatHandler : IOperationHandler
         if (!HasAnyProperty(op))
             return OperationPreview.Fail(new ValidationError(
                 ValidationErrorCodes.InvalidOperation,
-                "format requires at least one of: styleId, fontFamily, sizeHalfPoints, bold, italic, underline, highlight, color, alignment, indent*, spacing*, border*, pageBreakBefore, listStyle, columnWidthsPx, widthPx, heightPx.",
+                "format requires at least one of: styleId, fontFamily, sizeHalfPoints, bold, italic, underline, highlight, color, alignment, indent*, spacing*, border*, pageBreakBefore, listStyle, numberingId, columnWidthsPx, widthPx, heightPx.",
                 op.Target));
 
         switch (op.Target)
@@ -395,6 +421,10 @@ internal sealed class FormatHandler : IOperationHandler
             WordNumbering.Apply(
                 WordModel.Doc(context.Package).MainDocumentPart!,
                 paragraph, list, op.ListLevel ?? 0, op.ListId ?? 0);
+        else if (op.NumberingId is { } numberingId)
+            WordNumbering.Attach(
+                WordModel.Doc(context.Package).MainDocumentPart!,
+                paragraph, numberingId, op.ListLevel ?? 0);
 
         if (op.StyleId is null && op.Alignment is null
             && op.IndentLeftTwips is null && op.IndentRightTwips is null
@@ -596,7 +626,7 @@ internal sealed class FormatHandler : IOperationHandler
         op.Alignment is not null ||
         op.IndentLeftTwips is not null || op.IndentRightTwips is not null || op.IndentFirstLineTwips is not null ||
         op.SpacingBeforeTwips is not null || op.SpacingAfterTwips is not null ||
-        op.PageBreakBefore is not null || op.ListStyle is not null ||
+        op.PageBreakBefore is not null || op.ListStyle is not null || op.NumberingId is not null ||
         op.ColumnWidthsPx is not null ||
         HasBorder(op) ||
         op.WidthPx is not null || op.HeightPx is not null;

@@ -109,7 +109,7 @@ public class PowerPointContractTests
                 Format = DocFormat.PowerPoint,
                 Operations = new PlanOperation[]
                 {
-                    new SetPropertyOp { Target = new NodeAnchor { Kind = "docProperty", Path = "core/title" }, Value = "Nope" }
+                    new RevisionOp { Target = new NodeAnchor { Kind = "revision", Path = "all" }, Action = RevisionAction.Accept }
                 }
             });
 
@@ -152,7 +152,7 @@ public class PowerPointContractTests
         services.AddPowerPointFormat();
         // A host extending Word with a verb PowerPoint does not implement. Registered as
         // a bare IOperationHandler, which is the only thing AddWordFormat consumes.
-        services.AddSingleton<IOperationHandler, WordOnlySetPropertyHandler>();
+        services.AddSingleton<IOperationHandler, WordOnlyRevisionHandler>();
         services.AddOfficeAgent();
 
         using var provider = services.BuildServiceProvider();
@@ -167,7 +167,7 @@ public class PowerPointContractTests
             new DocumentPlan
             {
                 Format = DocFormat.PowerPoint,
-                Operations = new PlanOperation[] { new SetPropertyOp { Target = new NodeAnchor { Kind = "docProperty", Path = "core/title" }, Value = "Nope" } }
+                Operations = new PlanOperation[] { new RevisionOp { Target = new NodeAnchor { Kind = "revision", Path = "all" }, Action = RevisionAction.Accept } }
             });
 
         // The deck must still refuse the verb: the Word handler leaking into the
@@ -176,12 +176,12 @@ public class PowerPointContractTests
     }
 
     /// <summary>Stands in for a host-contributed Word extension handler for a verb the PowerPoint module does not implement.</summary>
-    private sealed class WordOnlySetPropertyHandler : IOperationHandler
+    private sealed class WordOnlyRevisionHandler : IOperationHandler
     {
-        public bool CanHandle(PlanOperation operation) => operation is SetPropertyOp;
+        public bool CanHandle(PlanOperation operation) => operation is RevisionOp;
 
         public OperationPreview Preview(ApplyContext context, PlanOperation operation) =>
-            OperationPreview.Ok(new ProposedChange { Verb = "setProperty", Target = operation.Target });
+            OperationPreview.Ok(new ProposedChange { Verb = "revision", Target = operation.Target });
 
         public void Apply(ApplyContext context, PlanOperation operation)
         {

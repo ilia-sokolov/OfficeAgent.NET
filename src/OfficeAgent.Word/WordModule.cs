@@ -32,7 +32,15 @@ public sealed class WordModule : IFormatModule, IBlankDocumentFactory, IPlanVali
 
     /// <inheritdoc />
     /// <remarks>Read from the module's own node providers, so it cannot drift from them.</remarks>
-    public IReadOnlyList<string> NodeKinds => _providers.Select(provider => provider.Kind).Distinct().ToList();
+    public IReadOnlyList<string> NodeKinds => _providers.Select(provider => provider.Kind)
+        .Concat(AddressableTableKinds).Distinct().ToList();
+
+    /// <summary>
+    /// Kinds a node anchor can name inside an inspected table (<c>table#N/row#M</c>,
+    /// <c>table#N/cell#R/C</c>) although inspection lists only the table itself. Declared so
+    /// discovery offers the verbs that take them, such as <c>mergeTableCells</c>.
+    /// </summary>
+    private static readonly string[] AddressableTableKinds = { "tableRow", "tableCell" };
 
     /// <inheritdoc />
     public TimeProvider Clock { get; }
@@ -57,6 +65,7 @@ public sealed class WordModule : IFormatModule, IBlankDocumentFactory, IPlanVali
             new ChangeTextHandler(),
             new FillHandler(),
             new CommentHandler(clock),
+            new LinkHandler(),
             new InsertHandler(),
             new InsertParagraphsHandler(),
             new RemoveParagraphHandler(),
@@ -70,6 +79,7 @@ public sealed class WordModule : IFormatModule, IBlankDocumentFactory, IPlanVali
             new RemoveTableRowsHandler(),
             new InsertTableColumnsHandler(),
             new RemoveTableColumnsHandler(),
+            new MergeTableCellsHandler(),
             new CopyStylesHandler(),
             new ClearStylesHandler(),
             new DefineStyleHandler(),
@@ -91,7 +101,8 @@ public sealed class WordModule : IFormatModule, IBlankDocumentFactory, IPlanVali
             new TableNodeProvider(),
             new ImageNodeProvider(),
             new CommentNodeProvider(),
-            new NoteNodeProvider()
+            new NoteNodeProvider(),
+            new ListNodeProvider()
         }
         .Concat(extraProviders ?? Enumerable.Empty<IWordNodeProvider>())
         .ToList();

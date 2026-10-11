@@ -37,6 +37,23 @@ public sealed class FileSystemDocumentProviderOptions
     /// machine-owned files, or one serving decks - PresentationML refuses Tracked.
     /// </summary>
     public ChangeMode DefaultChangeMode { get; set; } = ChangeMode.Tracked;
+
+    /// <summary>
+    /// Gets or sets whether a workbook previewed or committed through this connection has its
+    /// formulas calculated, so the saved file carries current values instead of none or stale
+    /// ones. Takes effect only when a formula evaluator is registered
+    /// (<c>AddExcelFormulaCalculation</c>); without one, nothing is calculated. Defaults to
+    /// <see langword="false"/>.
+    /// </summary>
+    public bool CalculateFormulas { get; set; }
+
+    /// <summary>
+    /// Gets or sets whether a plan whose calculation produces a new formula error (such as
+    /// <c>#DIV/0!</c> or <c>#REF!</c>) or a circular reference is refused with
+    /// <c>formula-error</c> instead of committed with the errors reported. Applies only with
+    /// <see cref="CalculateFormulas"/>. Defaults to <see langword="false"/>.
+    /// </summary>
+    public bool RejectFormulaErrors { get; set; }
 }
 
 /// <summary>
@@ -49,7 +66,7 @@ public sealed class FileSystemDocumentProviderOptions
 /// <see cref="CreateAsync"/> are the one case
 /// where the provider owns the bytes it writes: they land directly under the root.
 /// </summary>
-public sealed class FileSystemDocumentProvider : IDocumentProvider, IDocumentCreatingProvider, IConnectionEditingDefaults
+public sealed class FileSystemDocumentProvider : IDocumentProvider, IDocumentCreatingProvider, IConnectionEditingDefaults, IConnectionCalculationDefaults
 {
     /// <summary>Gets the provider discriminator used in document references.</summary>
     public const string ProviderName = "filesystem";
@@ -81,6 +98,8 @@ public sealed class FileSystemDocumentProvider : IDocumentProvider, IDocumentCre
 
         ConnectionId = options.ConnectionId;
         DefaultChangeMode = options.DefaultChangeMode;
+        CalculateFormulas = options.CalculateFormulas;
+        RejectFormulaErrors = options.RejectFormulaErrors;
         _root = Path.GetFullPath(options.RootPath);
         Directory.CreateDirectory(_root);
         Directory.CreateDirectory(Path.Combine(_root, IndexDirectoryName));
@@ -103,6 +122,12 @@ public sealed class FileSystemDocumentProvider : IDocumentProvider, IDocumentCre
 
     /// <inheritdoc />
     public ChangeMode DefaultChangeMode { get; }
+
+    /// <inheritdoc />
+    public bool CalculateFormulas { get; }
+
+    /// <inheritdoc />
+    public bool RejectFormulaErrors { get; }
 
     /// <inheritdoc />
     public async Task<DocumentReference> RegisterAsync(

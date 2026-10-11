@@ -170,6 +170,7 @@ listId: Int32?
 listLevel: Int32?
 listStyle: String
 mode: ChangeMode?
+numberingId: Int32?
 pageBreakBefore: Boolean?
 sizeHalfPoints: Int32?
 spacingAfterTwips: Int32?
@@ -345,6 +346,26 @@ mode: ChangeMode?
 position: TablePosition
 rowIndex: Int32
 rows: IReadOnlyList<IReadOnlyList<String>>
+target: Anchor
+```
+
+### `link`
+
+Type: `OfficeAgent.Abstractions.LinkOp`
+
+```text
+mode: ChangeMode?
+target: Anchor
+url: String
+```
+
+### `mergeTableCells`
+
+Type: `OfficeAgent.Abstractions.MergeTableCellsOp`
+
+```text
+columnSpan: Int32
+mode: ChangeMode?
 target: Anchor
 ```
 
@@ -1439,6 +1460,9 @@ Type: `OfficeAgent.Abstractions.EngineCapabilities`
             },
             "type": "array"
           },
+          "calculatesFormulas": {
+            "type": "boolean"
+          },
           "connectionId": {
             "type": "string"
           },
@@ -1502,6 +1526,23 @@ Type: `OfficeAgent.Abstractions.EngineCapabilities`
         "type": "object"
       },
       "type": "array"
+    },
+    "formulaCalculation": {
+      "properties": {
+        "engine": {
+          "type": "string"
+        },
+        "supportedFunctions": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        }
+      },
+      "type": [
+        "object",
+        "null"
+      ]
     },
     "limits": {
       "properties": {
@@ -2070,6 +2111,86 @@ Type: `OfficeAgent.Abstractions.TemplateBatchResult`
           "report": {
             "additionalProperties": false,
             "properties": {
+              "calculation": {
+                "additionalProperties": false,
+                "properties": {
+                  "cells": {
+                    "items": {
+                      "additionalProperties": false,
+                      "properties": {
+                        "address": {
+                          "type": "string"
+                        },
+                        "formula": {
+                          "type": "string"
+                        },
+                        "outcome": {
+                          "enum": [
+                            "Calculated",
+                            "NotCalculated"
+                          ],
+                          "type": "string"
+                        },
+                        "reason": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        },
+                        "sheetId": {
+                          "type": "integer"
+                        },
+                        "value": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        },
+                        "valueKind": {
+                          "enum": [
+                            "Number",
+                            "Text",
+                            "Boolean",
+                            "Error",
+                            null
+                          ],
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        }
+                      },
+                      "type": "object"
+                    },
+                    "type": "array"
+                  },
+                  "circularReference": {
+                    "type": "boolean"
+                  },
+                  "engine": {
+                    "type": "string"
+                  },
+                  "hasFormulaErrors": {
+                    "type": "boolean"
+                  },
+                  "newErrors": {
+                    "items": {
+                      "$ref": "#/properties/items/items/properties/report/properties/calculation/properties/cells/items"
+                    },
+                    "type": "array"
+                  },
+                  "notCalculatedReason": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  }
+                },
+                "type": [
+                  "object",
+                  "null"
+                ]
+              },
               "changes": {
                 "items": {
                   "additionalProperties": false,
@@ -2122,7 +2243,8 @@ Type: `OfficeAgent.Abstractions.TemplateBatchResult`
                         "InvalidOperation",
                         "RequiresRenderer",
                         "OperationConflict",
-                        "RevisionOverlap"
+                        "RevisionOverlap",
+                        "FormulaError"
                       ],
                       "type": "string"
                     },
@@ -2545,6 +2667,7 @@ State: committed, anonymous caller
 
 ```text
 $: object
+$.calculation: null
 $.changes: array
 $.changes[]: object
 $.changes[].after: string
@@ -2593,6 +2716,7 @@ State: committed, authenticated actor
 
 ```text
 $: object
+$.calculation: null
 $.changes: array
 $.changes[]: object
 $.changes[].after: string
@@ -2644,6 +2768,7 @@ State: validation failure
 
 ```text
 $: object
+$.calculation: null
 $.changes: array
 $.committed: boolean
 $.errors: array
@@ -2682,6 +2807,7 @@ State: unknown document
 
 ```text
 $: object
+$.calculation: null
 $.changes: array
 $.committed: boolean
 $.errors: array
@@ -2708,6 +2834,7 @@ State: connection denied
 
 ```text
 $: object
+$.calculation: null
 $.changes: array
 $.committed: boolean
 $.errors: array
@@ -2734,6 +2861,7 @@ State: snapshot required
 
 ```text
 $: object
+$.calculation: null
 $.changes: array
 $.committed: boolean
 $.errors: array
@@ -2759,6 +2887,7 @@ State: stale version at save
 
 ```text
 $: object
+$.calculation: null
 $.changes: array
 $.committed: boolean
 $.errors: array
@@ -2785,6 +2914,7 @@ State: storage refused the write
 
 ```text
 $: object
+$.calculation: null
 $.changes: array
 $.committed: boolean
 $.errors: array
@@ -2811,6 +2941,7 @@ State: provider failed without classifying the outcome
 
 ```text
 $: object
+$.calculation: null
 $.changes: array
 $.committed: boolean
 $.errors: array
@@ -2841,6 +2972,7 @@ State: storage accepted, then failed to confirm
 
 ```text
 $: object
+$.calculation: null
 $.changes: array
 $.committed: boolean
 $.errors: array
@@ -2871,6 +3003,7 @@ State: cancelled after storage accepted
 
 ```text
 $: object
+$.calculation: null
 $.changes: array
 $.committed: boolean
 $.errors: array
@@ -2901,6 +3034,7 @@ State: written but not registered
 
 ```text
 $: object
+$.calculation: null
 $.changes: array
 $.committed: boolean
 $.errors: array
@@ -3001,6 +3135,7 @@ State: unknown document
 
 ```text
 $: object
+$.calculation: null
 $.changes: array
 $.committed: boolean
 $.errors: array
@@ -3029,6 +3164,7 @@ State: created blank
 
 ```text
 $: object
+$.calculation: null
 $.changes: array
 $.committed: boolean
 $.errors: array
@@ -3048,6 +3184,7 @@ State: created from a plan
 
 ```text
 $: object
+$.calculation: null
 $.changes: array
 $.changes[]: object
 $.changes[].after: string
@@ -3096,6 +3233,7 @@ State: validation failure
 
 ```text
 $: object
+$.calculation: null
 $.changes: array
 $.committed: boolean
 $.errors: array
@@ -3134,6 +3272,7 @@ State: name already exists
 
 ```text
 $: object
+$.calculation: null
 $.changes: array
 $.committed: boolean
 $.errors: array
@@ -3160,6 +3299,7 @@ State: storage accepted, then failed to confirm
 
 ```text
 $: object
+$.calculation: null
 $.changes: array
 $.committed: boolean
 $.errors: array
@@ -3192,6 +3332,7 @@ State: created
 
 ```text
 $: object
+$.calculation: null
 $.changes: array
 $.changes[]: object
 $.changes[].after: string
@@ -3229,6 +3370,7 @@ State: validation failure
 
 ```text
 $: object
+$.calculation: null
 $.changes: array
 $.committed: boolean
 $.contentBase64: null
@@ -3268,6 +3410,7 @@ $.connections: array
 $.connections[]: object
 $.connections[].allowed: array
 $.connections[].allowed[]: string
+$.connections[].calculatesFormulas: boolean
 $.connections[].connectionId: string
 $.connections[].provider: string
 $.contracts: object
@@ -3283,6 +3426,7 @@ $.formats[].nodeKinds: array
 $.formats[].nodeKinds[]: string
 $.formats[].operations: array
 $.formats[].operations[]: string
+$.formulaCalculation: null
 $.limits: object
 $.limits.maximumCompressedBytes: number
 $.limits.maximumExpandedBytes: number
@@ -3314,6 +3458,7 @@ $.formats[].nodeKinds: array
 $.formats[].nodeKinds[]: string
 $.formats[].operations: array
 $.formats[].operations[]: string
+$.formulaCalculation: null
 $.limits: object
 $.limits.maximumCompressedBytes: number
 $.limits.maximumExpandedBytes: number
@@ -3375,6 +3520,7 @@ State: committed
 
 ```text
 $: object
+$.calculation: null
 $.changes: array
 $.changes[]: object
 $.changes[].after: string
@@ -3423,6 +3569,7 @@ State: validation failure
 
 ```text
 $: object
+$.calculation: null
 $.changes: array
 $.committed: boolean
 $.errors: array
@@ -3461,6 +3608,7 @@ State: find target not bound
 
 ```text
 $: object
+$.calculation: null
 $.changes: array
 $.committed: boolean
 $.errors: array
@@ -3486,6 +3634,7 @@ State: snapshot required
 
 ```text
 $: object
+$.calculation: null
 $.changes: array
 $.committed: boolean
 $.errors: array
@@ -3513,6 +3662,7 @@ State: committed
 
 ```text
 $: object
+$.calculation: null
 $.changes: array
 $.changes[]: object
 $.changes[].after: string
@@ -3550,6 +3700,7 @@ State: preview only
 
 ```text
 $: object
+$.calculation: null
 $.changes: array
 $.changes[]: object
 $.changes[].after: string
@@ -3587,6 +3738,7 @@ State: validation failure
 
 ```text
 $: object
+$.calculation: null
 $.changes: array
 $.committed: boolean
 $.contentBase64: null
@@ -3634,6 +3786,7 @@ State: unknown document
 
 ```text
 $: object
+$.calculation: null
 $.changes: array
 $.committed: boolean
 $.errors: array
@@ -3682,6 +3835,7 @@ State: unknown document
 
 ```text
 $: object
+$.calculation: null
 $.changes: array
 $.committed: boolean
 $.errors: array
@@ -3721,6 +3875,7 @@ State: content is not a package
 
 ```text
 $: object
+$.calculation: null
 $.changes: array
 $.committed: boolean
 $.errors: array
@@ -3875,6 +4030,7 @@ State: unknown document
 
 ```text
 $: object
+$.calculation: null
 $.changes: array
 $.committed: boolean
 $.errors: array
@@ -3901,6 +4057,7 @@ State: connection denied
 
 ```text
 $: object
+$.calculation: null
 $.changes: array
 $.committed: boolean
 $.errors: array
@@ -3927,6 +4084,7 @@ State: cancelled before start
 
 ```text
 $: object
+$.calculation: null
 $.changes: array
 $.committed: boolean
 $.errors: array
@@ -3987,6 +4145,7 @@ State: content is not a package
 
 ```text
 $: object
+$.calculation: null
 $.changes: array
 $.committed: boolean
 $.contentBase64: null
@@ -4065,6 +4224,7 @@ State: storage accepted, then failed to confirm
 
 ```text
 $: object
+$.calculation: null
 $.changes: array
 $.committed: boolean
 $.errors: array
@@ -4149,6 +4309,7 @@ State: file not found
 
 ```text
 $: object
+$.calculation: null
 $.changes: array
 $.committed: boolean
 $.errors: array
@@ -4210,6 +4371,7 @@ $.items[].receipt.revision.author: string
 $.items[].receipt.revision.timestampUtc: string
 $.items[].receipt.timestampUtc: string
 $.items[].report: object
+$.items[].report.calculation: null
 $.items[].report.changes: array
 $.items[].report.changes[]: object
 $.items[].report.changes[].after: string
@@ -4288,6 +4450,7 @@ $.items[].receipt.revision.author: string
 $.items[].receipt.revision.timestampUtc: string
 $.items[].receipt.timestampUtc: string
 $.items[].report: null | object
+$.items[].report.calculation: null
 $.items[].report.changes: array
 $.items[].report.changes[]: object
 $.items[].report.changes[].after: string
@@ -4381,6 +4544,7 @@ State: valid, changes proposed
 
 ```text
 $: object
+$.calculation: null
 $.changes: array
 $.changes[]: object
 $.changes[].after: string
@@ -4423,6 +4587,7 @@ State: valid, empty plan
 
 ```text
 $: object
+$.calculation: null
 $.changes: array
 $.committed: boolean
 $.errors: array
@@ -4453,6 +4618,7 @@ State: validation failure
 
 ```text
 $: object
+$.calculation: null
 $.changes: array
 $.committed: boolean
 $.errors: array
@@ -4491,6 +4657,7 @@ State: unreadable plan
 
 ```text
 $: object
+$.calculation: null
 $.changes: array
 $.committed: boolean
 $.errors: array
@@ -4517,6 +4684,7 @@ State: snapshot required
 
 ```text
 $: object
+$.calculation: null
 $.changes: array
 $.committed: boolean
 $.errors: array
@@ -4629,6 +4797,7 @@ State: file not found
 
 ```text
 $: object
+$.calculation: null
 $.changes: array
 $.committed: boolean
 $.errors: array
@@ -4655,6 +4824,7 @@ State: path outside the root
 
 ```text
 $: object
+$.calculation: null
 $.changes: array
 $.committed: boolean
 $.errors: array
@@ -4692,6 +4862,7 @@ State: unknown document
 
 ```text
 $: object
+$.calculation: null
 $.changes: array
 $.committed: boolean
 $.errors: array
@@ -4727,14 +4898,17 @@ OfficeAgent:AllowRegistration: Boolean = true
 OfficeAgent:EphemeralConnectionId: String = ""
 OfficeAgent:EphemeralMaximumTotalBytes: Int64 = 104857600
 OfficeAgent:FileSystemConnections[]:AllowedExtensions: IList<String> = [".docx"]
+OfficeAgent:FileSystemConnections[]:CalculateFormulas: Boolean = false
 OfficeAgent:FileSystemConnections[]:ConnectionId: String = ""
 OfficeAgent:FileSystemConnections[]:DefaultChangeMode: String = "Tracked"
 OfficeAgent:FileSystemConnections[]:MaximumBytes: Int64 = 104857600
+OfficeAgent:FileSystemConnections[]:RejectFormulaErrors: Boolean = false
 OfficeAgent:FileSystemConnections[]:RootPath: String = ""
 OfficeAgent:RequirePlanSnapshot: Boolean = false
 OfficeAgent:SharePointConnections[]:AllowedExtensions: IList<String> = [".docx"]
 OfficeAgent:SharePointConnections[]:AppOnlyScope: String = "https://graph.microsoft.com/.default"
 OfficeAgent:SharePointConnections[]:AuthMode: String = "appOnly"
+OfficeAgent:SharePointConnections[]:CalculateFormulas: Boolean = false
 OfficeAgent:SharePointConnections[]:ClientId: String = ""
 OfficeAgent:SharePointConnections[]:ClientSecret: String = ""
 OfficeAgent:SharePointConnections[]:ConnectionId: String = ""
@@ -4746,6 +4920,7 @@ OfficeAgent:SharePointConnections[]:LoginAuthority: String = "https://login.micr
 OfficeAgent:SharePointConnections[]:MaximumBytes: Int64 = 104857600
 OfficeAgent:SharePointConnections[]:OnBehalfOfScope: String = "https://graph.microsoft.com/.default"
 OfficeAgent:SharePointConnections[]:RegistrationIndexPath: String = ""
+OfficeAgent:SharePointConnections[]:RejectFormulaErrors: Boolean = false
 OfficeAgent:SharePointConnections[]:TenantId: String = ""
 OfficeAgent:StrictToolSchemas: Boolean = true
 OfficeAgent:Transport: String = "http"
@@ -5040,6 +5215,35 @@ NodeKinds = []
 Operations = []
 ```
 
+### `OfficeAgent.Abstractions.FormulaCalculationCapabilities`
+
+```text
+Engine = ""
+SupportedFunctions = []
+```
+
+### `OfficeAgent.Abstractions.FormulaCalculationReport`
+
+```text
+Cells = []
+Engine = ""
+NewErrors = []
+```
+
+### `OfficeAgent.Abstractions.FormulaCellResult`
+
+```text
+Address = ""
+Formula = ""
+Outcome = Calculated
+```
+
+### `OfficeAgent.Abstractions.FormulaEvaluation`
+
+```text
+Cells = []
+```
+
 ### `OfficeAgent.Abstractions.InsertBreakOp`
 
 ```text
@@ -5151,10 +5355,22 @@ Styles.Styles = []
 Worksheets = []
 ```
 
+### `OfficeAgent.Abstractions.LinkOp`
+
+```text
+Url = ""
+```
+
 ### `OfficeAgent.Abstractions.MatchOptions`
 
 ```text
 SpreadsheetValueView = Both
+```
+
+### `OfficeAgent.Abstractions.MergeTableCellsOp`
+
+```text
+ColumnSpan = 2
 ```
 
 ### `OfficeAgent.Abstractions.MoveSlideOp`

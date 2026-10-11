@@ -149,9 +149,10 @@ class CandidateWorkflowTests(unittest.TestCase):
                      'verify_integration_kit.py --artifacts ./candidate --version "$CANDIDATE_VERSION"'):
             self.assertIn(step, job)
 
-    def test_the_job_requires_all_nine_packages_and_covers_the_runtime_matrix(self) -> None:
+    def test_the_job_requires_all_ten_packages_and_covers_the_runtime_matrix(self) -> None:
         job = self.job()
-        self.assertIn("test \"$count\" -eq 9", job)
+        self.assertIn("test \"$count\" -eq 10", job)
+        self.assertIn(" Excel.Calculation ", job)
         for cell in ("{ os: ubuntu-latest, runtime: '8' }", "{ os: windows-latest, runtime: '8' }",
                      "{ os: macos-latest, runtime: '8' }", "{ os: ubuntu-latest, runtime: '10' }",
                      "{ os: windows-latest, runtime: '10' }"):

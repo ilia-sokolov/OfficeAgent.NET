@@ -161,11 +161,12 @@ add members to them:
 
 | Interface | Implemented to |
 | --- | --- |
-| `IDocumentProvider`, `IDocumentCreatingProvider`, `IConnectionEditingDefaults` | Add a storage backend |
+| `IDocumentProvider`, `IDocumentCreatingProvider`, `IConnectionEditingDefaults`, `IConnectionCalculationDefaults` | Add a storage backend |
 | `IConnectionAccessPolicy`, `ITrustedPrincipalAccessor` | Authorise tool calls |
 | `IAuditActorProvider` | Stamp receipts with the acting user |
 | `IAccessTokenProvider`, `ISharePointRegistrationStore` | Customise SharePoint authentication and registration |
 | `IDocumentRenderer` | Plug in a renderer |
+| `IFormulaEvaluator` | Plug in a formula calculation engine |
 
 `ITextFormat` and `ITrackedOperation` are stable to read but are implemented only by the
 library's own plan records, so 1.x may add members to them. A test fails whenever a new public

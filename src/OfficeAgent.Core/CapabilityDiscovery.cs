@@ -56,7 +56,18 @@ public static class CapabilityDiscovery
     public static EngineCapabilities Describe(
         IEnumerable<IFormatModule> modules,
         OpenXmlIngestionLimits? limits = null,
-        bool renderingAvailable = false)
+        bool renderingAvailable = false) =>
+        Describe(modules, limits, renderingAvailable, formulaEvaluator: null);
+
+    /// <summary>
+    /// Describes the engine as configured, including the registered formula evaluator and
+    /// the functions it calculates.
+    /// </summary>
+    public static EngineCapabilities Describe(
+        IEnumerable<IFormatModule> modules,
+        OpenXmlIngestionLimits? limits,
+        bool renderingAvailable,
+        IFormulaEvaluator? formulaEvaluator)
     {
         if (modules is null) throw new ArgumentNullException(nameof(modules));
 
@@ -69,6 +80,13 @@ public static class CapabilityDiscovery
                 .ToList(),
             Limits = limits ?? OpenXmlIngestionLimits.Default,
             RenderingAvailable = renderingAvailable,
+            FormulaCalculation = formulaEvaluator is null
+                ? null
+                : new FormulaCalculationCapabilities
+                {
+                    Engine = formulaEvaluator.Name,
+                    SupportedFunctions = formulaEvaluator.SupportedFunctions.OrderBy(f => f, StringComparer.Ordinal).ToList()
+                },
             RequiresInspection = new[]
             {
                 "Anchor identifiers. Paragraph, table, slide and shape ids come from inspect_document " +

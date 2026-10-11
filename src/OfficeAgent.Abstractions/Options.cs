@@ -50,6 +50,20 @@ public sealed class ApplyOptions
     /// </summary>
     public AuditActor? Actor { get; init; }
 
+    /// <summary>
+    /// Gets whether a workbook's formulas are calculated after the plan applies, so the file
+    /// carries correct cached values and the report lists each result. Needs a registered
+    /// <see cref="IFormulaEvaluator"/>; ignored for other formats. Off by default.
+    /// </summary>
+    public bool CalculateFormulas { get; init; }
+
+    /// <summary>
+    /// Gets whether a plan whose calculation finds new formula errors, or a circular
+    /// reference, is refused with <see cref="ValidationErrorCodes.FormulaError"/> instead of
+    /// committed with the errors reported. Applies only with <see cref="CalculateFormulas"/>.
+    /// </summary>
+    public bool RejectFormulaErrors { get; init; }
+
     /// <summary>Gets options for previewing a plan.</summary>
     public static ApplyOptions Preview { get; } = new() { DryRun = true };
 

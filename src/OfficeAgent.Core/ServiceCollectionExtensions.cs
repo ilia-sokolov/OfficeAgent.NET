@@ -38,7 +38,10 @@ public static class ServiceCollectionExtensions
             // capability promises; whether the backend then starts is reported per render, as
             // renderer-unavailable.
             return new OfficeAgentEngine(modules, resolverList, loggerFactory, limits,
-                renderingAvailable: sp.GetService<IDocumentRenderer>() is not null);
+                renderingAvailable: sp.GetService<IDocumentRenderer>() is not null,
+                // Calculation is available when the host registered an evaluator, for example
+                // with AddExcelFormulaCalculation(); a commit still asks for it per call.
+                formulaEvaluator: sp.GetService<IFormulaEvaluator>());
         });
 
         services.AddSingleton<DocumentProviderRegistry>();

@@ -18,6 +18,7 @@ body:
         - OfficeAgent.AgentFramework
         - OfficeAgent.Core
         - OfficeAgent.Excel
+        - OfficeAgent.Excel.Calculation
         - OfficeAgent.Mcp
         - OfficeAgent.PowerPoint
         - OfficeAgent.Rendering

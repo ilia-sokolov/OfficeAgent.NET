@@ -259,7 +259,8 @@ public sealed class OfficeAgentTools
             {
                 ConnectionId = connection.ConnectionId,
                 Provider = connection.Provider,
-                Allowed = allowed
+                Allowed = allowed,
+                CalculatesFormulas = connection.CalculatesFormulas
             });
         }
 
@@ -270,6 +271,7 @@ public sealed class OfficeAgentTools
             Limits = engine.Limits,
             RenderingAvailable = engine.RenderingAvailable,
             RequiresInspection = engine.RequiresInspection,
+            FormulaCalculation = engine.FormulaCalculation,
             Connections = visible
         };
     }
@@ -297,19 +299,20 @@ public sealed class OfficeAgentTools
 
         Plan shape, anchors, safety loop
         - Plan body is { "snapshot": { "eTag": "<snapshot from inspect_document>" }, "operations": [ ... ] }. Copy the scalar snapshot string returned by inspect_document into snapshot.eTag to detect drift in Word body/header/footer/footnote/endnote XML, PowerPoint slide/notes XML, or Excel workbook, worksheet, table and note XML. It does not cover properties, Word comments, sections, media/image bytes, masters, layouts, or Excel styles, charts and pivot tables; their anchors and provider version checks still apply. Omit snapshot only deliberately. Omit contractVersion for legacy 0.2 behavior, or set it to exactly "0.2". Other values fail with contract-mismatch.
-        - Available operations (the JSON shape of each is in the preview_plan description): Word and PowerPoint use the document operations below; decks additionally support insertChart/updateChart; workbooks support setCell, appendTableRows, and comment Add/Remove on a cell. These are plan operations inside preview_plan/apply_plan, not separate tools.
+        - Available operations (the JSON shape of each is in the preview_plan description): Word and PowerPoint use the document operations below; decks additionally support insertChart/updateChart; workbooks support setCell, appendTableRows, comment Add/Remove on a cell, and setProperty on core document properties. These are plan operations inside preview_plan/apply_plan, not separate tools.
         - populate_template_batch resolves named slots and repeating Word rows into plans and saves one independent output per item. compare_documents reads two Word documents and returns a snapshot-bound redline plan only when every detected change is covered; preview that plan before applying it to the original.
         - preview_document_merge assembles ordered whole Word documents in memory and returns a separate merge plan plus compatibility diagnostics. Pass that complete plan to merge_documents when available. A merge creates a new document and never edits its sources. It does not reconcile independently edited versions. Respect unsupported-content diagnostics and do not substitute a text-only copy.
         - Call inspect_document or find_in_document before building a plan to obtain anchor ids; never invent paragraph ids, occurrence numbers, content-control tags, or node paths.
         - Tables and images only appear in inspect_document.nodes, never in the paragraphs list. Copy the path from there rather than composing one: Word uses "table#N"/"image#N", a deck uses "table#{slideId}/{shapeId}"/"image#{slideId}/{shapeId}". To recognise table content, look for paragraphs whose `in` field matches a table path.
         - Preview before you apply. If preview reports stale-snapshot, re-inspect and rebuild. If preview reports expect-mismatch, the document drifted - re-inspect/find that operation. If preview reports revision-overlap, the edit spans somebody else's pending tracked change: resolve that revision first with a revision operation, re-inspect, then reissue the edit, or target a narrower span that lies wholly inside or wholly outside it.
         - Change mode: in a Word document default to "Tracked" unless the user explicitly approves direct edits. "mode" is not only for changeText - it belongs on every verb that changes content (insert, insertParagraphs, removeParagraph, insertTable, removeTable, the table row/column verbs including repeatTableRow, insertImage, removeImage, format, fill, insertBreak, note), and Word tracks all of them when it is omitted. A tracked structural edit is a real redline: an added paragraph and its paragraph mark come back as insertions, a removed row stays in place struck through until someone accepts it, and a format records what it replaced. A PowerPoint deck has no tracked-changes representation and REFUSES mode "Tracked" on any of these, so use "Direct" there and say that edits to a deck cannot be redlined; add a comment if the change needs to be flagged for review.
+        - To delete text, use changeText with an empty "with": { "op": "changeText", "target": { "paraId": "w14:…", "expect": " unless terminated earlier" }, "with": "", "mode": "Tracked" }. Under Tracked it is one deletion a reviewer can accept or reject. Include the space next to the deleted words in expect so the sentence keeps one space. There is no separate delete verb; to remove a whole paragraph use removeParagraph.
         - Reviewing an existing Word redline: inspect_document.nodes lists every revision (kind "revision") with its author and date, under paths like "ins#7", "del#7", "markIns#7" (a paragraph split), "rowIns#7"/"rowDel#7", "cellIns#7"/"cellDel#7", and "runFormat#7"/"paraFormat#7" (formatting changes). Resolve them with { "op": "revision", "target": { "kind": "revision", "path": "…" }, "action": "Accept" | "Reject" } - "all" takes every revision in the document and "author:<name>" takes one person's.
         - Editing a document that already has tracked changes: inspect_document and find_in_document show the text as it would read if every pending change were accepted, so pending insertions are visible and pending deletions are not. An edit clear of the existing revisions, or wholly inside one pending insertion, is applied normally. An edit that spans a pending deletion, or reaches out of one revision into ordinary text, is refused with revision-overlap and nothing is written, because the resulting redline would no longer reject back to the original text. Resolving somebody else's revision is always an explicit revision operation, never a side effect of an edit.
         - Word comments are a conversation, not a write-only log: inspect_document.nodes lists each one (kind "comment") with its author, its text, whether it is resolved, and which comment it replies to. Answer one with action "Reply", close it with "Resolve", delete it with "Remove". Read the open comments before editing a document under review - they usually say what the edit should be.
         - Reject operations that need a renderer (pagination, field recalculation); explain the limitation instead.
         - An image behind the content is backgroundImage, not insertImage: { "op": "backgroundImage", "base64Bytes": "iVBORw0KGgo...", "imageType": "png", "opacity": 0.2 }. On a deck a slide target paints one slide and no target paints every slide; in Word there is no target and the image repeats on every page. ALWAYS set opacity for a photograph behind text - at full strength almost any image destroys the contrast the text needs, and 0.1-0.3 is the usable range. Supply no image at all to take an existing background away. A flat colour is format with fillColor instead, and a picture IN the text is still insertImage.
-        - Real list numbering (Word only): { "op": "format", "target": {…}, "listStyle": "clause", "listLevel": 0, "listId": 0 }. listStyle is bullet, decimal (1./a./i.), clause (1./1.1/1.1.1) or none. listLevel is 0-8. NEVER type the number into the text as well - Word draws it, and a paragraph reading "1. Connect the drive" in a numbered list comes out as "1. 1. Connect the drive". Paragraphs sharing a listStyle AND a listId are one running sequence; a different listId starts a separate one, which is how a second chapter restarts its steps at 1. This is what makes an inserted clause renumber the rest.
+        - Real list numbering (Word only): { "op": "format", "target": {…}, "listStyle": "clause", "listLevel": 0, "listId": 0 }. listStyle is bullet, decimal (1./a./i.), clause (1./1.1/1.1.1) or none. listLevel is 0-8. NEVER type the number into the text as well - Word draws it, and a paragraph reading "1. Connect the drive" in a numbered list comes out as "1. 1. Connect the drive". Paragraphs sharing a listStyle AND a listId are one running sequence; a different listId starts a separate one, which is how a second chapter restarts its steps at 1. This is what makes an inserted clause renumber the rest. To continue a list the document already has - a template's clause numbering - use "numberingId": N from an inspect_document node of kind "list" (path "list#N") instead of listStyle, so the new paragraph joins that sequence rather than starting a look-alike.
         - Word page geometry: { "op": "pageSetup", "paperSize": "A4", "orientation": "Landscape", "marginTopTwips": 720 }. Measurements are twips - 1440 to the inch - matching the indents and spacing on format. paperSize is A3, A4, A5, Letter, Legal, Tabloid or Executive; give pageWidthTwips/pageHeightTwips instead for anything else, never both. No target sets the document's final section - the whole document until something splits it; a paragraph target sets the section that paragraph belongs to. Margins you do not name keep their current value.
         - Word breaks: { "op": "insertBreak", "target": {…}, "kind": "Page", "position": "After" }. kind is Page, Column, SectionNextPage, SectionContinuous, SectionEvenPage or SectionOddPage. The break lands in a paragraph of its own, so removing it later is removing one paragraph. A landscape run of pages in the middle of a portrait report is insertBreak twice and then pageSetup targeting a paragraph between them. Use format's pageBreakBefore instead when the page must keep starting at a given paragraph however the text above it changes.
         - Word footnotes and endnotes: { "op": "note", "target": { "paraId": "w14:…", "expect": "thirty days" }, "kind": "Footnote", "text": "Subject to clause 8.2." } puts the reference right after that text, or at the end of the paragraph when expect is empty. Word owns the numbering, so a note added in the middle renumbers the rest - never type a superscript number into the text yourself. Existing notes appear in inspect_document.nodes as kind "note" with paths "footnote#1"/"endnote#1"; rewrite one with action "Update" or delete it with action "Remove". A note's body is also an ordinary paragraph (location "footnote"/"endnote"), so changeText and format edit it in place.
@@ -318,7 +321,7 @@ public sealed class OfficeAgentTools
         Working with a PowerPoint deck
         - Each slide is one outline entry. Paragraph ids read "slide{slideId}/shape{shapeId}/p{n}", with "notes/..." for speaker notes and ".../r{row}c{col}/..." inside a table cell.
         - A slide has no text flow, so insertTable, insertImage, and an added comment target the SLIDE - { "kind": "slide", "path": "slide#256" } - not a paragraph. Resolve a comment with { "op": "comment", "action": "Resolve", "target": { "kind": "comment", "path": "comment#256/{id}" } }.
-        - Only these verbs work on a deck: changeText, insert, format, fill, copyStyles, clearStyles, insertTable, removeTable, insertTableRows, removeTableRows, insertTableColumns, removeTableColumns, insertImage, removeImage, backgroundImage, insertShape, removeShape, insertMedia, insertChart, updateChart, comment, section, headerFooter, transition, animate, insertSlide, removeSlide, moveSlide, duplicateSlide.
+        - Only these verbs work on a deck: setProperty (core document properties only), changeText, insert, format, fill, copyStyles, clearStyles, insertTable, removeTable, insertTableRows, removeTableRows, insertTableColumns, removeTableColumns, insertImage, removeImage, backgroundImage, insertShape, removeShape, insertMedia, insertChart, updateChart, comment, section, headerFooter, transition, animate, insertSlide, removeSlide, moveSlide, duplicateSlide.
         - Native charts: insertChart targets a slide and takes kind ClusteredColumn, Bar, Line, or Pie, categories, numeric series, title, showLegend, description, and pixel placement. It creates an editable chart with an embedded workbook. updateChart targets a chart node and only edits charts OfficeAgent created.
         - Slide transitions: { "op": "transition", "effect": "push", "direction": "up", "durationMs": 700 }. No target applies it to every slide, which is PowerPoint's "Apply To All"; a slide target sets just that one. effect "none" removes it. Set advanceAfterMs for a self-running deck and advanceOnClick:false to stop clicks skipping ahead.
         - Shape animations target a SHAPE node: { "op": "animate", "target": { "kind": "shape", "path": "shape#257/2" }, "effect": "fade", "kind": "Entrance", "trigger": "OnClick", "durationMs": 600 }. trigger is OnClick, WithPrevious or AfterPrevious and decides where the effect lands in the slide's sequence - a new click step, alongside the previous effect, or straight after it. Effects play in the order you send the operations. effect "none" removes that shape's animations.
@@ -340,7 +343,7 @@ public sealed class OfficeAgentTools
 
         Working with an Excel workbook
         - inspect_document returns worksheets and up to maximumCells populated cells. Each cell anchor carries a durable sheetId plus an A1 address. Pass sheetId and range to inspect only the needed rectangle.
-        - setCell writes a scalar or a formula: { "op": "setCell", "target": { "sheetId": 7, "address": "B2" }, "value": "42" } or use "formula": "SUM(B2:B8)". OfficeAgent clears the cached result and asks Excel to recalculate on open; it does not calculate formulas.
+        - setCell writes a scalar or a formula: { "op": "setCell", "target": { "sheetId": 7, "address": "B2" }, "value": "42" } or use "formula": "SUM(B2:B8)". OfficeAgent clears the cached result and asks Excel to recalculate on open. On a connection that calculates formulas (calculatesFormulas in describe_capabilities), the preview_plan/apply_plan result has a calculation section: each formula's value, the formulas left notCalculated and why, and newErrors. Fix a new #DIV/0!, #REF! or #N/A it lists rather than leaving it; such a plan may be refused with formula-error.
         - appendTableRows targets a spreadsheetTable node from inspection and requires one value per table column. It refuses to overwrite populated cells below the table and preserves other worksheet content.
         - Excel comments are legacy cell notes. Add one with a cell target and action Add; remove one with the cellComment node returned by inspection and action Remove.
         """;
@@ -474,7 +477,7 @@ public sealed class OfficeAgentTools
                 "The extension picks the format: '.docx' makes Word, '.pptx' PowerPoint, and '.xlsx' Excel. " +
                 "Pass planJson \"\" for a minimal document. The starting anchor differs by format: a Word document has one empty paragraph at { \"paraId\": \"auto-0000\", \"expect\": \"\" }; a deck has one empty title placeholder at { \"paraId\": \"slide256/shape2/p0\", \"expect\": \"\" }, and its slide-targeted verbs use { \"kind\": \"slide\", \"path\": \"slide#256\" }. " +
                 "Plan-validation errors guarantee no write. Provider and cancellation errors may occur after storage accepted the file, so do not retry the same name; report the possibly unregistered name to the host for recovery. " +
-                "Returns {isValid, committed, receipt, sourceDocumentId, outputConnectionId, outputDocumentId, outputVersion, outputName, outputContentType, changes, errors}; non-applicable values are null.")));
+                "Returns {isValid, committed, receipt, sourceDocumentId, outputConnectionId, outputDocumentId, outputVersion, outputName, outputContentType, changes, errors, calculation}; non-applicable values are null.")));
             functions.Add(AIFunctionFactory.Create(DiscoverTemplate, Opts(schema,
                 "discover_template",
                 "Read a Word or PowerPoint template and report what it can be bound to, without writing anything. " +
@@ -503,7 +506,7 @@ public sealed class OfficeAgentTools
                 "name is a bare file name whose extension picks the format: '.docx' makes Word, '.pptx' PowerPoint, and '.xlsx' Excel. " +
                 "planJson is optional and authors the document before it is returned; several operations in one call turn nothing into a finished document. " +
                 "Pass planJson \"\" for an empty document. The starting anchor differs by format: a Word document has one empty paragraph at { \"paraId\": \"auto-0000\", \"expect\": \"\" }; a deck has one empty title placeholder at { \"paraId\": \"slide256/shape2/p0\", \"expect\": \"\" }. " +
-                "Returns {isValid, committed, receipt, name, contentBase64, contentBytes, changes, errors}. contentBase64 is the finished document - hand it to the host to save, or pass it straight back to edit_document_content to keep working. It is null when the plan failed, and then nothing was created.\n\n" +
+                "Returns {isValid, committed, receipt, name, contentBase64, contentBytes, changes, errors, calculation}. contentBase64 is the finished document - hand it to the host to save, or pass it straight back to edit_document_content to keep working. It is null when the plan failed, and then nothing was created.\n\n" +
                 PlanOperations)));
             functions.Add(AIFunctionFactory.Create(InspectDocumentContent, Opts(schema,
                 "inspect_document_content",
@@ -519,7 +522,7 @@ public sealed class OfficeAgentTools
                 "{ \"op\": \"changeText\", \"target\": { \"find\": \"Acme Corp\" }, \"with\": \"Globex Inc.\" }\n" +
                 "If that text matches more than once the call fails with 'ambiguous-anchor' and lists each candidate; re-issue with { \"find\": \"Acme Corp\", \"match\": 2 } (zero-based) or use more surrounding text. Anchors from inspect_document_content work here too, and can be mixed in the same plan. " +
                 "Set preview=true to validate without producing a document - the report comes back with contentBase64 null and nothing is applied. " +
-                "Returns {isValid, committed, receipt, name, contentBase64, contentBytes, changes, errors}. contentBase64 carries the edited document and is null on a preview or a failure. " +
+                "Returns {isValid, committed, receipt, name, contentBase64, contentBytes, changes, errors, calculation}. contentBase64 carries the edited document and is null on a preview or a failure. " +
                 "Nothing is stored anywhere: the returned document is the only copy, so pass it on or hand it to the host before dropping it. " +
                 "Pass back the contentBase64 you were given, complete and unchanged - content that arrives altered or truncated is refused as invalid-argument, because it is no longer a readable package.\n\n" +
                 PlanOperations)));
@@ -574,6 +577,10 @@ public sealed class OfficeAgentTools
             "{ \"op\": \"comment\", \"target\": { \"kind\": \"comment\", \"path\": \"comment#1\" }, \"action\": \"Reply\", \"text\": \"Forty-five, per the MSA.\" }\n" +
             "{ \"op\": \"comment\", \"target\": { \"kind\": \"comment\", \"path\": \"comment#1\" }, \"action\": \"Resolve\" }\n" +
             "{ \"op\": \"comment\", \"target\": { \"kind\": \"comment\", \"path\": \"comment#1\" }, \"action\": \"Remove\" }\n\n" +
+            "// Link existing text (Word only, Direct; http, https or mailto):\n" +
+            "{ \"op\": \"link\", \"target\": { \"paraId\": \"w14:...\", \"expect\": \"the price list\" }, \"url\": \"https://example.com/prices\" }\n" +
+            "// Continue a list the document already defines (numbering id from a \"list#N\" node in inspect_document.nodes):\n" +
+            "{ \"op\": \"format\", \"target\": { \"paraId\": \"w14:...\", \"expect\": \"\" }, \"numberingId\": 42, \"listLevel\": 1 }\n\n" +
             "// Define a style once instead of repeating direct formatting on every paragraph. Word only.\n" +
             "// Define it first, then apply it with format's styleId - both can sit in the same plan:\n" +
             "{ \"op\": \"defineStyle\", \"styleId\": \"Quote\", \"name\": \"Pull Quote\", \"basedOn\": \"Normal\", \"next\": \"Normal\",\n" +
@@ -597,6 +604,7 @@ public sealed class OfficeAgentTools
             "{ \"op\": \"insertTableRows\", \"target\": { \"kind\": \"table\", \"path\": \"table#0\" }, \"rows\": [[\"NL\",\"17\",\"41850\"]], \"position\": \"End\" }\n" +
             "{ \"op\": \"repeatTableRow\", \"target\": { \"kind\": \"table\", \"path\": \"table#0\" }, \"templateRowIndex\": 1, \"records\": [{ \"Description\": \"Consulting\", \"Amount\": \"1200.00\" }] }\n" +
             "{ \"op\": \"removeTableRows\", \"target\": { \"kind\": \"table\", \"path\": \"table#0\" }, \"onlyIfEmpty\": true }\n" +
+            "{ \"op\": \"mergeTableCells\", \"target\": { \"kind\": \"tableCell\", \"path\": \"table#0/cell#0/1\" }, \"columnSpan\": 2 }   // Word only, Direct: merges with the cells to its right\n" +
             "{ \"op\": \"insertImage\", \"target\": { \"paraId\": \"w14:...\", \"expect\": \"...\" }, \"base64Bytes\": \"iVBORw0KGgo...\", \"imageType\": \"png\", \"widthPx\": 200, \"heightPx\": 80 }\n" +
             "{ \"op\": \"insertImage\", \"target\": { \"paraId\": \"w14:...\", \"expect\": \"...\" }, \"imageConnectionId\": \"images\", \"imageDocumentId\": \"<opaque id from a prior add>\", \"imageType\": \"png\", \"widthPx\": 200, \"heightPx\": 80 }\n" +
             "{ \"op\": \"removeImage\", \"target\": { \"kind\": \"image\", \"path\": \"image#0\" } }\n" +
@@ -626,12 +634,12 @@ public sealed class OfficeAgentTools
             "Find content in Word, PowerPoint, or Excel. Excel can search displayed, raw, or both cell representations and returns sheetId plus A1 address anchors.")),
         AIFunctionFactory.Create(PreviewPlan, Opts(schema,
             "preview_plan",
-            "Dry-run a DocumentPlan JSON against (connectionId, documentId). Returns {isValid, committed, receipt, sourceDocumentId, outputConnectionId, outputDocumentId, outputVersion, outputName, outputContentType, changes, errors}; the output fields are null and committed is false. " +
+            "Dry-run a DocumentPlan JSON against (connectionId, documentId). Returns {isValid, committed, receipt, sourceDocumentId, outputConnectionId, outputDocumentId, outputVersion, outputName, outputContentType, changes, errors, calculation}; the output fields are null and committed is false. " +
             "Plan shape: { \"snapshot\": { \"eTag\": \"<snapshot string from inspect_document>\" }, \"revision\": { \"author\": \"Review Bot\", \"timestampUtc\": \"2026-09-09T10:00:00Z\" }, \"operations\": [ ... ] }. revision controls Word's displayed revision identity; omit timestampUtc to use one engine timestamp for the whole apply. The snapshot detects drift in Word text-host XML, PowerPoint slide/notes XML, and Excel workbook, worksheet, table and note XML; other parts rely on anchors and provider version checks. Omit it only intentionally. Omit contractVersion for legacy 0.2 behavior, or set it to exactly \"0.2\". Other values fail with contract-mismatch. Unknown properties and enum values fail with invalid-json. " +
             PlanOperations)),
         AIFunctionFactory.Create(ApplyPlan, Opts(schema,
             "apply_plan",
-            "Apply a DocumentPlan JSON to (connectionId, documentId) and save through the provider. Returns {isValid, committed, writeOutcome, possibleOutput, receipt, sourceDocumentId, outputConnectionId, outputDocumentId, outputVersion, outputName, outputContentType, changes, errors}; non-applicable values are null. The receipt hashes the effective plan and exact input/output bytes and keeps the host-authenticated actor separate from the plan's display revision author. saveMode: 'Replace' (default, overwrites the source after an optimistic version check), 'NewVersion' (keeps the source and mints a new id under the same connection), 'NewDocument' (mints a fresh id with an optional newName for display). Plan-validation and operation-conflict failures have writeOutcome 'notWritten'. A provider failure after a write began may instead return 'unknown' or 'writtenNotRegistered' with possibleOutput; never retry those blindly or report the document unchanged until the host reconciles the possible output.")),
+            "Apply a DocumentPlan JSON to (connectionId, documentId) and save through the provider. Returns {isValid, committed, writeOutcome, possibleOutput, receipt, sourceDocumentId, outputConnectionId, outputDocumentId, outputVersion, outputName, outputContentType, changes, errors, calculation}; non-applicable values are null. The receipt hashes the effective plan and exact input/output bytes and keeps the host-authenticated actor separate from the plan's display revision author. saveMode: 'Replace' (default, overwrites the source after an optimistic version check), 'NewVersion' (keeps the source and mints a new id under the same connection), 'NewDocument' (mints a fresh id with an optional newName for display). Plan-validation and operation-conflict failures have writeOutcome 'notWritten'. A provider failure after a write began may instead return 'unknown' or 'writtenNotRegistered' with possibleOutput; never retry those blindly or report the document unchanged until the host reconciles the possible output.")),
         AIFunctionFactory.Create(CompareDocuments, Opts(schema,
             "compare_documents",
             "Read two Word documents and return paragraph differences, exact input SHA-256 hashes, coverage diagnostics, and a tracked-change plan bound to the original snapshot. " +
@@ -1688,7 +1696,8 @@ public sealed class OfficeAgentTools
             {
                 e.Code, e.Message,
                 target = SummariseAnchor(e.Target)
-            })
+            }),
+            calculation = CalculationPayload(report.Calculation)
         }, Json);
 
     private static string SerializeReport(
@@ -1723,8 +1732,44 @@ public sealed class OfficeAgentTools
             {
                 e.Code, e.Message,
                 target = SummariseAnchor(e.Target)
-            })
+            }),
+            calculation = CalculationPayload(report.Calculation)
         }, Json);
+
+    /// <summary>The most cells one tool result lists; errors and uncalculated cells come first.</summary>
+    internal const int MaximumCalculationCells = 50;
+
+    /// <summary>
+    /// The formula calculation section of a tool result, or null when the workbook was not
+    /// calculated. Lists new errors in full and at most <see cref="MaximumCalculationCells"/>
+    /// cells, errors and uncalculated cells first, so a large workbook cannot flood the context.
+    /// </summary>
+    internal static object? CalculationPayload(FormulaCalculationReport? calculation)
+    {
+        if (calculation is null) return null;
+        var ordered = calculation.Cells
+            .OrderBy(c => c.ValueKind == FormulaValueKind.Error ? 0 : c.Outcome == FormulaOutcome.NotCalculated ? 1 : 2)
+            .ToList();
+        return new
+        {
+            engine = calculation.Engine,
+            calculated = calculation.Cells.Count(c => c.Outcome == FormulaOutcome.Calculated),
+            notCalculated = calculation.Cells.Count(c => c.Outcome == FormulaOutcome.NotCalculated),
+            notCalculatedReason = calculation.NotCalculatedReason,
+            circularReference = calculation.CircularReference,
+            newErrors = calculation.NewErrors.Select(c => new { sheetId = c.SheetId, address = c.Address, formula = c.Formula, value = c.Value }),
+            cells = ordered.Take(MaximumCalculationCells).Select(c => new
+            {
+                sheetId = c.SheetId,
+                address = c.Address,
+                formula = c.Formula,
+                outcome = c.Outcome == FormulaOutcome.Calculated ? "calculated" : "notCalculated",
+                value = c.Value,
+                reason = c.Reason
+            }),
+            cellsTruncated = ordered.Count > MaximumCalculationCells
+        };
+    }
 
     private static string SerializeError(string code, string message, string? provider = null, string? connectionId = null,
         string? itemId = null, string writeOutcome = "notWritten", object? possibleOutput = null) =>
@@ -1742,7 +1787,8 @@ public sealed class OfficeAgentTools
             outputName = (string?)null,
             outputContentType = (string?)null,
             changes = Array.Empty<object>(),
-            errors = new[] { new { Code = code, Message = message, target = (object?)null, provider, connectionId, itemId } }
+            errors = new[] { new { Code = code, Message = message, target = (object?)null, provider, connectionId, itemId } },
+            calculation = (object?)null
         }, Json);
 
     /// <summary>
@@ -1775,7 +1821,8 @@ public sealed class OfficeAgentTools
                 target = (object?)null,
                 connectionId,
                 itemId = sourceDocumentId
-            })
+            }),
+            calculation = (object?)null
         }, Json);
 
     internal static object? SummariseAnchor(Anchor? anchor) => anchor switch

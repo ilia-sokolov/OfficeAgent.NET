@@ -372,8 +372,8 @@ public class EndToEndJourneyTests
         using var refused = Json(await tools.ApplyPlan("workspace", documentId, $$"""
             [ { "op": "insertTable", "target": { "kind": "slide", "path": "{{slidePath}}" },
                 "table": { "headers": ["A"], "rows": [["1"]] } },
-              { "op": "setProperty", "target": { "kind": "docProperty", "path": "core/title" },
-                "value": "Nope" } ]
+              { "op": "revision", "target": { "kind": "revision", "path": "all" },
+                "action": "Accept" } ]
             """));
 
         Assert.False(refused.RootElement.GetProperty("committed").GetBoolean());

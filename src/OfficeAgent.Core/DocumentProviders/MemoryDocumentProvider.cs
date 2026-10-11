@@ -30,7 +30,7 @@ namespace OfficeAgent.Core.DocumentProviders;
 /// host runs out of memory.
 /// </para>
 /// </remarks>
-public sealed class MemoryDocumentProvider : IDocumentProvider, IDocumentCreatingProvider, IConnectionEditingDefaults
+public sealed class MemoryDocumentProvider : IDocumentProvider, IDocumentCreatingProvider, IConnectionEditingDefaults, IConnectionCalculationDefaults
 {
     /// <summary>The provider name reported on references and errors.</summary>
     public const string ProviderName = "memory";
@@ -57,6 +57,12 @@ public sealed class MemoryDocumentProvider : IDocumentProvider, IDocumentCreatin
 
     /// <inheritdoc />
     public ChangeMode DefaultChangeMode => _options.DefaultChangeMode;
+
+    /// <inheritdoc />
+    public bool CalculateFormulas => _options.CalculateFormulas;
+
+    /// <inheritdoc />
+    public bool RejectFormulaErrors => _options.RejectFormulaErrors;
 
     /// <summary>Gets the number of documents currently held.</summary>
     public int Count => _documents.Count;
@@ -387,4 +393,21 @@ public sealed class MemoryDocumentProviderOptions
     /// <see cref="ChangeMode.Tracked"/>, as every other connection does.
     /// </summary>
     public ChangeMode DefaultChangeMode { get; set; } = ChangeMode.Tracked;
+
+    /// <summary>
+    /// Gets or sets whether a workbook previewed or committed through this connection has its
+    /// formulas calculated, so the saved file carries current values instead of none or stale
+    /// ones. Takes effect only when a formula evaluator is registered
+    /// (<c>AddExcelFormulaCalculation</c>); without one, nothing is calculated. Defaults to
+    /// <see langword="false"/>.
+    /// </summary>
+    public bool CalculateFormulas { get; set; }
+
+    /// <summary>
+    /// Gets or sets whether a plan whose calculation produces a new formula error (such as
+    /// <c>#DIV/0!</c> or <c>#REF!</c>) or a circular reference is refused with
+    /// <c>formula-error</c> instead of committed with the errors reported. Applies only with
+    /// <see cref="CalculateFormulas"/>. Defaults to <see langword="false"/>.
+    /// </summary>
+    public bool RejectFormulaErrors { get; set; }
 }

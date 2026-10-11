@@ -224,6 +224,27 @@ This matters most for decks: PresentationML has no redline vocabulary, so under 
 
 The setting fills a gap; it never overrides an operation that names its own `mode`. It applies to plans arriving through `OfficeAgentTools` - `preview_plan`, `apply_plan`, `edit_document`, `create_document` - where an absent `mode` is genuinely absent. A host building a `DocumentPlan` in code sets `ChangeTextOp.Mode` itself, and `OfficeAgentClient.DefaultChangeModeFor(connectionId)` reports the connection's policy if it wants to follow it. A custom `IDocumentProvider` that does not implement `IConnectionEditingDefaults` takes the global default.
 
+## Formula calculation
+
+A connection over workbooks can have every preview and commit through it calculate formulas,
+so saved files carry current values. It needs a registered evaluator
+(`AddExcelFormulaCalculation` from `OfficeAgent.Excel.Calculation`):
+
+```csharp
+services.AddFileSystemDocumentProvider("finance", "/srv/officeagent/finance", o =>
+{
+    o.AllowedExtensions = new[] { ".xlsx" };
+    o.DefaultChangeMode = ChangeMode.Direct;
+    o.CalculateFormulas = true;
+    o.RejectFormulaErrors = true;
+});
+```
+
+The same two settings exist on the SharePoint and session-memory providers. A custom
+`IDocumentProvider` opts in by implementing `IConnectionCalculationDefaults`; one that does
+not leaves calculation off. See [formula calculation](excel.md#formula-calculation) for what
+is calculated and what is written.
+
 ## Error contract
 
 Failures at the provider boundary throw `DocumentProviderException` carrying a strongly typed `ProviderErrorCode` and `Provider` / `ConnectionId` / `ItemId`. A single `catch (DocumentProviderException ex)` covers every provider failure.

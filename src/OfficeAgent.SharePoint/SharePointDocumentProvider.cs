@@ -35,6 +35,23 @@ public sealed class SharePointDocumentProviderOptions
     /// machine-owned files, or one serving decks - PresentationML refuses Tracked.
     /// </summary>
     public ChangeMode DefaultChangeMode { get; set; } = ChangeMode.Tracked;
+
+    /// <summary>
+    /// Gets or sets whether a workbook previewed or committed through this connection has its
+    /// formulas calculated, so the saved file carries current values instead of none or stale
+    /// ones. Takes effect only when a formula evaluator is registered
+    /// (<c>AddExcelFormulaCalculation</c>); without one, nothing is calculated. Defaults to
+    /// <see langword="false"/>.
+    /// </summary>
+    public bool CalculateFormulas { get; set; }
+
+    /// <summary>
+    /// Gets or sets whether a plan whose calculation produces a new formula error (such as
+    /// <c>#DIV/0!</c> or <c>#REF!</c>) or a circular reference is refused with
+    /// <c>formula-error</c> instead of committed with the errors reported. Applies only with
+    /// <see cref="CalculateFormulas"/>. Defaults to <see langword="false"/>.
+    /// </summary>
+    public bool RejectFormulaErrors { get; set; }
 }
 
 /// <summary>
@@ -51,7 +68,7 @@ public sealed class SharePointDocumentProviderOptions
 /// the drive item's ETag for optimistic concurrency, and removing a registration
 /// never deletes SharePoint content.
 /// </summary>
-public sealed class SharePointDocumentProvider : IDocumentProvider, IDocumentCreatingProvider, IConnectionEditingDefaults
+public sealed class SharePointDocumentProvider : IDocumentProvider, IDocumentCreatingProvider, IConnectionEditingDefaults, IConnectionCalculationDefaults
 {
     /// <summary>Gets the provider discriminator used in document references.</summary>
     public const string ProviderName = "sharepoint";
@@ -111,6 +128,12 @@ public sealed class SharePointDocumentProvider : IDocumentProvider, IDocumentCre
 
     /// <inheritdoc />
     public ChangeMode DefaultChangeMode => _options.DefaultChangeMode;
+
+    /// <inheritdoc />
+    public bool CalculateFormulas => _options.CalculateFormulas;
+
+    /// <inheritdoc />
+    public bool RejectFormulaErrors => _options.RejectFormulaErrors;
 
     /// <inheritdoc />
     public async Task<DocumentReference> RegisterAsync(

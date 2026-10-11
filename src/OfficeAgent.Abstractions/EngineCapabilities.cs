@@ -36,6 +36,12 @@ public sealed class EngineCapabilities
     public bool RenderingAvailable { get; init; }
 
     /// <summary>
+    /// Gets the registered formula evaluator and the functions it calculates, or null when no
+    /// evaluator is registered and workbooks are left for Excel to recalculate on open.
+    /// </summary>
+    public FormulaCalculationCapabilities? FormulaCalculation { get; init; }
+
+    /// <summary>
     /// Gets the connections this caller may address, with the capabilities allowed on
     /// each. Connections the caller cannot use are absent rather than listed as denied,
     /// so the result never discloses that they exist.
@@ -97,4 +103,11 @@ public sealed class ConnectionCapabilities
 
     /// <summary>Gets the capabilities this caller is allowed on this connection, sorted.</summary>
     public IReadOnlyList<string> Allowed { get; init; } = Array.Empty<string>();
+
+    /// <summary>
+    /// Gets whether workbooks previewed or committed through this connection have their
+    /// formulas calculated: the host turned calculation on for the connection and a formula
+    /// evaluator is registered. See <see cref="EngineCapabilities.FormulaCalculation"/>.
+    /// </summary>
+    public bool CalculatesFormulas { get; init; }
 }

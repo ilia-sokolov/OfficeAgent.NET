@@ -419,7 +419,9 @@ paths are refused rather than approximated. See
 accept.
 
 The core engine does not render pages, calculate Word fields, or evaluate Excel formulas.
-Formula edits set the workbook to recalculate when Excel opens it. Operations that depend on
+Formula edits set the workbook to recalculate when Excel opens it. The optional
+`OfficeAgent.Excel.Calculation` package calculates a verified set of Excel functions and
+writes the results as cached values; see [formula calculation](docs/excel.md#formula-calculation). Operations that depend on
 pagination, table-of-contents rendering, or field recalculation are outside the core scope.
 Preview reports structural changes. The optional [rendering package](docs/rendering.md) can
 produce PDF-derived page images through external processes, but it does not yet detect overflow

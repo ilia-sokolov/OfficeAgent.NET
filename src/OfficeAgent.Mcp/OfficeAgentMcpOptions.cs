@@ -149,6 +149,23 @@ public sealed class FileSystemConnectionOptions
     /// no redline vocabulary and refuses Tracked outright.
     /// </summary>
     public string DefaultChangeMode { get; set; } = "Tracked";
+
+    /// <summary>
+    /// Gets or sets whether workbooks previewed or committed through this connection have
+    /// their formulas calculated with the bundled engine, so the saved file carries current
+    /// values. Only allowlisted functions are calculated; <c>describe_capabilities</c> lists
+    /// them, and the tool result names every formula left uncalculated and why. Defaults to
+    /// <see langword="false"/>.
+    /// </summary>
+    public bool CalculateFormulas { get; set; }
+
+    /// <summary>
+    /// Gets or sets whether a plan whose calculation produces a new formula error or a
+    /// circular reference is refused with <c>formula-error</c> rather than saved with the
+    /// errors reported. Applies only with <see cref="CalculateFormulas"/>. Defaults to
+    /// <see langword="false"/>.
+    /// </summary>
+    public bool RejectFormulaErrors { get; set; }
 }
 
 /// <summary>One SharePoint document-library connection.</summary>
@@ -229,4 +246,21 @@ public sealed class SharePointConnectionOptions
     /// redline vocabulary and refuses Tracked outright.
     /// </summary>
     public string DefaultChangeMode { get; set; } = "Tracked";
+
+    /// <summary>
+    /// Gets or sets whether workbooks previewed or committed through this connection have
+    /// their formulas calculated with the bundled engine, so the saved file carries current
+    /// values. Only allowlisted functions are calculated; <c>describe_capabilities</c> lists
+    /// them, and the tool result names every formula left uncalculated and why. Defaults to
+    /// <see langword="false"/>.
+    /// </summary>
+    public bool CalculateFormulas { get; set; }
+
+    /// <summary>
+    /// Gets or sets whether a plan whose calculation produces a new formula error or a
+    /// circular reference is refused with <c>formula-error</c> rather than saved with the
+    /// errors reported. Applies only with <see cref="CalculateFormulas"/>. Defaults to
+    /// <see langword="false"/>.
+    /// </summary>
+    public bool RejectFormulaErrors { get; set; }
 }

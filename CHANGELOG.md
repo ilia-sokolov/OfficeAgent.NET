@@ -17,6 +17,48 @@ corresponding GitHub release.
   runtime it contains. The executables carry no publisher signature; see
   [standalone downloads](docs/mcp-server.md#standalone-downloads) for Gatekeeper and SmartScreen,
   and for how .NET runtime updates reach them.
+- **Core properties for decks and workbooks.** `setProperty` on `core/title`, `core/creator`,
+  `core/subject` and the other core properties now works on `.pptx` and `.xlsx` as it does on
+  `.docx`, and inspection lists them as `docProperty` nodes. Search indexes, SharePoint columns
+  and Office's title bar show these values. `field` and `settings/*` targets stay Word only
+  ([#30](https://github.com/ilia-sokolov/OfficeAgent.NET/issues/30)).
+- **The Word compatibility mode.** `setProperty` on `settings/compatibilityMode` reads and sets
+  the mode Word lays a document out in (`11`, `12`, `14` or `15`), creating the setting when the
+  document has none. A document without it opens in Word in Compatibility Mode. Inspection
+  reports the current value ([#44](https://github.com/ilia-sokolov/OfficeAgent.NET/issues/44)).
+- **`FindHit.ParaId`.** The paragraph id of a text hit, or `null` for a cell, shape or node hit,
+  so C# callers no longer pattern-match the anchor to get it. Tool responses already carried
+  `paraId` and are unchanged ([#26](https://github.com/ilia-sokolov/OfficeAgent.NET/issues/26)).
+- **How to delete text is documented.** `changeText` with an empty `with` is the supported way
+  to delete a span, now with a recipe in the plan reference and a line in the agent prompt
+  guidance ([#27](https://github.com/ilia-sokolov/OfficeAgent.NET/issues/27)).
+- **Formula calculation, in a new optional package.** `OfficeAgent.Excel.Calculation` calculates
+  the formulas of an edited workbook and writes the results as cached values. Readers that do
+  not calculate, such as previewers, data pipelines and `inspect_document`, then see values
+  instead of empty cells. It calculates only an allowlist of functions, each checked against a
+  known value. Volatile functions, structured and external references, array formulas, any
+  other function, and everything that depends on them are reported as not calculated, with the
+  reason. Turn it on with `AddExcelFormulaCalculation()` and `ApplyOptions.CalculateFormulas`,
+  or per connection; the MCP server includes it, off by default. Only cached values change,
+  and Excel still recalculates on open. `describe_capabilities` reports the engine and its
+  functions ([#47](https://github.com/ilia-sokolov/OfficeAgent.NET/issues/47),
+  [#48](https://github.com/ilia-sokolov/OfficeAgent.NET/issues/48)).
+- **Formula errors in the change report.** With calculation on, `ChangeReport.Calculation`
+  lists formulas that now evaluate to an error the input did not have, such as `#DIV/0!` or
+  `#REF!`. Tool results carry it as `calculation`. `RejectFormulaErrors` refuses such a plan,
+  or one that creates a circular reference, with the new `formula-error` code, and writes
+  nothing ([#49](https://github.com/ilia-sokolov/OfficeAgent.NET/issues/49)).
+- **Hyperlinks on existing text.** The `link` verb turns a span of Word text into an `http`,
+  `https` or `mailto` hyperlink without changing the text or its formatting
+  ([#42](https://github.com/ilia-sokolov/OfficeAgent.NET/issues/42)).
+- **Merging table cells.** `mergeTableCells` merges a Word table cell with the cells to its
+  right into one cell spanning `columnSpan` grid columns, keeping their content. Merges that
+  would split an existing span, or that touch a vertical merge, are refused
+  ([#43](https://github.com/ilia-sokolov/OfficeAgent.NET/issues/43)).
+- **Continuing an existing list.** `format` with `numberingId` attaches a paragraph to a list
+  the document already defines, so a clause added to a template continues its numbering.
+  Inspection lists each list as a `list` node with its levels
+  ([#45](https://github.com/ilia-sokolov/OfficeAgent.NET/issues/45)).
 
 ### Changed
 
@@ -45,6 +87,21 @@ corresponding GitHub release.
 
 ### Fixed
 
+- **Newer Excel functions written by `setCell` no longer show `#NAME?`.** A workbook stores a
+  function added after Excel 2007 with a prefix (`_xlfn.STDEV.S`, `_xlfn._xlws.FILTER`). `setCell`
+  wrote the formula as given, so Excel read all 160 such functions, `STDEV.S`, `TEXTJOIN`,
+  `XLOOKUP` and `IFS` among them, as unknown names. `setCell` now adds the prefix Excel 16 writes
+  for each of them.
+  Formulas that already carry it, string literals, and older functions are unchanged. The native
+  Office check for formula calculation found this.
+- **The native Office record's corrupt-file controls are now actually opened.** The harness
+  looked each control up by its base name, which all three share (`control-corrupt.docx`,
+  `.pptx`, `.xlsx`), so every control worker failed before opening its file. That failure was
+  counted as Office refusing the file. The v1.0.0 record therefore claimed "3 of 3 corrupt controls
+  caught" without Office having opened any of them. Controls are now looked up by full name. A
+  worker that fails without a result no longer counts as a catch, and the record check rejects
+  such a result. In the new record, Word, PowerPoint and Excel each opened and refused their
+  control. The 73 operation cases were never affected.
 - **A tracked deletion is one revision.** `changeText` with an empty `with` under `Tracked`
   wrote the expected `w:del` and, beside it, an empty `w:ins` by the same author. Word's
   Review pane counted two changes for one deletion, and stepping through them landed on an

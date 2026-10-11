@@ -57,7 +57,7 @@ REQUIRED_RECORDS = (
 )
 
 PACKAGES = ("OfficeAgent.Core", "OfficeAgent.Word", "OfficeAgent.PowerPoint", "OfficeAgent.Excel",
-            "OfficeAgent.AgentFramework")
+            "OfficeAgent.Excel.Calculation", "OfficeAgent.AgentFramework")
 
 # The assemblies whose version the consumer reports. Abstractions arrives transitively.
 ASSEMBLIES = ("OfficeAgent.Abstractions",) + PACKAGES
@@ -71,6 +71,7 @@ PROJECT = """<Project Sdk="Microsoft.NET.Sdk">
   </PropertyGroup>
   <ItemGroup>
 {references}
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection" Version="8.0.1" />
   </ItemGroup>
 </Project>
 """
@@ -83,11 +84,13 @@ using System.Text.Json.Nodes;
 using System.Text.Json.Serialization;
 using DocumentFormat.OpenXml;
 using DocumentFormat.OpenXml.Packaging;
+using Microsoft.Extensions.DependencyInjection;
 using OfficeAgent.Abstractions;
 using OfficeAgent.AgentFramework;
 using OfficeAgent.Core;
 using OfficeAgent.Core.DocumentProviders;
 using OfficeAgent.Excel;
+using OfficeAgent.Excel.Calculation;
 using OfficeAgent.PowerPoint;
 using OfficeAgent.Word;
 
@@ -227,12 +230,31 @@ Check("the 1.0 recovery types are reachable from the packages", () =>
                              typeof(DocumentWriteRecoveryException).IsAssignableFrom(typeof(DocumentWriteOutcomeUnknownException))
         ? null : "the recovery hierarchy is missing"));
 
+Check("the packaged formula engine calculates a committed formula into its cached value", () =>
+{
+    // The documented registration: calculation is wired through dependency injection.
+    var client = new ServiceCollection().AddExcelFormat().AddExcelFormulaCalculation().AddOfficeAgent()
+        .BuildServiceProvider().GetRequiredService<OfficeAgentClient>();
+    using var result = client.Apply(new StreamHandle(new MemoryStream(client.CreateBlank("book.xlsx"), writable: false), "book.xlsx"), new DocumentPlan
+    {
+        Format = OfficeAgent.Abstractions.DocumentFormat.Excel,
+        Operations = new PlanOperation[]
+        {
+            new SetCellOp { Target = new CellAnchor { SheetId = 1, Address = "A1" }, Value = "21", ValueKind = SpreadsheetCellValueKind.Number },
+            new SetCellOp { Target = new CellAnchor { SheetId = 1, Address = "A2" }, Formula = "A1*2" }
+        }
+    }, new ApplyOptions { DryRun = false, CalculateFormulas = true });
+    var cell = result.Report.Calculation?.Cells.SingleOrDefault(c => c.Address == "A2");
+    return Task.FromResult<string?>(result.Committed && cell?.Value == "42"
+        ? null : "not calculated: " + (cell?.Reason ?? string.Join("; ", result.Report.Errors.Select(e => e.Message))));
+});
+
 Console.WriteLine($"RUNTIME\t{Environment.Version}");
 
 // Reported, not judged here: the exact comparison is scripts/verify_candidate_consumer.py's
 // version_mismatches, which its unit tests exercise with near matches.
 foreach (var type in new[] { typeof(DocumentPlan), typeof(OfficeAgentClient), typeof(WordModule), typeof(PowerPointModule),
-                             typeof(ExcelModule), typeof(OfficeAgentTools) })
+                             typeof(ExcelModule), typeof(ClosedXmlFormulaEvaluator), typeof(OfficeAgentTools) })
 {
     var assembly = type.Assembly;
     Console.WriteLine($"ASSEMBLY\t{assembly.GetName().Name}\t{assembly.GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion ?? ""}");

@@ -291,7 +291,7 @@ public sealed partial class OfficeAgentClient
             using var applied = await ApplyAsync(
                 new StreamHandle(new MemoryStream(bytes, writable: false), name),
                 plan,
-                new ApplyOptions { DryRun = false, Actor = ResolveActor(explicitActor: null) },
+                WithCalculation(new ApplyOptions { DryRun = false, Actor = ResolveActor(explicitActor: null) }, provider),
                 cancellationToken).ConfigureAwait(false);
 
             if (!applied.Committed)
@@ -411,12 +411,15 @@ public sealed partial class OfficeAgentClient
             Formats = described.Formats,
             Limits = described.Limits,
             RenderingAvailable = described.RenderingAvailable,
+            FormulaCalculation = described.FormulaCalculation,
             RequiresInspection = described.RequiresInspection,
             Connections = _providers.All
                 .Select(provider => new ConnectionCapabilities
                 {
                     ConnectionId = provider.ConnectionId,
-                    Provider = provider.Provider
+                    Provider = provider.Provider,
+                    CalculatesFormulas = described.FormulaCalculation is not null
+                        && provider is IConnectionCalculationDefaults { CalculateFormulas: true }
                 })
                 .OrderBy(connection => connection.ConnectionId, StringComparer.Ordinal)
                 .ToList()
@@ -526,11 +529,12 @@ public sealed partial class OfficeAgentClient
             return rejected;
 
         plan = await ResolveImageReferencesAsync(plan, cancellationToken).ConfigureAwait(false);
-        using var content = await OpenWithTelemetryAsync(reference, cancellationToken).ConfigureAwait(false);
+        var provider = _providers.Resolve(reference);
+        using var content = await OpenWithTelemetryAsync(provider, reference, cancellationToken).ConfigureAwait(false);
         return await ApplyAsync(
             new StreamHandle(content.Stream, content.Reference.Name),
             plan,
-            new ApplyOptions { DryRun = true, Actor = ResolveActor(explicitActor: null) },
+            WithCalculation(new ApplyOptions { DryRun = true, Actor = ResolveActor(explicitActor: null) }, provider),
             cancellationToken).ConfigureAwait(false);
     }
 
@@ -551,7 +555,7 @@ public sealed partial class OfficeAgentClient
         using var result = await ApplyAsync(
             new StreamHandle(content.Stream, content.Reference.Name),
             plan,
-            new ApplyOptions { DryRun = false, Actor = ResolveActor(saveOpts.Actor) },
+            WithCalculation(new ApplyOptions { DryRun = false, Actor = ResolveActor(saveOpts.Actor) }, provider),
             cancellationToken).ConfigureAwait(false);
 
         if (!result.Committed)
@@ -592,6 +596,18 @@ public sealed partial class OfficeAgentClient
             Receipt = result.Receipt is null ? null : WithOutputDocument(result.Receipt, saved)
         };
     }
+
+    /// <summary>Adds the connection's calculation settings, when its provider declares any.</summary>
+    private static ApplyOptions WithCalculation(ApplyOptions options, IDocumentProvider provider) =>
+        provider is IConnectionCalculationDefaults { CalculateFormulas: true } calculation
+            ? new ApplyOptions
+            {
+                DryRun = options.DryRun,
+                Actor = options.Actor,
+                CalculateFormulas = true,
+                RejectFormulaErrors = calculation.RejectFormulaErrors
+            }
+            : options;
 
     // ── Opaque-id overloads (connection id selects the provider) ──────────────
 

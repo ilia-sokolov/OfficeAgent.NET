@@ -5,8 +5,8 @@
     "family": "changeText",
     "description": "Tracked replacement of a phrase",
     "file": "w-changetext-tracked.docx",
-    "inputSha256": "81119a38045fd140022a5927b1c5d14b8a95a96713993ce97e6c4b8802abe335",
-    "outputSha256": "f3b83b91c3c5e993315f2eedab13dc7df989aa4e9886c6711e719ad1f80f173c",
+    "inputSha256": "08ae3c631613272e2d7fb8e83a2cb499f7a552ccfe737f9ecb2c827880e9f48f",
+    "outputSha256": "b4f82476ed84f11f17eee6603c34f90cdebef7ce02a4c4983dbe573cf64c1508",
     "visual": true,
     "expect": {
       "revisionsAtLeast": 2,
@@ -27,8 +27,8 @@
     "family": "revision",
     "description": "Two authors\u0027 tracked edits in successive commits",
     "file": "w-successive-authors.docx",
-    "inputSha256": "81119a38045fd140022a5927b1c5d14b8a95a96713993ce97e6c4b8802abe335",
-    "outputSha256": "b55fbf6a4b0eff47c27d351952c16d4684c8078f0946e8b1e1f872db3cb1e535",
+    "inputSha256": "08ae3c631613272e2d7fb8e83a2cb499f7a552ccfe737f9ecb2c827880e9f48f",
+    "outputSha256": "0a06e85a379598fbe6e2caa6cf5f95ce6184f06b3a64d0aedd42aa54c57b1ef8",
     "visual": true,
     "expect": {
       "revisionAuthors": [
@@ -54,8 +54,8 @@
     "family": "insertParagraphs",
     "description": "Tracked paragraph insertion",
     "file": "w-insertparagraphs-tracked.docx",
-    "inputSha256": "81119a38045fd140022a5927b1c5d14b8a95a96713993ce97e6c4b8802abe335",
-    "outputSha256": "a27cfb11d75b0b5da03ce9df4a027a14239094bb280630c3e5ea55b3a2014a00",
+    "inputSha256": "08ae3c631613272e2d7fb8e83a2cb499f7a552ccfe737f9ecb2c827880e9f48f",
+    "outputSha256": "d786ecc98fe00bbdbe26ed0f98359eff7dea7d9ba7594cc9b791f5fc75213bf9",
     "visual": false,
     "expect": {
       "revisionsAtLeast": 1,
@@ -73,8 +73,8 @@
     "family": "removeParagraph",
     "description": "Tracked paragraph removal",
     "file": "w-removeparagraph-tracked.docx",
-    "inputSha256": "81119a38045fd140022a5927b1c5d14b8a95a96713993ce97e6c4b8802abe335",
-    "outputSha256": "9e682a50dc6ef156c3c499461b020c97db414ce7b08f21ffa4e2c71a362d90a8",
+    "inputSha256": "08ae3c631613272e2d7fb8e83a2cb499f7a552ccfe737f9ecb2c827880e9f48f",
+    "outputSha256": "d5096efec398926d3e90531919d85d7d59de5c5bbf543907c31a0b5a2893b6bf",
     "visual": false,
     "expect": {
       "revisionsAtLeast": 1,
@@ -92,8 +92,8 @@
     "family": "format",
     "description": "Tracked formatting change",
     "file": "w-format-tracked.docx",
-    "inputSha256": "81119a38045fd140022a5927b1c5d14b8a95a96713993ce97e6c4b8802abe335",
-    "outputSha256": "70ef5f087f4ae89aecd1b67b8b3548fda668ca610372d561c149ce8b20fef639",
+    "inputSha256": "08ae3c631613272e2d7fb8e83a2cb499f7a552ccfe737f9ecb2c827880e9f48f",
+    "outputSha256": "2134013b58ff83e55d1214f88a3be5f1c547821ae2a3f25e0bb1babe83b536c6",
     "visual": false,
     "expect": {
       "revisionsAtLeast": 1,
@@ -108,8 +108,8 @@
     "family": "insert",
     "description": "Direct paragraph insertion after a found phrase",
     "file": "w-insert-direct.docx",
-    "inputSha256": "81119a38045fd140022a5927b1c5d14b8a95a96713993ce97e6c4b8802abe335",
-    "outputSha256": "58e3f06654047f1e0c9c043e49bbc83e72c6576228d47d17c409039e019011f3",
+    "inputSha256": "08ae3c631613272e2d7fb8e83a2cb499f7a552ccfe737f9ecb2c827880e9f48f",
+    "outputSha256": "5de6535d508476a016f0bbf79347f8f31f6f834dc1b4d7931ff76241da4735ec",
     "visual": false,
     "expect": {
       "revisions": 0,
@@ -163,7 +163,7 @@
     "description": "Comment beside existing review threads",
     "file": "w-comment-add.docx",
     "inputSha256": "68b8217443aaf8bd381ec8164e2d0f2237a6db5aafdc6deb8f9568d9b4626c1c",
-    "outputSha256": "991a11c530146b5fce93d47579b54749c8682422b1af6cff9b7d21c83c151ebf",
+    "outputSha256": "cddcaea3d58876a406f627efe09f015fb75ceae4f4eb883a3335b5c728d24e05",
     "visual": true,
     "expect": {
       "commentsAtLeast": 2,
@@ -178,8 +178,8 @@
     "family": "note",
     "description": "Footnote",
     "file": "w-note-footnote.docx",
-    "inputSha256": "81119a38045fd140022a5927b1c5d14b8a95a96713993ce97e6c4b8802abe335",
-    "outputSha256": "4bdb104a9404f903571339e8dd4dfc8391d2ec911169707ca612dbe08ea3d887",
+    "inputSha256": "08ae3c631613272e2d7fb8e83a2cb499f7a552ccfe737f9ecb2c827880e9f48f",
+    "outputSha256": "84f99344cc73d84d99f10227280f5184b5785e17a58d606746b1563d578bccb5",
     "visual": true,
     "expect": {
       "footnotes": 1,
@@ -192,8 +192,8 @@
     "family": "note",
     "description": "Endnote",
     "file": "w-note-endnote.docx",
-    "inputSha256": "81119a38045fd140022a5927b1c5d14b8a95a96713993ce97e6c4b8802abe335",
-    "outputSha256": "c9a4af41ef3f95d957d6bea4f8c0da6b5d8f8f6e9176c79cc47e1db6ee51b79c",
+    "inputSha256": "08ae3c631613272e2d7fb8e83a2cb499f7a552ccfe737f9ecb2c827880e9f48f",
+    "outputSha256": "5509a3373fc624e9f2ecc452dfbd9016a94cbe6f61921e8f5dcda29719e0c2ca",
     "visual": false,
     "expect": {
       "endnotes": 1,
@@ -222,8 +222,8 @@
     "family": "insertTable",
     "description": "Insert a 3x3 table",
     "file": "w-inserttable.docx",
-    "inputSha256": "81119a38045fd140022a5927b1c5d14b8a95a96713993ce97e6c4b8802abe335",
-    "outputSha256": "992ae785ea2c73ad250130ff68aeb7e8dd525027a7ff43c6db73f9eb03528635",
+    "inputSha256": "08ae3c631613272e2d7fb8e83a2cb499f7a552ccfe737f9ecb2c827880e9f48f",
+    "outputSha256": "08ada7f8a709ae2ac0cec14af15e335ed9fc85149c1795337c9f6ea9146a740b",
     "visual": true,
     "expect": {
       "tables": 1,
@@ -240,8 +240,8 @@
     "family": "insertTableRows",
     "description": "Append table rows",
     "file": "w-inserttablerows.docx",
-    "inputSha256": "992ae785ea2c73ad250130ff68aeb7e8dd525027a7ff43c6db73f9eb03528635",
-    "outputSha256": "6d68b5c4ba721e1c2026ae44c4e71f9592f03f0424b048f832dee2d0028146e8",
+    "inputSha256": "08ada7f8a709ae2ac0cec14af15e335ed9fc85149c1795337c9f6ea9146a740b",
+    "outputSha256": "2cecb5350d7434edb9741cab850b768450b21a942453fbf94e99cfc93007524e",
     "visual": false,
     "expect": {
       "tables": 1,
@@ -257,8 +257,8 @@
     "family": "removeTableRows",
     "description": "Remove a table row",
     "file": "w-removetablerows.docx",
-    "inputSha256": "992ae785ea2c73ad250130ff68aeb7e8dd525027a7ff43c6db73f9eb03528635",
-    "outputSha256": "0a975a57459c8765ecafa3878e2f1bb0164f74a27fd35097f0d6a6c8ff155b73",
+    "inputSha256": "08ada7f8a709ae2ac0cec14af15e335ed9fc85149c1795337c9f6ea9146a740b",
+    "outputSha256": "68d58eb714555fb3b6bea4a816a43aea91dd2dd1a5397a61bb527a05e53d10cc",
     "visual": false,
     "expect": {
       "tables": 1,
@@ -274,8 +274,8 @@
     "family": "insertTableColumns",
     "description": "Insert a table column",
     "file": "w-inserttablecolumns.docx",
-    "inputSha256": "992ae785ea2c73ad250130ff68aeb7e8dd525027a7ff43c6db73f9eb03528635",
-    "outputSha256": "a7365cb308deb8fa46619a2d88614d9b280da962a1e1575bf45c7c84b3e8ed95",
+    "inputSha256": "08ada7f8a709ae2ac0cec14af15e335ed9fc85149c1795337c9f6ea9146a740b",
+    "outputSha256": "9ec6307dbf097124a5b084ffe85eefca95b2df2fb6b24984f9c7bfeb439ed74b",
     "visual": false,
     "expect": {
       "tables": 1,
@@ -291,8 +291,8 @@
     "family": "removeTableColumns",
     "description": "Remove a table column",
     "file": "w-removetablecolumns.docx",
-    "inputSha256": "992ae785ea2c73ad250130ff68aeb7e8dd525027a7ff43c6db73f9eb03528635",
-    "outputSha256": "2fe97c1aca628634721657f6fa1feb6a6290616115b964363437e03dc7d3e6d0",
+    "inputSha256": "08ada7f8a709ae2ac0cec14af15e335ed9fc85149c1795337c9f6ea9146a740b",
+    "outputSha256": "de73cfe35bb516b12c5159a5d9700f4d24993340396b1c868b706236dfce8b69",
     "visual": false,
     "expect": {
       "tables": 1,
@@ -308,8 +308,8 @@
     "family": "removeTableColumns",
     "description": "Tracked column removal, resolved in Word",
     "file": "w-removetablecolumns-tracked.docx",
-    "inputSha256": "992ae785ea2c73ad250130ff68aeb7e8dd525027a7ff43c6db73f9eb03528635",
-    "outputSha256": "4e32678f9116992b2d9e5986ff95aa5020ab18687fec2d329d26475b449d614b",
+    "inputSha256": "08ada7f8a709ae2ac0cec14af15e335ed9fc85149c1795337c9f6ea9146a740b",
+    "outputSha256": "c24c73f55aa950e47c7331a0b0f991f17bf0ee93920ce8aa1552ab1a884a83b9",
     "visual": false,
     "expect": {
       "revisionsAtLeast": 1,
@@ -330,8 +330,8 @@
     "family": "repeatTableRow",
     "description": "Repeat a template row per record",
     "file": "w-repeattablerow.docx",
-    "inputSha256": "e0fe11149c07b3305cf1cf8f5dae6f569884c43f7851914777a24bf353e53d94",
-    "outputSha256": "2e1cefb2ae2750bc888725b025919125f1363b1646af0558f39cd7ddbd885876",
+    "inputSha256": "623fcf5061740bc9e6573eac3001ff93aad9d302a4cd13047bd07baa57f0e169",
+    "outputSha256": "16f96d58e3e27276dc36ce206c324cdc46b46fef119994cea8538590a6cdd3cb",
     "visual": true,
     "expect": {
       "tables": 1,
@@ -347,13 +347,33 @@
     }
   },
   {
+    "id": "w-mergetablecells",
+    "format": "word",
+    "family": "mergeTableCells",
+    "description": "Merge the header row\u0027s first two cells",
+    "file": "w-mergetablecells.docx",
+    "inputSha256": "08ada7f8a709ae2ac0cec14af15e335ed9fc85149c1795337c9f6ea9146a740b",
+    "outputSha256": "4ab6b7d00aed77a14bf11b0d2023c85ff5dc233bf0b6b54e8cc9f8a39fb6694d",
+    "visual": true,
+    "expect": {
+      "tables": 1,
+      "tableRows": 3,
+      "firstRowCells": 2,
+      "textContains": [
+        "Item",
+        "Qty",
+        "Widget"
+      ]
+    }
+  },
+  {
     "id": "w-removetable",
     "format": "word",
     "family": "removeTable",
     "description": "Remove a table",
     "file": "w-removetable.docx",
-    "inputSha256": "992ae785ea2c73ad250130ff68aeb7e8dd525027a7ff43c6db73f9eb03528635",
-    "outputSha256": "51343ce28e71bc277d28a8e7044e55c9162d931cf1ed73d5d32fb9b6824e7696",
+    "inputSha256": "08ada7f8a709ae2ac0cec14af15e335ed9fc85149c1795337c9f6ea9146a740b",
+    "outputSha256": "38ae3137531e9287ba2f9d7cf87f35c1c6829952e867b2aca4ecdcd67100e832",
     "visual": false,
     "expect": {
       "tables": 0,
@@ -368,8 +388,8 @@
     "family": "insertImage",
     "description": "Insert an inline picture",
     "file": "w-insertimage.docx",
-    "inputSha256": "81119a38045fd140022a5927b1c5d14b8a95a96713993ce97e6c4b8802abe335",
-    "outputSha256": "763be6294574a7b8b73069c382293f702046583d4135eaa7c3d4db71f68d8673",
+    "inputSha256": "08ae3c631613272e2d7fb8e83a2cb499f7a552ccfe737f9ecb2c827880e9f48f",
+    "outputSha256": "efdec8fc55dd4f3dfe3dae6a7d67ffb9da329e45175f7fd9d11ad7c5b536db82",
     "visual": true,
     "expect": {
       "inlineShapes": 1
@@ -381,8 +401,8 @@
     "family": "removeImage",
     "description": "Remove the picture",
     "file": "w-removeimage.docx",
-    "inputSha256": "763be6294574a7b8b73069c382293f702046583d4135eaa7c3d4db71f68d8673",
-    "outputSha256": "097ea5dd277e8e2bcfeedfc914a925db965960fa31c8d053f23430335d08c6f8",
+    "inputSha256": "efdec8fc55dd4f3dfe3dae6a7d67ffb9da329e45175f7fd9d11ad7c5b536db82",
+    "outputSha256": "628145f3bb28f0962b45fc1b00999150f437842ac5195cc8f065d094c6631766",
     "visual": false,
     "expect": {
       "inlineShapes": 0
@@ -394,8 +414,8 @@
     "family": "backgroundImage",
     "description": "Page background picture",
     "file": "w-backgroundimage.docx",
-    "inputSha256": "81119a38045fd140022a5927b1c5d14b8a95a96713993ce97e6c4b8802abe335",
-    "outputSha256": "752c5d7d49c55e95671e39442123bee9dc4da7855de4a1ad9ce01398c004787e",
+    "inputSha256": "08ae3c631613272e2d7fb8e83a2cb499f7a552ccfe737f9ecb2c827880e9f48f",
+    "outputSha256": "540103ff024f9928d73159ece40dae56a6326dcd3cca83c3791d2c24c16e4705",
     "visual": true,
     "expect": {
       "headerPictureBehindText": true
@@ -407,8 +427,8 @@
     "family": "headerFooter",
     "description": "Header, footer and page number",
     "file": "w-headerfooter.docx",
-    "inputSha256": "81119a38045fd140022a5927b1c5d14b8a95a96713993ce97e6c4b8802abe335",
-    "outputSha256": "bdb0d30466e00af235d1d3fba18321a75717bc62aa3f3f43272883381dd4684b",
+    "inputSha256": "08ae3c631613272e2d7fb8e83a2cb499f7a552ccfe737f9ecb2c827880e9f48f",
+    "outputSha256": "1cc2369af1188c1d52a7046f875eb9c093fe5c5376ea316006756fa1c3a33800",
     "visual": true,
     "expect": {
       "headerContains": "Contoso",
@@ -421,8 +441,8 @@
     "family": "pageSetup",
     "description": "Landscape A4 with wide margins",
     "file": "w-pagesetup.docx",
-    "inputSha256": "81119a38045fd140022a5927b1c5d14b8a95a96713993ce97e6c4b8802abe335",
-    "outputSha256": "3c96538f8996d0222b1ca729f241d150d75d8e0b455b63ae7c59b0dd6cb1a5f9",
+    "inputSha256": "08ae3c631613272e2d7fb8e83a2cb499f7a552ccfe737f9ecb2c827880e9f48f",
+    "outputSha256": "0cceb427993f7371891944b59955bc66b8f8e9439207a0913992bec2e0149be0",
     "visual": true,
     "expect": {
       "landscape": true
@@ -434,8 +454,8 @@
     "family": "insertBreak",
     "description": "Page break",
     "file": "w-insertbreak.docx",
-    "inputSha256": "81119a38045fd140022a5927b1c5d14b8a95a96713993ce97e6c4b8802abe335",
-    "outputSha256": "8026e294a3036e8d3b6f0bf65e6a0e7c6d911ae5adf1994967b7b84b55e277af",
+    "inputSha256": "08ae3c631613272e2d7fb8e83a2cb499f7a552ccfe737f9ecb2c827880e9f48f",
+    "outputSha256": "b2cf274bdb2e74347d84b115cf52b1e3f8189af4d2c8c56f0cf232c0adc692da",
     "visual": true,
     "expect": {
       "pagesAtLeast": 2
@@ -447,11 +467,57 @@
     "family": "setProperty",
     "description": "Document title property",
     "file": "w-setproperty.docx",
-    "inputSha256": "81119a38045fd140022a5927b1c5d14b8a95a96713993ce97e6c4b8802abe335",
-    "outputSha256": "f7586a7e73c004b2764afce4b46e7e9d4567001c33db76fbfa448ef936cf6b78",
+    "inputSha256": "08ae3c631613272e2d7fb8e83a2cb499f7a552ccfe737f9ecb2c827880e9f48f",
+    "outputSha256": "113fb26636f1781b0ac0fa91ccd08970ca05eaedad286dc5a33828edd7ad6c04",
     "visual": false,
     "expect": {
       "title": "Master services agreement"
+    }
+  },
+  {
+    "id": "w-setproperty-compatibility",
+    "format": "word",
+    "family": "setProperty",
+    "description": "Compatibility mode set to Word 2010",
+    "file": "w-setproperty-compatibility.docx",
+    "inputSha256": "08ae3c631613272e2d7fb8e83a2cb499f7a552ccfe737f9ecb2c827880e9f48f",
+    "outputSha256": "f8f7d922891603669312b8a5033d4ee7d3a551ce6af4610ba50437bd1096f203",
+    "visual": false,
+    "expect": {
+      "compatibilityMode": 14
+    }
+  },
+  {
+    "id": "w-link",
+    "format": "word",
+    "family": "link",
+    "description": "Hyperlink on existing text",
+    "file": "w-link.docx",
+    "inputSha256": "08ae3c631613272e2d7fb8e83a2cb499f7a552ccfe737f9ecb2c827880e9f48f",
+    "outputSha256": "e2ee0d4e1fe9c7082a7c8e615a4c7d44255caf8841227c4c47b2f3c7c9e572f5",
+    "visual": false,
+    "expect": {
+      "hyperlinks": 1,
+      "hyperlinkAddress": "https://example.com/acme",
+      "hyperlinkText": "Acme Corp",
+      "wordTextSameAsInput": true,
+      "revisions": 0
+    }
+  },
+  {
+    "id": "w-format-numberingid",
+    "format": "word",
+    "family": "format",
+    "description": "A paragraph attached to the document\u0027s existing list",
+    "file": "w-format-numberingid.docx",
+    "inputSha256": "2d30ee80e7caa1eec56110e7a68ad19d45a447d87e69748d137d7140bbd0d127",
+    "outputSha256": "548e2efe8fd0aaaef3c401d8a603c8825461ed5cf49e9016cd8e5e5a1bc96a37",
+    "visual": false,
+    "expect": {
+      "listStrings": [
+        "1.",
+        "2."
+      ]
     }
   },
   {
@@ -460,8 +526,8 @@
     "family": "defineStyle",
     "description": "Define and apply a heading style",
     "file": "w-definestyle.docx",
-    "inputSha256": "81119a38045fd140022a5927b1c5d14b8a95a96713993ce97e6c4b8802abe335",
-    "outputSha256": "342d0fd596b045320dd83661def09fa519c1c6975e0e4bc335d30d7ec17f5fe7",
+    "inputSha256": "08ae3c631613272e2d7fb8e83a2cb499f7a552ccfe737f9ecb2c827880e9f48f",
+    "outputSha256": "67194130e1cb209c3e566bdb9c0412e2e0a6e04018fc6261dba9a9d425f88f96",
     "visual": false,
     "expect": {
       "styleExists": "Contract Heading"
@@ -473,8 +539,8 @@
     "family": "clearStyles",
     "description": "Clear direct formatting on a bolded phrase",
     "file": "w-clearstyles.docx",
-    "inputSha256": "e0d869fb1786b824a7d4a1fa4c9ef8bc2492927291126cdab5930574ec2174ba",
-    "outputSha256": "51343ce28e71bc277d28a8e7044e55c9162d931cf1ed73d5d32fb9b6824e7696",
+    "inputSha256": "3d4ea8292f7947b0519fd8d93c2ec375258c2b710921949f5a0598e2efaedc98",
+    "outputSha256": "38ae3137531e9287ba2f9d7cf87f35c1c6829952e867b2aca4ecdcd67100e832",
     "visual": false,
     "expect": {
       "wordTextSameAsInput": true,
@@ -515,8 +581,8 @@
     "family": "create",
     "description": "Blank document from OfficeAgent, then written",
     "file": "w-create-with-plan.docx",
-    "inputSha256": "9048deb472f7ce0066ff3398b4c4c41873c0a32358487f513b8f5f6b7c14c82b",
-    "outputSha256": "0ab30d361f27d81dfb38e02138c8f0fbb3257646346dc7920bee75830b8e4f12",
+    "inputSha256": "6ffb1b491bd696bea09da31a07aa303d3f2daf376198d269506d1751eb35dc74",
+    "outputSha256": "b866358ea6e2c978e39fcbaaaab627cdad26489823cfc579af5757bc916c7f38",
     "visual": false,
     "expect": {
       "textContains": [
@@ -532,8 +598,8 @@
     "family": "template",
     "description": "Template with a slot and a repeating row, populated",
     "file": "w-template-populated.docx",
-    "inputSha256": "b31ffb277eea57341e4e05b295c53bef3f1680e2b52d3da36fb9d36e8c72485c",
-    "outputSha256": "1fd8f00c820990de552f976718437764aac47352bbe08e12a750f7d8ae4e8c1d",
+    "inputSha256": "a84dd4d5ee150ecec9a8069e040b2c918f7e89849d29b797d8b43aaf6bd3cd57",
+    "outputSha256": "f2f72bb1017cd5f74c34e015baefbe449c723f6a3f809f53171c8b5f8385ca0e",
     "visual": true,
     "expect": {
       "textContains": [
@@ -554,8 +620,8 @@
     "family": "template",
     "description": "Template image slot bound through a template batch on the filesystem provider",
     "file": "w-template-image.docx",
-    "inputSha256": "a9172781c69ff0c2f2a5751bf18bb0c16bcf42c7e282afe3efdaffbf85f3cf4d",
-    "outputSha256": "0d962804e144d7fc5b5d3f1eb49facbbe096b89fe8faa763447986eebc099c1e",
+    "inputSha256": "fea194f15285a85ef1f2482bfc1a912d8aeb5d28a74c4646e4b08c37f02d2b6f",
+    "outputSha256": "3f3bee9bfa7f3e36f7b28f8c841569caf9de755ee882409f2cb1584fae9e8947",
     "visual": true,
     "expect": {
       "inlineShapes": 1,
@@ -577,8 +643,8 @@
     "family": "comparison",
     "description": "Comparison redline of a table-cell edit",
     "file": "w-comparison-table-cell.docx",
-    "inputSha256": "992ae785ea2c73ad250130ff68aeb7e8dd525027a7ff43c6db73f9eb03528635",
-    "outputSha256": "c2f25f0d563d185561dad1731d273b39582452ba70335803e93d5c438c0211ca",
+    "inputSha256": "08ada7f8a709ae2ac0cec14af15e335ed9fc85149c1795337c9f6ea9146a740b",
+    "outputSha256": "4ab48981a824910311cdd1bd7826c847f3cb99c4e2e6f06b31d3d4c23e293e53",
     "visual": true,
     "expect": {
       "revisionsAtLeast": 1,
@@ -604,8 +670,8 @@
     "family": "comparison",
     "description": "Comparison redline between two versions",
     "file": "w-comparison.docx",
-    "inputSha256": "81119a38045fd140022a5927b1c5d14b8a95a96713993ce97e6c4b8802abe335",
-    "outputSha256": "f7e09176b1aef46d0068dc06b95593c641aa1f8b1bc4772fbb852ec7d29d2143",
+    "inputSha256": "08ae3c631613272e2d7fb8e83a2cb499f7a552ccfe737f9ecb2c827880e9f48f",
+    "outputSha256": "f9db52becd702fb925da419227a28e021244ffa4bee488916192ae43ce0b886e",
     "visual": true,
     "expect": {
       "revisionsAtLeast": 1,
@@ -626,8 +692,8 @@
     "family": "assembly",
     "description": "Two documents assembled, each keeping its header",
     "file": "w-assembly.docx",
-    "inputSha256": "cd514882cc2164b917b6b39e3ecc195960c8b65038a58d82b49fed21c0ad9baf",
-    "outputSha256": "7138b9aea55e5044b3ae4cce0c49cde2ec4b709a54821e50be1ff65d64929a36",
+    "inputSha256": "7c3767442bdfcea7af9f5687df9f7b6b44cf35410d27c64fdb2043c6fbe48c55",
+    "outputSha256": "b1a3d9df36d0b21d39ac519ebe74053ffcb05199c513e4ee33878892a98f9765",
     "visual": true,
     "expect": {
       "textContains": [
@@ -645,8 +711,8 @@
     "family": "insertSlide",
     "description": "Two slides added to a blank deck",
     "file": "p-insertslide.pptx",
-    "inputSha256": "6b16b723626d672d89d3875ed73bc2e46c532b729f44f5b17ce6b910f85cbe26",
-    "outputSha256": "dfe28ff5f346653ac67f619b0a17870da70ef1d464d0596d9d8689b4313b91fe",
+    "inputSha256": "4df9eb83bfe9901089334131addfb8922d042d3461031df2a8ccb287f7f52cc9",
+    "outputSha256": "e38b0612a48b1c01b0d370e076604b2ca4dd1772aa6b18e7e3e87776f5e0d1d6",
     "visual": true,
     "expect": {
       "slides": 3,
@@ -662,8 +728,8 @@
     "family": "removeSlide",
     "description": "Remove a slide",
     "file": "p-removeslide.pptx",
-    "inputSha256": "dfe28ff5f346653ac67f619b0a17870da70ef1d464d0596d9d8689b4313b91fe",
-    "outputSha256": "48bef843a8dfb9ea0e04d8c979d08f1a72dab35cc86a7f10700c79d2250994c3",
+    "inputSha256": "e38b0612a48b1c01b0d370e076604b2ca4dd1772aa6b18e7e3e87776f5e0d1d6",
+    "outputSha256": "685b7fce507987425404c556fad9bb5e52a142b0d0c3a059bcbced59c0d9380e",
     "visual": false,
     "expect": {
       "slides": 2,
@@ -678,8 +744,8 @@
     "family": "moveSlide",
     "description": "Move the last slide first",
     "file": "p-moveslide.pptx",
-    "inputSha256": "dfe28ff5f346653ac67f619b0a17870da70ef1d464d0596d9d8689b4313b91fe",
-    "outputSha256": "d6cae28a7284f5baac40a9faf710dd26343018fdb1373d578fa039d395dd8fa2",
+    "inputSha256": "e38b0612a48b1c01b0d370e076604b2ca4dd1772aa6b18e7e3e87776f5e0d1d6",
+    "outputSha256": "a6e54534cf9128a00e63449541e755d8a5e23bac4a34968cbbc2ba0fb55ebff4",
     "visual": false,
     "expect": {
       "slides": 3,
@@ -692,8 +758,8 @@
     "family": "duplicateSlide",
     "description": "Duplicate a slide",
     "file": "p-duplicateslide.pptx",
-    "inputSha256": "dfe28ff5f346653ac67f619b0a17870da70ef1d464d0596d9d8689b4313b91fe",
-    "outputSha256": "c97dd2baf9177d98f58e228e82ed95a4f74466baf09b92caf6d396909102ecbe",
+    "inputSha256": "e38b0612a48b1c01b0d370e076604b2ca4dd1772aa6b18e7e3e87776f5e0d1d6",
+    "outputSha256": "7df863ff27ad68c4a1236a6a1d3a51041d99ecdefe180fcad8156df82a0f6b74",
     "visual": false,
     "expect": {
       "slides": 4
@@ -705,8 +771,8 @@
     "family": "section",
     "description": "Add a section",
     "file": "p-section.pptx",
-    "inputSha256": "dfe28ff5f346653ac67f619b0a17870da70ef1d464d0596d9d8689b4313b91fe",
-    "outputSha256": "67b46cad33bc8586dff21ea7bb911996c730299b905f0ef87c27cb6da37dbb4e",
+    "inputSha256": "e38b0612a48b1c01b0d370e076604b2ca4dd1772aa6b18e7e3e87776f5e0d1d6",
+    "outputSha256": "a4b13d15ae661c7e458a7bfac4f280d34c6984341ad73fdf41ce126066c7505f",
     "visual": false,
     "expect": {
       "sectionsAtLeast": 2,
@@ -721,8 +787,8 @@
     "family": "transition",
     "description": "Fade transition on every slide",
     "file": "p-transition.pptx",
-    "inputSha256": "dfe28ff5f346653ac67f619b0a17870da70ef1d464d0596d9d8689b4313b91fe",
-    "outputSha256": "2a8508a6c5e8b5ee6a3f45c275b3084a12ffb19f284c96a82ca68c198089eb35",
+    "inputSha256": "e38b0612a48b1c01b0d370e076604b2ca4dd1772aa6b18e7e3e87776f5e0d1d6",
+    "outputSha256": "dd01dbbdd409890733f364022a5d2c5f74d3214556640f7c06ddf19f5a36bdea",
     "visual": false,
     "expect": {
       "slides": 3,
@@ -735,8 +801,8 @@
     "family": "animate",
     "description": "Fade-in animation on a shape",
     "file": "p-animate.pptx",
-    "inputSha256": "dfe28ff5f346653ac67f619b0a17870da70ef1d464d0596d9d8689b4313b91fe",
-    "outputSha256": "8ddf0ff5dd7c973031d46706500e13b4aff076ec52bd71102e0aed11a4fb1d20",
+    "inputSha256": "e38b0612a48b1c01b0d370e076604b2ca4dd1772aa6b18e7e3e87776f5e0d1d6",
+    "outputSha256": "6b7cf544fd19a09f925e76e6295831ff9b1c643ad73982782954b6fee1e96333",
     "visual": false,
     "expect": {
       "animationsAtLeast": 1
@@ -748,8 +814,8 @@
     "family": "headerFooter",
     "description": "Footer and slide numbers",
     "file": "p-headerfooter.pptx",
-    "inputSha256": "dfe28ff5f346653ac67f619b0a17870da70ef1d464d0596d9d8689b4313b91fe",
-    "outputSha256": "984178b840e00c2d359c07a2a160068b88fae26b93e01c8c977e9c2eeab3897c",
+    "inputSha256": "e38b0612a48b1c01b0d370e076604b2ca4dd1772aa6b18e7e3e87776f5e0d1d6",
+    "outputSha256": "5a42af8e174f90e8f9f79c764ec243fbb7ea8fd779ba0b3d8582d1115248fd83",
     "visual": true,
     "expect": {
       "footerContains": "Confidential"
@@ -761,8 +827,8 @@
     "family": "insertShape",
     "description": "Insert a text box",
     "file": "p-insertshape.pptx",
-    "inputSha256": "81b2fd96b22470580b55821ef3468737dbe142832f4c1e42d8f08b3d9d909e87",
-    "outputSha256": "602c99f681e1aa45930c3b110b39367c75dac73205254c4a10e6cad4b7f6af60",
+    "inputSha256": "4db45a1fa0d49ed16cb0655f0cc0af01e51a5a04e3662c529ea51802681fb8e1",
+    "outputSha256": "065157856e816b2e6148aad2d9753c6d531c0dfee8ae41fa0d3255bf6026264f",
     "visual": true,
     "expect": {
       "textContains": [
@@ -776,8 +842,8 @@
     "family": "removeShape",
     "description": "Remove the text box",
     "file": "p-removeshape.pptx",
-    "inputSha256": "602c99f681e1aa45930c3b110b39367c75dac73205254c4a10e6cad4b7f6af60",
-    "outputSha256": "4c1fdeb8138714a15970b86fe9a4e43c4309bd14260762b3c089a69f5d44cbec",
+    "inputSha256": "065157856e816b2e6148aad2d9753c6d531c0dfee8ae41fa0d3255bf6026264f",
+    "outputSha256": "2b26d5c59c39c90c4c03bf376d173f26559346ddd69d093221efc83379130d6c",
     "visual": false,
     "expect": {
       "textExcludes": [
@@ -791,8 +857,8 @@
     "family": "insertChart",
     "description": "Native column chart with embedded data",
     "file": "p-insertchart.pptx",
-    "inputSha256": "205addf00d315e96322b28ed0f35f08c36bd78029ff0acf436f295f5451a985a",
-    "outputSha256": "8c3a0a2f4ea4dfb0e18859599ea298db3a0a23c194d472dbb810a5f45186fdb8",
+    "inputSha256": "3e14af2382cd2013474057e6281074e0831e51801472df24252ffee4ab265ccf",
+    "outputSha256": "d267325d880ec16243e9236c21234dbb35cae43161070a8a98189458bc63655b",
     "visual": true,
     "expect": {
       "charts": 1,
@@ -810,8 +876,8 @@
     "family": "updateChart",
     "description": "Replace the chart\u0027s data",
     "file": "p-updatechart.pptx",
-    "inputSha256": "8c3a0a2f4ea4dfb0e18859599ea298db3a0a23c194d472dbb810a5f45186fdb8",
-    "outputSha256": "8c963a91c2432a44dd1063ca584cc8cb1b0afb15229eaede861e5413d8ac51e0",
+    "inputSha256": "d267325d880ec16243e9236c21234dbb35cae43161070a8a98189458bc63655b",
+    "outputSha256": "9228204559ddb65ba281c0bb31fec301017f3d78ab4032184d6f1dae79813673",
     "visual": true,
     "expect": {
       "charts": 1,
@@ -828,8 +894,8 @@
     "family": "template",
     "description": "Template chart slot bound through a template batch on the filesystem provider",
     "file": "p-template-chart.pptx",
-    "inputSha256": "8c3a0a2f4ea4dfb0e18859599ea298db3a0a23c194d472dbb810a5f45186fdb8",
-    "outputSha256": "76c1246aaf5714e2cd593a411ac7987585e207dacbaec653e8d8a530089303c4",
+    "inputSha256": "d267325d880ec16243e9236c21234dbb35cae43161070a8a98189458bc63655b",
+    "outputSha256": "b365f4e5f13c4ea90aca0e80a2bdae981f6e3c38df024d193192c0af8b27159c",
     "visual": true,
     "expect": {
       "charts": 1,
@@ -846,8 +912,8 @@
     "family": "insertImage",
     "description": "Insert a picture",
     "file": "p-insertimage.pptx",
-    "inputSha256": "81b2fd96b22470580b55821ef3468737dbe142832f4c1e42d8f08b3d9d909e87",
-    "outputSha256": "289a22f0d2070cbb399f3e98fee692572ee5a86b63336506a39d83b1380af91f",
+    "inputSha256": "4db45a1fa0d49ed16cb0655f0cc0af01e51a5a04e3662c529ea51802681fb8e1",
+    "outputSha256": "d34686895b45d4ddf5b024134bc1b9f771036b9f77ffb907a1579e78a5afcec6",
     "visual": true,
     "expect": {
       "pictures": 1
@@ -859,8 +925,8 @@
     "family": "removeImage",
     "description": "Remove the picture",
     "file": "p-removeimage.pptx",
-    "inputSha256": "289a22f0d2070cbb399f3e98fee692572ee5a86b63336506a39d83b1380af91f",
-    "outputSha256": "1bc96bf2843d4ba2a40667c9a0c488dd99b300970cce810133305faa3ff49465",
+    "inputSha256": "d34686895b45d4ddf5b024134bc1b9f771036b9f77ffb907a1579e78a5afcec6",
+    "outputSha256": "f564ffce1034b0c08728db1e7c0f05e41566d425679b28be08adce77a286f76a",
     "visual": false,
     "expect": {
       "pictures": 0
@@ -872,8 +938,8 @@
     "family": "backgroundImage",
     "description": "Slide background picture",
     "file": "p-backgroundimage.pptx",
-    "inputSha256": "81b2fd96b22470580b55821ef3468737dbe142832f4c1e42d8f08b3d9d909e87",
-    "outputSha256": "2f9a36237391f7a38fac4b746b89af85bc385c2a71ed0d540fdaa618ec81b1e0",
+    "inputSha256": "4db45a1fa0d49ed16cb0655f0cc0af01e51a5a04e3662c529ea51802681fb8e1",
+    "outputSha256": "6be4dcc0e8e739f1db23017880312bbb154744986b7ca52f6501ee52b531636d",
     "visual": true,
     "expect": {
       "backgroundPicture": true
@@ -885,8 +951,8 @@
     "family": "insertMedia",
     "description": "Embedded video with a poster frame",
     "file": "p-insertmedia.pptx",
-    "inputSha256": "1142508e2786fd595c4afce73101b5ef8ef4863c0abf76f3ef48657a599edb8a",
-    "outputSha256": "ce97e9091f951d68448b99929cae5f0cfe6d40168d707acdc2fd3609888d322e",
+    "inputSha256": "7644f8f687a98945f25f74553318c85a63c51c545e71a29b753ab22664a66d24",
+    "outputSha256": "3e35f92413e418f3cf591215926c451126c2ca9f503230efabd9b2f70b316d5b",
     "visual": false,
     "expect": {
       "media": 1
@@ -898,8 +964,8 @@
     "family": "insertTable",
     "description": "Insert a table",
     "file": "p-inserttable.pptx",
-    "inputSha256": "b49e5974e534c2658be26b16a55a3cd9507d564483898a35fc173b62e40eae01",
-    "outputSha256": "5f0b2822c3d230f744e94f07abc285b2745c932b5ef99fc09e8fb28fc6f1d9b0",
+    "inputSha256": "ee0fb5c633bf40bd2f2f53eee064c282f56b51ee4b704b306b2c0e0d96a6f309",
+    "outputSha256": "4a862903c86a507bcece3fd71e4fbfe7d7c43b8528cd1f4cde4fc6aa67fdf89c",
     "visual": true,
     "expect": {
       "tables": 1,
@@ -914,8 +980,8 @@
     "family": "insertTableRows",
     "description": "Append a table row",
     "file": "p-inserttablerows.pptx",
-    "inputSha256": "c27aa8bb23d96c3e6e31f91c608349dc8b0410fdcae5c14c7283a13e9e47a3cc",
-    "outputSha256": "0a028432de2eee8b51e5269b5a1183f65061ba69695e6cd9161110fecc1c8366",
+    "inputSha256": "e2ec777c8c2e8222c350ec1b24ce90f5faa2d5cadf0040b313d6c4684dc9a4ce",
+    "outputSha256": "dc564e3746de2f1606fac61882aa5344bd02c32a7489e352db01aecf443936d4",
     "visual": false,
     "expect": {
       "tables": 1,
@@ -930,8 +996,8 @@
     "family": "removeTableRows",
     "description": "Remove a table row",
     "file": "p-removetablerows.pptx",
-    "inputSha256": "c27aa8bb23d96c3e6e31f91c608349dc8b0410fdcae5c14c7283a13e9e47a3cc",
-    "outputSha256": "7ad08242bccf204a6896829b3aab6f817bd76060d898cebb306cd702900d0ce0",
+    "inputSha256": "e2ec777c8c2e8222c350ec1b24ce90f5faa2d5cadf0040b313d6c4684dc9a4ce",
+    "outputSha256": "642337d787878f10ffd7dfc13051ec4fac39975d5389a47c990773d5bf5e9521",
     "visual": false,
     "expect": {
       "tables": 1
@@ -943,8 +1009,8 @@
     "family": "insertTableColumns",
     "description": "Insert a table column",
     "file": "p-inserttablecolumns.pptx",
-    "inputSha256": "c27aa8bb23d96c3e6e31f91c608349dc8b0410fdcae5c14c7283a13e9e47a3cc",
-    "outputSha256": "22fe3dddc7b014a9d4df384375f157890a7132a19d355d9f43a24a4fa84cfbd7",
+    "inputSha256": "e2ec777c8c2e8222c350ec1b24ce90f5faa2d5cadf0040b313d6c4684dc9a4ce",
+    "outputSha256": "63e39945b5e432649d768126c6685a23e161cb9724058ff9ba598321b0615b4c",
     "visual": false,
     "expect": {
       "tables": 1,
@@ -959,8 +1025,8 @@
     "family": "removeTableColumns",
     "description": "Remove a table column",
     "file": "p-removetablecolumns.pptx",
-    "inputSha256": "c27aa8bb23d96c3e6e31f91c608349dc8b0410fdcae5c14c7283a13e9e47a3cc",
-    "outputSha256": "dca62908274ea9f845e7e3a78f6ed46cb4bc260ca16051cb2154e253dc8f0b4a",
+    "inputSha256": "e2ec777c8c2e8222c350ec1b24ce90f5faa2d5cadf0040b313d6c4684dc9a4ce",
+    "outputSha256": "3d1a5c2ee1fa4ac47cb733ecfefded14aee26f0e9470a5449a6644a5ca41618c",
     "visual": false,
     "expect": {
       "tables": 1
@@ -972,8 +1038,8 @@
     "family": "removeTable",
     "description": "Remove the table",
     "file": "p-removetable.pptx",
-    "inputSha256": "c27aa8bb23d96c3e6e31f91c608349dc8b0410fdcae5c14c7283a13e9e47a3cc",
-    "outputSha256": "c4feff922463c5083836d207fc51ca792e0da29686b9ebedcc0c440402b5edcc",
+    "inputSha256": "e2ec777c8c2e8222c350ec1b24ce90f5faa2d5cadf0040b313d6c4684dc9a4ce",
+    "outputSha256": "76890b01c86ee1d65b738be6fd416844630b7deabbc19e295eb9f3b9081b1e72",
     "visual": false,
     "expect": {
       "tables": 0
@@ -985,8 +1051,8 @@
     "family": "changeText",
     "description": "Replace the title text",
     "file": "p-changetext.pptx",
-    "inputSha256": "dfe28ff5f346653ac67f619b0a17870da70ef1d464d0596d9d8689b4313b91fe",
-    "outputSha256": "e41f9ccd2bfb3287ae8386060bba3ef26192ce77c6949b371e1809831507d444",
+    "inputSha256": "e38b0612a48b1c01b0d370e076604b2ca4dd1772aa6b18e7e3e87776f5e0d1d6",
+    "outputSha256": "eb4bff979de61a05fa2e851b07a812ef41e66ba4578108b05db6b65e84e2c47f",
     "visual": false,
     "expect": {
       "textContains": [
@@ -1000,8 +1066,8 @@
     "family": "insert",
     "description": "Insert a paragraph after the title",
     "file": "p-insert.pptx",
-    "inputSha256": "dfe28ff5f346653ac67f619b0a17870da70ef1d464d0596d9d8689b4313b91fe",
-    "outputSha256": "120ffeb486ade78e0f73f4cb7c2190788330d4b6926bbd48ddca4d6d5efdd070",
+    "inputSha256": "e38b0612a48b1c01b0d370e076604b2ca4dd1772aa6b18e7e3e87776f5e0d1d6",
+    "outputSha256": "5155bffefbc3733438ed278f82e812af3d5f8295050f97f76428d908abaf4d8c",
     "visual": false,
     "expect": {
       "textContains": [
@@ -1015,8 +1081,8 @@
     "family": "format",
     "description": "Bold, coloured title",
     "file": "p-format.pptx",
-    "inputSha256": "dfe28ff5f346653ac67f619b0a17870da70ef1d464d0596d9d8689b4313b91fe",
-    "outputSha256": "45e567892fc2e294e8483e44b434fc67754d14efc34dc37ac3a7eff3c08e44e4",
+    "inputSha256": "e38b0612a48b1c01b0d370e076604b2ca4dd1772aa6b18e7e3e87776f5e0d1d6",
+    "outputSha256": "6b3dc843b7b95f868ebec48b78f8e961f59289cfc6b0e754f2b8bc628463adcf",
     "visual": true,
     "expect": {
       "textContains": [
@@ -1030,8 +1096,8 @@
     "family": "clearStyles",
     "description": "Clear direct formatting on the title",
     "file": "p-clearstyles.pptx",
-    "inputSha256": "96e6185c56dcb9a14ead27411c852fb4dfae70cb13712db24bae28d7b15bc54c",
-    "outputSha256": "7a5721bbf3fe598df7503427769a5028fa8b39219f152ce093b4fc05a8336b6e",
+    "inputSha256": "b85fca302eaabed41dbcde1ed7b0509e3301c0b8c93b50220273c0a6dc961b27",
+    "outputSha256": "769c9daddcad746395d77291061ebbd8c2c437573a69c8da1ef4177dbfde02bd",
     "visual": false,
     "expect": {
       "textContains": [
@@ -1045,8 +1111,8 @@
     "family": "copyStyles",
     "description": "Copy paragraph formatting between lines",
     "file": "p-copystyles.pptx",
-    "inputSha256": "dfe28ff5f346653ac67f619b0a17870da70ef1d464d0596d9d8689b4313b91fe",
-    "outputSha256": "7a5721bbf3fe598df7503427769a5028fa8b39219f152ce093b4fc05a8336b6e",
+    "inputSha256": "e38b0612a48b1c01b0d370e076604b2ca4dd1772aa6b18e7e3e87776f5e0d1d6",
+    "outputSha256": "769c9daddcad746395d77291061ebbd8c2c437573a69c8da1ef4177dbfde02bd",
     "visual": false,
     "expect": {
       "slides": 3
@@ -1058,11 +1124,24 @@
     "family": "comment",
     "description": "Modern comment on a slide",
     "file": "p-comment.pptx",
-    "inputSha256": "81b2fd96b22470580b55821ef3468737dbe142832f4c1e42d8f08b3d9d909e87",
-    "outputSha256": "bed901e681c325c4eae9f37f1ba2c37381091ef542ed42076a281adc705094db",
+    "inputSha256": "4db45a1fa0d49ed16cb0655f0cc0af01e51a5a04e3662c529ea51802681fb8e1",
+    "outputSha256": "059b16bd97bb468ed30bd7c8da5a86b0d18311509e20bf8580e576afbf754fd6",
     "visual": false,
     "expect": {
       "commentsAtLeast": 1
+    }
+  },
+  {
+    "id": "p-setproperty",
+    "format": "powerpoint",
+    "family": "setProperty",
+    "description": "Deck title property",
+    "file": "p-setproperty.pptx",
+    "inputSha256": "4db45a1fa0d49ed16cb0655f0cc0af01e51a5a04e3662c529ea51802681fb8e1",
+    "outputSha256": "31880023af845c79ed3f3a9fbc71103aaa3cf55aff1ca13b5e18373f262d790a",
+    "visual": false,
+    "expect": {
+      "title": "Quarterly business review"
     }
   },
   {
@@ -1071,8 +1150,8 @@
     "family": "fill",
     "description": "Fill a named template shape",
     "file": "p-fill.pptx",
-    "inputSha256": "2b2dbe4baa87f7e7f95b7d49396e0e6613a1bd848d36a2adbddc864eb2018e4e",
-    "outputSha256": "c6ab8e36cce020f4497b52435433c27ca27c52f2d19491069b8b71156b2b8b31",
+    "inputSha256": "44c08522dde65750388e5c37835ba3ac51f03ad3332bfae69a838965451346ae",
+    "outputSha256": "177a699f92e828c7b889ff07ade966ae84c4ba6c7467de2214d172f4ad620beb",
     "visual": true,
     "expect": {
       "textContains": [
@@ -1089,8 +1168,8 @@
     "family": "setCell",
     "description": "Text, numbers and a SUM formula",
     "file": "x-setcell-values-and-formula.xlsx",
-    "inputSha256": "e72af963db952b17217aac5adda49de6d75e8db23cb2f62185d3b2c663706a4d",
-    "outputSha256": "42a4f306341527d65d4ec6e05f5445c9b54e095f5457f99c9112b002a02bc66b",
+    "inputSha256": "b0d1f8a1077129b3c7011e61994b31bbcd1122f2b7c3a8d5e61645d5dd601c6e",
+    "outputSha256": "0d5f362a8f832fa66ce71dc91a20ebd69f676ce0abdf84b6ca2dc604dbcaa0f4",
     "visual": true,
     "expect": {
       "cells": [
@@ -1112,13 +1191,683 @@
     }
   },
   {
+    "id": "x-calculate",
+    "format": "excel",
+    "family": "calculation",
+    "description": "107 allowlisted formulas calculated by the engine, recalculated by Excel",
+    "file": "x-calculate.xlsx",
+    "inputSha256": "f05aec1707b9686ffd2c7199edd1492a9df69ba2ca3837941610e013af61c1dc",
+    "outputSha256": "b811794446424d004927dc358c8ee16c53424a08e74d96d5ef019d219bf17fac",
+    "visual": false,
+    "expect": {
+      "recalculate": true,
+      "calculated": [
+        {
+          "address": "Z1",
+          "kind": "Number",
+          "value": "15",
+          "formula": "SUM(A1:A5)"
+        },
+        {
+          "address": "Z2",
+          "kind": "Number",
+          "value": "3",
+          "formula": "AVERAGE(A1:A5)"
+        },
+        {
+          "address": "Z3",
+          "kind": "Number",
+          "value": "1",
+          "formula": "MIN(A1:A5)"
+        },
+        {
+          "address": "Z4",
+          "kind": "Number",
+          "value": "5",
+          "formula": "MAX(A1:A5)"
+        },
+        {
+          "address": "Z5",
+          "kind": "Number",
+          "value": "6",
+          "formula": "COUNT(A1:A6)"
+        },
+        {
+          "address": "Z6",
+          "kind": "Number",
+          "value": "4",
+          "formula": "COUNTA(B1:B4)"
+        },
+        {
+          "address": "Z7",
+          "kind": "Number",
+          "value": "3",
+          "formula": "COUNTBLANK(A7:A9)"
+        },
+        {
+          "address": "Z8",
+          "kind": "Number",
+          "value": "2.57",
+          "formula": "ROUND(2.567,2)"
+        },
+        {
+          "address": "Z9",
+          "kind": "Number",
+          "value": "2.57",
+          "formula": "ROUNDUP(2.561,2)"
+        },
+        {
+          "address": "Z10",
+          "kind": "Number",
+          "value": "2.56",
+          "formula": "ROUNDDOWN(2.569,2)"
+        },
+        {
+          "address": "Z11",
+          "kind": "Number",
+          "value": "-3",
+          "formula": "INT(-2.5)"
+        },
+        {
+          "address": "Z12",
+          "kind": "Number",
+          "value": "1",
+          "formula": "MOD(10,3)"
+        },
+        {
+          "address": "Z13",
+          "kind": "Number",
+          "value": "4",
+          "formula": "ABS(-4)"
+        },
+        {
+          "address": "Z14",
+          "kind": "Number",
+          "value": "1024",
+          "formula": "POWER(2,10)"
+        },
+        {
+          "address": "Z15",
+          "kind": "Number",
+          "value": "4",
+          "formula": "SQRT(16)"
+        },
+        {
+          "address": "Z16",
+          "kind": "Number",
+          "value": "120",
+          "formula": "PRODUCT(A1:A5)"
+        },
+        {
+          "address": "Z17",
+          "kind": "Number",
+          "value": "26",
+          "formula": "SUMPRODUCT(A1:A3,A3:A5)"
+        },
+        {
+          "address": "Z18",
+          "kind": "Number",
+          "value": "12",
+          "formula": "SUMIF(A1:A5,\u0022\u003E2\u0022)"
+        },
+        {
+          "address": "Z19",
+          "kind": "Number",
+          "value": "200",
+          "formula": "SUMIFS(F1:F3,E1:E3,\u0022y\u0022)"
+        },
+        {
+          "address": "Z20",
+          "kind": "Number",
+          "value": "3",
+          "formula": "COUNTIF(A1:A5,\u0022\u003E=3\u0022)"
+        },
+        {
+          "address": "Z21",
+          "kind": "Number",
+          "value": "3",
+          "formula": "COUNTIFS(A1:A5,\u0022\u003E1\u0022,A1:A5,\u0022\u003C5\u0022)"
+        },
+        {
+          "address": "Z22",
+          "kind": "Number",
+          "value": "5",
+          "formula": "CEILING(4.3,1)"
+        },
+        {
+          "address": "Z23",
+          "kind": "Number",
+          "value": "4",
+          "formula": "FLOOR(4.7,1)"
+        },
+        {
+          "address": "Z24",
+          "kind": "Number",
+          "value": "5",
+          "formula": "_xlfn.CEILING.MATH(4.3)"
+        },
+        {
+          "address": "Z25",
+          "kind": "Number",
+          "value": "4",
+          "formula": "_xlfn.FLOOR.MATH(4.7)"
+        },
+        {
+          "address": "Z26",
+          "kind": "Number",
+          "value": "4",
+          "formula": "TRUNC(4.79)"
+        },
+        {
+          "address": "Z27",
+          "kind": "Number",
+          "value": "-1",
+          "formula": "SIGN(-3)"
+        },
+        {
+          "address": "Z28",
+          "kind": "Number",
+          "value": "1",
+          "formula": "EXP(0)"
+        },
+        {
+          "address": "Z29",
+          "kind": "Number",
+          "value": "0",
+          "formula": "LN(1)"
+        },
+        {
+          "address": "Z30",
+          "kind": "Number",
+          "value": "3",
+          "formula": "LOG10(1000)"
+        },
+        {
+          "address": "Z31",
+          "kind": "Number",
+          "value": "3",
+          "formula": "LOG(8,2)"
+        },
+        {
+          "address": "Z32",
+          "kind": "Number",
+          "value": "3.141592653589793",
+          "formula": "PI()"
+        },
+        {
+          "address": "Z33",
+          "kind": "Number",
+          "value": "6",
+          "formula": "GCD(12,18)"
+        },
+        {
+          "address": "Z34",
+          "kind": "Number",
+          "value": "12",
+          "formula": "LCM(4,6)"
+        },
+        {
+          "address": "Z35",
+          "kind": "Number",
+          "value": "120",
+          "formula": "FACT(5)"
+        },
+        {
+          "address": "Z36",
+          "kind": "Number",
+          "value": "10",
+          "formula": "COMBIN(5,2)"
+        },
+        {
+          "address": "Z37",
+          "kind": "Number",
+          "value": "3",
+          "formula": "QUOTIENT(7,2)"
+        },
+        {
+          "address": "Z38",
+          "kind": "Number",
+          "value": "4",
+          "formula": "EVEN(3)"
+        },
+        {
+          "address": "Z39",
+          "kind": "Number",
+          "value": "3",
+          "formula": "ODD(2)"
+        },
+        {
+          "address": "Z40",
+          "kind": "Number",
+          "value": "9",
+          "formula": "MROUND(10,3)"
+        },
+        {
+          "address": "Z41",
+          "kind": "Number",
+          "value": "15",
+          "formula": "SUBTOTAL(9,A1:A5)"
+        },
+        {
+          "address": "Z42",
+          "kind": "Number",
+          "value": "3",
+          "formula": "MEDIAN(A1:A5)"
+        },
+        {
+          "address": "Z43",
+          "kind": "Number",
+          "value": "4",
+          "formula": "LARGE(A1:A5,2)"
+        },
+        {
+          "address": "Z44",
+          "kind": "Number",
+          "value": "1.5811388300841898",
+          "formula": "_xlfn.STDEV.S(A1:A5)"
+        },
+        {
+          "address": "Z45",
+          "kind": "Number",
+          "value": "2.5",
+          "formula": "_xlfn.VAR.S(A1:A5)"
+        },
+        {
+          "address": "Z46",
+          "kind": "Number",
+          "value": "1.4142135623730951",
+          "formula": "_xlfn.STDEV.P(A1:A5)"
+        },
+        {
+          "address": "Z47",
+          "kind": "Text",
+          "value": "pos",
+          "formula": "IF(A1\u003E0,\u0022pos\u0022,\u0022neg\u0022)"
+        },
+        {
+          "address": "Z48",
+          "kind": "Boolean",
+          "value": "FALSE",
+          "formula": "AND(TRUE,FALSE)"
+        },
+        {
+          "address": "Z49",
+          "kind": "Boolean",
+          "value": "TRUE",
+          "formula": "OR(TRUE,FALSE)"
+        },
+        {
+          "address": "Z50",
+          "kind": "Boolean",
+          "value": "TRUE",
+          "formula": "NOT(FALSE)"
+        },
+        {
+          "address": "Z51",
+          "kind": "Text",
+          "value": "div",
+          "formula": "IFERROR(1/0,\u0022div\u0022)"
+        },
+        {
+          "address": "Z52",
+          "kind": "Boolean",
+          "value": "TRUE",
+          "formula": "ISBLANK(A9)"
+        },
+        {
+          "address": "Z53",
+          "kind": "Boolean",
+          "value": "TRUE",
+          "formula": "ISNUMBER(A1)"
+        },
+        {
+          "address": "Z54",
+          "kind": "Boolean",
+          "value": "TRUE",
+          "formula": "ISERROR(1/0)"
+        },
+        {
+          "address": "Z55",
+          "kind": "Boolean",
+          "value": "TRUE",
+          "formula": "ISNA(NA())"
+        },
+        {
+          "address": "Z56",
+          "kind": "Boolean",
+          "value": "TRUE",
+          "formula": "ISEVEN(4)"
+        },
+        {
+          "address": "Z57",
+          "kind": "Boolean",
+          "value": "FALSE",
+          "formula": "ISODD(4)"
+        },
+        {
+          "address": "Z58",
+          "kind": "Number",
+          "value": "1",
+          "formula": "N(TRUE)"
+        },
+        {
+          "address": "Z59",
+          "kind": "Number",
+          "value": "1",
+          "formula": "TYPE(1)"
+        },
+        {
+          "address": "Z60",
+          "kind": "Text",
+          "value": "ab",
+          "formula": "CONCATENATE(\u0022a\u0022,\u0022b\u0022)"
+        },
+        {
+          "address": "Z61",
+          "kind": "Text",
+          "value": "apple-Banana",
+          "formula": "_xlfn.CONCAT(B1,\u0022-\u0022,B2)"
+        },
+        {
+          "address": "Z62",
+          "kind": "Text",
+          "value": "a,b",
+          "formula": "_xlfn.TEXTJOIN(\u0022,\u0022,TRUE,\u0022a\u0022,\u0022\u0022,\u0022b\u0022)"
+        },
+        {
+          "address": "Z63",
+          "kind": "Text",
+          "value": "he",
+          "formula": "LEFT(\u0022hello\u0022,2)"
+        },
+        {
+          "address": "Z64",
+          "kind": "Text",
+          "value": "llo",
+          "formula": "RIGHT(\u0022hello\u0022,3)"
+        },
+        {
+          "address": "Z65",
+          "kind": "Text",
+          "value": "ell",
+          "formula": "MID(\u0022hello\u0022,2,3)"
+        },
+        {
+          "address": "Z66",
+          "kind": "Number",
+          "value": "5",
+          "formula": "LEN(\u0022hello\u0022)"
+        },
+        {
+          "address": "Z67",
+          "kind": "Text",
+          "value": "ABC",
+          "formula": "UPPER(\u0022abc\u0022)"
+        },
+        {
+          "address": "Z68",
+          "kind": "Text",
+          "value": "abc",
+          "formula": "LOWER(\u0022ABC\u0022)"
+        },
+        {
+          "address": "Z69",
+          "kind": "Text",
+          "value": "Hello World",
+          "formula": "PROPER(\u0022hello world\u0022)"
+        },
+        {
+          "address": "Z70",
+          "kind": "Text",
+          "value": "cherry",
+          "formula": "TRIM(B3)"
+        },
+        {
+          "address": "Z71",
+          "kind": "Text",
+          "value": "a\u002Bb\u002Bc",
+          "formula": "SUBSTITUTE(\u0022a-b-c\u0022,\u0022-\u0022,\u0022\u002B\u0022)"
+        },
+        {
+          "address": "Z72",
+          "kind": "Text",
+          "value": "Jello",
+          "formula": "REPLACE(\u0022hello\u0022,1,1,\u0022J\u0022)"
+        },
+        {
+          "address": "Z73",
+          "kind": "Number",
+          "value": "3",
+          "formula": "FIND(\u0022l\u0022,\u0022hello\u0022)"
+        },
+        {
+          "address": "Z74",
+          "kind": "Number",
+          "value": "3",
+          "formula": "SEARCH(\u0022L\u0022,\u0022hello\u0022)"
+        },
+        {
+          "address": "Z75",
+          "kind": "Number",
+          "value": "42",
+          "formula": "VALUE(\u002242\u0022)"
+        },
+        {
+          "address": "Z76",
+          "kind": "Text",
+          "value": "ababab",
+          "formula": "REPT(\u0022ab\u0022,3)"
+        },
+        {
+          "address": "Z77",
+          "kind": "Boolean",
+          "value": "FALSE",
+          "formula": "EXACT(\u0022a\u0022,\u0022A\u0022)"
+        },
+        {
+          "address": "Z78",
+          "kind": "Text",
+          "value": "A",
+          "formula": "CHAR(65)"
+        },
+        {
+          "address": "Z79",
+          "kind": "Number",
+          "value": "65",
+          "formula": "CODE(\u0022A\u0022)"
+        },
+        {
+          "address": "Z80",
+          "kind": "Text",
+          "value": "x",
+          "formula": "T(\u0022x\u0022)"
+        },
+        {
+          "address": "Z81",
+          "kind": "Number",
+          "value": "200",
+          "formula": "VLOOKUP(\u0022y\u0022,E1:F3,2,FALSE)"
+        },
+        {
+          "address": "Z82",
+          "kind": "Number",
+          "value": "2",
+          "formula": "HLOOKUP(\u0022b\u0022,H6:I7,2,FALSE)"
+        },
+        {
+          "address": "Z83",
+          "kind": "Number",
+          "value": "200",
+          "formula": "INDEX(F1:F3,2)"
+        },
+        {
+          "address": "Z84",
+          "kind": "Number",
+          "value": "3",
+          "formula": "MATCH(\u0022z\u0022,E1:E3,0)"
+        },
+        {
+          "address": "Z85",
+          "kind": "Number",
+          "value": "3",
+          "formula": "ROW(A3)"
+        },
+        {
+          "address": "Z86",
+          "kind": "Number",
+          "value": "3",
+          "formula": "COLUMN(C1)"
+        },
+        {
+          "address": "Z87",
+          "kind": "Number",
+          "value": "5",
+          "formula": "ROWS(A1:A5)"
+        },
+        {
+          "address": "Z88",
+          "kind": "Number",
+          "value": "6",
+          "formula": "COLUMNS(A1:F1)"
+        },
+        {
+          "address": "Z89",
+          "kind": "Number",
+          "value": "46301",
+          "formula": "DATE(2026,10,6)"
+        },
+        {
+          "address": "Z90",
+          "kind": "Number",
+          "value": "2026",
+          "formula": "YEAR(C1)"
+        },
+        {
+          "address": "Z91",
+          "kind": "Number",
+          "value": "10",
+          "formula": "MONTH(C1)"
+        },
+        {
+          "address": "Z92",
+          "kind": "Number",
+          "value": "6",
+          "formula": "DAY(C1)"
+        },
+        {
+          "address": "Z93",
+          "kind": "Number",
+          "value": "3",
+          "formula": "WEEKDAY(C1)"
+        },
+        {
+          "address": "Z94",
+          "kind": "Number",
+          "value": "46081",
+          "formula": "EDATE(C2,1)"
+        },
+        {
+          "address": "Z95",
+          "kind": "Number",
+          "value": "46326",
+          "formula": "EOMONTH(C1,0)"
+        },
+        {
+          "address": "Z96",
+          "kind": "Number",
+          "value": "248",
+          "formula": "_xlfn.DAYS(C1,C2)"
+        },
+        {
+          "address": "Z97",
+          "kind": "Number",
+          "value": "177",
+          "formula": "NETWORKDAYS(C2,C1)"
+        },
+        {
+          "address": "Z98",
+          "kind": "Number",
+          "value": "46059",
+          "formula": "WORKDAY(C2,5)"
+        },
+        {
+          "address": "Z99",
+          "kind": "Number",
+          "value": "0.5",
+          "formula": "TIME(12,0,0)"
+        },
+        {
+          "address": "Z100",
+          "kind": "Number",
+          "value": "18",
+          "formula": "HOUR(0.75)"
+        },
+        {
+          "address": "Z101",
+          "kind": "Number",
+          "value": "30",
+          "formula": "MINUTE(TIME(1,30,0))"
+        },
+        {
+          "address": "Z102",
+          "kind": "Number",
+          "value": "0.5",
+          "formula": "YEARFRAC(DATE(2026,1,1),DATE(2026,7,1))"
+        },
+        {
+          "address": "Z103",
+          "kind": "Number",
+          "value": "-188.7123364401099",
+          "formula": "PMT(0.05/12,60,10000)"
+        },
+        {
+          "address": "Z104",
+          "kind": "Number",
+          "value": "1257.789253554884",
+          "formula": "FV(0.05,10,-100)"
+        },
+        {
+          "address": "Z105",
+          "kind": "Error",
+          "value": "#DIV/0!",
+          "formula": "1/0"
+        },
+        {
+          "address": "Z106",
+          "kind": "Error",
+          "value": "#VALUE!",
+          "formula": "A1\u002B\u0022x\u0022"
+        },
+        {
+          "address": "Z107",
+          "kind": "Error",
+          "value": "#N/A",
+          "formula": "VLOOKUP(\u0022q\u0022,E1:F3,2,FALSE)"
+        }
+      ]
+    }
+  },
+  {
+    "id": "x-setproperty",
+    "format": "excel",
+    "family": "setProperty",
+    "description": "Workbook title property",
+    "file": "x-setproperty.xlsx",
+    "inputSha256": "b0d1f8a1077129b3c7011e61994b31bbcd1122f2b7c3a8d5e61645d5dd601c6e",
+    "outputSha256": "1cf68204bdeb04210690e7178001b5fc25c55dfd55c8bc739990d27c62ba77e2",
+    "visual": false,
+    "expect": {
+      "title": "Q2 sales summary"
+    }
+  },
+  {
     "id": "x-comment",
     "format": "excel",
     "family": "comment",
     "description": "Cell comment",
     "file": "x-comment.xlsx",
-    "inputSha256": "e72af963db952b17217aac5adda49de6d75e8db23cb2f62185d3b2c663706a4d",
-    "outputSha256": "311bbfcf9ac9a9c0def8f930df1a5cbb8420e2dd8bc9a47e530c59166bc32022",
+    "inputSha256": "b0d1f8a1077129b3c7011e61994b31bbcd1122f2b7c3a8d5e61645d5dd601c6e",
+    "outputSha256": "20fe4059e241761298b337e749678cf2277bb31234f97fec150e7459c33bbf8d",
     "visual": false,
     "expect": {
       "commentsAtLeast": 1
@@ -1130,8 +1879,8 @@
     "family": "appendTableRows",
     "description": "Append rows to an Excel table",
     "file": "x-appendtablerows.xlsx",
-    "inputSha256": "07c089392f3e1c59c4adbb242182696fc502bbc73c3e0ce3c0a64fd4cb5f22a7",
-    "outputSha256": "d37069b09137a4ff1107a48632ea8bb4a4abccd499064d151a85f78242f8f5b1",
+    "inputSha256": "321c67372af14f4a72e13bf38075133d02466d35efa60b604f17b79ecf3980c4",
+    "outputSha256": "4a880cfa39e3869f80582345fe418535b316e53fa52a9ef5538b02c2faff3e54",
     "visual": true,
     "expect": {
       "tables": 1,

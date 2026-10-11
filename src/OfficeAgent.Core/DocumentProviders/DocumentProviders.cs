@@ -138,6 +138,27 @@ public interface IConnectionEditingDefaults
     ChangeMode DefaultChangeMode { get; }
 }
 
+/// <summary>
+/// Optional <see cref="IDocumentProvider"/> capability: whether workbooks edited through one
+/// connection have their formulas calculated. Separate from <see cref="IDocumentProvider"/>
+/// and <see cref="IConnectionEditingDefaults"/> so existing custom providers keep compiling
+/// and simply leave calculation off.
+/// </summary>
+public interface IConnectionCalculationDefaults
+{
+    /// <summary>
+    /// Gets whether a workbook previewed or committed through the connection is calculated;
+    /// see <see cref="ApplyOptions.CalculateFormulas"/>.
+    /// </summary>
+    bool CalculateFormulas { get; }
+
+    /// <summary>
+    /// Gets whether a new formula error refuses the plan; see
+    /// <see cref="ApplyOptions.RejectFormulaErrors"/>.
+    /// </summary>
+    bool RejectFormulaErrors { get; }
+}
+
 /// <summary>Resolves configured providers without exposing credentials to agent tool calls.</summary>
 public sealed class DocumentProviderRegistry
 {

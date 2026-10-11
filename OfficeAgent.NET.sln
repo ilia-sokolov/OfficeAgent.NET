@@ -67,6 +67,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "PageCounter", "samples\Page
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "TableRowInsertion", "samples\TableRowInsertion\TableRowInsertion.csproj", "{F246D7D3-36E8-4CBE-8797-67712A162808}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "OfficeAgent.Excel.Calculation", "src\OfficeAgent.Excel.Calculation\OfficeAgent.Excel.Calculation.csproj", "{2FE8F42A-8DBD-4F6D-AAE1-F9E84C7DDFF2}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -413,6 +415,18 @@ Global
 		{F246D7D3-36E8-4CBE-8797-67712A162808}.Release|x64.Build.0 = Release|Any CPU
 		{F246D7D3-36E8-4CBE-8797-67712A162808}.Release|x86.ActiveCfg = Release|Any CPU
 		{F246D7D3-36E8-4CBE-8797-67712A162808}.Release|x86.Build.0 = Release|Any CPU
+		{2FE8F42A-8DBD-4F6D-AAE1-F9E84C7DDFF2}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{2FE8F42A-8DBD-4F6D-AAE1-F9E84C7DDFF2}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{2FE8F42A-8DBD-4F6D-AAE1-F9E84C7DDFF2}.Debug|x64.ActiveCfg = Debug|Any CPU
+		{2FE8F42A-8DBD-4F6D-AAE1-F9E84C7DDFF2}.Debug|x64.Build.0 = Debug|Any CPU
+		{2FE8F42A-8DBD-4F6D-AAE1-F9E84C7DDFF2}.Debug|x86.ActiveCfg = Debug|Any CPU
+		{2FE8F42A-8DBD-4F6D-AAE1-F9E84C7DDFF2}.Debug|x86.Build.0 = Debug|Any CPU
+		{2FE8F42A-8DBD-4F6D-AAE1-F9E84C7DDFF2}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{2FE8F42A-8DBD-4F6D-AAE1-F9E84C7DDFF2}.Release|Any CPU.Build.0 = Release|Any CPU
+		{2FE8F42A-8DBD-4F6D-AAE1-F9E84C7DDFF2}.Release|x64.ActiveCfg = Release|Any CPU
+		{2FE8F42A-8DBD-4F6D-AAE1-F9E84C7DDFF2}.Release|x64.Build.0 = Release|Any CPU
+		{2FE8F42A-8DBD-4F6D-AAE1-F9E84C7DDFF2}.Release|x86.ActiveCfg = Release|Any CPU
+		{2FE8F42A-8DBD-4F6D-AAE1-F9E84C7DDFF2}.Release|x86.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
@@ -446,5 +460,6 @@ Global
 		{79FDA0BD-3C1C-4E3E-8319-702E0E57005A} = {E9165D53-4CEC-4488-99C8-63147AFEBC54}
 		{94C12543-077D-4136-A5D6-981DD35204C8} = {E9165D53-4CEC-4488-99C8-63147AFEBC54}
 		{F246D7D3-36E8-4CBE-8797-67712A162808} = {E9165D53-4CEC-4488-99C8-63147AFEBC54}
+		{2FE8F42A-8DBD-4F6D-AAE1-F9E84C7DDFF2} = {B933F76B-4652-45B8-9BFA-1E619DC42D9C}
 	EndGlobalSection
 EndGlobal

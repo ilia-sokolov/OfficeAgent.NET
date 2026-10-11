@@ -163,6 +163,14 @@ jobs:
             artifacts/OfficeAgent.Excel.${{ steps.release.outputs.version }}.snupkg
           sbom-path: artifacts/OfficeAgent.Excel.${{ steps.release.outputs.version }}.cdx.json
 
+      - name: Attest OfficeAgent.Excel.Calculation SBOM
+        uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2
+        with:
+          subject-path: |
+            artifacts/OfficeAgent.Excel.Calculation.${{ steps.release.outputs.version }}.nupkg
+            artifacts/OfficeAgent.Excel.Calculation.${{ steps.release.outputs.version }}.snupkg
+          sbom-path: artifacts/OfficeAgent.Excel.Calculation.${{ steps.release.outputs.version }}.cdx.json
+
       - name: Attest OfficeAgent.Mcp SBOM
         uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2
         with:

@@ -33,6 +33,7 @@
     <ProjectReference Include="..\..\src\OfficeAgent.Mcp\OfficeAgent.Mcp.csproj" />
     <ProjectReference Include="..\..\src\OfficeAgent.PowerPoint\OfficeAgent.PowerPoint.csproj" />
     <ProjectReference Include="..\..\src\OfficeAgent.Excel\OfficeAgent.Excel.csproj" />
+    <ProjectReference Include="..\..\src\OfficeAgent.Excel.Calculation\OfficeAgent.Excel.Calculation.csproj" />
     <ProjectReference Include="..\..\src\OfficeAgent.Rendering\OfficeAgent.Rendering.csproj" />
     <ProjectReference Include="..\..\samples\HostedGateway\HostedGateway.csproj" />
     <ProjectReference Include="..\..\tools\OfficeAgent.ApiDocs\OfficeAgent.ApiDocs.csproj" />

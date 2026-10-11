@@ -69,6 +69,62 @@ internal static class WordNumbering
         FormatHandler.PlaceParagraphProperty(properties, numbering);
     }
 
+    /// <summary>Whether the document defines a numbering instance with this <c>w:numId</c>.</summary>
+    public static bool InstanceExists(MainDocumentPart main, int numberId) =>
+        Instance(main, numberId) is not null;
+
+    /// <summary>
+    /// Attaches a paragraph to a list the document already defines, at a level. When that
+    /// level of the list names a paragraph style (<c>w:lvl/w:pStyle</c>), the paragraph takes
+    /// it too, as Word does when a list is applied from its gallery.
+    /// </summary>
+    public static void Attach(MainDocumentPart main, Paragraph paragraph, int numberId, int level)
+    {
+        var properties = paragraph.ParagraphProperties ??= new ParagraphProperties();
+        properties.GetFirstChild<NumberingProperties>()?.Remove();
+
+        if (LevelStyle(main, numberId, level) is { Length: > 0 } styleId)
+        {
+            properties.GetFirstChild<ParagraphStyleId>()?.Remove();
+            FormatHandler.PlaceParagraphProperty(properties, new ParagraphStyleId { Val = styleId });
+        }
+
+        FormatHandler.PlaceParagraphProperty(properties, new NumberingProperties(
+            new NumberingLevelReference { Val = level },
+            new NumberingId { Val = numberId }));
+    }
+
+    private static NumberingInstance? Instance(MainDocumentPart main, int numberId) =>
+        main.NumberingDefinitionsPart?.Numbering?.Elements<NumberingInstance>()
+            .FirstOrDefault(instance => instance.NumberID?.Value == numberId);
+
+    /// <summary>The abstract definition an instance points at, or null.</summary>
+    internal static AbstractNum? AbstractFor(MainDocumentPart main, NumberingInstance instance)
+    {
+        var abstractId = instance.AbstractNumId?.Val?.Value;
+        return abstractId is null
+            ? null
+            : main.NumberingDefinitionsPart?.Numbering?.Elements<AbstractNum>()
+                .FirstOrDefault(definition => definition.AbstractNumberId?.Value == abstractId);
+    }
+
+    /// <summary>
+    /// The level definition in effect for an instance: a <c>w:lvlOverride</c> that carries its
+    /// own <c>w:lvl</c> wins over the abstract definition's.
+    /// </summary>
+    internal static Level? LevelFor(MainDocumentPart main, NumberingInstance instance, int level)
+    {
+        var overridden = instance.Elements<LevelOverride>()
+            .FirstOrDefault(o => o.LevelIndex?.Value == level)?.GetFirstChild<Level>();
+        return overridden ?? AbstractFor(main, instance)?.Elements<Level>()
+            .FirstOrDefault(l => l.LevelIndex?.Value == level);
+    }
+
+    private static string? LevelStyle(MainDocumentPart main, int numberId, int level) =>
+        Instance(main, numberId) is { } instance
+            ? LevelFor(main, instance, level)?.ParagraphStyleIdInLevel?.Val?.Value
+            : null;
+
     /// <summary>
     /// The <c>w:numId</c> for a look, creating the abstract definition and the instance on
     /// first use and reusing them afterwards.

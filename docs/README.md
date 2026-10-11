@@ -66,6 +66,7 @@ corpora and evaluations remain evidence for that release, not instructions for a
 | `OfficeAgent.Word` | Word `.docx` inspection, creation, and editing | `netstandard2.0`, `net8.0` |
 | `OfficeAgent.PowerPoint` | PowerPoint `.pptx` inspection, creation, and editing | `netstandard2.0`, `net8.0` |
 | `OfficeAgent.Excel` | Excel `.xlsx` inspection, creation, and editing | `netstandard2.0`, `net8.0` |
+| `OfficeAgent.Excel.Calculation` | Optional formula calculation for a verified set of Excel functions | `netstandard2.0`, `net8.0` |
 | `OfficeAgent.AgentFramework` | `Microsoft.Extensions.AI` / Microsoft Agent Framework tools | `netstandard2.0`, `net8.0` |
 | `OfficeAgent.SharePoint` | Microsoft Graph document provider | `netstandard2.0`, `net8.0` |
 | `OfficeAgent.Mcp` | Standalone MCP server and .NET global tool | `net8.0` |
@@ -73,7 +74,7 @@ corpora and evaluations remain evidence for that release, not instructions for a
 
 Applications add `OfficeAgent.Core` plus at least one format module. Add a
 provider or agent adapter only when that hosting model needs it. The standalone
-MCP tool already includes all three format modules and both built-in providers.
+MCP tool already includes all three format modules, formula calculation, and both built-in providers.
 
 ## Core workflow
 

@@ -203,13 +203,13 @@ jobs:
       - name: Pack every package at the candidate version
         run: dotnet pack OfficeAgent.NET.sln --configuration Release -p:Version="$CANDIDATE_VERSION" --output ./candidate
 
-      - name: Require exactly the nine candidate packages
+      - name: Require exactly the ten candidate packages
         run: |
-          for id in Abstractions AgentFramework Core Excel Mcp PowerPoint Rendering SharePoint Word; do
+          for id in Abstractions AgentFramework Core Excel Excel.Calculation Mcp PowerPoint Rendering SharePoint Word; do
             test -f "candidate/OfficeAgent.$id.$CANDIDATE_VERSION.nupkg" || { echo "missing OfficeAgent.$id.$CANDIDATE_VERSION.nupkg" >&2; exit 1; }
           done
           count=$(ls candidate/*.nupkg | wc -l)
-          test "$count" -eq 9 || { echo "expected 9 packages, found $count" >&2; exit 1; }
+          test "$count" -eq 10 || { echo "expected 10 packages, found $count" >&2; exit 1; }
 
       - name: Run installed packages on the .NET 10 runtime
         if: matrix.runtime == '10'
