@@ -10,8 +10,8 @@ reproducing an issue when possible.
 
 | Version | Security support |
 | --- | --- |
-| 1.1.x | Supported |
-| 1.0.x and earlier | Unsupported |
+| 1.2.x | Supported |
+| 1.1.x and earlier | Unsupported |
 
 Every earlier 1.x minor and every 0.x version is unsupported. This table is updated with each
 minor release, and a test checks that it names the version the repository builds.
