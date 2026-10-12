@@ -11,7 +11,7 @@ Use OfficeAgent.NET only when its typed OOXML operations and preservation bounda
 
 - For dependency selection, application wiring, package installation, providers, MCP, or agent tools, continue with this skill.
 - For an agent actively reviewing or editing an existing Word document, use `word-document-review` after the host integration is ready.
-- For unsupported formats, native Office layout, Excel calculation, or low-level OOXML operations outside the documented plan operations, choose another component or use the Open XML SDK directly. When both are needed in one application, follow the tested copy, edit, reinspect workflow in the versioned [SDK interoperability guide](https://github.com/ilia-sokolov/OfficeAgent.NET/blob/v1.1.0/docs/sdk-interoperability.md) and recipe 4 of [recipes](references/recipes.md).
+- For unsupported formats, native Office layout, a full Excel calculation engine, or low-level OOXML operations outside the documented plan operations, choose another component or use the Open XML SDK directly. The optional `OfficeAgent.Excel.Calculation` package fills in cached formula values for an allowlisted set of functions and reports every formula it does not calculate; it does not replace Excel's own calculation. When both are needed in one application, follow the tested copy, edit, reinspect workflow in the versioned [SDK interoperability guide](https://github.com/ilia-sokolov/OfficeAgent.NET/blob/v1.1.0/docs/sdk-interoperability.md) and recipe 4 of [recipes](references/recipes.md).
 
 Read the versioned [selection guide](https://github.com/ilia-sokolov/OfficeAgent.NET/blob/v1.1.0/docs/choose-officeagent.md) before choosing packages. Keep all OfficeAgent packages on the same version.
 

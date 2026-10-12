@@ -11,8 +11,8 @@ corresponding GitHub release.
   self-contained executable for Windows, macOS and Linux on x64 and Arm64
   (`officeagent-mcp-<runtime>.zip` or `.tar.gz`), and as an MCPB bundle for Claude Desktop on
   Windows and macOS (`officeagent-mcp-<runtime>.mcpb`). The bundle asks for a documents folder and
-  edits `.docx`, `.pptx` and `.xlsx` files in it; creating new documents stays off until the user
-  turns it on. Every archive and bundle is in `SHA256SUMS`, carries a build provenance
+  edits `.docx`, `.pptx` and `.xlsx` files in it. Creating new documents and calculating
+  workbook formulas each stay off until the user turns them on. Every archive and bundle is in `SHA256SUMS`, carries a build provenance
   attestation, and has a CycloneDX SBOM read from the executable itself, which names the .NET
   runtime it contains. The executables carry no publisher signature; see
   [standalone downloads](docs/mcp-server.md#standalone-downloads) for Gatekeeper and SmartScreen,

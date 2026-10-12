@@ -1033,6 +1033,8 @@ def verify_bundle(bundle: Path, version: str, workdir: Path, env: dict[str, str]
     settings = manifest.get("user_config", {})
     if settings.get("allow_creation", {}).get("default") is not False:
         raise SmokeError("a bundle must not allow creating documents unless the user turns it on")
+    if settings.get("calculate_formulas", {}).get("default") is not False:
+        raise SmokeError("a bundle must not calculate formulas unless the user turns it on")
     advertised = {tool["name"] for tool in manifest.get("tools", [])}
 
     documents = workdir / "bundle-documents"
@@ -1040,9 +1042,11 @@ def verify_bundle(bundle: Path, version: str, workdir: Path, env: dict[str, str]
     (documents / "quote.docx").write_bytes(build_template_docx())
     cwd = workdir / "bundle-cwd"
     cwd.mkdir()
+    # The second run turns both options on, so each one is shown to reach the server.
     for allow_creation in ("false", "true"):
         command, bundle_env = resolve_bundle_command(
-            manifest, root, {"documents_folder": str(documents), "allow_creation": allow_creation}
+            manifest, root, {"documents_folder": str(documents), "allow_creation": allow_creation,
+                             "calculate_formulas": allow_creation}
         )
         with StdioServer(command, cwd, {**env, **bundle_env}) as server:
             reported = initialize(server).get("serverInfo", {}).get("version", "")
@@ -1059,6 +1063,10 @@ def verify_bundle(bundle: Path, version: str, workdir: Path, env: dict[str, str]
                 if not advertised < tools or "create_document" not in tools:
                     raise SmokeError(f"allowing creation did not add create_document: {sorted(tools)}")
                 verify_bundle_creation(server, documents)
+            calculates = {connection.get("connectionId"): connection.get("calculatesFormulas")
+                          for connection in server.call_tool("describe_capabilities", {}).get("connections", [])}
+            if calculates.get("documents") is not (allow_creation == "true"):
+                raise SmokeError(f"calculate_formulas={allow_creation} reached the server as {calculates}")
     print(f"bundle=passed tools={len(advertised)}")
 
 

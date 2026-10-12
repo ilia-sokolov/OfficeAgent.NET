@@ -99,6 +99,21 @@ restore, from a fresh package cache, resolved `OfficeAgent.Abstractions`, `Offic
 `OfficeAgent.Word` at exactly `$CANDIDATE`. Record the run URL and its commit as the candidate's
 installed-package evidence.
 
+Rehearse the publish workflow itself from the same commit. A dry run builds, tests, packs,
+packages the standalone server and bundles, generates the SBOMs and release manifest for the tag
+the commit will become, and builds the container image. It attaches no release assets, creates
+no attestations, pushes no packages and pushes no image:
+
+```bash
+gh workflow run publish.yml --ref "release/$VERSION" -f version="$VERSION" -f dry_run=true
+```
+
+The run still waits for the `nuget` environment's approval. It fails unless `$VERSION` matches
+`Directory.Build.props`. The documentation check on `main` requires that version to match the
+newest dated changelog heading, so make the release commit described below on a
+`release/$VERSION` branch, rehearse from there, and fast-forward `main` to it once the rehearsal
+passes. The run's summary lists the artifacts it built.
+
 Update the supported-versions table in [`SECURITY.md`](../SECURITY.md#supported-versions) so its
 supported row names this minor version; `tests/test_support_policy.py` fails until it does.
 
@@ -339,6 +354,14 @@ has another version installed.
 
 Publish only after NuGet exposes the matching `OfficeAgent.Mcp` version, because the registry
 validates that the package exists.
+
+The Claude Desktop bundles and the container image can be listed beside the NuGet tool once the
+release exists. A bundle entry (`"registryType": "mcpb"`) names its release download URL and
+must carry that file's `fileSha256`, taken from the release's `SHA256SUMS`; clients check it
+before installing. A container entry (`"registryType": "oci"`) names
+`ghcr.io/ilia-sokolov/officeagent-mcp:<version>`, which the registry accepts because the image
+carries the `io.modelcontextprotocol.server.name` label. Add those entries, run
+`python scripts/validate_server_manifest.py`, and commit them before publishing.
 
 ```bash
 mcp-publisher login github

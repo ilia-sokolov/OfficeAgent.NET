@@ -92,6 +92,12 @@ class BundleManifestTests(unittest.TestCase):
         self.assertEqual(settings["documents_folder"]["type"], "directory")
         self.assertTrue(settings["documents_folder"]["required"])
 
+    def test_calculation_stays_off_until_the_user_turns_it_on(self) -> None:
+        manifest = self.manifest("osx-arm64")
+        self.assertIs(manifest["user_config"]["calculate_formulas"]["default"], False)
+        self.assertEqual(manifest["server"]["mcp_config"]["env"]["OfficeAgent__FileSystemConnections__0__CalculateFormulas"],
+                         "${user_config.calculate_formulas}")
+
     def test_environment_names_bind_to_server_options(self) -> None:
         options = (ROOT / "src" / "OfficeAgent.Mcp" / "OfficeAgentMcpOptions.cs").read_text(encoding="utf-8")
         env = self.manifest("win-x64")["server"]["mcp_config"]["env"]

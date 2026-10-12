@@ -67,6 +67,7 @@ with one filesystem connection, `documents`:
 | --- | --- | --- |
 | Documents folder | Your Documents folder | The connection root. `.docx`, `.pptx`, and `.xlsx` files inside it are reachable; nothing outside it is. |
 | Allow creating new documents | Off | Sets `AllowCreation`, which adds `create_document` and the template tools. |
+| Calculate formulas in workbooks | Off | Sets the connection's `CalculateFormulas`, so formulas written to a workbook are saved with their results. See [formula calculation](excel.md#formula-calculation). |
 
 Word edits are tracked changes unless the agent asks for `Direct`. PowerPoint has no tracked
 changes, so the server refuses a tracked text edit to a deck and tells the agent to send it again

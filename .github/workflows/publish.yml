@@ -8,6 +8,13 @@ on:
       version:
         description: 'Existing release tag version without v, for example 0.7.0'
         required: true
+      dry_run:
+        description: >-
+          Rehearse the release from the selected branch without publishing: build, test, pack,
+          package and verify everything, but attach no assets, create no attestations, push no
+          packages and push no image. The version must be the one in Directory.Build.props.
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -25,7 +32,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0   # Source Link / deterministic builds
-          ref: ${{ github.event.release.tag_name || format('v{0}', inputs.version) }}
+          ref: ${{ inputs.dry_run && github.sha || github.event.release.tag_name || format('v{0}', inputs.version) }}
 
       - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
         with:
@@ -37,8 +44,22 @@ jobs:
         id: release
         env:
           RELEASE_TAG: ${{ github.event.release.tag_name || format('v{0}', inputs.version) }}
+          DRY_RUN: ${{ inputs.dry_run }}
         run: |
           EXPECTED_REF="refs/tags/$RELEASE_TAG"
+          if [ "$DRY_RUN" = "true" ]; then
+            # No tag exists yet. The evidence is built for the tag this commit would become;
+            # validate_release.py runs on the real release, once the changelog is dated.
+            COMMITTED="v$(sed -n 's:.*<Version>\([^<]*\)</Version>.*:\1:p' Directory.Build.props | head -n 1)"
+            if [ "$COMMITTED" != "$RELEASE_TAG" ]; then
+              echo "Dry run for $RELEASE_TAG, but Directory.Build.props is at $COMMITTED" >&2
+              exit 1
+            fi
+            echo "version=${RELEASE_TAG#v}" >> "$GITHUB_OUTPUT"
+            echo "source_ref=$EXPECTED_REF" >> "$GITHUB_OUTPUT"
+            echo "::notice::Dry run of $RELEASE_TAG from $GITHUB_REF: nothing will be published"
+            exit 0
+          fi
           if [ "$GITHUB_REF" != "$EXPECTED_REF" ]; then
             echo "Release workflow must run from $EXPECTED_REF, not $GITHUB_REF" >&2
             exit 1
@@ -48,6 +69,7 @@ jobs:
             exit 1
           fi
           echo "version=${RELEASE_TAG#v}" >> "$GITHUB_OUTPUT"
+          echo "source_ref=$GITHUB_REF" >> "$GITHUB_OUTPUT"
           python scripts/validate_release.py "$RELEASE_TAG"
 
       - name: Validate MCP Registry manifest
@@ -108,13 +130,13 @@ jobs:
           python scripts/release_evidence.py create \
             --version "${{ steps.release.outputs.version }}" \
             --source-sha "$GITHUB_SHA" \
-            --source-ref "$GITHUB_REF" \
+            --source-ref "${{ steps.release.outputs.source_ref }}" \
             --artifacts artifacts
           python scripts/release_evidence.py verify \
             --repository "$GITHUB_REPOSITORY" \
             --workflow ".github/workflows/publish.yml" \
             --source-sha "$GITHUB_SHA" \
-            --source-ref "$GITHUB_REF" \
+            --source-ref "${{ steps.release.outputs.source_ref }}" \
             --artifacts artifacts
 
       - name: Test sample, skill, and release evidence failure boundaries
@@ -127,11 +149,13 @@ jobs:
         run: python scripts/verify_integration_kit.py --artifacts artifacts --version "${{ steps.release.outputs.version }}"
 
       - name: Attest release build provenance
+        if: ${{ !inputs.dry_run }}
         uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2
         with:
           subject-path: artifacts/*
 
       - name: Attest OfficeAgent.Abstractions SBOM
+        if: ${{ !inputs.dry_run }}
         uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2
         with:
           subject-path: |
@@ -140,6 +164,7 @@ jobs:
           sbom-path: artifacts/OfficeAgent.Abstractions.${{ steps.release.outputs.version }}.cdx.json
 
       - name: Attest OfficeAgent.AgentFramework SBOM
+        if: ${{ !inputs.dry_run }}
         uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2
         with:
           subject-path: |
@@ -148,6 +173,7 @@ jobs:
           sbom-path: artifacts/OfficeAgent.AgentFramework.${{ steps.release.outputs.version }}.cdx.json
 
       - name: Attest OfficeAgent.Core SBOM
+        if: ${{ !inputs.dry_run }}
         uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2
         with:
           subject-path: |
@@ -156,6 +182,7 @@ jobs:
           sbom-path: artifacts/OfficeAgent.Core.${{ steps.release.outputs.version }}.cdx.json
 
       - name: Attest OfficeAgent.Excel SBOM
+        if: ${{ !inputs.dry_run }}
         uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2
         with:
           subject-path: |
@@ -164,6 +191,7 @@ jobs:
           sbom-path: artifacts/OfficeAgent.Excel.${{ steps.release.outputs.version }}.cdx.json
 
       - name: Attest OfficeAgent.Excel.Calculation SBOM
+        if: ${{ !inputs.dry_run }}
         uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2
         with:
           subject-path: |
@@ -172,6 +200,7 @@ jobs:
           sbom-path: artifacts/OfficeAgent.Excel.Calculation.${{ steps.release.outputs.version }}.cdx.json
 
       - name: Attest OfficeAgent.Mcp SBOM
+        if: ${{ !inputs.dry_run }}
         uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2
         with:
           subject-path: |
@@ -180,6 +209,7 @@ jobs:
           sbom-path: artifacts/OfficeAgent.Mcp.${{ steps.release.outputs.version }}.cdx.json
 
       - name: Attest OfficeAgent.PowerPoint SBOM
+        if: ${{ !inputs.dry_run }}
         uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2
         with:
           subject-path: |
@@ -188,6 +218,7 @@ jobs:
           sbom-path: artifacts/OfficeAgent.PowerPoint.${{ steps.release.outputs.version }}.cdx.json
 
       - name: Attest OfficeAgent.Rendering SBOM
+        if: ${{ !inputs.dry_run }}
         uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2
         with:
           subject-path: |
@@ -196,6 +227,7 @@ jobs:
           sbom-path: artifacts/OfficeAgent.Rendering.${{ steps.release.outputs.version }}.cdx.json
 
       - name: Attest OfficeAgent.SharePoint SBOM
+        if: ${{ !inputs.dry_run }}
         uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2
         with:
           subject-path: |
@@ -204,6 +236,7 @@ jobs:
           sbom-path: artifacts/OfficeAgent.SharePoint.${{ steps.release.outputs.version }}.cdx.json
 
       - name: Attest OfficeAgent.Word SBOM
+        if: ${{ !inputs.dry_run }}
         uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2
         with:
           subject-path: |
@@ -212,24 +245,28 @@ jobs:
           sbom-path: artifacts/OfficeAgent.Word.${{ steps.release.outputs.version }}.cdx.json
 
       - name: Attest Word review skill SBOM
+        if: ${{ !inputs.dry_run }}
         uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2
         with:
           subject-path: artifacts/word-document-review.zip
           sbom-path: artifacts/word-document-review.${{ steps.release.outputs.version }}.cdx.json
 
       - name: Attest OfficeAgent integration skill SBOM
+        if: ${{ !inputs.dry_run }}
         uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2
         with:
           subject-path: artifacts/officeagent-integration.zip
           sbom-path: artifacts/officeagent-integration.${{ steps.release.outputs.version }}.cdx.json
 
       - name: Attest standalone QuickEdit sample SBOM
+        if: ${{ !inputs.dry_run }}
         uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2
         with:
           subject-path: artifacts/quickedit-sample.zip
           sbom-path: artifacts/quickedit-sample.${{ steps.release.outputs.version }}.cdx.json
 
       - name: Attest standalone Windows x64 server SBOM
+        if: ${{ !inputs.dry_run }}
         uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2
         with:
           subject-path: |
@@ -238,6 +275,7 @@ jobs:
           sbom-path: artifacts/officeagent-mcp-win-x64.${{ steps.release.outputs.version }}.cdx.json
 
       - name: Attest standalone Windows Arm64 server SBOM
+        if: ${{ !inputs.dry_run }}
         uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2
         with:
           subject-path: |
@@ -246,6 +284,7 @@ jobs:
           sbom-path: artifacts/officeagent-mcp-win-arm64.${{ steps.release.outputs.version }}.cdx.json
 
       - name: Attest standalone macOS x64 server SBOM
+        if: ${{ !inputs.dry_run }}
         uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2
         with:
           subject-path: |
@@ -254,6 +293,7 @@ jobs:
           sbom-path: artifacts/officeagent-mcp-osx-x64.${{ steps.release.outputs.version }}.cdx.json
 
       - name: Attest standalone macOS Arm64 server SBOM
+        if: ${{ !inputs.dry_run }}
         uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2
         with:
           subject-path: |
@@ -262,24 +302,28 @@ jobs:
           sbom-path: artifacts/officeagent-mcp-osx-arm64.${{ steps.release.outputs.version }}.cdx.json
 
       - name: Attest standalone Linux x64 server SBOM
+        if: ${{ !inputs.dry_run }}
         uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2
         with:
           subject-path: artifacts/officeagent-mcp-linux-x64.tar.gz
           sbom-path: artifacts/officeagent-mcp-linux-x64.${{ steps.release.outputs.version }}.cdx.json
 
       - name: Attest standalone Linux Arm64 server SBOM
+        if: ${{ !inputs.dry_run }}
         uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2
         with:
           subject-path: artifacts/officeagent-mcp-linux-arm64.tar.gz
           sbom-path: artifacts/officeagent-mcp-linux-arm64.${{ steps.release.outputs.version }}.cdx.json
 
       - name: Attach original artifacts and verification materials to release
+        if: ${{ !inputs.dry_run }}
         env:
           GH_TOKEN: ${{ github.token }}
           RELEASE_TAG: ${{ github.event.release.tag_name || format('v{0}', inputs.version) }}
         run: gh release upload "$RELEASE_TAG" artifacts/* --clobber
 
       - name: Verify complete release attachment set
+        if: ${{ !inputs.dry_run }}
         env:
           GH_TOKEN: ${{ github.token }}
           RELEASE_TAG: ${{ github.event.release.tag_name || format('v{0}', inputs.version) }}
@@ -295,11 +339,13 @@ jobs:
 
       - name: Login to NuGet.org (Trusted Publishing → short-lived key)
         id: nuget-login
+        if: ${{ !inputs.dry_run }}
         uses: NuGet/login@8d196754b4036150537f80ac539e15c2f1028841 # v1
         with:
           user: ilia-sokolov
 
       - name: Push
+        if: ${{ !inputs.dry_run }}
         env:
           NUGET_API_KEY: ${{ steps.nuget-login.outputs.NUGET_API_KEY }}
         run: |
@@ -321,6 +367,7 @@ jobs:
           done
 
       - name: Log in to GHCR
+        if: ${{ !inputs.dry_run }}
         uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
         with:
           registry: ghcr.io
@@ -335,7 +382,8 @@ jobs:
         uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
         with:
           context: .
-          push: true
+          # A dry run still builds the image, so a broken Dockerfile shows up before the tag.
+          push: ${{ !inputs.dry_run }}
           provenance: mode=max
           sbom: true
           tags: |
@@ -343,8 +391,21 @@ jobs:
             ghcr.io/${{ github.repository_owner }}/officeagent-mcp:latest
 
       - name: Attest container build provenance
+        if: ${{ !inputs.dry_run }}
         uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2
         with:
           subject-name: ghcr.io/${{ github.repository_owner }}/officeagent-mcp
           subject-digest: ${{ steps.container.outputs.digest }}
           push-to-registry: true
+
+      - name: Dry run summary
+        if: ${{ inputs.dry_run }}
+        run: |
+          {
+            echo "### Dry run of v${{ steps.release.outputs.version }}: nothing was published"
+            echo
+            echo "Built, tested, packed, packaged and verified from \`$GITHUB_REF\` at \`$GITHUB_SHA\`."
+            echo "Skipped: attestations, release assets, NuGet push, container push."
+            echo
+            ls -1 artifacts | sed 's/^/- /'
+          } >> "$GITHUB_STEP_SUMMARY"

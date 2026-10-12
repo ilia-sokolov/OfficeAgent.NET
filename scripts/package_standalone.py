@@ -182,6 +182,7 @@ Give it a folder of documents with environment variables:
     OfficeAgent__FileSystemConnections__0__AllowedExtensions__1=.pptx
     OfficeAgent__FileSystemConnections__0__AllowedExtensions__2=.xlsx
     OfficeAgent__AllowCreation=true      (optional: lets the agent create new files)
+    OfficeAgent__FileSystemConnections__0__CalculateFormulas=true      (optional: calculates workbook formulas)
 
 With nothing configured, the server keeps documents in memory for the life of the process.
 
@@ -200,6 +201,7 @@ def bundle_manifest(standalone: dict, rid: str, version: str) -> dict:
         "OfficeAgent__FileSystemConnections__0__ConnectionId": "documents",
         "OfficeAgent__FileSystemConnections__0__RootPath": "${user_config.documents_folder}",
         "OfficeAgent__AllowCreation": "${user_config.allow_creation}",
+        "OfficeAgent__FileSystemConnections__0__CalculateFormulas": "${user_config.calculate_formulas}",
     }
     env.update(
         (f"OfficeAgent__FileSystemConnections__0__AllowedExtensions__{index}", extension)
@@ -216,7 +218,8 @@ def bundle_manifest(standalone: dict, rid: str, version: str) -> dict:
             "previews each change before saving it, and records Word edits as tracked changes by "
             "default, so you review them in Word before accepting them. It reads and writes only "
             "inside the folder you choose; turn on *Allow creating new documents* to let Claude "
-            "create files there too.\n\n"
+            "create files there too, and *Calculate formulas in workbooks* to have Excel formulas it writes "
+            "saved with their results.\n\n"
             f"This is a self-contained build of the open-source [OfficeAgent.NET]({REPOSITORY}) "
             "MCP server, so nothing else needs to be installed."
         ),
@@ -252,6 +255,13 @@ def bundle_manifest(standalone: dict, rid: str, version: str) -> dict:
                 "type": "boolean",
                 "title": "Allow creating new documents",
                 "description": "Let Claude create new documents in the folder, not only edit existing ones.",
+                "required": False,
+                "default": False,
+            },
+            "calculate_formulas": {
+                "type": "boolean",
+                "title": "Calculate formulas in workbooks",
+                "description": "Save the results of formulas Claude writes in Excel workbooks, for the functions OfficeAgent can calculate. Excel recalculates everything when it opens the file either way.",
                 "required": False,
                 "default": False,
             },

@@ -14,6 +14,9 @@ FROM mcr.microsoft.com/dotnet/aspnet:10.0@sha256:2d584d8147faddb0d678c5748d47953
 WORKDIR /app
 COPY --from=build /app ./
 
+# The MCP Registry lists this image only when the label names the server in server.json.
+LABEL io.modelcontextprotocol.server.name="io.github.ilia-sokolov/officeagent"
+
 ENV OfficeAgent__Transport=http \
     ASPNETCORE_URLS=http://0.0.0.0:8080
 EXPOSE 8080
