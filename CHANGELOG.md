@@ -65,7 +65,10 @@ corresponding GitHub release.
 - **The MCP server also targets `net10.0`.** `OfficeAgent.Mcp` now targets `net8.0` and
   `net10.0`, so the tool runs its `net10.0` build where .NET 10 is installed and keeps running on
   .NET 8 elsewhere. The container image and the standalone downloads run the `net10.0` build on
-  the .NET 10 runtime.
+  the .NET 10 runtime. This release ships on .NET 10.0.13, the October 2026 security release,
+  which fixes remote code execution and privilege escalation issues in ASP.NET Core and the
+  runtime; the container image pins the patched base images and the standalone downloads bundle
+  that runtime.
 
 - **Built with the .NET 10 SDK.** .NET 8 support ends on 2026-11-10, so `global.json` now pins
   the .NET 10 SDK, for CI and for the container image's build stage. The packages still target
