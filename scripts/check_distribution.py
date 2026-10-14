@@ -17,10 +17,17 @@ PACKAGE_ID = "officeagent.mcp"
 USER_AGENT = "OfficeAgent.NET-distribution-check"
 
 
-def get_json(url: str, timeout: int) -> object:
+def get_json(url: str, timeout: int, attempts: int = 3) -> object:
+    """Fetch JSON, retrying a timed-out read: the MCP Registry can take about a minute to answer."""
     request = Request(url, headers={"Accept": "application/json", "User-Agent": USER_AGENT})
-    with urlopen(request, timeout=timeout) as response:
-        return json.load(response)
+    for attempt in range(1, attempts + 1):
+        try:
+            with urlopen(request, timeout=timeout) as response:
+                return json.load(response)
+        except (TimeoutError, OSError) as error:
+            if attempt == attempts or "timed out" not in str(error).lower():
+                raise
+    raise RuntimeError("unreachable")
 
 
 def github_release(timeout: int) -> dict[str, object]:
@@ -36,7 +43,7 @@ def main() -> int:
         "--version",
         help="expected major.minor.patch version; defaults to the latest GitHub release",
     )
-    parser.add_argument("--timeout", type=int, default=30, help="HTTP timeout in seconds")
+    parser.add_argument("--timeout", type=int, default=120, help="HTTP timeout in seconds per attempt (a timed-out read is retried twice)")
     args = parser.parse_args()
 
     errors: list[str] = []
