@@ -350,6 +350,16 @@ officeagent-mcp --stdio
 Use a disposable machine, container, or user profile when the maintainer workstation already
 has another version installed.
 
+### Glama builds from the branch head
+
+Glama's auto-release builds a new listing version for every GitHub release, but it builds
+whatever commit `main` points at when it notices the release, which can be hours later, and it
+refuses to pin a build to a commit it has not synced itself. Hold back other pushes to `main`
+until Glama shows the new version, so its build is the release commit. Its build steps live in
+the server's admin page on glama.ai, not in this repository: they install the .NET SDK that
+`global.json` names (10.0 since 1.2.0) and publish `src/OfficeAgent.Mcp` with `-f net10.0`.
+Update them there when the SDK or the server's target frameworks change.
+
 ### Publish the Python wheels
 
 Once the GitHub release has its assets, publish the `officeagent-mcp` wheels to PyPI from
