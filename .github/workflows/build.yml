@@ -45,7 +45,7 @@ jobs:
 
       - name: Test skill packaging, agent evaluation, and release inventory
         if: matrix.os == 'ubuntu-latest'
-        run: python -m unittest tests/test_agent_evaluation.py tests/test_package_samples.py tests/test_package_skills.py tests/test_package_standalone.py tests/test_release_evidence.py tests/test_smoke_packaged_artifacts.py tests/test_benchmark_report.py tests/test_byte_exact_fixtures.py tests/test_support_policy.py tests/test_verify_candidate_consumer.py -v
+        run: python -m unittest tests/test_agent_evaluation.py tests/test_package_samples.py tests/test_package_skills.py tests/test_package_standalone.py tests/test_package_wheels.py tests/test_release_evidence.py tests/test_smoke_packaged_artifacts.py tests/test_benchmark_report.py tests/test_byte_exact_fixtures.py tests/test_support_policy.py tests/test_verify_candidate_consumer.py -v
 
       - name: Validate MCP Registry manifest
         if: matrix.os == 'ubuntu-latest'
@@ -285,11 +285,31 @@ jobs:
         with:
           dotnet-version: 10.0.x
 
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: '3.x'
+
       - name: Package the standalone server for this machine
         run: python scripts/package_standalone.py --output ./standalone --runtime ${{ matrix.runtime }}
 
       - name: Smoke the standalone server and bundle with no .NET on the path
         run: python scripts/smoke_packaged_artifacts.py --standalone --artifacts ./standalone
+
+      # The same archive repackaged as this machine's officeagent-mcp wheel, installed with pip
+      # and run through its launcher, so a launcher change is caught before a release.
+      - name: Package and smoke the Python wheel for this machine
+        shell: bash
+        run: |
+          python - <<'EOF'
+          import hashlib, pathlib
+          folder = pathlib.Path("standalone")
+          archives = sorted(p for p in folder.iterdir() if p.name.endswith((".zip", ".tar.gz")))
+          lines = [f"{hashlib.sha256(p.read_bytes()).hexdigest()}  {p.name}" for p in archives]
+          (folder / "SHA256SUMS").write_text("\n".join(lines) + "\n", encoding="utf-8")
+          EOF
+          version=$(python -c "import re, pathlib; print(re.search(r'<Version>([^<]+)</Version>', pathlib.Path('Directory.Build.props').read_text()).group(1))")
+          python scripts/package_wheels.py --artifacts standalone --version "$version" --output wheels --runtime ${{ matrix.runtime }}
+          python scripts/smoke_python_wheel.py --wheels wheels --version "$version"
 
       - name: Upload the standalone build for manual checks
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1

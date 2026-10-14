@@ -19,6 +19,14 @@ corresponding GitHub release.
   SharePoint connection a host configures, and stores only the id index in a connection's
   folder. The README has a summary, and the Claude Desktop bundles link the policy from their
   manifests.
+- **Install from PyPI with no .NET.** `uvx officeagent-mcp --stdio` runs the MCP server, and
+  `pip install officeagent-mcp` installs it as a command. Each platform wheel carries the
+  release's self-contained executable, taken from the attested release archive rather than
+  rebuilt, for Windows, macOS 15 or later and glibc Linux on x64 and Arm64. On Windows the
+  launcher ends the server when it ends, even if a client kills it without closing the
+  connection. Installed this way, the executable carries no download mark, so SmartScreen and Gatekeeper
+  do not prompt; Windows 11's Smart App Control can still block it where it is turned on.
+  See [the MCP server guide](docs/mcp-server.md#install-and-run).
 - **Formula calculation in the session connection.** `EphemeralCalculateFormulas` and
   `EphemeralRejectFormulaErrors` turn calculation on for the MCP server's in-memory session
   connection, including the one it starts with when nothing is configured, as the folder and

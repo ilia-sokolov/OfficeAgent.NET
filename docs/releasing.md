@@ -350,6 +350,22 @@ officeagent-mcp --stdio
 Use a disposable machine, container, or user profile when the maintainer workstation already
 has another version installed.
 
+### Publish the Python wheels
+
+Once the GitHub release has its assets, publish the `officeagent-mcp` wheels to PyPI from
+those archives:
+
+```bash
+gh workflow run publish-python.yml --ref main -f version="$VERSION" -f publish=true
+```
+
+The workflow checks every standalone archive against `SHA256SUMS` and its build attestation,
+builds one wheel per platform, installs and runs the server through each wheel on Linux,
+Windows and macOS, and only then uploads through PyPI trusted publishing. It waits for the
+`pypi` environment's approval. Run it with `publish=false` first to build and test without
+uploading. PyPI never accepts the same version twice, so a published wheel cannot be replaced;
+fix a broken one in the next release.
+
 ## 3. Publish the MCP Registry entry
 
 Publish only after NuGet exposes the matching `OfficeAgent.Mcp` version, because the registry

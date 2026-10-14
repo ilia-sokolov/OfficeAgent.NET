@@ -38,7 +38,27 @@ Or from source:
 dotnet run --project src/OfficeAgent.Mcp -- --stdio
 ```
 
-No .NET installed? Use a [standalone download](#standalone-downloads) instead of the tool.
+No .NET installed? Use a [standalone download](#standalone-downloads), or install from PyPI:
+
+```bash
+uvx officeagent-mcp --stdio
+```
+
+The `officeagent-mcp` package carries the same self-contained server as the standalone
+downloads, so it needs no .NET either. `uvx` runs it without a separate install step;
+`pip install officeagent-mcp` puts an `officeagent-mcp` command on the path instead. Wheels
+exist for Windows (x64, Arm64), macOS 15 or later (Intel, Apple silicon), and Linux with glibc
+2.27 or later (x64, Arm64); Alpine and other musl-based systems are not covered. Because pip
+and uv install the executable themselves, it carries no download mark, so Windows SmartScreen
+and macOS Gatekeeper do not question it the way they do a browser download. Windows 11's Smart
+App Control, on machines where it is turned on, can still block it, because the executable has
+no publisher signature yet. In an MCP client's configuration, use
+`"command": "uvx", "args": ["officeagent-mcp", "--stdio"]` with the same environment
+variables as above.
+
+Each wheel is built from a release's standalone archive after the archive is checked against
+the release's `SHA256SUMS` and its build attestation, so it installs exactly the attested
+executable. PyPI holds its own publish attestation for every wheel.
 
 During initialization the server advertises its tools and the OfficeAgent prompt guidance as MCP server instructions, so a connected client passes the `(connectionId, documentId)` contract and the safety loop to its model.
 
