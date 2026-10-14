@@ -97,8 +97,8 @@ with `"mode": "Direct"`.
 
 `plugins/officeagent` is a Claude plugin that bundles the server with the two agent skills. It
 starts the server with `uvx officeagent-mcp==<version> --stdio`, so [uv](https://docs.astral.sh/uv/)
-must be installed, and roots the server's one folder connection at the project folder
-(`${CLAUDE_PROJECT_DIR}`). Creating documents and calculating formulas are plugin options that
+must be installed, and roots the server's one folder connection at `.`, the project folder Claude Code starts
+it in. Creating documents and calculating formulas are plugin options that
 stay off until the user turns them on. Try it with:
 
 ```bash

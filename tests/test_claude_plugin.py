@@ -86,7 +86,10 @@ class PluginDirectoryRuleTests(unittest.TestCase):
 
     def test_the_server_reaches_only_the_project_folder(self) -> None:
         env = server()["env"]
-        self.assertEqual("${CLAUDE_PROJECT_DIR}", env["OfficeAgent__FileSystemConnections__0__RootPath"])
+        # Claude Code starts the server in the project folder. The directory's validator refuses
+        # a path built from any variable but ${CLAUDE_PLUGIN_ROOT}, so the root is ".".
+        self.assertEqual(".", env["OfficeAgent__FileSystemConnections__0__RootPath"])
+        self.assertNotIn("CLAUDE_PROJECT_DIR", json.dumps(server()))
         self.assertEqual({".docx", ".pptx", ".xlsx"},
                          {value for name, value in env.items() if "AllowedExtensions" in name})
 
