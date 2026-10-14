@@ -130,7 +130,8 @@ internal static class WireContract
         builder.AppendLine();
         builder.AppendLine("Every tool the Agent Framework surface can publish with every opt-in enabled, then the tools only");
         builder.AppendLine("the MCP server adds. Generation fails if the MCP server publishes a shared tool with a different");
-        builder.AppendLine("schema. Parameter schemas are shown without descriptions.");
+        builder.AppendLine("schema. Parameter schemas are shown without descriptions. Each tool's MCP annotations follow its");
+        builder.AppendLine("heading: the title clients display and the read-only, destructive, idempotent and open-world hints.");
 
         var client = new OfficeAgentClient(new WordModule(), new PowerPointModule(), new ExcelModule());
         var tools = new OfficeAgentTools(client);
@@ -156,8 +157,14 @@ internal static class WireContract
             FileSystemConnections = { new FileSystemConnectionOptions { ConnectionId = "workspace", RootPath = Path.GetTempPath() } }
         });
         var mcpOnly = new SortedDictionary<string, JsonNode?>(StringComparer.Ordinal);
+        var annotations = new Dictionary<string, string>(StringComparer.Ordinal);
         foreach (var tool in mcp)
         {
+            var hints = tool.ProtocolTool.Annotations
+                ?? throw new InvalidOperationException($"The MCP server publishes {tool.ProtocolTool.Name} without annotations.");
+            annotations[tool.ProtocolTool.Name] =
+                $"title \"{hints.Title}\"; readOnly {Hint(hints.ReadOnlyHint)}, destructive {Hint(hints.DestructiveHint)}, " +
+                $"idempotent {Hint(hints.IdempotentHint)}, openWorld {Hint(hints.OpenWorldHint)}";
             var schema = Canonical(JsonNode.Parse(tool.ProtocolTool.InputSchema.GetRawText()));
             if (!schemas.TryGetValue(tool.ProtocolTool.Name, out var shared))
                 mcpOnly[tool.ProtocolTool.Name] = schema;
@@ -166,16 +173,23 @@ internal static class WireContract
         }
 
         foreach (var (name, schema) in schemas.OrderBy(pair => pair.Key, StringComparer.Ordinal))
-            AppendSchema(builder, $"`{name}`", schema);
+            AppendSchema(builder, $"`{name}`", schema, annotations.TryGetValue(name, out var shared) ? shared : null);
         foreach (var (name, schema) in mcpOnly)
-            AppendSchema(builder, $"`{name}` (MCP server only)", schema);
+            AppendSchema(builder, $"`{name}` (MCP server only)", schema, annotations[name]);
     }
 
-    private static void AppendSchema(StringBuilder builder, string heading, JsonNode? schema)
+    private static string Hint(bool? value) => value switch { true => "true", false => "false", null => "unset" };
+
+    private static void AppendSchema(StringBuilder builder, string heading, JsonNode? schema, string? annotations)
     {
         builder.AppendLine();
         builder.AppendLine($"### {heading}");
         builder.AppendLine();
+        if (annotations is not null)
+        {
+            builder.AppendLine($"MCP annotations: {annotations}.");
+            builder.AppendLine();
+        }
         builder.AppendLine("```json");
         builder.AppendLine(schema?.ToJsonString(new JsonSerializerOptions { WriteIndented = true })
             .Replace("\r\n", "\n") ?? "null");

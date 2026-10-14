@@ -306,6 +306,12 @@ Word assembly adds the read-only `preview_document_merge` and, when `AllowCreati
 enabled, `merge_documents`. They authorize every input connection; commit also authorizes
 the destination. See [Word document assembly](document-assembly.md) for the JSON contracts.
 
+Every tool carries MCP annotations: a title, and explicit read-only, destructive, idempotent
+and open-world hints. The read-only tools change nothing outside the call. `apply_plan` and
+`edit_document` are destructive because they save over a document in place; the other writing
+tools only add documents or registrations. The [wire contract](wire-contract.md#tools) lists
+every tool's annotations.
+
 The MCP toolset is the projection of [the agent-integration surface](agent-integration.md): `describe_capabilities`, `inspect_document`, `find_in_document`, `preview_plan`, `apply_plan`, `compare_documents`, and `preview_document_merge`; `AllowRegistration` independently adds `register_document` / `remove_document` plus the composites `open_document` / `edit_document`, while `AllowCreation` adds `create_document`, the template trio `discover_template` / `preview_template_batch` / `populate_template_batch`, and `merge_documents` when at least one connection allows a creatable extension - `.docx`, `.pptx`, or `.xlsx` (SharePoint also requires its creation destination). Either opt-in adds `list_connections`, which returns `{connectionId, provider, canCreateDocuments}` entries. That boolean means the connection is configured for at least one creatable format; it is not a format list, a permission check, or a readiness probe. The higher-level workflow contracts and their limits are documented in [template population and comparison](document-workflows.md) and [Word document assembly](document-assembly.md).
 
 Discovery and batch preflight write nothing and demand read access only, but they arrive

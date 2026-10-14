@@ -537,6 +537,53 @@ public class McpServerTests
         Assert.False(connections["plain"]);
     }
 
+    /// <summary>
+    /// Every published tool tells clients what it does to their files: a title, and explicit
+    /// read-only, destructive, idempotent and open-world hints. Anthropic's directory requires
+    /// them, and a tool without a destructive hint counts as destructive.
+    /// </summary>
+    [Fact]
+    public void Every_tool_carries_a_title_and_explicit_hints()
+    {
+        using var root = new TemporaryRoot();
+        var services = new ServiceCollection();
+        var options = new OfficeAgentMcpOptions
+        {
+            AllowRegistration = true,
+            AllowCreation = true,
+            AllowInlineContent = true,
+            EphemeralConnectionId = "session",
+            FileSystemConnections = { new FileSystemConnectionOptions { ConnectionId = "documents", RootPath = root.Path } }
+        };
+        OfficeAgentMcpServer.AddOfficeAgentMcp(services, options);
+        using var provider = services.BuildServiceProvider();
+
+        var tools = OfficeAgentMcpServer.CreateTools(provider.GetRequiredService<OfficeAgent.AgentFramework.OfficeAgentTools>(), options)
+            .Select(tool => tool.ProtocolTool)
+            .ToDictionary(tool => tool.Name);
+
+        foreach (var tool in tools.Values)
+        {
+            var annotations = tool.Annotations;
+            Assert.True(annotations is not null, $"{tool.Name} has no annotations");
+            Assert.False(string.IsNullOrWhiteSpace(annotations!.Title), $"{tool.Name} has no title");
+            Assert.NotNull(annotations.ReadOnlyHint);
+            Assert.NotNull(annotations.DestructiveHint);
+            Assert.NotNull(annotations.IdempotentHint);
+            Assert.False(annotations.OpenWorldHint ?? true, $"{tool.Name} is not marked closed-world");
+            Assert.False(annotations.ReadOnlyHint == true && annotations.DestructiveHint == true, $"{tool.Name} is read-only and destructive");
+        }
+
+        // Every annotated name is a tool the server really publishes, so the table cannot drift.
+        Assert.Equal(ToolAnnotations.ByName.Keys.OrderBy(name => name), tools.Keys.OrderBy(name => name));
+
+        // The two tools that save over a document in place are the only destructive ones.
+        Assert.Equal(new[] { "apply_plan", "edit_document" },
+            tools.Values.Where(tool => tool.Annotations!.DestructiveHint == true).Select(tool => tool.Name).OrderBy(name => name));
+        Assert.True(tools["inspect_document"].Annotations!.ReadOnlyHint);
+        Assert.False(tools["remove_document"].Annotations!.ReadOnlyHint);
+    }
+
     private static OfficeAgentMcpOptions OptionsFor(TemporaryRoot root) => new()
     {
         FileSystemConnections =

@@ -452,6 +452,15 @@ deployment assistance are available from dotaction:
 That service is separate from the project: it is governed by its own agreement and does not change
 the library's license, compatibility promise or [community support policy](SUPPORT.md).
 
+## Privacy Policy
+
+OfficeAgent.NET runs on your machine or your own server and collects nothing: no telemetry, no
+analytics, no calls home. It reads and writes only the documents in the folders, SharePoint
+libraries, or session connections it is given, and contacts no third party except Microsoft
+Graph for a SharePoint connection a host configures. Tool results go to the AI assistant using
+it, under that assistant's own policy. The full policy, including what is stored and for how
+long, is in [PRIVACY.md](PRIVACY.md).
+
 ## License
 
 MIT. See [LICENSE](LICENSE).

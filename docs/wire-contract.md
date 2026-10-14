@@ -626,9 +626,12 @@ paraId: String
 
 Every tool the Agent Framework surface can publish with every opt-in enabled, then the tools only
 the MCP server adds. Generation fails if the MCP server publishes a shared tool with a different
-schema. Parameter schemas are shown without descriptions.
+schema. Parameter schemas are shown without descriptions. Each tool's MCP annotations follow its
+heading: the title clients display and the read-only, destructive, idempotent and open-world hints.
 
 ### `apply_plan`
+
+MCP annotations: title "Apply an edit plan"; readOnly false, destructive true, idempotent false, openWorld false.
 
 ```json
 {
@@ -665,6 +668,8 @@ schema. Parameter schemas are shown without descriptions.
 
 ### `compare_documents`
 
+MCP annotations: title "Compare two documents"; readOnly true, destructive false, idempotent true, openWorld false.
+
 ```json
 {
   "additionalProperties": false,
@@ -699,6 +704,8 @@ schema. Parameter schemas are shown without descriptions.
 
 ### `create_document`
 
+MCP annotations: title "Create a document"; readOnly false, destructive false, idempotent false, openWorld false.
+
 ```json
 {
   "additionalProperties": false,
@@ -725,6 +732,8 @@ schema. Parameter schemas are shown without descriptions.
 
 ### `create_document_content`
 
+MCP annotations: title "Create document content"; readOnly true, destructive false, idempotent true, openWorld false.
+
 ```json
 {
   "additionalProperties": false,
@@ -747,6 +756,8 @@ schema. Parameter schemas are shown without descriptions.
 
 ### `describe_capabilities`
 
+MCP annotations: title "Describe capabilities"; readOnly true, destructive false, idempotent true, openWorld false.
+
 ```json
 {
   "additionalProperties": false,
@@ -757,6 +768,8 @@ schema. Parameter schemas are shown without descriptions.
 ```
 
 ### `discover_template`
+
+MCP annotations: title "Discover a template's slots"; readOnly true, destructive false, idempotent true, openWorld false.
 
 ```json
 {
@@ -778,6 +791,8 @@ schema. Parameter schemas are shown without descriptions.
 ```
 
 ### `edit_document`
+
+MCP annotations: title "Edit a document"; readOnly false, destructive true, idempotent false, openWorld false.
 
 ```json
 {
@@ -814,6 +829,8 @@ schema. Parameter schemas are shown without descriptions.
 
 ### `edit_document_content`
 
+MCP annotations: title "Edit document content"; readOnly true, destructive false, idempotent true, openWorld false.
+
 ```json
 {
   "additionalProperties": false,
@@ -840,6 +857,8 @@ schema. Parameter schemas are shown without descriptions.
 
 ### `export_document_content`
 
+MCP annotations: title "Export a session document"; readOnly true, destructive false, idempotent true, openWorld false.
+
 ```json
 {
   "additionalProperties": false,
@@ -860,6 +879,8 @@ schema. Parameter schemas are shown without descriptions.
 ```
 
 ### `find_in_document`
+
+MCP annotations: title "Find in a document"; readOnly true, destructive false, idempotent true, openWorld false.
 
 ```json
 {
@@ -906,6 +927,8 @@ schema. Parameter schemas are shown without descriptions.
 
 ### `import_document_content`
 
+MCP annotations: title "Import document content"; readOnly false, destructive false, idempotent false, openWorld false.
+
 ```json
 {
   "additionalProperties": false,
@@ -930,6 +953,8 @@ schema. Parameter schemas are shown without descriptions.
 ```
 
 ### `inspect_document`
+
+MCP annotations: title "Inspect a document"; readOnly true, destructive false, idempotent true, openWorld false.
 
 ```json
 {
@@ -982,6 +1007,8 @@ schema. Parameter schemas are shown without descriptions.
 
 ### `inspect_document_content`
 
+MCP annotations: title "Inspect document content"; readOnly true, destructive false, idempotent true, openWorld false.
+
 ```json
 {
   "additionalProperties": false,
@@ -1029,6 +1056,8 @@ schema. Parameter schemas are shown without descriptions.
 
 ### `merge_documents`
 
+MCP annotations: title "Merge documents"; readOnly false, destructive false, idempotent false, openWorld false.
+
 ```json
 {
   "additionalProperties": false,
@@ -1053,6 +1082,8 @@ schema. Parameter schemas are shown without descriptions.
 ```
 
 ### `open_document`
+
+MCP annotations: title "Open a document"; readOnly false, destructive false, idempotent false, openWorld false.
 
 ```json
 {
@@ -1105,6 +1136,8 @@ schema. Parameter schemas are shown without descriptions.
 
 ### `populate_template_batch`
 
+MCP annotations: title "Populate a template batch"; readOnly false, destructive false, idempotent false, openWorld false.
+
 ```json
 {
   "additionalProperties": false,
@@ -1135,6 +1168,8 @@ schema. Parameter schemas are shown without descriptions.
 
 ### `preview_document_merge`
 
+MCP annotations: title "Preview a document merge"; readOnly true, destructive false, idempotent true, openWorld false.
+
 ```json
 {
   "additionalProperties": false,
@@ -1151,6 +1186,8 @@ schema. Parameter schemas are shown without descriptions.
 ```
 
 ### `preview_plan`
+
+MCP annotations: title "Preview an edit plan"; readOnly true, destructive false, idempotent true, openWorld false.
 
 ```json
 {
@@ -1177,6 +1214,8 @@ schema. Parameter schemas are shown without descriptions.
 
 ### `preview_template_batch`
 
+MCP annotations: title "Preview a template batch"; readOnly true, destructive false, idempotent true, openWorld false.
+
 ```json
 {
   "additionalProperties": false,
@@ -1202,6 +1241,8 @@ schema. Parameter schemas are shown without descriptions.
 
 ### `register_document`
 
+MCP annotations: title "Register a document"; readOnly false, destructive false, idempotent false, openWorld false.
+
 ```json
 {
   "additionalProperties": false,
@@ -1223,6 +1264,8 @@ schema. Parameter schemas are shown without descriptions.
 
 ### `remove_document`
 
+MCP annotations: title "Remove a document registration"; readOnly false, destructive false, idempotent true, openWorld false.
+
 ```json
 {
   "additionalProperties": false,
@@ -1243,6 +1286,8 @@ schema. Parameter schemas are shown without descriptions.
 ```
 
 ### `list_connections` (MCP server only)
+
+MCP annotations: title "List connections"; readOnly true, destructive false, idempotent true, openWorld false.
 
 ```json
 {

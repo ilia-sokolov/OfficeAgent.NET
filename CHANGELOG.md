@@ -3,6 +3,23 @@
 Notable changes per release. The body of each version section is also the text used for the
 corresponding GitHub release.
 
+## 1.2.1 — Unreleased
+
+### Added
+
+- **Every MCP tool says what it does to your files.** Each tool now carries MCP annotations: a
+  title clients display, and explicit read-only, destructive, idempotent and open-world hints.
+  Clients use them to tell tools that only read from tools that write, and some approve
+  read-only tools without asking. `apply_plan` and `edit_document` are the only destructive
+  tools, because they save over a document in place; the tools that create documents refuse to
+  overwrite one, and `remove_document` never deletes a file. No tool is open-world. The
+  annotations are recorded in the [wire contract](docs/wire-contract.md#tools).
+- **A privacy policy.** [PRIVACY.md](PRIVACY.md) states what OfficeAgent does with documents
+  and data: it collects nothing, contacts no third party except Microsoft Graph for a
+  SharePoint connection a host configures, and stores only the id index in a connection's
+  folder. The README has a summary, and the Claude Desktop bundles link the policy from their
+  manifests.
+
 ## 1.2.0 — 2026-10-14
 
 ### Added

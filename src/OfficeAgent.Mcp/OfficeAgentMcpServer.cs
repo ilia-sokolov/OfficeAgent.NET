@@ -195,7 +195,7 @@ public static class OfficeAgentMcpServer
                 AllowConnectionAddressing = hasConnections,
                 StrictToolSchemas = options.StrictToolSchemas
             })
-            .Select(function => McpServerTool.Create(function))
+            .Select(function => McpServerTool.Create(function, ToolAnnotations.For(function.Name)))
             .ToList();
 
         // A tool is the reliable discovery channel for either staging capability; unlike
@@ -305,7 +305,7 @@ public static class OfficeAgentMcpServer
                     $"for {addressedTools}; never ask the user for it."
             });
 
-        return McpServerTool.Create(function);
+        return McpServerTool.Create(function, ToolAnnotations.For(function.Name));
     }
 
     internal static async Task<string> ConnectionsPayloadAsync(

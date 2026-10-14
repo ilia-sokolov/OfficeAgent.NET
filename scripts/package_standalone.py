@@ -228,6 +228,7 @@ def bundle_manifest(standalone: dict, rid: str, version: str) -> dict:
         "homepage": REPOSITORY,
         "documentation": f"{REPOSITORY}/blob/main/docs/mcp-server.md",
         "support": f"{REPOSITORY}/issues",
+        "privacy_policies": [f"{REPOSITORY}/blob/v{version}/PRIVACY.md"],
         "icon": "icon.png",
         "license": standalone["license"],
         "keywords": ["word", "docx", "powerpoint", "pptx", "excel", "xlsx", "office", "tracked changes"],

@@ -92,6 +92,13 @@ class BundleManifestTests(unittest.TestCase):
         self.assertEqual(settings["documents_folder"]["type"], "directory")
         self.assertTrue(settings["documents_folder"]["required"])
 
+    def test_the_bundle_links_the_privacy_policy_of_its_own_release(self) -> None:
+        manifest = self.manifest("win-x64")
+        self.assertEqual(manifest["privacy_policies"],
+                         ["https://github.com/ilia-sokolov/OfficeAgent.NET/blob/v1.2.0/PRIVACY.md"])
+        self.assertTrue((ROOT / "PRIVACY.md").is_file())
+        self.assertIn("## Privacy Policy", (ROOT / "README.md").read_text(encoding="utf-8"))
+
     def test_calculation_stays_off_until_the_user_turns_it_on(self) -> None:
         manifest = self.manifest("osx-arm64")
         self.assertIs(manifest["user_config"]["calculate_formulas"]["default"], False)
