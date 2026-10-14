@@ -89,6 +89,21 @@ public sealed class OfficeAgentMcpOptions
     public long EphemeralMaximumTotalBytes { get; set; } = 100L * 1024 * 1024;
 
     /// <summary>
+    /// Gets or sets whether workbooks previewed or committed in the session connection have
+    /// their formulas calculated, as <see cref="FileSystemConnectionOptions.CalculateFormulas"/>
+    /// does for a folder. It applies to the zero-configuration session connection too. Defaults
+    /// to <see langword="false"/>.
+    /// </summary>
+    public bool EphemeralCalculateFormulas { get; set; }
+
+    /// <summary>
+    /// Gets or sets whether a plan whose calculation produces a new formula error or a circular
+    /// reference is refused in the session connection with <c>formula-error</c>. Applies only
+    /// with <see cref="EphemeralCalculateFormulas"/>. Defaults to <see langword="false"/>.
+    /// </summary>
+    public bool EphemeralRejectFormulaErrors { get; set; }
+
+    /// <summary>
     /// Gets or sets whether every tool parameter is listed as required, including the
     /// parameters that have a default. Defaults to <see langword="true"/>, which OpenAI and
     /// Azure OpenAI strict function calling require.

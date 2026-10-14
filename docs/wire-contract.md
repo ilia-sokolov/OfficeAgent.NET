@@ -4940,8 +4940,10 @@ their defaults as constructed; `[]` marks a list whose elements take the keys be
 OfficeAgent:AllowCreation: Boolean = false
 OfficeAgent:AllowInlineContent: Boolean = false
 OfficeAgent:AllowRegistration: Boolean = true
+OfficeAgent:EphemeralCalculateFormulas: Boolean = false
 OfficeAgent:EphemeralConnectionId: String = ""
 OfficeAgent:EphemeralMaximumTotalBytes: Int64 = 104857600
+OfficeAgent:EphemeralRejectFormulaErrors: Boolean = false
 OfficeAgent:FileSystemConnections[]:AllowedExtensions: IList<String> = [".docx"]
 OfficeAgent:FileSystemConnections[]:CalculateFormulas: Boolean = false
 OfficeAgent:FileSystemConnections[]:ConnectionId: String = ""

@@ -483,6 +483,44 @@ public class McpServerTests
     }
 
     [Fact]
+    public async Task The_session_connection_calculates_when_asked_and_not_otherwise()
+    {
+        static async Task<(JsonElement Applied, bool Calculates)> Run(bool calculate)
+        {
+            // Nothing else configured: the server falls back to its "session" connection.
+            var options = new OfficeAgentMcpOptions { EphemeralCalculateFormulas = calculate, EphemeralRejectFormulaErrors = calculate };
+            var services = new ServiceCollection();
+            OfficeAgentMcpServer.AddOfficeAgentMcp(services, options);
+            using var provider = services.BuildServiceProvider();
+            var tools = provider.GetRequiredService<OfficeAgent.AgentFramework.OfficeAgentTools>();
+
+            var blank = Convert.ToBase64String(new OfficeAgent.Excel.ExcelModule().CreateBlank());
+            using var imported = JsonDocument.Parse(await tools.ImportDocumentContent("session", "book.xlsx", blank));
+            var id = imported.RootElement.GetProperty("documentId").GetString()!;
+            const string plan = "{\"operations\":[" +
+                "{\"op\":\"setCell\",\"target\":{\"sheetId\":1,\"address\":\"A1\"},\"value\":\"21\"}," +
+                "{\"op\":\"setCell\",\"target\":{\"sheetId\":1,\"address\":\"A2\"},\"formula\":\"A1*2\"}]}";
+            using var applied = JsonDocument.Parse(await tools.ApplyPlan("session", id, plan));
+
+            using var capabilities = JsonDocument.Parse(await tools.DescribeCapabilities());
+            var session = capabilities.RootElement.GetProperty("connections").EnumerateArray()
+                .Single(c => c.GetProperty("connectionId").GetString() == "session");
+            return (applied.RootElement.Clone(), session.GetProperty("calculatesFormulas").GetBoolean());
+        }
+
+        var (calculated, calculates) = await Run(calculate: true);
+        Assert.True(calculated.GetProperty("committed").GetBoolean(), calculated.ToString());
+        Assert.True(calculates);
+        Assert.Equal("42", calculated.GetProperty("calculation").GetProperty("cells").EnumerateArray()
+            .Single(c => c.GetProperty("address").GetString() == "A2").GetProperty("value").GetString());
+
+        var (plain, plainCalculates) = await Run(calculate: false);
+        Assert.True(plain.GetProperty("committed").GetBoolean(), plain.ToString());
+        Assert.False(plainCalculates);
+        Assert.Equal(JsonValueKind.Null, plain.GetProperty("calculation").ValueKind);
+    }
+
+    [Fact]
     public async Task A_connection_that_calculates_writes_values_and_reports_them()
     {
         using var root = new TemporaryRoot();

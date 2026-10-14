@@ -143,6 +143,8 @@ public static class OfficeAgentMcpServer
             {
                 o.MaximumTotalBytes = options.EphemeralMaximumTotalBytes;
                 o.AllowedExtensions = CreatableExtensions.Value.ToList();
+                o.CalculateFormulas = options.EphemeralCalculateFormulas;
+                o.RejectFormulaErrors = options.EphemeralRejectFormulaErrors;
             });
         }
 

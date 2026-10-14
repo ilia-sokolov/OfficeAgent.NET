@@ -19,6 +19,10 @@ corresponding GitHub release.
   SharePoint connection a host configures, and stores only the id index in a connection's
   folder. The README has a summary, and the Claude Desktop bundles link the policy from their
   manifests.
+- **Formula calculation in the session connection.** `EphemeralCalculateFormulas` and
+  `EphemeralRejectFormulaErrors` turn calculation on for the MCP server's in-memory session
+  connection, including the one it starts with when nothing is configured, as the folder and
+  SharePoint connection settings already do. Both default to off.
 
 ## 1.2.0 — 2026-10-14
 
