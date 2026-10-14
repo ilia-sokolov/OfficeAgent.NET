@@ -1,0 +1,7 @@
+interface:
+  display_name: "OfficeAgent Integration"
+  short_description: "Build verified OfficeAgent.NET integrations"
+  default_prompt: "Use $officeagent-integration to choose and implement the right OfficeAgent.NET interface for this application."
+
+policy:
+  allow_implicit_invocation: true

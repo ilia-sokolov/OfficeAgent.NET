@@ -1,0 +1,17 @@
+{
+  "mcpServers": {
+    "officeagent": {
+      "command": "uvx",
+      "args": ["officeagent-mcp==1.2.0", "--stdio"],
+      "env": {
+        "OfficeAgent__FileSystemConnections__0__ConnectionId": "documents",
+        "OfficeAgent__FileSystemConnections__0__RootPath": "${CLAUDE_PROJECT_DIR}",
+        "OfficeAgent__FileSystemConnections__0__AllowedExtensions__0": ".docx",
+        "OfficeAgent__FileSystemConnections__0__AllowedExtensions__1": ".pptx",
+        "OfficeAgent__FileSystemConnections__0__AllowedExtensions__2": ".xlsx",
+        "OfficeAgent__FileSystemConnections__0__CalculateFormulas": "${user_config.calculate_formulas}",
+        "OfficeAgent__AllowCreation": "${user_config.allow_creation}"
+      }
+    }
+  }
+}

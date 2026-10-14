@@ -376,6 +376,15 @@ Windows and macOS, and only then uploads through PyPI trusted publishing. It wai
 uploading. PyPI never accepts the same version twice, so a published wheel cannot be replaced;
 fix a broken one in the next release.
 
+### Update the Claude plugin
+
+Once PyPI serves the new `officeagent-mcp`, move the plugin to it: set `version` in
+`plugins/officeagent/.claude-plugin/plugin.json` and the `officeagent-mcp==` pin in
+`plugins/officeagent/.mcp.json` to the release version, run
+`python scripts/sync_claude_plugin.py`, and commit. Anthropic's directory follows `main` and
+scans the new commit; a version that runs a package from PyPI is always held for a reviewer
+before it goes live.
+
 ## 3. Publish the MCP Registry entry
 
 Publish only after NuGet exposes the matching `OfficeAgent.Mcp` version, because the registry

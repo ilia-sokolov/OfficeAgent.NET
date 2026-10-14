@@ -1,0 +1,32 @@
+{
+  "name": "officeagent",
+  "displayName": "OfficeAgent",
+  "version": "1.2.0",
+  "description": "Inspect and edit the Word, PowerPoint and Excel files in your project: Claude previews every change before it is saved, and Word edits arrive as tracked changes you accept or reject in Word.",
+  "author": {
+    "name": "Ilia Sokolov",
+    "url": "https://github.com/ilia-sokolov"
+  },
+  "homepage": "https://github.com/ilia-sokolov/OfficeAgent.NET",
+  "repository": "https://github.com/ilia-sokolov/OfficeAgent.NET",
+  "license": "MIT",
+  "keywords": ["word", "docx", "powerpoint", "pptx", "excel", "xlsx", "office", "tracked changes", "redline"],
+  "icon": "./icon.png",
+  "documentationUrl": "https://github.com/ilia-sokolov/OfficeAgent.NET/blob/main/docs/mcp-server.md",
+  "supportUrl": "https://github.com/ilia-sokolov/OfficeAgent.NET/issues",
+  "privacyPolicyUrl": "https://github.com/ilia-sokolov/OfficeAgent.NET/blob/main/PRIVACY.md",
+  "userConfig": {
+    "allow_creation": {
+      "type": "boolean",
+      "title": "Allow creating new documents",
+      "description": "Let Claude create new .docx, .pptx and .xlsx files in the project folder, not only edit existing ones.",
+      "default": false
+    },
+    "calculate_formulas": {
+      "type": "boolean",
+      "title": "Calculate formulas in workbooks",
+      "description": "Save the results of formulas Claude writes in Excel workbooks, for the functions OfficeAgent can calculate. Excel recalculates everything when it opens the file either way.",
+      "default": false
+    }
+  }
+}

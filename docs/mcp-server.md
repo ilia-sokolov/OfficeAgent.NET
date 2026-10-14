@@ -93,6 +93,22 @@ Word edits are tracked changes unless the agent asks for `Direct`. PowerPoint ha
 changes, so the server refuses a tracked text edit to a deck and tells the agent to send it again
 with `"mode": "Direct"`.
 
+### Claude Code plugin
+
+`plugins/officeagent` is a Claude plugin that bundles the server with the two agent skills. It
+starts the server with `uvx officeagent-mcp==<version> --stdio`, so [uv](https://docs.astral.sh/uv/)
+must be installed, and roots the server's one folder connection at the project folder
+(`${CLAUDE_PROJECT_DIR}`). Creating documents and calculating formulas are plugin options that
+stay off until the user turns them on. Try it with:
+
+```bash
+claude --plugin-dir ./plugins/officeagent
+```
+
+The server is a local process, so it runs in Claude Code and in Cowork sessions on the user's
+computer; in claude.ai chat only the skills load. The plugin's skills are copies of `skills/`;
+after editing a skill, run `python scripts/sync_claude_plugin.py` to refresh them.
+
 ### Other clients
 
 Extract the archive and give the client the executable's absolute path where the examples on this

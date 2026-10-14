@@ -27,6 +27,12 @@ corresponding GitHub release.
   connection. Installed this way, the executable carries no download mark, so SmartScreen and Gatekeeper
   do not prompt; Windows 11's Smart App Control can still block it where it is turned on.
   See [the MCP server guide](docs/mcp-server.md#install-and-run).
+- **A Claude plugin.** `plugins/officeagent` packages the MCP server, started with
+  `uvx officeagent-mcp`, together with the `word-document-review` and `officeagent-integration`
+  skills. The server reaches only the project folder; creating documents and calculating
+  formulas stay off until the user turns them on. It passes `claude plugin validate`, and a test
+  holds it to the directory's published submission rules. See
+  [the MCP server guide](docs/mcp-server.md#claude-code-plugin).
 - **Formula calculation in the session connection.** `EphemeralCalculateFormulas` and
   `EphemeralRejectFormulaErrors` turn calculation on for the MCP server's in-memory session
   connection, including the one it starts with when nothing is configured, as the folder and
