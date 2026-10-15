@@ -12,7 +12,7 @@
 # Microsoft publishes no .NET 10 image on Debian 12, and the LibreOffice and Poppler pins below
 # are Debian 12 builds, so the base is plain Debian rather than a .NET runtime image.
 
-FROM debian:bookworm-slim@sha256:3783cc01769c7b2b1b83a5c5ad96c815348e28ed7da68e2e3687004faa906251 AS base
+FROM debian:bookworm-slim@sha256:7c7b2c966bc9ee8cedfeef67e0e279108992c77681fa595db4a9d65c06ccc587 AS base
 
 ARG LIBREOFFICE_VERSION=4:7.4.7-1+deb12u14
 ARG POPPLER_VERSION=22.12.0-2+deb12u3
