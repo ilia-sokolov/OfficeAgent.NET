@@ -3,7 +3,7 @@
 Notable changes per release. The body of each version section is also the text used for the
 corresponding GitHub release.
 
-## 1.2.1 — Unreleased
+## 1.3.0 — Unreleased
 
 ### Added
 
@@ -45,8 +45,7 @@ corresponding GitHub release.
   `edit_document_content` takes `"match": "all"`, which repeats the operation for every
   occurrence, in headers, footers and notes too, and skips it where there is none, plus
   `"caseSensitive": true` and `"wholeWord": true`. A plan whose every `"match": "all"` target
-  matched nothing is refused with `anchor-not-found` and saves nothing. A `match` that is
-  neither an index nor `"all"` is now refused rather than ignored.
+  matched nothing is refused with `anchor-not-found` and saves nothing.
 
 - **Every MCP tool says what it does to your files.** Each tool now carries MCP annotations: a
   title clients display, and explicit read-only, destructive, idempotent and open-world hints.
@@ -78,6 +77,18 @@ corresponding GitHub release.
   `EphemeralRejectFormulaErrors` turn calculation on for the MCP server's in-memory session
   connection, including the one it starts with when nothing is configured, as the folder and
   SharePoint connection settings already do. Both default to off.
+
+### Changed
+
+- **Rows `insertTableRows` adds keep the template row's text formatting.** A new row copies
+  the last row and now writes each value with that cell's first run formatting, instead of an
+  unformatted run. Bookmarks, comment ranges and comment references are no longer copied
+  into new rows, where they duplicated ids that must be unique.
+- **`fill` on a slide writes its run before `a:endParaRPr`.** It used to append the run after
+  it, which the schema does not allow. An empty value now leaves the shape with no run rather
+  than an empty one.
+- **A `find` target's `match` must be an index or `"all"`.** Any other string is refused with
+  `invalid-argument` instead of being ignored.
 
 ## 1.2.0 — 2026-10-14
 

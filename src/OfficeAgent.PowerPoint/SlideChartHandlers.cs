@@ -72,7 +72,7 @@ internal sealed class SlideUpdateChartHandler : IOperationHandler
         var located = SlideChartNodeProvider.Locate(anchor.Path, context.Package);
         if (located is null)
             return Fail($"No chart with path '{anchor.Path}'.", anchor, ValidationErrorCodes.AnchorNotFound);
-        if (!PowerPointModel.ShapeNameOf(located.Frame).StartsWith(SlideChartBuilder.FrameNamePrefix, StringComparison.Ordinal))
+        if (SlideChartBuilder.OwnName(PowerPointModel.ShapeNameOf(located.Frame)) is null)
             return Fail("Only charts created by OfficeAgent can be updated.", anchor);
         var error = SlideInsertChartHandler.Validate(op.Kind, op.Categories, op.Series);
         if (error is not null) return Fail(error, anchor);

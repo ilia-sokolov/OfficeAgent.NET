@@ -116,8 +116,46 @@ internal static class MarkedText
             ? "its text crosses a hyperlink, content control or tracked change, and a rewrite cannot move " +
               "text between those. Rewrite each part with its own changeText and \"with\", or settle pending " +
               "revisions first"
-            : null;
+            : HasEmbeddedContent(runs.Select(entry => entry.Item1).ToList())
+                ? "its text holds a tab, line break, field, note reference or picture, which a rewrite would drop " +
+                  "or move to the end. Rewrite the text on either side of it with its own changeText and \"with\""
+                : null;
         return new Layout(runs, groups, refusal);
+    }
+
+    /// <summary>
+    /// Whether anything but text sits inside the text runs or between them. A rewrite rebuilds
+    /// the text runs from their formatting and words alone, so a tab or break inside one would
+    /// vanish, and a note reference, field or picture between two would end up after the whole
+    /// new text. Bookmarks, comment ranges and proofing marks carry no content and may stay.
+    /// </summary>
+    private static bool HasEmbeddedContent(IReadOnlyList<OpenXmlElement> textRuns)
+    {
+        if (textRuns.Count == 0) return false;
+
+        foreach (var run in textRuns)
+            if (run.ChildElements.Any(child => child is not (W.RunProperties or W.Text or W.LastRenderedPageBreak
+                    or A.RunProperties or A.Text)))
+                return true;
+
+        var parent = textRuns[0].Parent!;
+        var siblings = parent.ChildElements.ToList();
+        var first = siblings.IndexOf(textRuns[0]);
+        var last = siblings.IndexOf(textRuns[textRuns.Count - 1]);
+        for (var i = first + 1; i < last; i++)
+        {
+            var between = siblings[i];
+            if (between is W.BookmarkStart or W.BookmarkEnd or W.CommentRangeStart or W.CommentRangeEnd
+                or W.ProofError or W.PermStart or W.PermEnd) continue;
+            if (textRuns.Contains(between)) continue;
+            // An empty text run, which edits often leave behind, holds nothing to lose.
+            if (between is W.Run or A.Run && between.ChildElements.All(child =>
+                    child is W.RunProperties or W.Text { Text.Length: 0 } or W.LastRenderedPageBreak
+                        or A.RunProperties or A.Text { Text.Length: 0 })) continue;
+            return true;
+        }
+
+        return false;
     }
 
     /// <summary>

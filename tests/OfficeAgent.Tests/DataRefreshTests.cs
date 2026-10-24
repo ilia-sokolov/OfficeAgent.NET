@@ -278,6 +278,133 @@ public class DataRefreshTests
             .ChartSpace!.Descendants<C.BarChartSeries>());
     }
 
+    [Fact]
+    public void Accounting_and_currency_formats_display_as_Excel_shows_them()
+    {
+        var book = WorkbookWithFormats(("A1", "4200000.5", 44U), ("A2", "-1234", 7U), ("A3", "1234", 42U));
+        var cells = Office().Inspect(book, new InspectOptions { SheetId = 1, Range = "A1:A3" }).Cells
+            .ToDictionary(cell => cell.Anchor.Address, cell => cell.FormattedValue);
+
+        Assert.Equal("$4,200,000.50", cells["A1"]);
+        Assert.Equal("($1,234.00)", cells["A2"]);
+        Assert.Equal("$1,234", cells["A3"]);
+    }
+
+    [Fact]
+    public void Growing_a_slide_table_does_not_copy_its_row_id()
+    {
+        var office = Office();
+        using var stream = new MemoryStream();
+        stream.Write(PptxFactory.DeckWithTable());
+        using (var document = PresentationDocument.Open(stream, isEditable: true))
+        {
+            var slide = document.PresentationPart!.SlideParts.First();
+            foreach (var (row, id) in slide.Slide.Descendants<A.TableRow>().Select((row, i) => (row, i)))
+                row.Append(new A.ExtensionList(new A.Extension { Uri = "{0D108BD9-81ED-4DB2-BD59-A6C34878D82A}" }));
+            slide.Slide.Save();
+        }
+
+        var deck = stream.ToArray();
+        var path = office.Inspect(deck).Nodes.Single(node => node.Kind == "table").Path;
+        using var applied = office.Commit(new StreamHandle(new MemoryStream(deck)), Plan(new FillTableOp
+        {
+            Target = new NodeAnchor { Kind = "table", Path = path },
+            Rows = new[] { new[] { "Region", "Q1" }, new[] { "North", "1" }, new[] { "South", "2" }, new[] { "West", "3" } }
+        }));
+
+        Assert.True(applied.Committed, Errors(applied));
+        using var output = new MemoryStream(applied.ToBytes());
+        using var result = PresentationDocument.Open(output, isEditable: false);
+        var extensions = result.PresentationPart!.SlideParts.First().Slide.Descendants<A.TableRow>()
+            .Select(row => row.Elements<A.ExtensionList>().Count()).ToList();
+        Assert.Equal(new[] { 1, 1, 0, 0 }, extensions);
+    }
+
+    [Fact]
+    public void Chart_data_that_would_empty_one_type_of_a_combination_chart_is_refused()
+    {
+        var office = Office();
+        var deck = DeckWithChart(office, seriesCount: 2);
+        using var stream = new MemoryStream();
+        stream.Write(deck);
+        using (var document = PresentationDocument.Open(stream, isEditable: true))
+        {
+            // Move the second column series into a line group: columns and a line on one chart.
+            var chart = document.PresentationPart!.SlideParts.First().ChartParts.Single();
+            var plot = chart.ChartSpace!.Descendants<C.PlotArea>().Single();
+            var bar = plot.GetFirstChild<C.BarChart>()!;
+            var second = bar.Elements<C.BarChartSeries>().Last();
+            second.Remove();
+            var line = new C.LineChart(new C.Grouping { Val = C.GroupingValues.Standard }, new C.VaryColors { Val = false },
+                new C.LineChartSeries(second.Elements().Where(e => e is C.Index or C.Order or C.SeriesText or C.CategoryAxisData or C.Values)
+                    .Select(e => e.CloneNode(true))),
+                new C.Marker(), bar.Elements<C.AxisId>().First().CloneNode(true), bar.Elements<C.AxisId>().Last().CloneNode(true));
+            bar.InsertAfterSelf(line);
+            chart.ChartSpace.Save();
+        }
+
+        var combined = stream.ToArray();
+        var path = office.Inspect(combined).Nodes.Single(node => node.Kind == "chart").Path;
+        var report = office.Preview(new StreamHandle(new MemoryStream(combined)), Plan(new SetChartDataOp
+        {
+            Target = new NodeAnchor { Kind = "chart", Path = path },
+            Categories = new[] { "Q1" },
+            Series = new[] { new ChartSeries { Name = "Only", Values = new double?[] { 1 } } }
+        }));
+
+        Assert.Contains("combines chart types", Assert.Single(report.Errors).Message);
+    }
+
+    [Fact]
+    public void Filling_a_Word_table_keeps_a_comment_on_its_cell_and_does_not_copy_it_into_new_rows()
+    {
+        var office = Office();
+        var commented = new TableCell(new Paragraph(
+            new CommentRangeStart { Id = "0" }, new Run(new Text("9")), new CommentRangeEnd { Id = "0" },
+            new Run(new CommentReference { Id = "0" })));
+        var table = new Table(
+            new TableProperties(new TableWidth { Type = TableWidthUnitValues.Auto, Width = "0" }),
+            new TableGrid(new GridColumn { Width = "2000" }, new GridColumn { Width = "2000" }),
+            new TableRow(new TableCell(new Paragraph(new Run(new Text("Month")))), new TableCell(new Paragraph(new Run(new Text("North"))))),
+            new TableRow(new TableCell(new Paragraph(new Run(new Text("Dec")))), commented));
+        var report = Memo(Para("x"), table);
+
+        using var applied = office.Commit(new StreamHandle(new MemoryStream(report)), Plan(new FillTableOp
+        {
+            Target = new NodeAnchor { Kind = "table", Path = "table#0" },
+            Rows = new[] { new[] { "Month", "North" }, new[] { "Jan", "10" }, new[] { "Feb", "12" } }
+        }));
+
+        Assert.True(applied.Committed, Errors(applied));
+        using var stream = new MemoryStream(applied.ToBytes());
+        using var document = WordprocessingDocument.Open(stream, isEditable: false);
+        var rows = document.MainDocumentPart!.Document.Body!.Elements<Table>().Single().Elements<TableRow>().ToList();
+        Assert.Equal("10", rows[1].Elements<TableCell>().Last().InnerText);
+        Assert.Single(rows[1].Descendants<CommentReference>());
+        Assert.Single(rows[1].Descendants<CommentRangeStart>());
+        Assert.Empty(rows[2].Descendants<CommentReference>());
+        Assert.Empty(rows[2].Descendants<CommentRangeStart>());
+    }
+
+    [Fact]
+    public void A_bound_OfficeAgent_chart_can_still_be_rebuilt_with_update_chart()
+    {
+        var office = Office();
+        var deck = BoundDeck(office);
+        var chart = office.Inspect(deck).Nodes.Single(node => node.Kind == "chart");
+        Assert.StartsWith("xl:SalesData#OfficeAgent Chart ", chart.Name);
+
+        using var applied = office.Commit(new StreamHandle(new MemoryStream(deck)), Plan(new UpdateChartOp
+        {
+            Target = new NodeAnchor { Kind = "chart", Path = chart.Path },
+            Kind = ChartKind.Line,
+            Categories = new[] { "A" },
+            Series = new[] { new ChartSeries { Name = "S", Values = new double?[] { 1 } } }
+        }));
+
+        Assert.True(applied.Committed, Errors(applied));
+    }
+
     // ── refresh_document ─────────────────────────────────────────────────────
 
     [Fact]
@@ -480,6 +607,35 @@ public class DataRefreshTests
             styles.Stylesheet.Save();
             summary.Worksheet.Save();
             sales.Worksheet.Save();
+            workbook.Workbook.Save();
+        }
+
+        return stream.ToArray();
+    }
+
+    /// <summary>One sheet of numbers, each cell styled with a built-in number format id and no format code.</summary>
+    private static byte[] WorkbookWithFormats(params (string Address, string Value, uint FormatId)[] cells)
+    {
+        using var stream = new MemoryStream();
+        using (var document = SpreadsheetDocument.Create(stream, SpreadsheetDocumentType.Workbook))
+        {
+            var workbook = document.AddWorkbookPart();
+            workbook.Workbook = new S.Workbook();
+            var styles = workbook.AddNewPart<WorkbookStylesPart>();
+            styles.Stylesheet = new S.Stylesheet(
+                new S.Fonts(new S.Font()) { Count = 1 },
+                new S.Fills(new S.Fill(new S.PatternFill { PatternType = S.PatternValues.None }),
+                    new S.Fill(new S.PatternFill { PatternType = S.PatternValues.Gray125 })) { Count = 2 },
+                new S.Borders(new S.Border()) { Count = 1 },
+                new S.CellStyleFormats(new S.CellFormat()) { Count = 1 },
+                new S.CellFormats(new[] { new S.CellFormat() }.Concat(cells.Select(cell =>
+                    new S.CellFormat { NumberFormatId = cell.FormatId, ApplyNumberFormat = true }))) { Count = (uint)cells.Length + 1 });
+            var sheet = workbook.AddNewPart<WorksheetPart>();
+            sheet.Worksheet = new S.Worksheet(new S.SheetData(cells.Select((cell, i) =>
+                Row((uint)(i + 1), Number(cell.Address, cell.Value, (uint)(i + 1))))));
+            workbook.Workbook.Append(new S.Sheets(new S.Sheet { Id = workbook.GetIdOfPart(sheet), SheetId = 1U, Name = "Data" }));
+            styles.Stylesheet.Save();
+            sheet.Worksheet.Save();
             workbook.Workbook.Save();
         }
 

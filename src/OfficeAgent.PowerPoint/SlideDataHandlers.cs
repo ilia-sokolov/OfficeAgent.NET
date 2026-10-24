@@ -53,6 +53,9 @@ internal sealed class SlideFillTableHandler : IOperationHandler
         while (rows.Count < op.Rows.Count)
         {
             var copy = (A.TableRow)rows[rows.Count - 1].CloneNode(deep: true);
+            // PowerPoint keeps a unique a16:rowId in each row's extension list; a copy carrying
+            // its source's id is a table PowerPoint repairs on open.
+            foreach (var extensions in copy.Elements<A.ExtensionList>().ToList()) extensions.Remove();
             rows[rows.Count - 1].InsertAfterSelf(copy);
             rows.Add(copy);
         }
@@ -67,32 +70,10 @@ internal sealed class SlideFillTableHandler : IOperationHandler
         {
             var cells = rows[r].Elements<A.TableCell>().ToList();
             for (var c = 0; c < cells.Count; c++)
-                SetText(cells[c], op.Rows[r][c]);
+                SlideText.Replace(
+                    cells[c].TextBody ?? cells[c].PrependChild(new A.TextBody(new A.BodyProperties(), new A.ListStyle())),
+                    op.Rows[r][c]);
         }
-    }
-
-    /// <summary>
-    /// Writes a cell's text into its first paragraph with the first run's formatting, and drops
-    /// whatever else the cell held.
-    /// </summary>
-    private static void SetText(A.TableCell cell, string text)
-    {
-        var body = cell.TextBody ?? cell.PrependChild(new A.TextBody(new A.BodyProperties(), new A.ListStyle()));
-        var paragraphs = body.Elements<A.Paragraph>().ToList();
-        var first = paragraphs.FirstOrDefault() ?? body.AppendChild(new A.Paragraph());
-        foreach (var extra in paragraphs.Skip(1)) extra.Remove();
-
-        var pattern = first.Elements<A.Run>().FirstOrDefault();
-        var properties = pattern?.RunProperties is { } rp
-            ? (A.RunProperties)rp.CloneNode(deep: true)
-            : new A.RunProperties { Language = "en-US" };
-        foreach (var child in first.ChildElements.Where(child => child is A.Run or A.Field or A.Break).ToList())
-            child.Remove();
-
-        if (text.Length == 0) return;
-        var run = new A.Run(properties, new A.Text(text));
-        if (first.GetFirstChild<A.EndParagraphRunProperties>() is { } end) end.InsertBeforeSelf(run);
-        else first.AppendChild(run);
     }
 
     private static bool Merged(A.Table table) =>
@@ -102,6 +83,35 @@ internal sealed class SlideFillTableHandler : IOperationHandler
 
     private static OperationPreview Fail(string code, string message, Anchor anchor) =>
         OperationPreview.Fail(new ValidationError(code, message, anchor));
+}
+
+/// <summary>Replaces the whole text of a text body - a filled shape or a table cell - and keeps its look.</summary>
+internal static class SlideText
+{
+    /// <summary>
+    /// Keeps the first paragraph, so its bullet, alignment and level survive, and writes the
+    /// text as one run with that paragraph's first run's formatting. Everything else the body
+    /// held goes: a filled slot holds the value it was given, not that plus leftovers.
+    /// </summary>
+    public static void Replace(OpenXmlCompositeElement body, string text)
+    {
+        var paragraphs = body.Elements<A.Paragraph>().ToList();
+        var first = paragraphs.FirstOrDefault() ?? body.AppendChild(new A.Paragraph());
+        foreach (var extra in paragraphs.Skip(1)) extra.Remove();
+
+        var properties = first.Elements<A.Run>().FirstOrDefault()?.RunProperties is { } rp
+            ? (A.RunProperties)rp.CloneNode(deep: true)
+            : new A.RunProperties { Language = "en-US" };
+        foreach (var child in first.ChildElements.Where(child => child is A.Run or A.Field or A.Break).ToList())
+            child.Remove();
+
+        if (text.Length == 0) return;
+
+        // a:endParaRPr must stay the paragraph's last child.
+        var run = new A.Run(properties, new A.Text(text));
+        if (first.GetFirstChild<A.EndParagraphRunProperties>() is { } end) end.InsertBeforeSelf(run);
+        else first.AppendChild(run);
+    }
 }
 
 /// <summary>Replaces a chart's data while keeping its type, colours, labels and layout.</summary>
@@ -199,7 +209,9 @@ internal sealed class SlideBindDataHandler : IOperationHandler
                 .Where(other => !ReferenceEquals(other, element))
                 .Select(PowerPointModel.ShapeNameOf) ?? Enumerable.Empty<string>(),
             StringComparer.OrdinalIgnoreCase);
-        var name = marker;
+        // A chart OfficeAgent made keeps its own name after the '#', so updateChart still knows it.
+        var origin = SlideChartBuilder.OwnName(current);
+        var name = origin is null ? marker : $"{marker}#{origin}";
         for (var n = 2; taken.Contains(name); n++) name = $"{marker}#{n}";
 
         if (DrawingPropertiesOf(element) is { } properties) properties.Name = name;
@@ -268,6 +280,18 @@ internal static class ChartDataWriter
             return "Chart values must be finite numbers.";
         if (groups.Where(IsSupported).All(IsPie) && series.Count != 1)
             return $"A pie chart shows exactly one series, and the data has {series.Count}.";
+
+        // Surplus series go from the end, so in a chart that combines types - columns with a
+        // line, say - too few would empty the last type and leave its axis drawn for nothing.
+        var before = 0;
+        foreach (var count in groups.Where(IsSupported).Select(group => group.ChildElements.Count(child => child.LocalName == "ser")))
+        {
+            if (count > 0 && before > 0 && series.Count <= before)
+                return $"The chart combines chart types and needs at least {before + 1} series to keep each one; the data has {series.Count}. " +
+                       "Bind a range with more series, or change the chart's type in PowerPoint.";
+            before += count;
+        }
+
         return null;
     }
 

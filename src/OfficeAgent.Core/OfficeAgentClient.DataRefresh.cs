@@ -46,8 +46,10 @@ public sealed partial class OfficeAgentClient
         var bindings = new List<DataRefreshBinding>();
         var operations = new List<PlanOperation>();
         var reader = new RangeReader(this, workbook, book);
+        var discovered = Discover(target).ToList();
+        reader.Prefetch(discovered.Where(found => !found.Duplicate).Select(found => found.Reference));
 
-        foreach (var found in Discover(target))
+        foreach (var found in discovered)
         {
             if (found.Duplicate)
             {
@@ -270,6 +272,9 @@ public sealed partial class OfficeAgentClient
         private readonly byte[] _workbook;
         private readonly InspectResult _book;
 
+        /// <summary>Cells already read, per sheet, with the rectangle that read covered.</summary>
+        private readonly Dictionary<uint, (int Left, uint Top, int Right, uint Bottom, Dictionary<string, CellInfo> Cells)> _sheets = new();
+
         public RangeReader(OfficeAgentClient client, byte[] workbook, InspectResult book)
         {
             _client = client;
@@ -277,10 +282,84 @@ public sealed partial class OfficeAgentClient
             _book = book;
         }
 
+        /// <summary>
+        /// Reads, in one pass per sheet, the rectangle covering every range the references name
+        /// there. Each inspection parses the whole workbook, so reading per binding would cost
+        /// bindings × workbook. A rectangle larger than one read allows is left to per-range reads.
+        /// </summary>
+        public void Prefetch(IEnumerable<string> references)
+        {
+            var regions = references
+                .Select(reference => Resolve(reference, out _, out _))
+                .Where(region => region is not null)
+                .Select(region => region!.Value);
+
+            foreach (var sheet in regions.GroupBy(region => region.Sheet.SheetId))
+            {
+                var left = sheet.Min(r => r.Left);
+                var top = sheet.Min(r => r.Top);
+                var right = sheet.Max(r => r.Right);
+                var bottom = sheet.Max(r => r.Bottom);
+                var area = (long)(bottom - top + 1) * (right - left + 1);
+                if (area > MaximumRefreshCells) continue;
+
+                var range = $"{SpreadsheetPartUtility.ColumnName(left)}{top}:{SpreadsheetPartUtility.ColumnName(right)}{bottom}";
+                var cells = _client.Inspect(_workbook, new InspectOptions
+                {
+                    Fidelity = Fidelity.Content,
+                    SheetId = sheet.Key,
+                    Range = range,
+                    MaximumCells = (int)area
+                }).Cells.ToDictionary(cell => cell.Anchor.Address.ToUpperInvariant(), StringComparer.Ordinal);
+                _sheets[sheet.Key] = (left, top, right, bottom, cells);
+            }
+        }
+
+        private readonly record struct Region(WorksheetInfo Sheet, string Range, int Left, uint Top, int Right, uint Bottom);
+
         /// <summary>The cells of a range, row by row with nulls for empty cells, or null with the reason.</summary>
         public CellInfo?[][]? Read(string reference, out string? resolved, out string? code, out string? message)
         {
             resolved = null;
+            var found = Resolve(reference, out code, out message);
+            if (found is not { } region) return null;
+
+            resolved = $"{Quote(region.Sheet.Name)}!{region.Range}";
+            var rows = (int)(region.Bottom - region.Top + 1);
+            var columns = region.Right - region.Left + 1;
+            if ((long)rows * columns > MaximumRefreshCells)
+            {
+                code = DataRefreshErrorCodes.RangeTooLarge;
+                message = $"{resolved} is {rows}×{columns} cells; one binding reads at most {MaximumRefreshCells}.";
+                return null;
+            }
+
+            IEnumerable<CellInfo> cells;
+            if (_sheets.TryGetValue(region.Sheet.SheetId, out var read) &&
+                region.Left >= read.Left && region.Right <= read.Right && region.Top >= read.Top && region.Bottom <= read.Bottom)
+                cells = read.Cells.Values;
+            else
+                cells = _client.Inspect(_workbook, new InspectOptions
+                {
+                    Fidelity = Fidelity.Content,
+                    SheetId = region.Sheet.SheetId,
+                    Range = region.Range,
+                    MaximumCells = rows * columns
+                }).Cells;
+
+            var grid = new CellInfo?[rows][];
+            for (var row = 0; row < rows; row++) grid[row] = new CellInfo?[columns];
+            foreach (var cell in cells)
+                if (SpreadsheetPartUtility.TryParseCell(cell.Anchor.Address, out var column, out var rowNumber) &&
+                    column >= region.Left && column <= region.Right && rowNumber >= region.Top && rowNumber <= region.Bottom)
+                    grid[rowNumber - region.Top][column - region.Left] = cell;
+
+            return grid;
+        }
+
+        /// <summary>Resolves a reference to a sheet and rectangle, or returns null with the reason.</summary>
+        private Region? Resolve(string reference, out string? code, out string? message)
+        {
             code = DataRefreshErrorCodes.RangeNotFound;
             if (!WorkbookReference.TryParse(reference, out var parsed))
             {
@@ -326,33 +405,9 @@ public sealed partial class OfficeAgentClient
                 return null;
             }
 
-            resolved = $"{Quote(sheet.Name)}!{range}";
-            var rows = (int)(bottom - top + 1);
-            var columns = right - left + 1;
-            if ((long)rows * columns > MaximumRefreshCells)
-            {
-                code = DataRefreshErrorCodes.RangeTooLarge;
-                message = $"{resolved} is {rows}×{columns} cells; one binding reads at most {MaximumRefreshCells}.";
-                return null;
-            }
-
-            var cells = _client.Inspect(_workbook, new InspectOptions
-            {
-                Fidelity = Fidelity.Content,
-                SheetId = sheet.SheetId,
-                Range = range,
-                MaximumCells = rows * columns
-            }).Cells;
-
-            var grid = new CellInfo?[rows][];
-            for (var row = 0; row < rows; row++) grid[row] = new CellInfo?[columns];
-            foreach (var cell in cells)
-                if (SpreadsheetPartUtility.TryParseCell(cell.Anchor.Address, out var column, out var rowNumber))
-                    grid[rowNumber - top][column - left] = cell;
-
             code = null;
             message = null;
-            return grid;
+            return new Region(sheet, range, left, top, right, bottom);
         }
 
         private static string Quote(string sheet) =>

@@ -1,4 +1,5 @@
 using System.Globalization;
+using System.Text.RegularExpressions;
 using DocumentFormat.OpenXml.Packaging;
 using ExcelNumberFormat;
 using OfficeAgent.Core;
@@ -26,9 +27,14 @@ internal sealed class CellFormatter
     private static readonly IReadOnlyDictionary<uint, string> BuiltIn = new Dictionary<uint, string>
     {
         [0] = "General", [1] = "0", [2] = "0.00", [3] = "#,##0", [4] = "#,##0.00",
+        [5] = "\"$\"#,##0_);(\"$\"#,##0)", [6] = "\"$\"#,##0_);[Red](\"$\"#,##0)",
+        [7] = "\"$\"#,##0.00_);(\"$\"#,##0.00)", [8] = "\"$\"#,##0.00_);[Red](\"$\"#,##0.00)",
         [9] = "0%", [10] = "0.00%", [11] = "0.00E+00", [12] = "# ?/?", [13] = "# ??/??",
         [14] = "m/d/yyyy", [15] = "d-mmm-yy", [16] = "d-mmm", [17] = "mmm-yy",
         [18] = "h:mm AM/PM", [19] = "h:mm:ss AM/PM", [20] = "h:mm", [21] = "h:mm:ss", [22] = "m/d/yyyy h:mm",
+        // 41-44 are Excel's Accounting formats, the usual choice in a finance model.
+        [41] = "_(* #,##0_);_(* (#,##0);_(* \"-\"_);_(@_)", [42] = "_(\"$\"* #,##0_);_(\"$\"* (#,##0);_(\"$\"* \"-\"_);_(@_)",
+        [43] = "_(* #,##0.00_);_(* (#,##0.00);_(* \"-\"??_);_(@_)", [44] = "_(\"$\"* #,##0.00_);_(\"$\"* (#,##0.00);_(\"$\"* \"-\"??_);_(@_)",
         [37] = "#,##0 ;(#,##0)", [38] = "#,##0 ;[Red](#,##0)", [39] = "#,##0.00;(#,##0.00)", [40] = "#,##0.00;[Red](#,##0.00)",
         [45] = "mm:ss", [46] = "[h]:mm:ss", [47] = "mmss.0", [48] = "##0.0E+0", [49] = "@"
     };
@@ -76,13 +82,21 @@ internal sealed class CellFormatter
 
         try
         {
-            return format.Format(number, CultureInfo.InvariantCulture, _date1904);
+            // Alignment padding - the space "_)" reserves and the gap a "*" fill stretches -
+            // lines numbers up in a column and means nothing in running text.
+            return Collapse(format.Format(number, CultureInfo.InvariantCulture, _date1904));
         }
         catch (Exception exception) when (exception is ArgumentException or FormatException or OverflowException or InvalidOperationException)
         {
             return raw;
         }
     }
+
+    /// <summary>Trims the padding and removes the fill gap between a currency sign and its number.</summary>
+    private static string Collapse(string text) => FillGap.Replace(text.Trim(), "$1");
+
+    /// <summary>Whitespace between a leading symbol such as <c>$</c> and the number, sign or bracket after it.</summary>
+    private static readonly Regex FillGap = new(@"^([^\d\s(\-]+)\s+(?=[\d(\-])", RegexOptions.CultureInvariant, TimeSpan.FromSeconds(1));
 
     private NumberFormat? NumberFormatFor(S.Cell cell)
     {

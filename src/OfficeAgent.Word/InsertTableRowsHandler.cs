@@ -142,11 +142,12 @@ internal sealed class InsertTableRowsHandler : IOperationHandler
         var clone = (TableRow)templateRow.CloneNode(deep: true);
         ClearParagraphIds(clone);
         ClearRevisionMarkup(clone);
+        WordTableCells.StripAnchors(clone);
         var templateCells = clone.Elements<TableCell>().ToList();
         int i = 0;
         foreach (var cell in templateCells)
         {
-            ReplaceCellText(cell, i < cells.Count ? cells[i] : string.Empty);
+            WordTableCells.SetText(cell, i < cells.Count ? cells[i] : string.Empty);
             i++;
         }
         for (; i < cells.Count; i++)
@@ -178,23 +179,6 @@ internal sealed class InsertTableRowsHandler : IOperationHandler
     {
         foreach (var marker in row.Descendants<TrackChangeType>().ToList())
             marker.Remove();
-    }
-
-    private static void ReplaceCellText(TableCell cell, string text)
-    {
-        var paragraph = cell.Elements<Paragraph>().FirstOrDefault();
-        if (paragraph is null)
-        {
-            cell.AppendChild(new Paragraph(new Run(new Text(text) { Space = SpaceProcessingModeValues.Preserve })));
-            return;
-        }
-
-        // Everything but the paragraph properties: a template cell can hold its text in a
-        // hyperlink or content control, and leaving those behind would duplicate content.
-        foreach (var child in paragraph.ChildElements.ToList())
-            if (child is not ParagraphProperties)
-                child.Remove();
-        paragraph.AppendChild(new Run(new Text(text) { Space = SpaceProcessingModeValues.Preserve }));
     }
 
     private static TableCell NewCell(string text) =>

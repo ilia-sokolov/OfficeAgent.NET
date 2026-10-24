@@ -186,6 +186,27 @@ public class MarkedTextAndBatchTests
             office.Inspect(result.ToBytes()).Paragraphs.Single(p => p.ParaId == paragraph.ParaId).Text);
     }
 
+    [Fact]
+    public void A_paragraph_holding_a_tab_or_a_note_reference_has_no_marked_text_and_refuses_a_rewrite()
+    {
+        var tabbed = new Run(new RunProperties(new Bold()), new Text("Total:"), new TabChar(), new Text("500"));
+        var noted = new Paragraph { ParagraphId = "0000000B" };
+        noted.Append(Run("See the note"), new Run(new FootnoteReference { Id = 1 }), Run(" for details", bold: true));
+        var bytes = Memo(Para("0000000A", tabbed, Run(" due now")), noted);
+        var office = Word();
+        var paragraphs = office.Inspect(bytes).Paragraphs;
+
+        Assert.All(paragraphs, paragraph => Assert.Null(paragraph.MarkedText));
+
+        var report = office.Preview(new StreamHandle(new MemoryStream(bytes)), Plan(new ChangeTextOp
+        {
+            Target = new TextSpanAnchor { ParaId = paragraphs[1].ParaId, Expect = paragraphs[1].Text },
+            WithMarked = "Zie de noot voor <1>details</1>",
+            Mode = ChangeMode.Direct
+        }));
+        Assert.Contains("note reference", Assert.Single(report.Errors).Message);
+    }
+
     // ── withMarked in PowerPoint ─────────────────────────────────────────────
 
     [Fact]
@@ -375,7 +396,7 @@ public class MarkedTextAndBatchTests
         using var workspace = new Workspace();
         workspace.Stage("a.docx", DocxFactory.Contract());
 
-        var twice = Parse(await workspace.Tools.EditDocuments("workspace", new[] { "a.docx", "A.docx" }, Rename("Acme", "Globex")));
+        var twice = Parse(await workspace.Tools.EditDocuments("workspace", new[] { "a.docx", "a.docx" }, Rename("Acme", "Globex")));
         Assert.Contains("more than once", twice.GetProperty("errors")[0].GetProperty("message").GetString());
 
         var snapshot = Parse(await workspace.Tools.EditDocuments("workspace", new[] { "a.docx" },

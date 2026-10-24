@@ -68,32 +68,7 @@ internal sealed class SlideFillHandler : IOperationHandler
         var op = (FillOp)operation;
         var anchor = (StructuralAnchor)op.Target;
 
-        var slot = Matching(context.Package, anchor.Tag).Single();
-        var body = slot.Body;
-
-        // Keep the first paragraph so its properties - bullet, alignment, level - survive,
-        // and drop the rest: a filled slot holds the value it was given, not the value
-        // plus whatever the template left behind.
-        var first = body.Elements<A.Paragraph>().FirstOrDefault();
-        foreach (var extra in body.Elements<A.Paragraph>().Skip(1).ToList())
-            extra.Remove();
-
-        if (first is null)
-        {
-            first = new A.Paragraph();
-            body.Append(first);
-        }
-
-        var template = first.Elements<A.Run>().FirstOrDefault();
-        var runProperties = template?.RunProperties is { } rp
-            ? (A.RunProperties)rp.CloneNode(deep: true)
-            : new A.RunProperties { Language = "en-US" };
-
-        foreach (var child in first.Elements<A.Run>().ToList()) child.Remove();
-        foreach (var child in first.Elements<A.Field>().ToList()) child.Remove();
-        foreach (var child in first.Elements<A.Break>().ToList()) child.Remove();
-
-        first.Append(new A.Run(runProperties, new A.Text(op.Value)));
+        SlideText.Replace(Matching(context.Package, anchor.Tag).Single().Body, op.Value);
     }
 
     /// <summary>

@@ -16,6 +16,17 @@ internal static class SlideChartBuilder
     private const string WorkbookContentType = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
     private const long EmusPerPixel = 9525L;
 
+    /// <summary>
+    /// The name OfficeAgent gave a chart it created, read from the frame's name directly or from
+    /// after the <c>#</c> of a data binding marker, or <see langword="null"/> for any other chart.
+    /// </summary>
+    public static string? OwnName(string frameName)
+    {
+        if (frameName.StartsWith(FrameNamePrefix, StringComparison.Ordinal)) return frameName;
+        var hash = frameName.IndexOf("#" + FrameNamePrefix, StringComparison.Ordinal);
+        return hash >= 0 ? frameName.Substring(hash + 1) : null;
+    }
+
     public static P.GraphicFrame Add(
         SlidePart slide, uint shapeId, InsertChartOp operation)
     {

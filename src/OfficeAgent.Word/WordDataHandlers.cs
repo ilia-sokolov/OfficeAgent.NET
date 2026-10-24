@@ -53,6 +53,7 @@ internal sealed class FillTableHandler : IOperationHandler
             var copy = (TableRow)rows[rows.Count - 1].CloneNode(deep: true);
             InsertTableRowsHandler.ClearParagraphIds(copy);
             InsertTableRowsHandler.ClearRevisionMarkup(copy);
+            WordTableCells.StripAnchors(copy);
             rows[rows.Count - 1].InsertAfterSelf(copy);
             rows.Add(copy);
         }
@@ -67,33 +68,8 @@ internal sealed class FillTableHandler : IOperationHandler
         {
             var cells = rows[r].Elements<TableCell>().ToList();
             for (var c = 0; c < cells.Count; c++)
-                SetText(cells[c], op.Rows[r][c]);
+                WordTableCells.SetText(cells[c], op.Rows[r][c]);
         }
-    }
-
-    /// <summary>
-    /// Writes a cell's text into its first paragraph with that paragraph's first run's
-    /// formatting. Further paragraphs go, so the cell holds the value and nothing left over.
-    /// </summary>
-    private static void SetText(TableCell cell, string text)
-    {
-        var paragraphs = cell.Elements<Paragraph>().ToList();
-        var first = paragraphs.FirstOrDefault() ?? cell.AppendChild(new Paragraph());
-        foreach (var extra in paragraphs.Skip(1)) extra.Remove();
-
-        var pattern = WordModel.Dialect.GetRuns(first).OfType<Run>().FirstOrDefault(WordModel.Dialect.IsTextRun)
-                      ?? first.Descendants<Run>().FirstOrDefault();
-        var properties = pattern?.RunProperties?.CloneNode(deep: true);
-
-        foreach (var child in first.ChildElements.ToList())
-            if (child is not ParagraphProperties)
-                child.Remove();
-
-        if (text.Length == 0) return;
-        var run = new Run();
-        if (properties is not null) run.AppendChild(properties);
-        run.AppendChild(new Text(text) { Space = SpaceProcessingModeValues.Preserve });
-        first.AppendChild(run);
     }
 
     private static bool Merged(Table table) =>

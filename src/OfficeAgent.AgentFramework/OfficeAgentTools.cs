@@ -1285,7 +1285,8 @@ public sealed class OfficeAgentTools
         if (sources.Any(string.IsNullOrWhiteSpace))
             throw new ArgumentException("sources contains an empty entry.", nameof(sources));
 
-        var repeated = sources.GroupBy(source => source, StringComparer.OrdinalIgnoreCase)
+        // Exact match only: on case-sensitive storage "Report.docx" and "report.docx" are two files.
+        var repeated = sources.GroupBy(source => source, StringComparer.Ordinal)
             .FirstOrDefault(group => group.Count() > 1);
         if (repeated is not null)
             throw new ArgumentException(
