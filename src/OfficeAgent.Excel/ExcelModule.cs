@@ -69,6 +69,7 @@ public sealed class ExcelModule : IFormatModule, IBlankDocumentFactory, IApplyTi
         var nodes = new List<NodeInfo>();
         var anchors = new List<Anchor>();
         var limit = Math.Max(1, Math.Min(options.MaximumCells, 10000));
+        var formatter = new CellFormatter(document);
 
         foreach (var sheet in workbookPart.WorkbookRoot().Sheets?.Elements<S.Sheet>() ?? Enumerable.Empty<S.Sheet>())
         {
@@ -122,7 +123,8 @@ public sealed class ExcelModule : IFormatModule, IBlankDocumentFactory, IApplyTi
                         Anchor = anchor,
                         RawValue = cell.CellValue?.InnerText,
                         DisplayValue = SpreadsheetPartUtility.DisplayValue(document, cell),
-                        Formula = cell.CellFormula?.Text
+                        Formula = cell.CellFormula?.Text,
+                        FormattedValue = formatter.Format(cell)
                     });
                     anchors.Add(anchor);
                 }
@@ -150,8 +152,38 @@ public sealed class ExcelModule : IFormatModule, IBlankDocumentFactory, IApplyTi
             Cells = cells,
             Nodes = nodes,
             Anchors = anchors,
-            Styles = new StyleCatalog()
+            Styles = new StyleCatalog(),
+            DefinedNames = DefinedNames(workbookPart)
         };
+    }
+
+    /// <summary>
+    /// The workbook-level names that refer to one range on one sheet. Built-in names such as
+    /// <c>_xlnm.Print_Area</c>, hidden names, names scoped to one sheet, and names that hold a
+    /// formula or a constant are left out: none of them is a range a report can show.
+    /// </summary>
+    private static IReadOnlyList<DefinedNameInfo> DefinedNames(WorkbookPart workbookPart)
+    {
+        var workbook = workbookPart.WorkbookRoot();
+        var sheets = workbook.Sheets?.Elements<S.Sheet>()
+            .Where(sheet => sheet.Name?.Value is not null && sheet.SheetId?.Value is not null)
+            .GroupBy(sheet => sheet.Name!.Value!, StringComparer.OrdinalIgnoreCase)
+            .ToDictionary(group => group.Key, group => group.First().SheetId!.Value, StringComparer.OrdinalIgnoreCase)
+            ?? new Dictionary<string, uint>(StringComparer.OrdinalIgnoreCase);
+
+        var names = new List<DefinedNameInfo>();
+        foreach (var defined in workbook.DefinedNames?.Elements<S.DefinedName>() ?? Enumerable.Empty<S.DefinedName>())
+        {
+            var name = defined.Name?.Value;
+            if (string.IsNullOrEmpty(name) || name!.StartsWith("_xlnm.", StringComparison.OrdinalIgnoreCase) ||
+                defined.Hidden?.Value == true || defined.LocalSheetId is not null) continue;
+            if (!WorkbookReference.TryParse(defined.Text ?? string.Empty, out var parsed) ||
+                parsed.Sheet is null || !sheets.TryGetValue(parsed.Sheet, out var sheetId)) continue;
+
+            names.Add(new DefinedNameInfo { Name = name, SheetId = sheetId, Range = parsed.Range! });
+        }
+
+        return names;
     }
 
     /// <inheritdoc />

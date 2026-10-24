@@ -227,7 +227,7 @@ assignment before starting the server.
 - [ ] `MaximumBytes` and `AllowedExtensions` reviewed against your documents (defaults: 100 MB, `.docx`). Add `.pptx` for decks and `.xlsx` for workbooks.
 - [ ] Every filesystem root is owned by the service/trusted administrators. Its ACL denies untrusted principals permission to create, rename, or replace directory entries; container volumes are not shared with untrusted writers.
 - [ ] `DefaultChangeMode` set per connection if `Tracked` is not what you want when a plan omits `mode` - notably `Direct` for a connection serving `.pptx`, since a deck refuses tracked changes.
-- [ ] `AllowRegistration` left on only if agents should stage their own document ids; otherwise set `false`. When on, the server exposes `register_document`, `remove_document`, and the source-addressed composites `open_document` and `edit_document`. All four reach the same documents under the same connection boundary - the composites only save round trips, they do not widen it.
+- [ ] `AllowRegistration` left on only if agents should stage their own document ids; otherwise set `false`. When on, the server exposes `register_document`, `remove_document`, and the source-addressed composites `open_document`, `edit_document`, `edit_documents` and `refresh_document`. All six reach the same documents under the same connection boundary - the composites only save round trips, they do not widen it.
 - [ ] `AllowCreation` enabled only if agents should create files. Each SharePoint creation connection has both `CreationDriveId` and `CreationFolderItemId`; `list_connections` reports `canCreateDocuments` per connection whenever registration or creation discovery is enabled.
 
 ---

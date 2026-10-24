@@ -156,6 +156,9 @@ public sealed class PowerPointModule : IFormatModule, IBlankDocumentFactory, IPl
             new SlideDuplicateHandler(),
             new SlideInsertChartHandler(),
             new SlideUpdateChartHandler(),
+            new SlideSetChartDataHandler(),
+            new SlideFillTableHandler(),
+            new SlideBindDataHandler(),
             new CorePropertyHandler()
         }
         .Concat(extraHandlers ?? Enumerable.Empty<IOperationHandler>())
@@ -235,7 +238,8 @@ public sealed class PowerPointModule : IFormatModule, IBlankDocumentFactory, IPl
                     Text = text,
                     StyleId = null,
                     In = paragraph.Host.Key,
-                    Location = paragraph.Location
+                    Location = paragraph.Location,
+                    MarkedText = Core.MarkedText.Describe(paragraph.Paragraph, PowerPointModel.Dialect)
                 });
                 anchors.Add(new TextSpanAnchor
                 {

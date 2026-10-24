@@ -126,6 +126,11 @@ function Check-Word($app, $case, [string]$path) {
         }
         if (Has $e 'inlineShapes') { Check 'inline pictures' $e.inlineShapes $doc.InlineShapes.Count ($doc.InlineShapes.Count -eq $e.inlineShapes) }
         if (Has $e 'contentControlsAtLeast') { Check 'content controls at least' $e.contentControlsAtLeast $doc.ContentControls.Count ($doc.ContentControls.Count -ge $e.contentControlsAtLeast) }
+        if (Has $e 'contentControlTags') {
+            $tags = @($doc.ContentControls | ForEach-Object { $_.Tag })
+            foreach ($tag in $e.contentControlTags) { Check "content control tagged '$tag'" $true ($tags -contains $tag) ($tags -contains $tag) }
+        }
+        if (Has $e 'tableTitle') { $t = $doc.Tables.Item(1).Title; Check 'table alt-text title' $e.tableTitle $t ($t -eq $e.tableTitle) }
         if (Has $e 'sectionsAtLeast') { Check 'sections at least' $e.sectionsAtLeast $doc.Sections.Count ($doc.Sections.Count -ge $e.sectionsAtLeast) }
         if (Has $e 'pagesAtLeast') { $n = $doc.ComputeStatistics($wdStatisticPages); Check 'pages at least' $e.pagesAtLeast $n ($n -ge $e.pagesAtLeast) }
         if (Has $e 'landscape') { $o = $doc.Sections.Item(1).PageSetup.Orientation; Check 'landscape' $true ($o -eq 1) ($o -eq 1) }
@@ -261,6 +266,15 @@ function Check-Deck($app, $case, [string]$path) {
             $chart = @($shapes | Where-Object { $_.HasChart })[0].Chart
             $values = @($chart.SeriesCollection(1).Values | ForEach-Object { [double]$_ })
             Check 'chart series values' ($e.chartSeriesValues -join ', ') ($values -join ', ') ((@($e.chartSeriesValues) -join '|') -eq ($values -join '|'))
+        }
+        if (Has $e 'chartSeriesCount') {
+            $chart = @($shapes | Where-Object { $_.HasChart })[0].Chart
+            $n = $chart.SeriesCollection().Count
+            Check 'chart series' $e.chartSeriesCount $n ($n -eq $e.chartSeriesCount)
+        }
+        if (Has $e 'shapeNames') {
+            $names = @($shapes | ForEach-Object { $_.Name })
+            foreach ($name in $e.shapeNames) { Check "shape named '$name'" $true ($names -contains $name) ($names -contains $name) }
         }
         if (Has $e 'commentsAtLeast') { $n = 0; foreach ($s in $deck.Slides) { $n += $s.Comments.Count }; Check 'comments at least' $e.commentsAtLeast $n ($n -ge $e.commentsAtLeast) }
         if (Has $e 'sectionsAtLeast') { $n = $deck.SectionProperties.Count; Check 'sections at least' $e.sectionsAtLeast $n ($n -ge $e.sectionsAtLeast) }

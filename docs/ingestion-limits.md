@@ -56,7 +56,7 @@ host ceiling.** Host policy is the maximum, always.
 | The same on a `StreamHandle` | Bounded read at the handle, before the engine copies anything |
 | The same on a `FileHandle` | File length checked before the file is read at all |
 | Provider reads (filesystem, SharePoint) | The provider's own `MaximumBytes`, then every package ceiling |
-| `create_document`, `edit_document`, `open_document` | Every package ceiling |
+| `create_document`, `edit_document`, `edit_documents`, `refresh_document`, `open_document` | Every package ceiling, for each document |
 | Inline base64 tools (`inspect_document_content` and friends) | Refused from the encoded length before decoding, then every package ceiling |
 | Session import and export | Every package ceiling |
 | Template population, comparison | Every package ceiling, per document read |

@@ -55,7 +55,7 @@ internal static class ResponseStates
         services.AddExcelFormat();
         services.AddSingleton<IDocumentProvider>(memory);
         services.AddSingleton<IDocumentProvider>(faulty);
-        services.AddFileSystemDocumentProvider("workspace", folder);
+        services.AddFileSystemDocumentProvider("workspace", folder, options => options.AllowedExtensions = new[] { ".docx", ".xlsx" });
         services.AddSingleton<IAuditActorProvider>(actor);
         services.AddOfficeAgent();
         using var provider = services.BuildServiceProvider();
@@ -235,6 +235,43 @@ internal static class ResponseStates
         // Refused before registration, so there is no source document to name.
         await Record("edit_document", "snapshot required", guarded.EditDocument("workspace", "contract.docx", unboundPlan),
             n => HasCode(n, ToolErrorCodes.SnapshotRequired) && n["sourceDocumentId"] is null, "snapshot-required before registration");
+
+        // edit_documents: one plan across several documents, each reported on its own.
+        var blankBytes = Convert.FromBase64String(Str(JsonNode.Parse(await tools.ExportDocumentContent("memory", blank))!, "contentBase64"));
+        File.WriteAllBytes(Path.Combine(folder, "batch-a.docx"), contractBytes);
+        File.WriteAllBytes(Path.Combine(folder, "batch-b.docx"), contractBytes);
+        File.WriteAllBytes(Path.Combine(folder, "batch-c.docx"), blankBytes);
+        const string renamePlan =
+            "{\"operations\":[{\"op\":\"changeText\",\"target\":{\"find\":\"Northwind\",\"match\":\"all\",\"wholeWord\":true},\"mode\":\"Direct\",\"with\":\"Contoso\"}]}";
+        var batch = new[] { "batch-a.docx", "batch-b.docx", "batch-c.docx" };
+        await Record("edit_documents", "previewed", tools.EditDocuments("workspace", batch, renamePlan, preview: true),
+            n => Int(n["summary"]!, "previewed") == 2 && Int(n["summary"]!, "unchanged") == 1, "two previews and one unchanged document");
+        await Record("edit_documents", "committed and unchanged", tools.EditDocuments("workspace", batch, renamePlan),
+            n => Int(n["summary"]!, "committed") == 2 && Int(n["summary"]!, "unchanged") == 1, "two commits and one unchanged document");
+        await Record("edit_documents", "one document failed", tools.EditDocuments("workspace", new[] { "batch-a.docx", "missing.docx" }, renamePlan),
+            n => !Bool(n, "isValid") && Int(n["summary"]!, "failed") == 1, "a failed item beside an unchanged one");
+        await Record("edit_documents", "refused before any document opened", tools.EditDocuments("workspace", Array.Empty<string>(), renamePlan),
+            IsError, "an error envelope");
+        await Record("edit_documents", "snapshot required", guarded.EditDocuments("workspace", batch, renamePlan),
+            n => HasCode(n, ToolErrorCodes.SnapshotRequired), "snapshot-required");
+
+        // refresh_document: bindings written by bindData, then refreshed from a workbook.
+        var bookBytes = Convert.FromBase64String(Str(JsonNode.Parse(await tools.ExportDocumentContent("memory", book))!, "contentBase64"));
+        File.WriteAllBytes(Path.Combine(folder, "book.xlsx"), bookBytes);
+        File.WriteAllBytes(Path.Combine(folder, "report.docx"), contractBytes);
+        File.WriteAllBytes(Path.Combine(folder, "broken.docx"), contractBytes);
+        await tools.EditDocument("workspace", "report.docx",
+            "[{\"op\":\"bindData\",\"target\":{\"find\":\"Northwind\"},\"source\":\"Sheet1!A1\"}]");
+        await tools.EditDocument("workspace", "broken.docx",
+            "[{\"op\":\"bindData\",\"target\":{\"find\":\"Northwind\"},\"source\":\"Nowhere!A1\"}]");
+        await Record("refresh_document", "previewed", tools.RefreshDocument("workspace", "report.docx", "book.xlsx", preview: true),
+            n => IsSuccess(n) && !Bool(n, "committed") && Arr(n, "bindings").Count == 1, "a preview listing its binding");
+        await Record("refresh_document", "committed", tools.RefreshDocument("workspace", "report.docx", "book.xlsx"),
+            n => Bool(n, "committed") && Arr(n, "bindings").Count == 1, "a commit listing its binding");
+        await Record("refresh_document", "binding not readable", tools.RefreshDocument("workspace", "broken.docx", "book.xlsx"),
+            n => IsError(n) && Arr(n, "bindings")[0]!["errorCode"] is not null, "an error naming the binding");
+        await Record("refresh_document", "no bindings", tools.RefreshDocument("workspace", "contract.docx", "book.xlsx"),
+            n => HasCode(n, DataRefreshErrorCodes.NoBindings) && Arr(n, "bindings").Count == 0, "no-bindings");
         var removable = Str(JsonNode.Parse(await tools.CreateDocument("memory", "removable.docx"))!, "outputDocumentId");
         await Record("remove_document", "removed", tools.RemoveDocument("memory", removable),
             n => n["removed"]?.GetValue<bool>() == true, "removed");
@@ -373,6 +410,8 @@ internal static class ResponseStates
     private static JsonArray Arr(JsonNode node, string name) => node[name]?.AsArray() ?? new JsonArray();
 
     private static bool Bool(JsonNode node, string name) => node[name]?.GetValue<bool>() == true;
+
+    private static int Int(JsonNode node, string name) => node[name]?.GetValue<int>() ?? -1;
 
     private static string Str(JsonNode node, string name) =>
         node[name]?.GetValue<string>() ?? throw new InvalidOperationException($"Fixture response has no '{name}': {node.ToJsonString()}");

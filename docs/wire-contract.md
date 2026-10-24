@@ -50,6 +50,15 @@ scope: String
 target: Anchor
 ```
 
+### `bindData`
+
+Type: `OfficeAgent.Abstractions.BindDataOp`
+
+```text
+source: String
+target: Anchor
+```
+
 ### `changeText`
 
 Type: `OfficeAgent.Abstractions.ChangeTextOp`
@@ -58,6 +67,7 @@ Type: `OfficeAgent.Abstractions.ChangeTextOp`
 mode: ChangeMode
 target: Anchor
 with: String
+withMarked: String
 ```
 
 ### `clearStyles`
@@ -141,6 +151,15 @@ Type: `OfficeAgent.Abstractions.FillOp`
 mode: ChangeMode?
 target: Anchor
 value: String
+```
+
+### `fillTable`
+
+Type: `OfficeAgent.Abstractions.FillTableOp`
+
+```text
+rows: IReadOnlyList<IReadOnlyList<String>>
+target: Anchor
 ```
 
 ### `format`
@@ -518,6 +537,16 @@ value: String
 valueKind: SpreadsheetCellValueKind
 ```
 
+### `setChartData`
+
+Type: `OfficeAgent.Abstractions.SetChartDataOp`
+
+```text
+categories: IReadOnlyList<String>
+series: IReadOnlyList<ChartSeries>
+target: Anchor
+```
+
 ### `setProperty`
 
 Type: `OfficeAgent.Abstractions.SetPropertyOp`
@@ -850,6 +879,46 @@ MCP annotations: title "Edit document content"; readOnly true, destructive false
     "contentBase64",
     "planJson",
     "preview"
+  ],
+  "type": "object"
+}
+```
+
+### `edit_documents`
+
+MCP annotations: title "Edit several documents"; readOnly false, destructive true, idempotent false, openWorld false.
+
+```json
+{
+  "additionalProperties": false,
+  "properties": {
+    "connectionId": {
+      "type": "string"
+    },
+    "planJson": {
+      "type": "string"
+    },
+    "preview": {
+      "default": false,
+      "type": "boolean"
+    },
+    "saveMode": {
+      "default": "Replace",
+      "type": "string"
+    },
+    "sources": {
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    }
+  },
+  "required": [
+    "connectionId",
+    "sources",
+    "planJson",
+    "preview",
+    "saveMode"
   ],
   "type": "object"
 }
@@ -1234,6 +1303,53 @@ MCP annotations: title "Preview a template batch"; readOnly true, destructive fa
     "connectionId",
     "documentId",
     "requestJson"
+  ],
+  "type": "object"
+}
+```
+
+### `refresh_document`
+
+MCP annotations: title "Refresh a document from a workbook"; readOnly false, destructive true, idempotent false, openWorld false.
+
+```json
+{
+  "additionalProperties": false,
+  "properties": {
+    "connectionId": {
+      "type": "string"
+    },
+    "newName": {
+      "default": "",
+      "type": "string"
+    },
+    "preview": {
+      "default": false,
+      "type": "boolean"
+    },
+    "saveMode": {
+      "default": "Replace",
+      "type": "string"
+    },
+    "source": {
+      "type": "string"
+    },
+    "workbookConnectionId": {
+      "default": "",
+      "type": "string"
+    },
+    "workbookSource": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "connectionId",
+    "source",
+    "workbookSource",
+    "preview",
+    "saveMode",
+    "newName",
+    "workbookConnectionId"
   ],
   "type": "object"
 }
@@ -3168,6 +3284,7 @@ $.plan.operations[].target.id: string
 $.plan.operations[].target.occurrence: number
 $.plan.operations[].target.paraId: string
 $.plan.operations[].with: string
+$.plan.operations[].withMarked: null
 $.plan.revision: object
 $.plan.revision.author: string
 $.plan.revision.timestampUtc: null
@@ -3813,6 +3930,231 @@ $.receipt.revision.timestampUtc: string
 $.receipt.timestampUtc: string
 ```
 
+#### `edit_documents`
+
+State: previewed
+
+```text
+$: object
+$.isValid: boolean
+$.items: array
+$.items[]: object
+$.items[].calculation: null
+$.items[].changes: array
+$.items[].changes[]: object
+$.items[].changes[].after: string
+$.items[].changes[].before: string
+$.items[].changes[].blastRadius: number
+$.items[].changes[].capability: string
+$.items[].changes[].context: string
+$.items[].changes[].target: object
+$.items[].changes[].target.expect: string
+$.items[].changes[].target.kind: string
+$.items[].changes[].target.occurrence: number
+$.items[].changes[].target.paraId: string
+$.items[].changes[].verb: string
+$.items[].committed: boolean
+$.items[].errors: array
+$.items[].errors[]: object
+$.items[].errors[].code: string
+$.items[].errors[].connectionId: string
+$.items[].errors[].itemId: string
+$.items[].errors[].message: string
+$.items[].errors[].target: null
+$.items[].isValid: boolean
+$.items[].outputConnectionId: null
+$.items[].outputContentType: null
+$.items[].outputDocumentId: null
+$.items[].outputName: null
+$.items[].outputVersion: null
+$.items[].possibleOutput: null
+$.items[].receipt: null | object
+$.items[].receipt.actor: null
+$.items[].receipt.inputSha256: string
+$.items[].receipt.outcome: string
+$.items[].receipt.outputDocument: null
+$.items[].receipt.outputSha256: null
+$.items[].receipt.planSha256: string
+$.items[].receipt.receiptVersion: string
+$.items[].receipt.revision: object
+$.items[].receipt.revision.author: string
+$.items[].receipt.revision.timestampUtc: string
+$.items[].receipt.timestampUtc: string
+$.items[].source: string
+$.items[].sourceDocumentId: string
+$.items[].status: string
+$.items[].writeOutcome: string
+$.preview: boolean
+$.summary: object
+$.summary.committed: number
+$.summary.failed: number
+$.summary.notAttempted: number
+$.summary.previewed: number
+$.summary.total: number
+$.summary.unchanged: number
+```
+
+State: committed and unchanged
+
+```text
+$: object
+$.isValid: boolean
+$.items: array
+$.items[]: object
+$.items[].calculation: null
+$.items[].changes: array
+$.items[].changes[]: object
+$.items[].changes[].after: string
+$.items[].changes[].before: string
+$.items[].changes[].blastRadius: number
+$.items[].changes[].capability: string
+$.items[].changes[].context: string
+$.items[].changes[].target: object
+$.items[].changes[].target.expect: string
+$.items[].changes[].target.kind: string
+$.items[].changes[].target.occurrence: number
+$.items[].changes[].target.paraId: string
+$.items[].changes[].verb: string
+$.items[].committed: boolean
+$.items[].errors: array
+$.items[].errors[]: object
+$.items[].errors[].code: string
+$.items[].errors[].connectionId: string
+$.items[].errors[].itemId: string
+$.items[].errors[].message: string
+$.items[].errors[].target: null
+$.items[].isValid: boolean
+$.items[].outputConnectionId: null | string
+$.items[].outputContentType: null | string
+$.items[].outputDocumentId: null | string
+$.items[].outputName: null | string
+$.items[].outputVersion: null | string
+$.items[].possibleOutput: null
+$.items[].receipt: null | object
+$.items[].receipt.actor: null
+$.items[].receipt.inputSha256: string
+$.items[].receipt.outcome: string
+$.items[].receipt.outputDocument: object
+$.items[].receipt.outputDocument.connectionId: string
+$.items[].receipt.outputDocument.contentType: string
+$.items[].receipt.outputDocument.itemId: string
+$.items[].receipt.outputDocument.name: string
+$.items[].receipt.outputDocument.provider: string
+$.items[].receipt.outputDocument.version: string
+$.items[].receipt.outputSha256: string
+$.items[].receipt.planSha256: string
+$.items[].receipt.receiptVersion: string
+$.items[].receipt.revision: object
+$.items[].receipt.revision.author: string
+$.items[].receipt.revision.timestampUtc: string
+$.items[].receipt.timestampUtc: string
+$.items[].source: string
+$.items[].sourceDocumentId: string
+$.items[].status: string
+$.items[].writeOutcome: string
+$.preview: boolean
+$.summary: object
+$.summary.committed: number
+$.summary.failed: number
+$.summary.notAttempted: number
+$.summary.previewed: number
+$.summary.total: number
+$.summary.unchanged: number
+```
+
+State: one document failed
+
+```text
+$: object
+$.isValid: boolean
+$.items: array
+$.items[]: object
+$.items[].calculation: null
+$.items[].changes: array
+$.items[].committed: boolean
+$.items[].errors: array
+$.items[].errors[]: object
+$.items[].errors[].code: string
+$.items[].errors[].connectionId: string
+$.items[].errors[].itemId: null | string
+$.items[].errors[].message: string
+$.items[].errors[].provider: string
+$.items[].errors[].target: null
+$.items[].isValid: boolean
+$.items[].outputConnectionId: null
+$.items[].outputContentType: null
+$.items[].outputDocumentId: null
+$.items[].outputName: null
+$.items[].outputVersion: null
+$.items[].possibleOutput: null
+$.items[].receipt: null
+$.items[].source: string
+$.items[].sourceDocumentId: null | string
+$.items[].status: string
+$.items[].writeOutcome: string
+$.preview: boolean
+$.summary: object
+$.summary.committed: number
+$.summary.failed: number
+$.summary.notAttempted: number
+$.summary.previewed: number
+$.summary.total: number
+$.summary.unchanged: number
+```
+
+State: refused before any document opened
+
+```text
+$: object
+$.calculation: null
+$.changes: array
+$.committed: boolean
+$.errors: array
+$.errors[]: object
+$.errors[].code: string
+$.errors[].connectionId: null
+$.errors[].itemId: null
+$.errors[].message: string
+$.errors[].provider: null
+$.errors[].target: null
+$.isValid: boolean
+$.outputConnectionId: null
+$.outputContentType: null
+$.outputDocumentId: null
+$.outputName: null
+$.outputVersion: null
+$.possibleOutput: null
+$.receipt: null
+$.sourceDocumentId: null
+$.writeOutcome: string
+```
+
+State: snapshot required
+
+```text
+$: object
+$.calculation: null
+$.changes: array
+$.committed: boolean
+$.errors: array
+$.errors[]: object
+$.errors[].code: string
+$.errors[].connectionId: string
+$.errors[].itemId: null
+$.errors[].message: string
+$.errors[].target: null
+$.isValid: boolean
+$.outputConnectionId: null
+$.outputContentType: null
+$.outputDocumentId: null
+$.outputName: null
+$.outputVersion: null
+$.possibleOutput: null
+$.receipt: null
+$.sourceDocumentId: null
+$.writeOutcome: string
+```
+
 #### `export_document_content`
 
 State: exported
@@ -3954,6 +4296,7 @@ $.contentControls: array
 $.contentControls[]: object
 $.contentControls[].kind: string
 $.contentControls[].tag: string
+$.definedNames: array
 $.format: string
 $.nodes: array
 $.nodes[]: object
@@ -3982,6 +4325,7 @@ State: Word, blank document
 $: object
 $.cells: array
 $.contentControls: array
+$.definedNames: array
 $.format: string
 $.nodes: array
 $.nodes[]: object
@@ -4017,10 +4361,12 @@ $.contentControls: array
 $.contentControls[]: object
 $.contentControls[].kind: string
 $.contentControls[].tag: string
+$.definedNames: array
 $.format: string
 $.nodes: array
 $.nodes[]: object
 $.nodes[].kind: string
+$.nodes[].name: string
 $.nodes[].path: string
 $.nodes[].summary: string
 $.outline: array
@@ -4050,6 +4396,7 @@ State: Excel workbook
 $: object
 $.cells: array
 $.contentControls: array
+$.definedNames: array
 $.format: string
 $.nodes: array
 $.nodes[]: object
@@ -4160,6 +4507,7 @@ State: inspected
 $: object
 $.cells: array
 $.contentControls: array
+$.definedNames: array
 $.format: string
 $.nodes: array
 $.nodes[]: object
@@ -4321,6 +4669,7 @@ $.cells: array
 $.connectionId: string
 $.contentControls: array
 $.contentType: string
+$.definedNames: array
 $.documentId: string
 $.format: string
 $.name: string
@@ -4825,6 +5174,190 @@ $.token.mediaSha256: string
 $.token.templateSha256: string
 ```
 
+#### `refresh_document`
+
+State: previewed
+
+```text
+$: object
+$.bindings: array
+$.bindings[]: object
+$.bindings[].errorCode: null
+$.bindings[].kind: string
+$.bindings[].marker: string
+$.bindings[].message: null
+$.bindings[].range: string
+$.bindings[].reference: string
+$.bindings[].summary: string
+$.bindings[].target: object
+$.bindings[].target.kind: string
+$.bindings[].target.structuralKind: string
+$.bindings[].target.tag: string
+$.calculation: null
+$.changes: array
+$.changes[]: object
+$.changes[].after: string
+$.changes[].before: string
+$.changes[].blastRadius: number
+$.changes[].capability: string
+$.changes[].context: string
+$.changes[].target: object
+$.changes[].target.kind: string
+$.changes[].target.structuralKind: string
+$.changes[].target.tag: string
+$.changes[].verb: string
+$.committed: boolean
+$.errors: array
+$.isValid: boolean
+$.outputConnectionId: null
+$.outputContentType: null
+$.outputDocumentId: null
+$.outputName: null
+$.outputVersion: null
+$.possibleOutput: null
+$.receipt: object
+$.receipt.actor: null
+$.receipt.inputSha256: string
+$.receipt.outcome: string
+$.receipt.outputDocument: null
+$.receipt.outputSha256: null
+$.receipt.planSha256: string
+$.receipt.receiptVersion: string
+$.receipt.revision: object
+$.receipt.revision.author: string
+$.receipt.revision.timestampUtc: string
+$.receipt.timestampUtc: string
+$.sourceDocumentId: string
+$.writeOutcome: string
+```
+
+State: committed
+
+```text
+$: object
+$.bindings: array
+$.bindings[]: object
+$.bindings[].errorCode: null
+$.bindings[].kind: string
+$.bindings[].marker: string
+$.bindings[].message: null
+$.bindings[].range: string
+$.bindings[].reference: string
+$.bindings[].summary: string
+$.bindings[].target: object
+$.bindings[].target.kind: string
+$.bindings[].target.structuralKind: string
+$.bindings[].target.tag: string
+$.calculation: null
+$.changes: array
+$.changes[]: object
+$.changes[].after: string
+$.changes[].before: string
+$.changes[].blastRadius: number
+$.changes[].capability: string
+$.changes[].context: string
+$.changes[].target: object
+$.changes[].target.kind: string
+$.changes[].target.structuralKind: string
+$.changes[].target.tag: string
+$.changes[].verb: string
+$.committed: boolean
+$.errors: array
+$.isValid: boolean
+$.outputConnectionId: string
+$.outputContentType: string
+$.outputDocumentId: string
+$.outputName: string
+$.outputVersion: string
+$.possibleOutput: null
+$.receipt: object
+$.receipt.actor: null
+$.receipt.inputSha256: string
+$.receipt.outcome: string
+$.receipt.outputDocument: object
+$.receipt.outputDocument.connectionId: string
+$.receipt.outputDocument.contentType: string
+$.receipt.outputDocument.itemId: string
+$.receipt.outputDocument.name: string
+$.receipt.outputDocument.provider: string
+$.receipt.outputDocument.version: string
+$.receipt.outputSha256: string
+$.receipt.planSha256: string
+$.receipt.receiptVersion: string
+$.receipt.revision: object
+$.receipt.revision.author: string
+$.receipt.revision.timestampUtc: string
+$.receipt.timestampUtc: string
+$.sourceDocumentId: string
+$.writeOutcome: string
+```
+
+State: binding not readable
+
+```text
+$: object
+$.bindings: array
+$.bindings[]: object
+$.bindings[].errorCode: string
+$.bindings[].kind: string
+$.bindings[].marker: string
+$.bindings[].message: string
+$.bindings[].range: null
+$.bindings[].reference: string
+$.bindings[].summary: null
+$.bindings[].target: object
+$.bindings[].target.kind: string
+$.bindings[].target.structuralKind: string
+$.bindings[].target.tag: string
+$.calculation: null
+$.changes: array
+$.committed: boolean
+$.errors: array
+$.errors[]: object
+$.errors[].code: string
+$.errors[].connectionId: string
+$.errors[].itemId: string
+$.errors[].message: string
+$.errors[].target: null
+$.isValid: boolean
+$.outputConnectionId: null
+$.outputContentType: null
+$.outputDocumentId: null
+$.outputName: null
+$.outputVersion: null
+$.possibleOutput: null
+$.receipt: null
+$.sourceDocumentId: string
+$.writeOutcome: string
+```
+
+State: no bindings
+
+```text
+$: object
+$.bindings: array
+$.calculation: null
+$.changes: array
+$.committed: boolean
+$.errors: array
+$.errors[]: object
+$.errors[].code: string
+$.errors[].connectionId: string
+$.errors[].itemId: string
+$.errors[].message: string
+$.errors[].target: null
+$.isValid: boolean
+$.outputConnectionId: null
+$.outputContentType: null
+$.outputDocumentId: null
+$.outputName: null
+$.outputVersion: null
+$.possibleOutput: null
+$.receipt: null
+$.sourceDocumentId: string
+$.writeOutcome: string
+```
+
 #### `register_document`
 
 State: registered
@@ -5023,6 +5556,12 @@ Subject = ""
 ImageType = "png"
 ```
 
+### `OfficeAgent.Abstractions.BindDataOp`
+
+```text
+Source = ""
+```
+
 ### `OfficeAgent.Abstractions.CellAnchor`
 
 ```text
@@ -5102,12 +5641,36 @@ MergeReceipt = "1"
 Scope = "all"
 ```
 
+### `OfficeAgent.Abstractions.DataRefreshBinding`
+
+```text
+Kind = Value
+Marker = ""
+Reference = ""
+```
+
+### `OfficeAgent.Abstractions.DataRefreshPlan`
+
+```text
+Bindings = []
+Plan.ContractVersion = "0.2"
+Plan.Format = Unspecified
+Plan.Operations = []
+```
+
 ### `OfficeAgent.Abstractions.DefineStyleOp`
 
 ```text
 Quick = true
 StyleId = ""
 Type = "paragraph"
+```
+
+### `OfficeAgent.Abstractions.DefinedNameInfo`
+
+```text
+Name = ""
+Range = ""
 ```
 
 ### `OfficeAgent.Abstractions.DocumentComparisonOptions`
@@ -5237,6 +5800,12 @@ RequiresInspection = []
 
 ```text
 Value = ""
+```
+
+### `OfficeAgent.Abstractions.FillTableOp`
+
+```text
+Rows = []
 ```
 
 ### `OfficeAgent.Abstractions.FindHit`
@@ -5392,6 +5961,7 @@ MaximumCells = 1000
 ```text
 Anchors = []
 Cells = []
+DefinedNames = []
 Format = Word
 Nodes = []
 Outline = []
@@ -5576,6 +6146,13 @@ Name = ""
 
 ```text
 ValueKind = Auto
+```
+
+### `OfficeAgent.Abstractions.SetChartDataOp`
+
+```text
+Categories = []
+Series = []
 ```
 
 ### `OfficeAgent.Abstractions.SetPropertyOp`

@@ -52,6 +52,25 @@ public sealed class InspectResult
 
     /// <summary>Gets populated cells from the bounded Excel inspection range.</summary>
     public IReadOnlyList<CellInfo> Cells { get; init; } = Array.Empty<CellInfo>();
+
+    /// <summary>
+    /// Gets a workbook's defined names that refer to one range, such as <c>Revenue</c> for
+    /// <c>Summary!$B$2</c>. Excel only; hidden and built-in names are left out.
+    /// </summary>
+    public IReadOnlyList<DefinedNameInfo> DefinedNames { get; init; } = Array.Empty<DefinedNameInfo>();
+}
+
+/// <summary>A workbook defined name and the range it refers to.</summary>
+public sealed class DefinedNameInfo
+{
+    /// <summary>Gets the name as Excel shows it.</summary>
+    public string Name { get; init; } = string.Empty;
+
+    /// <summary>Gets the durable sheet id of the range.</summary>
+    public uint SheetId { get; init; }
+
+    /// <summary>Gets the A1 range, without the sheet name or <c>$</c> signs, such as <c>B2</c> or <c>A1:D6</c>.</summary>
+    public string Range { get; init; } = string.Empty;
 }
 
 /// <summary>Describes one worksheet and its table catalog.</summary>
@@ -89,6 +108,14 @@ public sealed class CellInfo
     public string? DisplayValue { get; init; }
     /// <summary>Gets the formula text when the cell contains a formula.</summary>
     public string? Formula { get; init; }
+
+    /// <summary>
+    /// Gets the value as Excel displays it, with the cell's number format applied - <c>$4,200,000</c>
+    /// or <c>12.5%</c> rather than <c>4200000</c> or <c>0.125</c>. Numbers are written with the
+    /// invariant culture's separators. A formula's cached result is formatted; a formula with no
+    /// cached result has no formatted value.
+    /// </summary>
+    public string? FormattedValue { get; init; }
 }
 
 /// <summary>
@@ -107,6 +134,13 @@ public sealed class NodeInfo
 
     /// <summary>Gets the anchor for the node.</summary>
     public NodeAnchor? Anchor { get; init; }
+
+    /// <summary>
+    /// Gets the name an author gave the node, or <see langword="null"/> when it has none: a
+    /// PowerPoint shape, table or chart's Selection Pane name, or a Word table's alt-text title.
+    /// A name starting with <see cref="DataBindingMarker.Prefix"/> links the node to a workbook range.
+    /// </summary>
+    public string? Name { get; init; }
 }
 
 /// <summary>
@@ -155,6 +189,19 @@ public sealed class ParagraphInfo
     /// change outside the document flow.
     /// </summary>
     public string Location { get; init; } = "body";
+
+    /// <summary>
+    /// Gets the paragraph text with its character formatting marked as numbered tags, such as
+    /// <c>Payment is due within &lt;1&gt;30 days&lt;/1&gt;.</c>, or <see langword="null"/> when
+    /// the whole paragraph has one formatting. Rewrite it keeping the tags around the words
+    /// that should carry each formatting, and send it as <see cref="ChangeTextOp.WithMarked"/>.
+    /// </summary>
+    /// <remarks>
+    /// Untagged text has the formatting most of the paragraph has. Also <see langword="null"/>
+    /// for a Word paragraph whose text crosses a hyperlink, content control or tracked change,
+    /// which a whole-paragraph rewrite cannot keep.
+    /// </remarks>
+    public string? MarkedText { get; init; }
 }
 
 /// <summary>

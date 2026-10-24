@@ -19,7 +19,10 @@ namespace OfficeAgent.AgentFramework;
 /// <para>
 /// Resolution is deliberately strict about ambiguity. Text matching more than once is an
 /// error unless the operation says which match it means, because silently editing the
-/// first of several is the one outcome an agent cannot detect from the result.
+/// first of several is the one outcome an agent cannot detect from the result. Saying
+/// <c>"match": "all"</c> means every match, so the operation is repeated once per match - and
+/// once per match may be not at all, which is what lets one plan run across many documents
+/// that do not all contain the text.
 /// </para>
 /// <para>
 /// This is an agent-surface convenience, not an engine concept: the rewritten plan that
@@ -84,17 +87,18 @@ internal sealed class FindTargetResolver
     {
         var failures = new List<Failure>();
         var operations = (JsonArray)plan["operations"]!;
-
-        var pending = operations
-            .Select((node, index) => (Node: node as JsonObject, Index: index))
-            .Where(entry => entry.Node?["target"] is JsonObject target && HasFind(target))
-            .ToList();
-
         var matchesByPattern = new Dictionary<string, IReadOnlyList<FindHit>>(StringComparer.Ordinal);
 
-        foreach (var (node, index) in pending)
+        // An operation saying "match": "all" is repeated once per match, which can be no
+        // times at all; every other operation is bound in place. Null means "in place".
+        var expansions = new List<JsonObject>?[operations.Count];
+
+        for (var index = 0; index < operations.Count; index++)
         {
-            var target = (JsonObject)node!["target"]!;
+            if (operations[index] is not JsonObject node ||
+                node["target"] is not JsonObject target || !HasFind(target))
+                continue;
+
             if (!TryGetString(target, "find", out var pattern) || pattern.Length == 0)
             {
                 failures.Add(new Failure(ToolErrorCodes.InvalidArgument,
@@ -102,22 +106,82 @@ internal sealed class FindTargetResolver
                 continue;
             }
 
-            if (!matchesByPattern.TryGetValue(pattern, out var hits))
+            var caseSensitive = TryGetBool(target, "caseSensitive");
+            var wholeWord = TryGetBool(target, "wholeWord");
+            var key = $"{(caseSensitive ? 'C' : 'c')}{(wholeWord ? 'W' : 'w')}{pattern}";
+            if (!matchesByPattern.TryGetValue(key, out var hits))
             {
                 hits = _client.Find(
                     new StreamHandle(new MemoryStream(bytes, writable: false), name),
-                    new FindQuery { Pattern = pattern });
-                matchesByPattern[pattern] = hits;
+                    new FindQuery
+                    {
+                        Pattern = pattern,
+                        Options = new MatchOptions { CaseSensitive = caseSensitive, WholeWord = wholeWord }
+                    });
+                matchesByPattern[key] = hits;
             }
 
-            var requestedMatch = TryGetInt(target, "match", out var match) ? match : (int?)null;
+            if (MatchesAll(target, index, failures, out var requestedMatch))
+            {
+                // Last match first. Edits to one paragraph apply in plan order, and an edit
+                // shifts the occurrence numbers of the matches after it but never of those
+                // before, so working backwards keeps every remaining anchor true.
+                var copies = new List<JsonObject>();
+                foreach (var hit in hits.Reverse())
+                {
+                    var copy = (JsonObject)node.DeepClone();
+                    Bind((JsonObject)copy["target"]!, hit);
+                    copies.Add(copy);
+                }
+
+                expansions[index] = copies;
+                continue;
+            }
+
             var chosen = Choose(hits, pattern, requestedMatch, index, failures);
             if (chosen is null) continue;
 
             Bind(target, chosen);
         }
 
+        if (failures.Count == 0 && expansions.Any(copies => copies is not null))
+        {
+            var rebuilt = new JsonArray();
+            for (var index = 0; index < operations.Count; index++)
+            {
+                if (expansions[index] is { } copies)
+                    foreach (var copy in copies) rebuilt.Add(copy);
+                else
+                    rebuilt.Add(operations[index]?.DeepClone());
+            }
+
+            plan["operations"] = rebuilt;
+        }
+
         return failures;
+    }
+
+    /// <summary>
+    /// Whether the target asks for every match, reading <c>match</c> as an index otherwise.
+    /// Any other string is refused rather than read as "no index", which would quietly turn
+    /// an intended choice into an ambiguity or a guess.
+    /// </summary>
+    private static bool MatchesAll(JsonObject target, int index, List<Failure> failures, out int? requestedMatch)
+    {
+        requestedMatch = null;
+        if (!target.TryGetPropertyValue("match", out var node) || node is not JsonValue value)
+            return false;
+
+        if (value.TryGetValue<string>(out var text))
+        {
+            if (string.Equals(text?.Trim(), "all", StringComparison.OrdinalIgnoreCase)) return true;
+            failures.Add(new Failure(ToolErrorCodes.InvalidArgument,
+                $"Operation {index}: \"match\" must be a zero-based index or \"all\", not \"{text}\"."));
+            return false;
+        }
+
+        if (value.TryGetValue<int>(out var match)) requestedMatch = match;
+        return false;
     }
 
     /// <summary>
@@ -169,12 +233,19 @@ internal sealed class FindTargetResolver
     {
         target.Remove("find");
         target.Remove("match");
+        target.Remove("caseSensitive");
+        target.Remove("wholeWord");
 
         var anchor = hit.Anchor as TextSpanAnchor;
         target["paraId"] = anchor?.ParaId ?? string.Empty;
         target["expect"] = hit.Text;
         target["occurrence"] = anchor?.Occurrence ?? 0;
     }
+
+    /// <summary>An optional boolean on a find target; absent means false, matching find_in_document's defaults.</summary>
+    private static bool TryGetBool(JsonObject target, string name) =>
+        target.TryGetPropertyValue(name, out var node) &&
+        node is JsonValue value && value.TryGetValue<bool>(out var flag) && flag;
 
     private static bool HasFind(JsonObject target) =>
         target.TryGetPropertyValue("find", out var node) && node is not null;
@@ -187,14 +258,6 @@ internal sealed class FindTargetResolver
         if (!jsonValue.TryGetValue<string>(out var parsed) || parsed is null) return false;
         value = parsed;
         return true;
-    }
-
-    private static bool TryGetInt(JsonObject target, string name, out int value)
-    {
-        value = 0;
-        if (!target.TryGetPropertyValue(name, out var node) || node is not JsonValue jsonValue)
-            return false;
-        return jsonValue.TryGetValue<int>(out value);
     }
 
     private static async Task<byte[]> ReadAllAsync(Stream stream, CancellationToken cancellationToken)

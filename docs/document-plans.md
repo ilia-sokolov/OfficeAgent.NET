@@ -186,6 +186,37 @@ var plan = new DocumentPlan
 Include the leading or trailing space in `expect` when the deleted words sit between other
 words, so the sentence keeps one space. To remove a whole paragraph, use `removeParagraph`.
 
+#### Rewrite a paragraph and keep its formatting
+
+`with` takes the formatting of the first run it replaces, so rewriting a whole paragraph with
+it loses a bold term or a coloured phrase in the middle. `withMarked` keeps them. Inspection
+gives each paragraph whose words differ in formatting a `markedText`: its text with every
+formatting except the paragraph's usual one written as a numbered tag.
+
+```json
+{ "paraId": "w14:…", "text": "Payment is due within 30 days of invoice.",
+  "markedText": "Payment is due within <1>30 days</1> of invoice." }
+```
+
+Rewrite that text, keeping each `<n>…</n>` around the words that should carry formatting `n`
+wherever they land, and send it as `withMarked`. `expect` is the paragraph's complete text.
+
+```json
+{ "op": "changeText",
+  "target": { "paraId": "w14:…", "expect": "Payment is due within 30 days of invoice." },
+  "withMarked": "<1>Binnen 30 dagen</1> na factuurdatum moet worden betaald.",
+  "mode": "Direct" }
+```
+
+Untagged text takes the paragraph's usual formatting. A tag may be used more than once or
+not at all, tags do not nest, and only a number in angle brackets is a tag, so `a < b` stays
+text. Each new run copies its formatting's character properties and nothing else. Under
+`Tracked` the rewrite is one deletion and one insertion. A paragraph with one formatting
+throughout has no `markedText` and takes `withMarked` without tags. A Word paragraph whose
+text crosses a hyperlink, content control or pending tracked change has no `markedText`
+and refuses `withMarked`; rewrite each part with `with`. Word and PowerPoint only. See
+[translation and bulk edits](translation-and-bulk-edits.md).
+
 ### `format`
 
 Unified styling. Apply any combination of properties to a paragraph or text span, a table, a table row, a table cell, or an image. Properties left unset are not changed.
@@ -517,6 +548,43 @@ when the row ends first, when the cell takes part in a vertical merge, or when t
 end part-way through a cell that already spans several columns - the message names the
 `columnSpan` that includes it whole. Merging is a `Direct` change; `"mode": "Tracked"` is
 refused, because OfficeAgent does not record a cell merge as a tracked change.
+
+### `fillTable` / `setChartData` / `bindData`
+
+The data verbs behind [report refresh](report-refresh.md); each is also usable on its own. All
+three apply directly.
+
+`fillTable` replaces every cell of a Word or PowerPoint table, row by row from the top-left,
+header row included. Every row has one value per column. The table grows by copies of its last
+row or loses its last rows to match; each cell keeps its first paragraph and that paragraph's
+first run's formatting. Tables with merged cells are refused.
+
+```json
+{ "op": "fillTable", "target": { "kind": "table", "path": "table#0" },
+  "rows": [["Region", "Revenue"], ["North", "$1.2M"], ["South", "$0.9M"]] }
+```
+
+`setChartData` replaces the data of any native PowerPoint chart - not only one OfficeAgent
+made - and keeps its type, colours, labels, axes and layout. Extra series copy the last one's
+formatting; surplus series are removed; the embedded data sheet is rewritten to match. Scatter,
+bubble, surface and stock charts are refused. `updateChart` still rebuilds a chart OfficeAgent
+created, type and all.
+
+```json
+{ "op": "setChartData", "target": { "kind": "chart", "path": "chart#256/4" },
+  "categories": ["Jan", "Feb", "Mar"],
+  "series": [{ "name": "North", "values": [10, 12, 15] }, { "name": "South", "values": [20, 18, null] }] }
+```
+
+`bindData` links part of a document to a workbook range by writing a `xl:` marker: a Word text
+span is wrapped in a content control tagged with it, a Word table gets it as its alt-text title,
+and a PowerPoint shape, table or chart node gets it as its name. `source` is `Sheet!B2`,
+`'Sheet name'!A1:D6`, a defined name, or an Excel table name. Binding a target to the range it
+already has changes nothing; a second Word link to the same range is tagged `…#2`.
+
+```json
+{ "op": "bindData", "target": { "paraId": "w14:…", "expect": "$3.1M" }, "source": "Revenue" }
+```
 
 ### `insertImage` / `removeImage`
 

@@ -170,6 +170,20 @@ internal static class NativeCorpus
         yield return W("w-removetable", "removeTable", "Remove a table", tabled,
             new PlanOperation[] { new RemoveTableOp { Target = table, Mode = ChangeMode.Direct } },
             new() { ["tables"] = 0, ["textExcludes"] = new[] { "Widget" } });
+        yield return W("w-filltable", "fillTable", "Refill a table from data, growing it by a row", tabled,
+            new PlanOperation[] { new FillTableOp { Target = table, Rows = new[]
+            {
+                new[] { "Item", "Qty", "Price" }, new[] { "Gizmo", "4", "12" }, new[] { "Doohickey", "7", "3" }, new[] { "Thingamajig", "1", "99" }
+            } } },
+            new() { ["tables"] = 1, ["tableRows"] = 4, ["tableColumns"] = 3, ["textContains"] = new[] { "Gizmo", "Thingamajig" },
+                    ["textExcludes"] = new[] { "Widget", "Gadget" } }, visual: true);
+        yield return W("w-binddata-text", "bindData", "Link a phrase to a workbook cell", contract,
+            new PlanOperation[] { new BindDataOp { Target = hit, Source = "Summary!B2" } },
+            new() { ["contentControlsAtLeast"] = 2, ["contentControlTags"] = new[] { "xl:Summary!B2" },
+                    ["textContains"] = new[] { "Acme Corp shall provide" } });
+        yield return W("w-binddata-table", "bindData", "Link a table to a workbook range", tabled,
+            new PlanOperation[] { new BindDataOp { Target = table, Source = "'Monthly Sales'!A1:C3" } },
+            new() { ["tables"] = 1, ["tableTitle"] = "xl:'Monthly Sales'!A1:C3", ["textContains"] = new[] { "Widget" } });
 
         // Images and page-level features.
         var imaged = Commit(client, contract, "input.docx", new PlanOperation[]
@@ -382,6 +396,14 @@ internal static class NativeCorpus
             new PlanOperation[] { new UpdateChartOp { Target = chart, Kind = ChartKind.Line, Categories = new[] { "A", "B" },
                 Series = new[] { new ChartSeries { Name = "New", Values = new double?[] { 2, 3 } } }, Description = "Updated chart" } },
             new() { ["charts"] = 1, ["chartEditable"] = true, ["chartSeriesValues"] = new[] { 2.0, 3.0 } }, visual: true);
+        yield return P("p-setchartdata", "setChartData", "New data in an existing chart, growing it to two series", charted,
+            new PlanOperation[] { new SetChartDataOp { Target = chart, Categories = new[] { "Jan", "Feb", "Mar", "Apr" },
+                Series = new[]
+                {
+                    new ChartSeries { Name = "North", Values = new double?[] { 10, 12, 15, 11 } },
+                    new ChartSeries { Name = "South", Values = new double?[] { 20, 18, 25, 22 } }
+                } } },
+            new() { ["charts"] = 1, ["chartEditable"] = true, ["chartSeriesCount"] = 2, ["chartSeriesValues"] = new[] { 10.0, 12.0, 15.0, 11.0 } }, visual: true);
 
         yield return new Case("p-template-chart", "powerpoint", "template", "Template chart slot bound through a template batch on the filesystem provider",
             charted, TemplateBatch(charted, ".pptx", null, chartBinding: new TemplateChartValue
@@ -430,6 +452,12 @@ internal static class NativeCorpus
         yield return P("p-removetable", "removeTable", "Remove the table", tabled,
             new PlanOperation[] { new RemoveTableOp { Target = pptTable } },
             new() { ["tables"] = 0 });
+        yield return P("p-filltable", "fillTable", "Refill a table from data, growing it by a row", tabled,
+            new PlanOperation[] { new FillTableOp { Target = pptTable, Rows = new[] { new[] { "Region", "Q1" }, new[] { "North", "10" }, new[] { "South", "12" } } } },
+            new() { ["tables"] = 1, ["textContains"] = new[] { "North", "South" }, ["textExcludes"] = new[] { "EMEA" } }, visual: true);
+        yield return P("p-binddata", "bindData", "Link a shape to a workbook cell", three,
+            new PlanOperation[] { new BindDataOp { Target = new NodeAnchor { Kind = "shape", Path = shapePath }, Source = "Revenue" } },
+            new() { ["slides"] = 3, ["shapeNames"] = new[] { "xl:Revenue" } });
 
         // Text verbs on a deck with real layouts: the minimal factory deck's shapes carry no
         // geometry, so PowerPoint lays them out at zero size and a PDF of them shows nothing.

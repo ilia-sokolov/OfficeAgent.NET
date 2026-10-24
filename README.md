@@ -5,7 +5,7 @@
 [![NuGet](https://img.shields.io/nuget/v/OfficeAgent.Core.svg)](https://www.nuget.org/packages/OfficeAgent.Core)
 [![.NET 8 | 10](https://img.shields.io/badge/.NET-8%20%7C%2010-512BD4)](https://github.com/ilia-sokolov/OfficeAgent.NET/blob/main/docs/compatibility.md)
 [![API: SemVer 1.x stable](https://img.shields.io/badge/API-SemVer%201.x%20stable-2ea44f)](https://github.com/ilia-sokolov/OfficeAgent.NET/blob/main/docs/compatibility.md)
-[![native Office: 70/70 cases verified](https://img.shields.io/badge/native%20Office-70%2F70%20cases%20verified-2ea44f)](https://github.com/ilia-sokolov/OfficeAgent.NET/blob/main/docs/native-compatibility.md)
+[![native Office: 83/83 cases verified](https://img.shields.io/badge/native%20Office-83%2F83%20cases%20verified-2ea44f)](https://github.com/ilia-sokolov/OfficeAgent.NET/blob/main/docs/native-compatibility.md)
 [![OpenSSF Best Practices](https://img.shields.io/cii/level/15172?label=openssf%20best%20practices)](https://www.bestpractices.dev/projects/15172)
 [![OpenSSF Scorecard](https://img.shields.io/ossf-scorecard/github.com/ilia-sokolov/OfficeAgent.NET?label=openssf%20scorecard)](https://securityscorecards.dev/viewer/?uri=github.com/ilia-sokolov/OfficeAgent.NET)
 [![good first issues](https://img.shields.io/github/issues/ilia-sokolov/OfficeAgent.NET/good%20first%20issue?label=good%20first%20issues)](https://github.com/ilia-sokolov/OfficeAgent.NET/labels/good%20first%20issue)
@@ -77,6 +77,9 @@ it for a workflow that depends on Office's layout or calculation engine.
 | Build a .NET, MCP, or Agent Framework integration | [Optional officeagent-integration skill](skills/officeagent-integration/SKILL.md) |
 | Build a contract-review agent | [ContractReview sample](samples/ContractReview/) |
 | Populate quote templates or compare Word documents | [Template and comparison workflows](docs/document-workflows.md) |
+| Update this month's report or deck from the new workbook | [Report refresh](docs/report-refresh.md) |
+| Translate a document and keep its formatting | [Translate a document](docs/translation-and-bulk-edits.md#translate-a-document) |
+| Rename a company or update a disclaimer across a folder | [Edit many documents at once](docs/translation-and-bulk-edits.md#edit-many-documents-at-once) |
 | Check support, compatibility, or security policy | [Support](SUPPORT.md) and [security](SECURITY.md) |
 | Contribute | [Contributing](#contributing) |
 

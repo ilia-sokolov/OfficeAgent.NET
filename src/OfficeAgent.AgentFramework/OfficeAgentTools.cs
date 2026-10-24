@@ -306,6 +306,7 @@ public sealed class OfficeAgentTools
         - Tables and images only appear in inspect_document.nodes, never in the paragraphs list. Copy the path from there rather than composing one: Word uses "table#N"/"image#N", a deck uses "table#{slideId}/{shapeId}"/"image#{slideId}/{shapeId}". To recognise table content, look for paragraphs whose `in` field matches a table path.
         - Preview before you apply. If preview reports stale-snapshot, re-inspect and rebuild. If preview reports expect-mismatch, the document drifted - re-inspect/find that operation. If preview reports revision-overlap, the edit spans somebody else's pending tracked change: resolve that revision first with a revision operation, re-inspect, then reissue the edit, or target a narrower span that lies wholly inside or wholly outside it.
         - Change mode: in a Word document default to "Tracked" unless the user explicitly approves direct edits. "mode" is not only for changeText - it belongs on every verb that changes content (insert, insertParagraphs, removeParagraph, insertTable, removeTable, the table row/column verbs including repeatTableRow, insertImage, removeImage, format, fill, insertBreak, note), and Word tracks all of them when it is omitted. A tracked structural edit is a real redline: an added paragraph and its paragraph mark come back as insertions, a removed row stays in place struck through until someone accepts it, and a format records what it replaced. A PowerPoint deck has no tracked-changes representation and REFUSES mode "Tracked" on any of these, so use "Direct" there and say that edits to a deck cannot be redlined; add a comment if the change needs to be flagged for review.
+        - Translating or rewriting a document: work paragraph by paragraph, so headings, lists, tables, headers and footers keep their structure and styles. A paragraph whose words differ in formatting has a markedText in inspect_document, such as "Payment is due within <1>30 days</1> of invoice." Rewrite it keeping each <n>…</n> around the words that should carry that formatting - wherever the translation puts them - and send it as withMarked with expect set to the paragraph's full text: { "op": "changeText", "target": { "paraId": "w14:…", "expect": "Payment is due within 30 days of invoice." }, "withMarked": "Betaling binnen <1>30 dagen</1> na factuurdatum." }. A paragraph without markedText takes a plain "with". Leave paragraphs that are only numbers, codes or names as they are. In a workbook, setCell the text cells and leave formulas alone.
         - To delete text, use changeText with an empty "with": { "op": "changeText", "target": { "paraId": "w14:…", "expect": " unless terminated earlier" }, "with": "", "mode": "Tracked" }. Under Tracked it is one deletion a reviewer can accept or reject. Include the space next to the deleted words in expect so the sentence keeps one space. There is no separate delete verb; to remove a whole paragraph use removeParagraph.
         - Reviewing an existing Word redline: inspect_document.nodes lists every revision (kind "revision") with its author and date, under paths like "ins#7", "del#7", "markIns#7" (a paragraph split), "rowIns#7"/"rowDel#7", "cellIns#7"/"cellDel#7", and "runFormat#7"/"paraFormat#7" (formatting changes). Resolve them with { "op": "revision", "target": { "kind": "revision", "path": "…" }, "action": "Accept" | "Reject" } - "all" takes every revision in the document and "author:<name>" takes one person's.
         - Editing a document that already has tracked changes: inspect_document and find_in_document show the text as it would read if every pending change were accepted, so pending insertions are visible and pending deletions are not. An edit clear of the existing revisions, or wholly inside one pending insertion, is applied normally. An edit that spans a pending deletion, or reaches out of one revision into ordinary text, is refused with revision-overlap and nothing is written, because the resulting redline would no longer reject back to the original text. Resolving somebody else's revision is always an explicit revision operation, never a side effect of an edit.
@@ -374,7 +375,10 @@ public sealed class OfficeAgentTools
         - open_document(connectionId, source) = register_document + inspect_document. Prefer it when the user names a file you have no id for and you need to see the document.
         - edit_document(connectionId, source, planJson) = register_document + find + apply_plan. Prefer it when you already know the text to change; it returns sourceDocumentId for follow-up work.
         - In edit_document a target may name text directly - { "find": "Acme Corp" } - instead of a paraId, so no lookup call is needed. Text matching more than once fails with "ambiguous-anchor" and lists the candidates: re-issue with { "find": "Acme Corp", "match": 2 } (zero-based) or use more surrounding text. Never guess a match index; use the one the error listed.
-        - Reach for the single-purpose tools when the composites do not fit: an id you already hold, a plan you want to preview before applying, or targets that need regex or case-sensitive search (find_in_document, then paraId targets).
+        - { "find": "Acme Corp", "match": "all" } means every match, including those in headers, footers and notes: the operation is repeated for each one. find ignores case and matches inside words unless the target adds "caseSensitive": true or "wholeWord": true.
+        - refresh_document(connectionId, source, workbookSource) updates a report or deck from a workbook through the bindings it carries (nodes and content controls named "xl:<range>"). The first time, link each number, table and chart with bindData in an edit_document or apply_plan call - inspect the workbook first and use its sheet names, defined names (definedNames) or table names. After that, each month is one refresh_document call: preview=true, show the user the bindings, then run it again without preview, with saveMode "NewVersion" if they want last month's copy kept.
+        - edit_documents(connectionId, sources, planJson) applies one plan to up to 100 documents: list the folder, preview=true first, show the user the summary, then run it again without preview. Each document saves on its own, so a failure in one leaves the rest done; report the failed and unchanged ones by name.
+        - Reach for the single-purpose tools when the composites do not fit: an id you already hold, a plan you want to preview before applying, or targets that need regex search (find_in_document, then paraId targets).
         """;
 
     /// <summary>
@@ -464,9 +468,30 @@ public sealed class OfficeAgentTools
                 "Targets may name text directly instead of a paragraph id, so no lookup call is needed first:\n" +
                 "{ \"op\": \"changeText\", \"target\": { \"find\": \"Acme Corp\" }, \"with\": \"Globex Inc.\" }\n" +
                 "If that text matches more than once the call fails with 'ambiguous-anchor' and lists each candidate with its context; re-issue with { \"find\": \"Acme Corp\", \"match\": 2 } (zero-based) or use more surrounding text. Text that matches nothing fails with 'anchor-not-found'. " +
+                "{ \"find\": \"Acme Corp\", \"match\": \"all\" } repeats the operation for every match - every one in headers, footers and notes too - and skips it where there is none. " +
+                "find ignores case and matches inside words unless the target adds \"caseSensitive\": true or \"wholeWord\": true. " +
                 "Anchors resolved from inspect_document/find_in_document ({ \"paraId\": …, \"expect\": … }) work here too, and can be mixed in the same plan. " +
                 "saveMode and newName behave as in apply_plan. Nothing is written unless every operation validates. " +
                 "Returns the apply_plan shape plus sourceDocumentId - the id of the document that was opened, usable for follow-up calls even when the edit failed.")));
+            functions.Add(AIFunctionFactory.Create(RefreshDocument, Opts(schema,
+                "refresh_document",
+                "Update a Word report or PowerPoint deck from an Excel workbook in one call: this month's numbers, tables and charts from this month's workbook. " +
+                "source is the document and workbookSource the workbook, both as edit_document takes source; workbookConnectionId defaults to connectionId. " +
+                "The document says what to update through markers that name a workbook range, written by the bindData operation or by hand: a Word content control or PowerPoint text shape bound to one cell takes its displayed value, number format applied; a bound table is filled from its range, growing or shrinking by rows; a bound chart takes its range with the series names in the first row and the categories in the first column, and keeps its colours and layout. " +
+                "A range is Sheet!B2, 'Sheet name'!A1:D6, a defined name, or an Excel table name. " +
+                "Run with preview=true first: it lists every binding and what it will write, and saves nothing. A refresh is all or nothing - if any binding cannot be read, nothing is written and each problem is listed. " +
+                "saveMode and newName behave as in apply_plan; NewVersion keeps last month's document beside the new one. " +
+                "Returns the edit_document shape plus bindings: [{kind, marker, reference, range, target, summary, errorCode, message}].")));
+            functions.Add(AIFunctionFactory.Create(EditDocuments, Opts(schema,
+                "edit_documents",
+                "Apply one plan to several documents in one call - rename a company, update a disclaimer, or change a term across a folder. " +
+                $"sources lists up to {MaximumBatchDocuments} documents, each exactly as edit_document takes source; list the folder yourself first. " +
+                "Name text with \"match\": \"all\" so each document changes wherever the text appears: { \"op\": \"changeText\", \"target\": { \"find\": \"Acme Corp\", \"match\": \"all\", \"caseSensitive\": true }, \"with\": \"Globex Inc.\" }. " +
+                "find ignores case and matches inside words unless the target adds \"caseSensitive\": true or \"wholeWord\": true; a rename usually wants both. " +
+                "Each document is edited on its own and atomically: one that fails is left untouched and the others still save. A document in which no \"match\": \"all\" target matched is reported as unchanged and not saved. " +
+                "Run with preview=true first to see every document's changes without writing anything, then again without it. The plan cannot carry a snapshot. " +
+                "saveMode behaves as in apply_plan; NewDocument keeps each source and saves a new copy beside it. " +
+                "Returns {isValid, preview, summary: {total, committed, previewed, unchanged, failed, notAttempted}, items}; each item is {source, status} followed by exactly what edit_document returns for that document, receipt included.")));
         }
         if (options.AllowCreation && options.AllowConnectionAddressing)
         {
@@ -558,6 +583,10 @@ public sealed class OfficeAgentTools
         "Each operation is one object. Concrete examples:\n\n" +
             "// Replace text:\n" +
             "{ \"op\": \"changeText\", \"target\": { \"paraId\": \"w14:...\", \"expect\": \"Acme Corp\", \"occurrence\": 0 }, \"with\": \"Globex Inc.\", \"mode\": \"Tracked\" }\n\n" +
+            "// Rewrite or translate a whole paragraph and keep its bold, italic, colour and links. inspect_document gives a paragraph whose words differ in formatting a markedText such as\n" +
+            "// \"Payment is due within <1>30 days</1> of invoice.\" Keep each <n>…</n> around the words that should carry that formatting, wherever they land; untagged text takes the paragraph's usual formatting.\n" +
+            "// expect is the paragraph's complete text. Word and PowerPoint:\n" +
+            "{ \"op\": \"changeText\", \"target\": { \"paraId\": \"w14:...\", \"expect\": \"Payment is due within 30 days of invoice.\" }, \"withMarked\": \"Betaling binnen <1>30 dagen</1> na factuurdatum.\", \"mode\": \"Direct\" }\n\n" +
             "// Unified formatting (paragraph/run/table/row/cell/image):\n" +
             "{ \"op\": \"format\", \"target\": { \"paraId\": \"w14:...\", \"expect\": \"important\", \"occurrence\": 0 }, \"highlight\": \"yellow\", \"bold\": true, \"color\": \"FF0000\" }\n" +
             "{ \"op\": \"format\", \"target\": { \"kind\": \"table\",     \"path\": \"table#0\" }, \"styleId\": \"TableGrid\", \"borderStyle\": \"single\" }\n" +
@@ -611,6 +640,13 @@ public sealed class OfficeAgentTools
             "{ \"op\": \"backgroundImage\", \"base64Bytes\": \"iVBORw0KGgo...\", \"imageType\": \"png\", \"opacity\": 0.2 }\n" +
             "{ \"op\": \"backgroundImage\", \"target\": { \"kind\": \"slide\", \"path\": \"slide#256\" }, \"base64Bytes\": \"iVBORw0KGgo...\", \"opacity\": 0.15 }\n" +
             "{ \"op\": \"headerFooter\", \"header\": \"Northwind Traders\", \"footer\": \"Confidential\", \"showPageNumber\": true, \"alignment\": \"edges\", \"differentFirstPage\": true }\n\n" +
+            "// Refresh data. fillTable replaces every cell of a table row by row, keeping cell formatting; rows must match the table's columns, and the table grows or shrinks by rows.\n" +
+            "{ \"op\": \"fillTable\", \"target\": { \"kind\": \"table\", \"path\": \"table#0\" }, \"rows\": [[\"Region\",\"Revenue\"],[\"North\",\"$1.2M\"]] }\n" +
+            "// setChartData replaces any chart's data and keeps its type, colours and layout (PowerPoint; not scatter or bubble):\n" +
+            "{ \"op\": \"setChartData\", \"target\": { \"kind\": \"chart\", \"path\": \"chart#256/4\" }, \"categories\": [\"Jan\",\"Feb\"], \"series\": [{ \"name\": \"Revenue\", \"values\": [10,12] }] }\n" +
+            "// bindData links a Word text span or table, or a PowerPoint shape, table or chart node, to a workbook range so refresh_document can update it next time:\n" +
+            "{ \"op\": \"bindData\", \"target\": { \"paraId\": \"w14:...\", \"expect\": \"$4.2M\" }, \"source\": \"Summary!B2\" }\n" +
+            "{ \"op\": \"bindData\", \"target\": { \"kind\": \"chart\", \"path\": \"chart#256/4\" }, \"source\": \"'Monthly Sales'!A1:D13\" }\n\n" +
             "// Native PowerPoint chart with an editable embedded workbook:\n" +
             "{ \"op\": \"insertChart\", \"target\": { \"kind\": \"slide\", \"path\": \"slide#256\" }, \"kind\": \"ClusteredColumn\", \"categories\": [\"Q1\",\"Q2\"], \"series\": [{ \"name\": \"Revenue\", \"values\": [10,12] }], \"title\": \"Revenue\", \"description\": \"Quarterly revenue\" }\n\n" +
             "// Excel cells and table rows; sheet ids and table paths come from inspection:\n" +
@@ -835,13 +871,34 @@ public sealed class OfficeAgentTools
         ["paragraphs"] = result.Paragraphs
             .Skip(Math.Max(0, paragraphOffset))
             .Take(Math.Max(0, paragraphLimit))
-            .Select(p => new { p.ParaId, style = p.StyleId, p.Text, @in = p.In, location = p.Location }),
+            .Select(p => new ParagraphPayload(p.ParaId, p.StyleId, p.Text, p.In, p.Location, p.MarkedText)),
         ["contentControls"] = result.StructuralAnchors.Select(s => new { s.Tag, s.Kind }),
-        ["nodes"] = result.Nodes.Select(n => new { n.Kind, n.Path, n.Summary }),
+        ["nodes"] = result.Nodes.Select(n => new NodePayload(n.Kind, n.Path, n.Summary, n.Name)),
         ["styles"] = result.Styles.Styles.Select(s => new { s.Id, s.Name, s.InUseCount }),
         ["worksheets"] = result.Worksheets,
+        ["definedNames"] = result.DefinedNames,
         ["cells"] = result.Cells
     };
+
+    /// <summary>One inspected node on the wire; <c>name</c> is left out when the node has none.</summary>
+    private sealed record NodePayload(
+        string Kind,
+        string Path,
+        string Summary,
+        [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? Name);
+
+    /// <summary>
+    /// One inspected paragraph on the wire. <c>markedText</c> is left out rather than sent as
+    /// null, because most paragraphs have one formatting throughout and an inspection lists
+    /// hundreds of them.
+    /// </summary>
+    private sealed record ParagraphPayload(
+        string ParaId,
+        string? Style,
+        string Text,
+        string? In,
+        string Location,
+        [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? MarkedText);
 
     /// <summary>Finds text in a document and returns content-verified anchors.</summary>
     public Task<string> FindInDocument(
@@ -1040,31 +1097,267 @@ public sealed class OfficeAgentTools
             var planObject = ParsePlanObject(planJson);
             if (MissingRequiredSnapshot(planObject))
                 return SnapshotRequired(connectionId, sourceDocumentId: null);
-            var reference = await _client.RegisterAsync(connectionId, source, cancellationToken).ConfigureAwait(false);
 
-            // Anchor binding happens against the freshly registered document, so the text
-            // an operation names is verified against live content before anything is applied.
-            var failures = await new FindTargetResolver(_client)
-                .ResolveAsync(reference, planObject, cancellationToken).ConfigureAwait(false);
-            if (failures.Count > 0)
-                return SerializeErrors(
-                    failures.Select(f => (f.Code, f.Message)).ToArray(),
-                    connectionId, reference.ItemId);
-
-            var options = new SaveDocumentOptions
-            {
-                Mode = parsedSaveMode,
-                NewName = outputName
-            };
-            var plan = DeserializePlan(planObject, connectionId);
-            await DemandReferencedContentAccessAsync(plan, cancellationToken).ConfigureAwait(false);
-            var result = await _client.CommitAsync(
-                connectionId, reference.ItemId, plan, options, cancellationToken).ConfigureAwait(false);
-
-            return SerializeReport(
-                result.Report, result.Committed, result.Committed ? result.Document : null,
-                sourceDocumentId: reference.ItemId, receipt: result.Receipt);
+            var edit = await EditSourceAsync(
+                connectionId, source, planObject, parsedSaveMode, outputName, preview: false, cancellationToken)
+                .ConfigureAwait(false);
+            return edit.Payload;
         });
+
+    /// <summary>The most documents one <c>edit_documents</c> call edits.</summary>
+    public const int MaximumBatchDocuments = 100;
+
+    /// <summary>
+    /// Applies one plan to several documents named by source, each on its own: one document
+    /// failing leaves the others committed, and each gets its own result and receipt.
+    /// </summary>
+    public Task<string> EditDocuments(
+        string connectionId,
+        string[] sources,
+        string planJson,
+        bool preview = false,
+        string saveMode = "Replace",
+        CancellationToken cancellationToken = default)
+        => SafeAsync("connectionId or a document the plan references", async () =>
+        {
+            var parsedSaveMode = ParseSaveMode(saveMode);
+            var names = CheckSources(sources);
+            await DemandAccessAsync(connectionId, ConnectionCapability.Register, cancellationToken).ConfigureAwait(false);
+            await DemandAccessAsync(connectionId, ConnectionCapability.Read, cancellationToken).ConfigureAwait(false);
+            if (!preview)
+                await DemandAccessAsync(
+                    connectionId,
+                    parsedSaveMode == SaveMode.Replace ? ConnectionCapability.Edit : ConnectionCapability.Create,
+                    cancellationToken).ConfigureAwait(false);
+
+            var planObject = ParsePlanObject(planJson);
+
+            // A snapshot names one document's state, so no single plan can carry one that holds
+            // for several. A server that insists on one cannot run a batch at all.
+            if (RequirePlanSnapshot)
+                return SerializeErrors(
+                    new[]
+                    {
+                        (ToolErrorCodes.SnapshotRequired,
+                         "This server requires every plan to carry the snapshot it was built against, and one plan " +
+                         "for several documents cannot. Edit each document with apply_plan and its own snapshot.")
+                    },
+                    connectionId, sourceDocumentId: null);
+            if (Member(planObject, "snapshot") is JsonObject)
+                throw new ArgumentException(
+                    "A plan for several documents cannot carry a snapshot, because a snapshot describes one document. " +
+                    "Leave it out; every operation is still verified against each document's live content.",
+                    nameof(planJson));
+
+            var items = new List<JsonObject>();
+            foreach (var source in names)
+            {
+                if (cancellationToken.IsCancellationRequested)
+                {
+                    items.Add(new JsonObject { ["source"] = source, ["status"] = "notAttempted" });
+                    continue;
+                }
+
+                var status = "failed";
+                var payload = await SafeAsync("source", async () =>
+                {
+                    var edit = await EditSourceAsync(
+                        connectionId, source, (JsonObject)planObject.DeepClone(), parsedSaveMode,
+                        outputName: null, preview, cancellationToken).ConfigureAwait(false);
+                    status = edit.Status;
+                    return edit.Payload;
+                }).ConfigureAwait(false);
+
+                var item = new JsonObject { ["source"] = source, ["status"] = status };
+                foreach (var field in JsonNode.Parse(payload)!.AsObject().ToList())
+                    item[field.Key] = field.Value?.DeepClone();
+                items.Add(item);
+            }
+
+            int Count(string status) => items.Count(item => (string?)item["status"] == status);
+            var result = new JsonObject
+            {
+                ["isValid"] = items.All(item => (string?)item["status"] is "committed" or "previewed" or "unchanged"),
+                ["preview"] = preview,
+                ["summary"] = new JsonObject
+                {
+                    ["total"] = items.Count,
+                    ["committed"] = Count("committed"),
+                    ["previewed"] = Count("previewed"),
+                    ["unchanged"] = Count("unchanged"),
+                    ["failed"] = Count("failed"),
+                    ["notAttempted"] = Count("notAttempted")
+                },
+                ["items"] = new JsonArray(items.Cast<JsonNode?>().ToArray())
+            };
+            return result.ToJsonString(Json);
+        });
+
+    /// <summary>
+    /// Updates a Word document or PowerPoint deck from a workbook through the binding markers
+    /// it carries, previewing or saving the result with one receipt.
+    /// </summary>
+    public Task<string> RefreshDocument(
+        string connectionId,
+        string source,
+        string workbookSource,
+        bool preview = false,
+        string saveMode = "Replace",
+        string newName = "",
+        string workbookConnectionId = "",
+        CancellationToken cancellationToken = default)
+        => SafeAsync("connectionId, source, workbookSource, workbookConnectionId, or newName", async () =>
+        {
+            var parsedSaveMode = ParseSaveMode(saveMode);
+            var outputName = ParseNewName(parsedSaveMode, newName);
+            var bookConnection = string.IsNullOrWhiteSpace(workbookConnectionId) ? connectionId : workbookConnectionId;
+            foreach (var connection in new[] { connectionId, bookConnection }.Distinct(StringComparer.Ordinal))
+            {
+                await DemandAccessAsync(connection, ConnectionCapability.Register, cancellationToken).ConfigureAwait(false);
+                await DemandAccessAsync(connection, ConnectionCapability.Read, cancellationToken).ConfigureAwait(false);
+            }
+            if (!preview)
+                await DemandAccessAsync(
+                    connectionId,
+                    parsedSaveMode == SaveMode.Replace ? ConnectionCapability.Edit : ConnectionCapability.Create,
+                    cancellationToken).ConfigureAwait(false);
+
+            var document = await _client.RegisterAsync(connectionId, source, cancellationToken).ConfigureAwait(false);
+            var workbook = await _client.RegisterAsync(bookConnection, workbookSource, cancellationToken).ConfigureAwait(false);
+            var refresh = await _client.PlanDataRefreshAsync(document, workbook, cancellationToken).ConfigureAwait(false);
+
+            string report;
+            if (!refresh.IsComplete)
+            {
+                var failures = refresh.Bindings.Count == 0
+                    ? new[] { (DataRefreshErrorCodes.NoBindings, NoBindings) }
+                    : refresh.Bindings.Where(binding => binding.ErrorCode is not null)
+                        .Select(binding => (binding.ErrorCode!, $"{binding.Marker}: {binding.Message}"))
+                        .ToArray();
+                report = SerializeErrors(failures, connectionId, document.ItemId);
+            }
+            else if (preview)
+            {
+                using var previewed = await _client.PreviewWithReceiptAsync(
+                    connectionId, document.ItemId, refresh.Plan, cancellationToken).ConfigureAwait(false);
+                report = SerializeReport(previewed.Report, committed: false, savedReference: null,
+                    sourceDocumentId: document.ItemId, receipt: previewed.Receipt);
+            }
+            else
+            {
+                var result = await _client.CommitAsync(connectionId, document.ItemId, refresh.Plan,
+                    new SaveDocumentOptions { Mode = parsedSaveMode, NewName = outputName }, cancellationToken).ConfigureAwait(false);
+                report = SerializeReport(result.Report, result.Committed, result.Committed ? result.Document : null,
+                    sourceDocumentId: document.ItemId, receipt: result.Receipt);
+            }
+
+            var payload = JsonNode.Parse(report)!.AsObject();
+            payload["bindings"] = JsonSerializer.SerializeToNode(refresh.Bindings.Select(binding => new
+            {
+                kind = binding.Kind.ToString(),
+                binding.Marker,
+                binding.Reference,
+                binding.Range,
+                target = SummariseAnchor(binding.Target),
+                binding.Summary,
+                binding.ErrorCode,
+                binding.Message
+            }), Json);
+            return payload.ToJsonString(Json);
+        });
+
+    /// <summary>What a document with nothing marked for refresh is told.</summary>
+    private const string NoBindings =
+        "The document has nothing linked to a workbook. Mark what to refresh first: bindData links a Word text span or " +
+        "table, or a PowerPoint shape, table or chart, to a range. By hand, name a PowerPoint shape, table or chart " +
+        "'xl:Summary!B2' in the Selection Pane, give a Word table the alt-text title 'xl:Sales!A1:D6', or tag a Word " +
+        "content control 'xl:Summary!B2'.";
+
+    /// <summary>The sources a batch names, checked before any document is opened.</summary>
+    private static IReadOnlyList<string> CheckSources(string[]? sources)
+    {
+        if (sources is null || sources.Length == 0)
+            throw new ArgumentException("sources must list at least one document.", nameof(sources));
+        if (sources.Length > MaximumBatchDocuments)
+            throw new ArgumentException(
+                $"sources lists {sources.Length} documents; one call edits at most {MaximumBatchDocuments}. " +
+                "Split the list across several calls.", nameof(sources));
+        if (sources.Any(string.IsNullOrWhiteSpace))
+            throw new ArgumentException("sources contains an empty entry.", nameof(sources));
+
+        var repeated = sources.GroupBy(source => source, StringComparer.OrdinalIgnoreCase)
+            .FirstOrDefault(group => group.Count() > 1);
+        if (repeated is not null)
+            throw new ArgumentException(
+                $"sources names '{repeated.Key}' more than once. Each document is edited once per call.", nameof(sources));
+
+        return sources;
+    }
+
+    /// <summary>
+    /// The body <c>edit_document</c> and <c>edit_documents</c> share: register the source, bind
+    /// its <c>find</c> targets against live content, then preview or apply. Returns the
+    /// <c>edit_document</c> payload and a status for a batch to count.
+    /// </summary>
+    private async Task<(string Payload, string Status)> EditSourceAsync(
+        string connectionId,
+        string source,
+        JsonObject planObject,
+        SaveMode saveMode,
+        string? outputName,
+        bool preview,
+        CancellationToken cancellationToken)
+    {
+        var reference = await _client.RegisterAsync(connectionId, source, cancellationToken).ConfigureAwait(false);
+        var hadOperations = planObject["operations"] is JsonArray { Count: > 0 };
+
+        // Anchor binding happens against the freshly registered document, so the text
+        // an operation names is verified against live content before anything is applied.
+        var failures = await new FindTargetResolver(_client)
+            .ResolveAsync(reference, planObject, cancellationToken).ConfigureAwait(false);
+        if (failures.Count > 0)
+            return (SerializeErrors(
+                failures.Select(f => (f.Code, f.Message)).ToArray(),
+                connectionId, reference.ItemId), "failed");
+
+        // Every operation said "match": "all" and none of them matched: there is nothing to
+        // do, and saving the document unchanged would only mint a new version of it.
+        if (hadOperations && planObject["operations"] is JsonArray { Count: 0 })
+            return (SerializeErrors(
+                new[] { (ValidationErrorCodes.AnchorNotFound, NothingMatched) },
+                connectionId, reference.ItemId), "unchanged");
+
+        var plan = DeserializePlan(planObject, connectionId);
+        await DemandReferencedContentAccessAsync(plan, cancellationToken).ConfigureAwait(false);
+
+        if (preview)
+        {
+            using var previewed = await _client.PreviewWithReceiptAsync(
+                connectionId, reference.ItemId, plan, cancellationToken).ConfigureAwait(false);
+            return (SerializeReport(
+                previewed.Report, committed: false, savedReference: null,
+                sourceDocumentId: reference.ItemId, receipt: previewed.Receipt),
+                previewed.Report.IsValid ? "previewed" : "failed");
+        }
+
+        var options = new SaveDocumentOptions
+        {
+            Mode = saveMode,
+            NewName = outputName
+        };
+        var result = await _client.CommitAsync(
+            connectionId, reference.ItemId, plan, options, cancellationToken).ConfigureAwait(false);
+
+        return (SerializeReport(
+            result.Report, result.Committed, result.Committed ? result.Document : null,
+            sourceDocumentId: reference.ItemId, receipt: result.Receipt),
+            result.Committed ? "committed" : "failed");
+    }
+
+    /// <summary>Why a plan whose every target said <c>"match": "all"</c> left the document as it was.</summary>
+    private const string NothingMatched =
+        "Every operation targets \"match\": \"all\" and none of the text they name is in this document, " +
+        "so nothing was changed and nothing was saved.";
 
     // ── Inline content: no connection, no stored document ────────────────
 
@@ -1138,10 +1431,15 @@ public sealed class OfficeAgentTools
             new InspectOptions { Fidelity = Fidelity.Outline }).Format);
 
         var planObject = ParsePlanObject(planJson);
+        var hadOperations = planObject["operations"] is JsonArray { Count: > 0 };
 
         var failures = new FindTargetResolver(_client).Resolve(bytes, name, planObject);
         if (failures.Count > 0)
             return SerializeContent(ReportOf(failures), committed: false, content: null, name);
+        if (hadOperations && planObject["operations"] is JsonArray { Count: 0 })
+            return SerializeContent(
+                ReportOf(new[] { new FindTargetResolver.Failure(ValidationErrorCodes.AnchorNotFound, NothingMatched) }),
+                committed: false, content: null, name);
 
         var plan = DeserializePlan(ApplyInlineChangeMode(planObject, format));
         await DemandReferencedContentAccessAsync(plan, cancellationToken).ConfigureAwait(false);

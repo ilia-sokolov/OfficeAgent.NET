@@ -16,7 +16,8 @@ namespace OfficeAgent.Mcp;
 /// </para>
 /// <para>
 /// A writing tool is destructive when it can replace content that already exists.
-/// <c>apply_plan</c> and <c>edit_document</c> save over the document in place by default.
+/// <c>apply_plan</c>, <c>edit_document</c>, <c>edit_documents</c> and <c>refresh_document</c> save over the
+/// document in place by default.
 /// The tools that create documents refuse to overwrite one, and <c>remove_document</c> removes
 /// a registration but never the file, so none of them is destructive.
 /// </para>
@@ -53,6 +54,8 @@ internal static class ToolAnnotations
 
         ["apply_plan"] = Writes("Apply an edit plan", destructive: true),
         ["edit_document"] = Writes("Edit a document", destructive: true),
+        ["edit_documents"] = Writes("Edit several documents", destructive: true),
+        ["refresh_document"] = Writes("Refresh a document from a workbook", destructive: true),
         ["create_document"] = Writes("Create a document"),
         ["merge_documents"] = Writes("Merge documents"),
         ["populate_template_batch"] = Writes("Populate a template batch"),

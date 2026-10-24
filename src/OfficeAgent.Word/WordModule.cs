@@ -64,6 +64,8 @@ public sealed class WordModule : IFormatModule, IBlankDocumentFactory, IPlanVali
         {
             new ChangeTextHandler(),
             new FillHandler(),
+            new FillTableHandler(),
+            new BindDataHandler(),
             new CommentHandler(clock),
             new LinkHandler(),
             new InsertHandler(),
@@ -321,7 +323,11 @@ public sealed class WordModule : IFormatModule, IBlankDocumentFactory, IPlanVali
                 inPath = path;
 
             if (wantContent)
-                paragraphs.Add(new ParagraphInfo { ParaId = paraId, Text = text, StyleId = styleId, In = inPath, Location = WordModel.LocationOf(hostKey) });
+                paragraphs.Add(new ParagraphInfo
+                {
+                    ParaId = paraId, Text = text, StyleId = styleId, In = inPath, Location = WordModel.LocationOf(hostKey),
+                    MarkedText = Core.MarkedText.Describe(paragraph, WordModel.Dialect)
+                });
 
             var anchor = new TextSpanAnchor { Id = paraId, ParaId = paraId, Expect = text, Occurrence = 0 };
             if (wantContent) anchors.Add(anchor);

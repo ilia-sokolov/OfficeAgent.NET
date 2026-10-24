@@ -31,9 +31,10 @@ public class RegistrationToolsTests
 
         var opted = tools.AsAIFunctions(new OfficeAgentToolsOptions { AllowRegistration = true })
             .Select(f => f.Name).ToArray();
-        Assert.Equal(11, opted.Length);
+        Assert.Equal(13, opted.Length);
         Assert.Contains("open_document", opted);
         Assert.Contains("edit_document", opted);
+        Assert.Contains("edit_documents", opted);
         Assert.Contains("register_document", opted);
         Assert.Contains("remove_document", opted);
 

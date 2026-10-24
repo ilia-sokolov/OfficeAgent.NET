@@ -22,6 +22,14 @@ it does not apply Excel number formats. Raw search uses the stored cell value, s
 shared-string index rather than the resolved text. Unless [formula calculation](#formula-calculation)
 is turned on, OfficeAgent does not calculate a new result.
 
+Each inspected cell also has a `formattedValue`: the value as Excel displays it, with the
+cell's number format applied, such as `$4,200,000` for `4200000` under `"$"#,##0`, `12.50%`,
+or `10/31/2026`. It uses the invariant culture's separators, and the locale-dependent
+built-in date formats in their en-US form. A formula with no stored result has none.
+Inspection also lists the workbook's `definedNames` that refer to one range, each with its
+sheet id and range; built-in, hidden and sheet-scoped names are left out. Both feed
+[report refresh](report-refresh.md).
+
 ## Operations
 
 `setCell` changes only the target cell's value/formula fields and keeps its style. Auto

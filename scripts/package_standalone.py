@@ -55,6 +55,8 @@ BUNDLE_TOOLS = [
     ("preview_plan", "Dry-run an edit plan and report what it would change, without saving."),
     ("apply_plan", "Apply an edit plan and save the document."),
     ("edit_document", "Edit a document by path in one call."),
+    ("edit_documents", "Apply one edit plan to several documents, each saved on its own."),
+    ("refresh_document", "Update a Word report or PowerPoint deck from an Excel workbook."),
     ("compare_documents", "Compare two Word documents and return their paragraph differences."),
     ("preview_document_merge", "Preview assembling Word documents into one, without saving."),
     ("register_document", "Register an existing document and return its id."),

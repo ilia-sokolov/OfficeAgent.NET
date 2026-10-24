@@ -315,3 +315,28 @@ public static class RenderFailureCodes
     /// <summary>A renderer executable was not found or could not be started.</summary>
     public const string RendererUnavailable = "renderer-unavailable";
 }
+
+/// <summary>Why a data binding could not be refreshed.</summary>
+public static class DataRefreshErrorCodes
+{
+    /// <summary>The document has no binding markers.</summary>
+    public const string NoBindings = "no-bindings";
+
+    /// <summary>The reference names no sheet, defined name or Excel table in the workbook, or is not a valid range.</summary>
+    public const string RangeNotFound = "range-not-found";
+
+    /// <summary>A formula cell has no calculated result stored in the workbook.</summary>
+    public const string NotCalculated = "not-calculated";
+
+    /// <summary>A chart range holds text where a number belongs, or is too small to be a chart.</summary>
+    public const string NotChartData = "not-chart-data";
+
+    /// <summary>Two places in the document carry the same marker where Office requires unique names.</summary>
+    public const string DuplicateBinding = "duplicate-binding";
+
+    /// <summary>A value binding names more than one cell.</summary>
+    public const string NotOneCell = "not-one-cell";
+
+    /// <summary>The range holds more cells than one refresh reads.</summary>
+    public const string RangeTooLarge = "range-too-large";
+}

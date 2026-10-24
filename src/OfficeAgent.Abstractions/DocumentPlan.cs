@@ -131,6 +131,20 @@ public sealed class ChangeTextOp : PlanOperation, ITrackedOperation
     public string With { get; init; } = string.Empty;
 
     /// <summary>
+    /// Gets a replacement for the whole paragraph that keeps its character formatting, written
+    /// in the tags of the paragraph's <see cref="ParagraphInfo.MarkedText"/>: text inside
+    /// <c>&lt;n&gt;…&lt;/n&gt;</c> takes the formatting tag <c>n</c> marks there, and untagged
+    /// text takes the paragraph's base formatting. Use it instead of <see cref="With"/> to
+    /// rewrite or translate a paragraph whose words carry different formatting.
+    /// </summary>
+    /// <remarks>
+    /// The target's <c>expect</c> must be the paragraph's complete text, because the tags
+    /// describe the whole paragraph. <see cref="With"/> must then be left empty. Word and
+    /// PowerPoint only.
+    /// </remarks>
+    public string? WithMarked { get; init; }
+
+    /// <summary>
     /// Gets how the replacement is represented in the document.
     /// </summary>
     public ChangeMode Mode { get; init; } = ChangeMode.Tracked;
@@ -1158,6 +1172,67 @@ public sealed class UpdateChartOp : PlanOperation
     public bool ShowLegend { get; init; } = true;
     /// <summary>Gets accessible alternative text.</summary>
     public string Description { get; init; } = string.Empty;
+}
+
+/// <summary>
+/// Replaces the data of a native chart and keeps everything else about it: its type, colours,
+/// labels, axes and layout, whoever made it. The target is a chart node.
+/// </summary>
+/// <remarks>
+/// Each series takes the formatting of the series it replaces. Extra series copy the last
+/// one's formatting, and series beyond the new count are removed. The chart's embedded data
+/// sheet is rewritten to hold exactly these values, so editing the data in PowerPoint later
+/// starts from them. A link to an outside workbook is replaced by that embedded sheet. Scatter
+/// and bubble charts are refused, because their categories are numbers rather than labels.
+/// PowerPoint only.
+/// </remarks>
+public sealed class SetChartDataOp : PlanOperation
+{
+    /// <summary>Gets the category labels, one per point.</summary>
+    public IReadOnlyList<string> Categories { get; init; } = Array.Empty<string>();
+
+    /// <summary>Gets the series, each with one value per category.</summary>
+    public IReadOnlyList<ChartSeries> Series { get; init; } = Array.Empty<ChartSeries>();
+}
+
+/// <summary>
+/// Replaces the text of every cell in a table, row by row from the top-left, and keeps each
+/// cell's formatting. The target is a table node.
+/// </summary>
+/// <remarks>
+/// Every row must have exactly as many values as the table has columns. A table with fewer
+/// rows than <see cref="Rows"/> grows by copies of its last row; one with more loses its last
+/// rows. A cell keeps its first paragraph and that paragraph's first run's formatting. Tables
+/// with merged cells are refused. Applied directly: a refreshed table is data, not a redline.
+/// </remarks>
+public sealed class FillTableOp : PlanOperation
+{
+    /// <summary>Gets the cell text, row by row, including any header row the table has.</summary>
+    public IReadOnlyList<IReadOnlyList<string>> Rows { get; init; } = Array.Empty<IReadOnlyList<string>>();
+}
+
+/// <summary>
+/// Links part of a document to a workbook range, so a data refresh can update it. Writes the
+/// <see cref="DataBindingMarker"/> naming <see cref="Source"/> where Word and PowerPoint keep it.
+/// </summary>
+/// <remarks>
+/// <list type="bullet">
+/// <item>A Word text span is wrapped in a content control tagged with the marker; the text
+/// stays as it is until the next refresh.</item>
+/// <item>A Word table gets the marker as its alt-text title.</item>
+/// <item>A PowerPoint shape, table or chart node gets the marker as its name, the one the
+/// Selection Pane shows.</item>
+/// </list>
+/// Applied directly. Binding is idempotent: binding a target to the source it already has
+/// changes nothing.
+/// </remarks>
+public sealed class BindDataOp : PlanOperation
+{
+    /// <summary>
+    /// Gets the workbook range: a cell or range such as <c>Summary!B2</c> or
+    /// <c>'Q3 Sales'!A1:D6</c>, a defined name, or an Excel table name.
+    /// </summary>
+    public string Source { get; init; } = string.Empty;
 }
 
 /// <summary>Writes a scalar or formula to an Excel cell.</summary>

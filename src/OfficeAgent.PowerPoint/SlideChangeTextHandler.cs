@@ -37,6 +37,14 @@ internal sealed class SlideChangeTextHandler : IOperationHandler
 
         var text = PowerPointModel.TextOf(paragraph.Paragraph);
 
+        var after = op.With;
+        if (op.WithMarked is not null)
+        {
+            if (MarkedText.Check(op, anchor, text, MarkedText.Read(paragraph.Paragraph, PowerPointModel.Dialect), out var pieces) is { } refusal)
+                return OperationPreview.Fail(refusal);
+            after = MarkedText.Plain(pieces);
+        }
+
         // An empty 'expect' means "this paragraph is blank; make it say something" - the
         // only way to fill the empty placeholder a new deck starts with, since a slide
         // has no paragraph-inserting verb. It stays content-verified: if the paragraph
@@ -53,7 +61,7 @@ internal sealed class SlideChangeTextHandler : IOperationHandler
                     Target = anchor,
                     Verb = "changeText",
                     Before = string.Empty,
-                    After = op.With,
+                    After = after,
                     Context = $"slide {paragraph.Slide.Number} ({paragraph.Location}): empty paragraph",
                     BlastRadius = 1
                 });
@@ -79,7 +87,7 @@ internal sealed class SlideChangeTextHandler : IOperationHandler
             Target = anchor,
             Verb = "changeText",
             Before = anchor.Expect,
-            After = op.With,
+            After = after,
             Context = $"slide {paragraph.Slide.Number} ({paragraph.Location}): " +
                       PowerPointModel.Snippet(text, start, anchor.Expect.Length),
             BlastRadius = 1
@@ -97,9 +105,22 @@ internal sealed class SlideChangeTextHandler : IOperationHandler
 
         var text = PowerPointModel.TextOf(paragraph.Paragraph);
 
+        // A marked rewrite builds its runs before the span is isolated, while every
+        // formatting group still has the run it was read from.
+        var replacement = op.With;
+        IReadOnlyList<DocumentFormat.OpenXml.OpenXmlElement>? markedRuns = null;
+        if (op.WithMarked is not null)
+        {
+            var layout = MarkedText.Read(paragraph.Paragraph, PowerPointModel.Dialect);
+            var pieces = MarkedText.Parse(op.WithMarked, Math.Max(0, layout.Groups.Count - 1), out var error);
+            if (error is not null) throw new InvalidOperationException(error);
+            replacement = MarkedText.Plain(pieces);
+            if (layout.Groups.Count > 0) markedRuns = MarkedText.BuildRuns(layout, pieces);
+        }
+
         if (string.IsNullOrEmpty(anchor.Expect))
         {
-            SetParagraphText(paragraph.Paragraph, op.With);
+            SetParagraphText(paragraph.Paragraph, replacement);
             return;
         }
 
@@ -115,7 +136,16 @@ internal sealed class SlideChangeTextHandler : IOperationHandler
         if (covered.Count == 0)
             throw new InvalidOperationException($"Span for '{anchor.Expect}' could not be isolated.");
 
-        PowerPointModel.Dialect.SetRunText(covered[0], op.With);
+        if (markedRuns is not null)
+        {
+            foreach (var run in markedRuns)
+                covered[0].InsertBeforeSelf(run);
+            foreach (var run in covered)
+                run.Remove();
+            return;
+        }
+
+        PowerPointModel.Dialect.SetRunText(covered[0], replacement);
         for (var i = 1; i < covered.Count; i++)
             covered[i].Remove();
     }

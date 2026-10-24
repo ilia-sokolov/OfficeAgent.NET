@@ -31,6 +31,7 @@ internal sealed class TableNodeProvider : IWordNodeProvider
                     Kind = Kind,
                     Path = $"table#{index}",
                     Summary = summary,
+                    Name = CaptionOf(table),
                     Anchor = new NodeAnchor
                     {
                         Id = $"tbl:{index}",
@@ -42,6 +43,12 @@ internal sealed class TableNodeProvider : IWordNodeProvider
             }
         }
     }
+
+    /// <summary>The table's alt-text title (<c>w:tblCaption</c>), which is where a data binding marker lives.</summary>
+    internal static string? CaptionOf(Table table) =>
+        table.GetFirstChild<TableProperties>()?.GetFirstChild<TableCaption>()?.Val?.Value is { Length: > 0 } caption
+            ? caption
+            : null;
 
     public ResolvedNode? Resolve(NodeAnchor anchor, WordObjectMap map)
     {

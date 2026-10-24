@@ -23,6 +23,7 @@ public sealed class ErrorCodeCatalogTests
         typeof(ComparisonDiagnosticCodes),
         typeof(AssemblyDiagnosticCodes),
         typeof(RenderFailureCodes),
+        typeof(DataRefreshErrorCodes),
     };
 
     /// <summary>
@@ -38,6 +39,9 @@ public sealed class ErrorCodeCatalogTests
         "non-body",             // a comparison coverage area name
         "on-behalf-of",         // configuration values for SharePoint authentication
         "app-only",
+        "d-mmm-yy",             // Excel's built-in date number formats
+        "d-mmm",
+        "mmm-yy",
     };
 
     private static IEnumerable<(string Catalogue, string Name, string Value)> Codes() =>

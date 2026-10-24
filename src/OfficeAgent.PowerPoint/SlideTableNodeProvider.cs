@@ -34,6 +34,7 @@ internal sealed class SlideTableNodeProvider : IPowerPointNodeProvider
                 Kind = Kind,
                 Path = table.Path,
                 Summary = $"slide {table.Slide.Number}: table {rows}×{columns}",
+                Name = PowerPointModel.ShapeNameOf(table.Frame) is { Length: > 0 } name ? name : null,
                 Anchor = new NodeAnchor { Id = table.Path, Kind = Kind, Path = table.Path }
             };
         }

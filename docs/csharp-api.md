@@ -166,6 +166,14 @@ public double? Opacity { get; init; }
 public string? Scope { get; init; }
 ```
 
+### `OfficeAgent.Abstractions.BindDataOp`
+
+```csharp
+public sealed class BindDataOp : OfficeAgent.Abstractions.PlanOperation
+public BindDataOp();
+public string Source { get; init; }
+```
+
 ### `OfficeAgent.Abstractions.BreakKind`
 
 ```csharp
@@ -203,6 +211,7 @@ public sealed class CellInfo
 public CellInfo();
 public CellAnchor Anchor { get; init; }
 public string? DisplayValue { get; init; }
+public string? FormattedValue { get; init; }
 public string? Formula { get; init; }
 public string? RawValue { get; init; }
 ```
@@ -234,6 +243,7 @@ public sealed class ChangeTextOp : OfficeAgent.Abstractions.PlanOperation, Offic
 public ChangeTextOp();
 public ChangeMode Mode { get; init; }
 public string With { get; init; }
+public string? WithMarked { get; init; }
 ```
 
 ### `OfficeAgent.Abstractions.ChartKind`
@@ -359,6 +369,62 @@ public string Scope { get; init; }
 public Anchor Source { get; init; }
 ```
 
+### `OfficeAgent.Abstractions.DataBindingKind`
+
+```csharp
+public enum DataBindingKind : System.IComparable, System.IConvertible, System.IFormattable, System.ISpanFormattable
+Value = 0
+Table = 1
+Chart = 2
+```
+
+### `OfficeAgent.Abstractions.DataBindingMarker`
+
+```csharp
+public static class DataBindingMarker
+public const string Prefix = "xl:";
+public static bool TryParse(string? name, out string reference);
+public static string For(string reference);
+```
+
+### `OfficeAgent.Abstractions.DataRefreshBinding`
+
+```csharp
+public sealed class DataRefreshBinding
+public DataRefreshBinding();
+public string? ErrorCode { get; init; }
+public DataBindingKind Kind { get; init; }
+public string Marker { get; init; }
+public string? Message { get; init; }
+public string? Range { get; init; }
+public string Reference { get; init; }
+public string? Summary { get; init; }
+public Anchor Target { get; init; }
+```
+
+### `OfficeAgent.Abstractions.DataRefreshErrorCodes`
+
+```csharp
+public static class DataRefreshErrorCodes
+public const string DuplicateBinding = "duplicate-binding";
+public const string NoBindings = "no-bindings";
+public const string NotCalculated = "not-calculated";
+public const string NotChartData = "not-chart-data";
+public const string NotOneCell = "not-one-cell";
+public const string RangeNotFound = "range-not-found";
+public const string RangeTooLarge = "range-too-large";
+```
+
+### `OfficeAgent.Abstractions.DataRefreshPlan`
+
+```csharp
+public sealed class DataRefreshPlan
+public DataRefreshPlan();
+public IReadOnlyList<DataRefreshBinding> Bindings { get; init; }
+public bool IsComplete { get; }
+public DocumentPlan Plan { get; init; }
+```
+
 ### `OfficeAgent.Abstractions.DefineStyleOp`
 
 ```csharp
@@ -388,6 +454,16 @@ public int? SpacingBeforeTwips { get; init; }
 public string StyleId { get; init; }
 public string Type { get; init; }
 public bool? Underline { get; init; }
+```
+
+### `OfficeAgent.Abstractions.DefinedNameInfo`
+
+```csharp
+public sealed class DefinedNameInfo
+public DefinedNameInfo();
+public string Name { get; init; }
+public string Range { get; init; }
+public uint SheetId { get; init; }
 ```
 
 ### `OfficeAgent.Abstractions.DocumentComparisonOptions`
@@ -633,6 +709,14 @@ public sealed class FillOp : OfficeAgent.Abstractions.PlanOperation, OfficeAgent
 public FillOp();
 public ChangeMode? Mode { get; init; }
 public string Value { get; init; }
+```
+
+### `OfficeAgent.Abstractions.FillTableOp`
+
+```csharp
+public sealed class FillTableOp : OfficeAgent.Abstractions.PlanOperation
+public FillTableOp();
+public IReadOnlyList<IReadOnlyList<string>> Rows { get; init; }
 ```
 
 ### `OfficeAgent.Abstractions.FindHit`
@@ -998,6 +1082,7 @@ public sealed class InspectResult
 public InspectResult();
 public IReadOnlyList<Anchor> Anchors { get; init; }
 public IReadOnlyList<CellInfo> Cells { get; init; }
+public IReadOnlyList<DefinedNameInfo> DefinedNames { get; init; }
 public DocumentFormat Format { get; init; }
 public IReadOnlyList<NodeInfo> Nodes { get; init; }
 public IReadOnlyList<OutlineNode> Outline { get; init; }
@@ -1082,6 +1167,7 @@ public sealed class NodeInfo
 public NodeInfo();
 public NodeAnchor? Anchor { get; init; }
 public string Kind { get; init; }
+public string? Name { get; init; }
 public string Path { get; init; }
 public string Summary { get; init; }
 ```
@@ -1205,6 +1291,7 @@ public sealed class ParagraphInfo
 public ParagraphInfo();
 public string? In { get; init; }
 public string Location { get; init; }
+public string? MarkedText { get; init; }
 public string ParaId { get; init; }
 public string? StyleId { get; init; }
 public string Text { get; init; }
@@ -1467,6 +1554,15 @@ public SetCellOp();
 public string? Formula { get; init; }
 public string? Value { get; init; }
 public SpreadsheetCellValueKind ValueKind { get; init; }
+```
+
+### `OfficeAgent.Abstractions.SetChartDataOp`
+
+```csharp
+public sealed class SetChartDataOp : OfficeAgent.Abstractions.PlanOperation
+public SetChartDataOp();
+public IReadOnlyList<string> Categories { get; init; }
+public IReadOnlyList<ChartSeries> Series { get; init; }
 ```
 
 ### `OfficeAgent.Abstractions.SetPropertyOp`
@@ -2074,10 +2170,16 @@ Working on documents passed in as content
 - preview=true on edit_document_content validates a plan and returns contentBase64 null. Use it when a plan is speculative; on a plan you are confident of, skip it, because a preview costs another full copy of the file.
 - contentBase64 comes back null whenever there is no document to hand back - a preview, or a plan that failed. Null means nothing was produced: report the errors rather than looking for a document.
 - Tell the user the document is ready and let the host deliver it. Do not paste contentBase64 into your reply to the user; it is for the host, not for reading.";
+public const int MaximumBatchDocuments = 100;
 public const string PlanOperations = "Each operation is one object. Concrete examples:
 
 // Replace text:
 { \"op\": \"changeText\", \"target\": { \"paraId\": \"w14:...\", \"expect\": \"Acme Corp\", \"occurrence\": 0 }, \"with\": \"Globex Inc.\", \"mode\": \"Tracked\" }
+
+// Rewrite or translate a whole paragraph and keep its bold, italic, colour and links. inspect_document gives a paragraph whose words differ in formatting a markedText such as
+// \"Payment is due within <1>30 days</1> of invoice.\" Keep each <n>…</n> around the words that should carry that formatting, wherever they land; untagged text takes the paragraph's usual formatting.
+// expect is the paragraph's complete text. Word and PowerPoint:
+{ \"op\": \"changeText\", \"target\": { \"paraId\": \"w14:...\", \"expect\": \"Payment is due within 30 days of invoice.\" }, \"withMarked\": \"Betaling binnen <1>30 dagen</1> na factuurdatum.\", \"mode\": \"Direct\" }
 
 // Unified formatting (paragraph/run/table/row/cell/image):
 { \"op\": \"format\", \"target\": { \"paraId\": \"w14:...\", \"expect\": \"important\", \"occurrence\": 0 }, \"highlight\": \"yellow\", \"bold\": true, \"color\": \"FF0000\" }
@@ -2142,6 +2244,14 @@ public const string PlanOperations = "Each operation is one object. Concrete exa
 { \"op\": \"backgroundImage\", \"target\": { \"kind\": \"slide\", \"path\": \"slide#256\" }, \"base64Bytes\": \"iVBORw0KGgo...\", \"opacity\": 0.15 }
 { \"op\": \"headerFooter\", \"header\": \"Northwind Traders\", \"footer\": \"Confidential\", \"showPageNumber\": true, \"alignment\": \"edges\", \"differentFirstPage\": true }
 
+// Refresh data. fillTable replaces every cell of a table row by row, keeping cell formatting; rows must match the table's columns, and the table grows or shrinks by rows.
+{ \"op\": \"fillTable\", \"target\": { \"kind\": \"table\", \"path\": \"table#0\" }, \"rows\": [[\"Region\",\"Revenue\"],[\"North\",\"$1.2M\"]] }
+// setChartData replaces any chart's data and keeps its type, colours and layout (PowerPoint; not scatter or bubble):
+{ \"op\": \"setChartData\", \"target\": { \"kind\": \"chart\", \"path\": \"chart#256/4\" }, \"categories\": [\"Jan\",\"Feb\"], \"series\": [{ \"name\": \"Revenue\", \"values\": [10,12] }] }
+// bindData links a Word text span or table, or a PowerPoint shape, table or chart node, to a workbook range so refresh_document can update it next time:
+{ \"op\": \"bindData\", \"target\": { \"paraId\": \"w14:...\", \"expect\": \"$4.2M\" }, \"source\": \"Summary!B2\" }
+{ \"op\": \"bindData\", \"target\": { \"kind\": \"chart\", \"path\": \"chart#256/4\" }, \"source\": \"'Monthly Sales'!A1:D13\" }
+
 // Native PowerPoint chart with an editable embedded workbook:
 { \"op\": \"insertChart\", \"target\": { \"kind\": \"slide\", \"path\": \"slide#256\" }, \"kind\": \"ClusteredColumn\", \"categories\": [\"Q1\",\"Q2\"], \"series\": [{ \"name\": \"Revenue\", \"values\": [10,12] }], \"title\": \"Revenue\", \"description\": \"Quarterly revenue\" }
 
@@ -2158,7 +2268,10 @@ Working from a source in one call
 - open_document(connectionId, source) = register_document + inspect_document. Prefer it when the user names a file you have no id for and you need to see the document.
 - edit_document(connectionId, source, planJson) = register_document + find + apply_plan. Prefer it when you already know the text to change; it returns sourceDocumentId for follow-up work.
 - In edit_document a target may name text directly - { \"find\": \"Acme Corp\" } - instead of a paraId, so no lookup call is needed. Text matching more than once fails with \"ambiguous-anchor\" and lists the candidates: re-issue with { \"find\": \"Acme Corp\", \"match\": 2 } (zero-based) or use more surrounding text. Never guess a match index; use the one the error listed.
-- Reach for the single-purpose tools when the composites do not fit: an id you already hold, a plan you want to preview before applying, or targets that need regex or case-sensitive search (find_in_document, then paraId targets).";
+- { \"find\": \"Acme Corp\", \"match\": \"all\" } means every match, including those in headers, footers and notes: the operation is repeated for each one. find ignores case and matches inside words unless the target adds \"caseSensitive\": true or \"wholeWord\": true.
+- refresh_document(connectionId, source, workbookSource) updates a report or deck from a workbook through the bindings it carries (nodes and content controls named \"xl:<range>\"). The first time, link each number, table and chart with bindData in an edit_document or apply_plan call - inspect the workbook first and use its sheet names, defined names (definedNames) or table names. After that, each month is one refresh_document call: preview=true, show the user the bindings, then run it again without preview, with saveMode \"NewVersion\" if they want last month's copy kept.
+- edit_documents(connectionId, sources, planJson) applies one plan to up to 100 documents: list the folder, preview=true first, show the user the summary, then run it again without preview. Each document saves on its own, so a failure in one leaves the rest done; report the failed and unchanged ones by name.
+- Reach for the single-purpose tools when the composites do not fit: an id you already hold, a plan you want to preview before applying, or targets that need regex search (find_in_document, then paraId targets).";
 public const string SnapshotRequiredPromptGuidance = "
 Required snapshot
 - This host refuses a plan without its snapshot. Call inspect_document first and copy its snapshot into snapshot.eTag in every plan you preview or apply, including a plan you rebuild after stale-snapshot or version-conflict.
@@ -2181,6 +2294,7 @@ Plan shape, anchors, safety loop
 - Tables and images only appear in inspect_document.nodes, never in the paragraphs list. Copy the path from there rather than composing one: Word uses \"table#N\"/\"image#N\", a deck uses \"table#{slideId}/{shapeId}\"/\"image#{slideId}/{shapeId}\". To recognise table content, look for paragraphs whose `in` field matches a table path.
 - Preview before you apply. If preview reports stale-snapshot, re-inspect and rebuild. If preview reports expect-mismatch, the document drifted - re-inspect/find that operation. If preview reports revision-overlap, the edit spans somebody else's pending tracked change: resolve that revision first with a revision operation, re-inspect, then reissue the edit, or target a narrower span that lies wholly inside or wholly outside it.
 - Change mode: in a Word document default to \"Tracked\" unless the user explicitly approves direct edits. \"mode\" is not only for changeText - it belongs on every verb that changes content (insert, insertParagraphs, removeParagraph, insertTable, removeTable, the table row/column verbs including repeatTableRow, insertImage, removeImage, format, fill, insertBreak, note), and Word tracks all of them when it is omitted. A tracked structural edit is a real redline: an added paragraph and its paragraph mark come back as insertions, a removed row stays in place struck through until someone accepts it, and a format records what it replaced. A PowerPoint deck has no tracked-changes representation and REFUSES mode \"Tracked\" on any of these, so use \"Direct\" there and say that edits to a deck cannot be redlined; add a comment if the change needs to be flagged for review.
+- Translating or rewriting a document: work paragraph by paragraph, so headings, lists, tables, headers and footers keep their structure and styles. A paragraph whose words differ in formatting has a markedText in inspect_document, such as \"Payment is due within <1>30 days</1> of invoice.\" Rewrite it keeping each <n>…</n> around the words that should carry that formatting - wherever the translation puts them - and send it as withMarked with expect set to the paragraph's full text: { \"op\": \"changeText\", \"target\": { \"paraId\": \"w14:…\", \"expect\": \"Payment is due within 30 days of invoice.\" }, \"withMarked\": \"Betaling binnen <1>30 dagen</1> na factuurdatum.\" }. A paragraph without markedText takes a plain \"with\". Leave paragraphs that are only numbers, codes or names as they are. In a workbook, setCell the text cells and leave formulas alone.
 - To delete text, use changeText with an empty \"with\": { \"op\": \"changeText\", \"target\": { \"paraId\": \"w14:…\", \"expect\": \" unless terminated earlier\" }, \"with\": \"\", \"mode\": \"Tracked\" }. Under Tracked it is one deletion a reviewer can accept or reject. Include the space next to the deleted words in expect so the sentence keeps one space. There is no separate delete verb; to remove a whole paragraph use removeParagraph.
 - Reviewing an existing Word redline: inspect_document.nodes lists every revision (kind \"revision\") with its author and date, under paths like \"ins#7\", \"del#7\", \"markIns#7\" (a paragraph split), \"rowIns#7\"/\"rowDel#7\", \"cellIns#7\"/\"cellDel#7\", and \"runFormat#7\"/\"paraFormat#7\" (formatting changes). Resolve them with { \"op\": \"revision\", \"target\": { \"kind\": \"revision\", \"path\": \"…\" }, \"action\": \"Accept\" | \"Reject\" } - \"all\" takes every revision in the document and \"author:<name>\" takes one person's.
 - Editing a document that already has tracked changes: inspect_document and find_in_document show the text as it would read if every pending change were accepted, so pending insertions are visible and pending deletions are not. An edit clear of the existing revisions, or wholly inside one pending insertion, is applied normally. An edit that spans a pending deletion, or reaches out of one revision into ordinary text, is refused with revision-overlap and nothing is written, because the resulting redline would no longer reject back to the original text. Resolving somebody else's revision is always an explicit revision operation, never a side effect of an edit.
@@ -2233,6 +2347,7 @@ public Task<string> DescribeCapabilities(CancellationToken cancellationToken = d
 public Task<string> DiscoverTemplate(string connectionId, string documentId, CancellationToken cancellationToken = default);
 public Task<string> EditDocument(string connectionId, string source, string planJson, string saveMode = "Replace", string newName = "", CancellationToken cancellationToken = default);
 public Task<string> EditDocumentContent(string contentBase64, string planJson, bool preview = false, CancellationToken cancellationToken = default);
+public Task<string> EditDocuments(string connectionId, string[] sources, string planJson, bool preview = false, string saveMode = "Replace", CancellationToken cancellationToken = default);
 public Task<string> ExportDocumentContent(string connectionId, string documentId, CancellationToken cancellationToken = default);
 public Task<string> FindInDocument(string connectionId, string documentId, string pattern, bool regex = false, bool wholeWord = false, bool caseSensitive = false, string spreadsheetValueView = "both", CancellationToken cancellationToken = default);
 public Task<string> ImportDocumentContent(string connectionId, string name, string contentBase64, CancellationToken cancellationToken = default);
@@ -2244,6 +2359,7 @@ public Task<string> PopulateTemplateBatch(string connectionId, string documentId
 public Task<string> PreviewDocumentMerge(string requestJson, CancellationToken cancellationToken = default);
 public Task<string> PreviewPlan(string connectionId, string documentId, string planJson, CancellationToken cancellationToken = default);
 public Task<string> PreviewTemplateBatch(string connectionId, string documentId, string requestJson, CancellationToken cancellationToken = default);
+public Task<string> RefreshDocument(string connectionId, string source, string workbookSource, bool preview = false, string saveMode = "Replace", string newName = "", string workbookConnectionId = "", CancellationToken cancellationToken = default);
 public Task<string> RegisterDocument(string connectionId, string source, CancellationToken cancellationToken = default);
 public Task<string> RemoveDocument(string connectionId, string documentId, CancellationToken cancellationToken = default);
 public ValueTask<bool> CanAccessConnectionAsync(string connectionId, ConnectionCapability capability, CancellationToken cancellationToken = default);
@@ -2641,6 +2757,7 @@ public OfficeAgentClient(IDocumentService service);
 public OfficeAgentClient(IDocumentService service, DocumentProviderRegistry providers, ILoggerFactory? loggerFactory = null);
 public OfficeAgentClient(IDocumentService service, DocumentProviderRegistry providers, ILoggerFactory? loggerFactory, IEnumerable<IBlankDocumentFactory> blankDocumentFactories, IAuditActorProvider? auditActorProvider = null);
 public OfficeAgentClient(params IFormatModule[] modules);
+public const int MaximumRefreshCells = 10000;
 public IReadOnlyList<string> CreatableExtensions { get; }
 public DocumentMergeLimits MergeLimits { get; init; }
 public TemplateBatchLimits TemplateLimits { get; }
@@ -2648,6 +2765,7 @@ public ApplyResult Apply(DocumentHandle handle, DocumentPlan plan, ApplyOptions?
 public ApplyResult Commit(DocumentHandle handle, DocumentPlan plan);
 public ChangeMode DefaultChangeModeFor(string connectionId);
 public ChangeReport Preview(DocumentHandle handle, DocumentPlan plan);
+public DataRefreshPlan PlanDataRefresh(byte[] document, byte[] workbook);
 public DocumentComparisonResult CompareDocuments(byte[] original, byte[] revised, DocumentComparisonOptions? options = null, CancellationToken cancellationToken = default);
 public DocumentMergePreview PreviewMerge(IReadOnlyList<byte[]> sources, DocumentMergeOptions? options = null, CancellationToken cancellationToken = default);
 public DocumentMergeResult CommitMerge(DocumentMergePlan plan, IReadOnlyList<byte[]> sources, CancellationToken cancellationToken = default);
@@ -2666,6 +2784,7 @@ public Task<ApplyResult> PreviewWithReceiptAsync(string connectionId, string doc
 public Task<ChangeReport> PreviewAsync(DocumentHandle handle, DocumentPlan plan, CancellationToken cancellationToken = default);
 public Task<ChangeReport> PreviewAsync(DocumentReference reference, DocumentPlan plan, CancellationToken cancellationToken = default);
 public Task<ChangeReport> PreviewAsync(string connectionId, string documentId, DocumentPlan plan, CancellationToken cancellationToken = default);
+public Task<DataRefreshPlan> PlanDataRefreshAsync(DocumentReference document, DocumentReference workbook, CancellationToken cancellationToken = default);
 public Task<DocumentComparisonResult> CompareDocumentsAsync(DocumentReference original, DocumentReference revised, DocumentComparisonOptions? options = null, CancellationToken cancellationToken = default);
 public Task<DocumentComparisonResult> CompareDocumentsAsync(string originalConnectionId, string originalDocumentId, string revisedConnectionId, string revisedDocumentId, DocumentComparisonOptions? options = null, CancellationToken cancellationToken = default);
 public Task<DocumentContent> OpenReadAsync(DocumentReference reference, CancellationToken cancellationToken = default);

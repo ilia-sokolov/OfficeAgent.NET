@@ -40,13 +40,21 @@ internal sealed class ChangeTextHandler : IOperationHandler
                 "To remove an entire paragraph, set 'with' to the empty string and 'expect' to the current paragraph text.",
                 anchor));
 
+        var after = op.With;
+        if (op.WithMarked is not null)
+        {
+            if (MarkedText.Check(op, anchor, text, MarkedText.Read(paragraph, WordModel.Dialect), out var pieces) is { } refusal)
+                return OperationPreview.Fail(refusal);
+            after = MarkedText.Plain(pieces);
+        }
+
         if (anchor.Expect.Length == 0)
             return OperationPreview.Ok(new ProposedChange
             {
                 Target = anchor,
                 Verb = "changeText",
                 Before = string.Empty,
-                After = op.With,
+                After = after,
                 Context = "empty paragraph",
                 BlastRadius = 1
             });
@@ -81,7 +89,7 @@ internal sealed class ChangeTextHandler : IOperationHandler
             Target = anchor,
             Verb = "changeText",
             Before = anchor.Expect,
-            After = op.With,
+            After = after,
             Context = WordModel.Snippet(text, start, anchor.Expect.Length),
             BlastRadius = 1
         });
@@ -176,9 +184,22 @@ internal sealed class ChangeTextHandler : IOperationHandler
         var paragraph = WordModel.ResolveParagraph(context, anchor.ParaId)
             ?? throw new InvalidOperationException($"Paragraph '{anchor.ParaId}' vanished before apply.");
 
+        // A marked rewrite builds its runs before the span is isolated, while every
+        // formatting group still has the run it was read from.
+        var replacement = op.With;
+        IReadOnlyList<OpenXmlElement>? markedRuns = null;
+        if (op.WithMarked is not null)
+        {
+            var layout = MarkedText.Read(paragraph, WordModel.Dialect);
+            var pieces = MarkedText.Parse(op.WithMarked, Math.Max(0, layout.Groups.Count - 1), out var error);
+            if (error is not null) throw new InvalidOperationException(error);
+            replacement = MarkedText.Plain(pieces);
+            if (layout.Groups.Count > 0) markedRuns = MarkedText.BuildRuns(layout, pieces);
+        }
+
         if (anchor.Expect.Length == 0)
         {
-            Fill(context, paragraph, op);
+            Fill(context, paragraph, replacement, op.Mode);
             return;
         }
 
@@ -193,9 +214,12 @@ internal sealed class ChangeTextHandler : IOperationHandler
             throw new InvalidOperationException("Span isolation produced no runs.");
 
         if (op.Mode == ChangeMode.Direct)
-            ApplyDirect(covered, op.With);
+        {
+            if (markedRuns is null) ApplyDirect(covered, replacement);
+            else ApplyDirectRuns(covered, markedRuns);
+        }
         else
-            ApplyTracked(context, covered, op.With);
+            ApplyTracked(context, covered, replacement, markedRuns);
     }
 
     /// <summary>
@@ -203,17 +227,17 @@ internal sealed class ChangeTextHandler : IOperationHandler
     /// adds a run rather than isolating a span - and under tracked changes it is recorded
     /// as an insertion, since that is what it is.
     /// </summary>
-    private static void Fill(ApplyContext context, OpenXmlElement paragraph, ChangeTextOp op)
+    private static void Fill(ApplyContext context, OpenXmlElement paragraph, string text, ChangeMode mode)
     {
-        if (op.With.Length == 0) return;
+        if (text.Length == 0) return;
 
         var run = new Run();
-        WordModel.Dialect.SetRunText(run, op.With);
+        WordModel.Dialect.SetRunText(run, text);
 
         // A run follows w:pPr, which is the paragraph's first child when it has one.
         var properties = paragraph.GetFirstChild<ParagraphProperties>();
 
-        if (op.Mode == ChangeMode.Direct)
+        if (mode == ChangeMode.Direct)
         {
             if (properties is null) paragraph.InsertAt(run, 0);
             else paragraph.InsertAfter(run, properties);
@@ -248,7 +272,21 @@ internal sealed class ChangeTextHandler : IOperationHandler
             covered[i].Remove();
     }
 
-    private static void ApplyTracked(ApplyContext context, IReadOnlyList<OpenXmlElement> covered, string replacement)
+    /// <summary>Replaces the span with a marked rewrite's runs, each already carrying its formatting.</summary>
+    private static void ApplyDirectRuns(IReadOnlyList<OpenXmlElement> covered, IReadOnlyList<OpenXmlElement> runs)
+    {
+        var first = covered[0];
+        foreach (var run in runs)
+            first.InsertBeforeSelf(run);
+        foreach (var element in covered)
+            element.Remove();
+    }
+
+    private static void ApplyTracked(
+        ApplyContext context,
+        IReadOnlyList<OpenXmlElement> covered,
+        string replacement,
+        IReadOnlyList<OpenXmlElement>? markedRuns)
     {
         var first = (Run)covered[0];
         var parent = first.Parent
@@ -278,11 +316,19 @@ internal sealed class ChangeTextHandler : IOperationHandler
         // changes nothing, which Word's Review pane still counts and steps through.
         if (replacement.Length > 0)
         {
-            var insertRun = (Run)first.CloneNode(deep: true);
-            WordModel.Dialect.SetRunText(insertRun, replacement);
             var inserted = WordRevisions.Stamp(
                 new InsertedRun(), allocator.Next().ToString(), author, stamp);
-            inserted.AppendChild(insertRun);
+            if (markedRuns is null)
+            {
+                var insertRun = (Run)first.CloneNode(deep: true);
+                WordModel.Dialect.SetRunText(insertRun, replacement);
+                inserted.AppendChild(insertRun);
+            }
+            else
+            {
+                foreach (var run in markedRuns)
+                    inserted.AppendChild(run);
+            }
             parent.InsertBefore(inserted, first);
         }
 

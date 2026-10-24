@@ -28,6 +28,9 @@ public sealed class PlanOperationJsonConverter : JsonConverter<PlanOperation>
         new Dictionary<string, Type>(StringComparer.OrdinalIgnoreCase)
         {
             ["fill"] = typeof(FillOp),
+            ["fillTable"] = typeof(FillTableOp),
+            ["setChartData"] = typeof(SetChartDataOp),
+            ["bindData"] = typeof(BindDataOp),
             ["changeText"] = typeof(ChangeTextOp),
             ["insert"] = typeof(InsertOp),
             ["insertParagraphs"] = typeof(InsertParagraphsOp),

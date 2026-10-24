@@ -94,7 +94,7 @@ than omitting a property.
 
 | Option | Added tools | Boundary |
 | --- | --- | --- |
-| `AllowRegistration` | `register_document`, `remove_document`, `open_document`, `edit_document` | Lets the agent name a provider-relative source. The underlying file is never deleted by `remove_document`. |
+| `AllowRegistration` | `register_document`, `remove_document`, `open_document`, `edit_document`, `edit_documents`, `refresh_document` | Lets the agent name a provider-relative source. The underlying file is never deleted by `remove_document`. |
 | `AllowCreation` | `create_document`, `discover_template`, `preview_template_batch`, `populate_template_batch`, `merge_documents` | Lets the agent create new stored outputs. A preflight is available only when its corresponding commit can also be enabled. |
 | `AllowInlineContent` | `create_document_content`, `inspect_document_content`, `edit_document_content` | Carries the complete document as base64 with no storage. Use for bounded, self-contained calls. |
 | `AllowEphemeralDocuments` | `import_document_content`, `export_document_content` | Transfers bytes into and out of a session connection; ordinary default tools handle the edits between those calls. |
@@ -164,6 +164,8 @@ offers separate least-privilege switches for existing documents and new ones:
 | `remove_document(connectionId, documentId)` | `AllowRegistration` | Removes the registration only - the underlying file is never deleted. |
 | `open_document(connectionId, source, fidelity, paragraphOffset, paragraphLimit, sheetId, range, maximumCells)` | `AllowRegistration` | `register_document` + `inspect_document` in one call. Send the same explicit inspection defaults as `inspect_document`. |
 | `edit_document(connectionId, source, planJson, saveMode, newName)` | `AllowRegistration` | `register_document` + anchor resolution + `apply_plan` in one call. Send `"Replace"` and `""` for the defaults. Targets may name text directly instead of a paragraph id. |
+| `edit_documents(connectionId, sources, planJson, preview, saveMode)` | `AllowRegistration` | `edit_document` for up to 100 sources with one plan. Each document is edited and saved on its own; returns a summary and one `edit_document` result per source. The plan cannot carry a snapshot. |
+| `refresh_document(connectionId, source, workbookSource, preview, saveMode, newName, workbookConnectionId)` | `AllowRegistration` | Updates a Word report or PowerPoint deck from a workbook through the `xl:` bindings it carries, all or nothing; returns the `edit_document` shape plus `bindings`. See [report refresh](report-refresh.md). |
 | `create_document(connectionId, name, planJson)` | `AllowCreation` | Creates a **new** document in the connection, registers it, and optionally applies an initial plan in the same call. Pass `""` for no initial plan. Returns the `apply_plan` shape, so the new id arrives as `outputDocumentId`. `name` is a bare file name with its extension; a name already in use is refused rather than overwritten, and an initial plan that fails validation creates nothing at all. |
 
 A new `.docx` contains one empty paragraph, addressed as paragraph id
@@ -198,10 +200,23 @@ next call can name the one it meant:
 `anchor-not-found`. Every unresolvable target in a plan is reported in the same
 result, so a plan with two bad targets costs one call to discover both, not two.
 
-`find` is a literal, case-insensitive search. Regex, whole-word, and
-case-sensitive matching stay on `find_in_document` - resolve there and pass the
-resulting `paraId` targets, which `edit_document` accepts and can mix freely with
-`find` targets in one plan.
+`"match": "all"` means every match, including matches in headers, footers and
+notes: the operation is repeated once per match, and skipped where the text does
+not appear. A plan whose every target matched nothing is refused with
+`anchor-not-found` and saves nothing.
+
+```jsonc
+[ { "op": "changeText", "target": { "find": "Acme Corp", "match": "all", "caseSensitive": true, "wholeWord": true }, "with": "Globex Inc." } ]
+```
+
+`find` is a literal, case-insensitive search that matches inside words; a target
+can add `"caseSensitive": true` and `"wholeWord": true`. Regex matching stays on
+`find_in_document` - resolve there and pass the resulting `paraId` targets, which
+`edit_document` accepts and can mix freely with `find` targets in one plan.
+
+`edit_documents(connectionId, sources, planJson, preview, saveMode)` applies one
+such plan to up to 100 documents, each edited and saved on its own with its own
+result and receipt. See [translation and bulk edits](translation-and-bulk-edits.md#edit-many-documents-at-once).
 
 `planJson` accepts a bare operations array `[ … ]` as well as
 `{ "operations": [ … ] }`, on `edit_document`, `create_document`, `preview_plan`,
@@ -300,8 +315,9 @@ work is two calls or one:
 - `open_document` → registers and inspects together; carry on from step 2.
 - `edit_document` → registers, resolves `find` targets, and applies, when the
   edit is already known. Reach back for the single-purpose tools when you need a
-  preview before writing, a regex or case-sensitive search, or an id you already
-  hold.
+  preview before writing, a regex search, or an id you already hold.
+- `edit_documents` → the same for a list of documents, when one change belongs
+  in many files.
 
 ## Errors the LLM can act on
 
@@ -315,7 +331,7 @@ work is two calls or one:
 | `content-too-large`, `extension-not-allowed` | Provider policy refused the input. |
 | `already-exists` | A `create_document` name is taken. Nothing was overwritten; retry with a different name. |
 | `ambiguous-anchor` | An `edit_document` `find` target matched several times. The message lists each candidate; re-issue with `"match": <index>` or more surrounding text. Nothing was written. |
-| `anchor-not-found` | A `find` target matched nothing, or its `match` index was out of range. Check the wording with `inspect_document` rather than retrying the same text. |
+| `anchor-not-found` | A `find` target matched nothing, its `match` index was out of range, or every `"match": "all"` target in the plan matched nothing. Check the wording with `inspect_document` rather than retrying the same text. |
 | `contract-mismatch` | The edit plan must omit `contractVersion` for legacy `0.2` behavior or set it to `"0.2"`. Null, empty, malformed, and unknown versions are refused before saving. |
 | `invalid-argument`, `invalid-json` | The plan or arguments were malformed. Unknown properties, operations, enum names, integer enum values, and non-string versions are refused. The error message says what to fix; when storage refused an argument, it names the call's arguments that reached storage, and a `newName` sent with `Replace` is refused by name. |
 | `configuration-error` | The `connectionId` is not registered on this host, or - for `create_document` - that connection cannot create documents. Try another connection rather than retrying. |

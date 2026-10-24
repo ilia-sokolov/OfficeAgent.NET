@@ -41,6 +41,9 @@ corpora and evaluations remain evidence for that release, not instructions for a
 | Update workbook inputs and get the new totals | [ExcelInputUpdate sample](../samples/ExcelInputUpdate/) | [Excel support](excel.md) |
 | Generate many documents from a template | [Template population](document-workflows.md#populate-a-template-batch) | [TemplateBatch sample](../samples/TemplateBatch/) |
 | Check a template batch before it writes | [Template preflight](document-workflows.md#preflight-a-template-batch) | [Capability discovery](capability-discovery.md) |
+| Update a report or deck from a new workbook | [Report refresh](report-refresh.md) | [Excel support](excel.md), [document plans](document-plans.md#filltable--setchartdata--binddata) |
+| Translate a document and keep its formatting | [Translate a document](translation-and-bulk-edits.md#translate-a-document) | [Document plans](document-plans.md#rewrite-a-paragraph-and-keep-its-formatting) |
+| Make one change across many documents | [Edit many documents at once](translation-and-bulk-edits.md#edit-many-documents-at-once) | [Agent integration](agent-integration.md#addressing-text-instead-of-paragraph-ids) |
 | Compare two Word documents and create a redline | [Document comparison](document-workflows.md#compare-two-word-documents) | [DocumentComparison sample](../samples/DocumentComparison/) |
 | Assemble a proposal and appendices | [Word document assembly](document-assembly.md) | [DocumentAssembly sample](../samples/DocumentAssembly/) |
 | Add document tools to an agent | [Agent integration](agent-integration.md) | [Document providers](document-providers.md) |

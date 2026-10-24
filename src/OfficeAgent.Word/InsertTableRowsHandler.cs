@@ -159,7 +159,7 @@ internal sealed class InsertTableRowsHandler : IOperationHandler
     /// row's paragraphs, so leaving them would put two paragraphs in the document under
     /// one anchor and make every later target ambiguous. Stabilize mints fresh ones.
     /// </summary>
-    private static void ClearParagraphIds(TableRow row)
+    internal static void ClearParagraphIds(TableRow row)
     {
         foreach (var paragraph in row.Descendants<Paragraph>())
         {
@@ -174,7 +174,7 @@ internal sealed class InsertTableRowsHandler : IOperationHandler
     /// this plan just added was added - or deleted - by someone else, earlier. The row's
     /// own mode decides what markup it gets, and it gets it after insertion.
     /// </summary>
-    private static void ClearRevisionMarkup(TableRow row)
+    internal static void ClearRevisionMarkup(TableRow row)
     {
         foreach (var marker in row.Descendants<TrackChangeType>().ToList())
             marker.Remove();

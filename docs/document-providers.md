@@ -222,7 +222,7 @@ services.AddFileSystemDocumentProvider("reports", "/srv/officeagent/reports", o 
 
 This matters most for decks: PresentationML has no redline vocabulary, so under `Tracked` every deck edit that omits a mode is refused outright. A connection serving `.pptx` usually wants `Direct`.
 
-The setting fills a gap; it never overrides an operation that names its own `mode`. It applies to plans arriving through `OfficeAgentTools` - `preview_plan`, `apply_plan`, `edit_document`, `create_document` - where an absent `mode` is genuinely absent. A host building a `DocumentPlan` in code sets `ChangeTextOp.Mode` itself, and `OfficeAgentClient.DefaultChangeModeFor(connectionId)` reports the connection's policy if it wants to follow it. A custom `IDocumentProvider` that does not implement `IConnectionEditingDefaults` takes the global default.
+The setting fills a gap; it never overrides an operation that names its own `mode`. It applies to plans arriving through `OfficeAgentTools` - `preview_plan`, `apply_plan`, `edit_document`, `edit_documents`, `create_document` - where an absent `mode` is genuinely absent. A host building a `DocumentPlan` in code sets `ChangeTextOp.Mode` itself, and `OfficeAgentClient.DefaultChangeModeFor(connectionId)` reports the connection's policy if it wants to follow it. A custom `IDocumentProvider` that does not implement `IConnectionEditingDefaults` takes the global default.
 
 ## Formula calculation
 

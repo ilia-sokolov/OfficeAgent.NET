@@ -37,9 +37,10 @@ public class McpServerTests
         var tools = OfficeAgentMcpServer.BuildToolset(options);
 
         var names = tools.Select(t => t.ProtocolTool.Name).ToArray();
-        Assert.Equal(12, names.Length);
+        Assert.Equal(14, names.Length);
         Assert.Contains("open_document", names);
         Assert.Contains("edit_document", names);
+        Assert.Contains("edit_documents", names);
         Assert.Contains("inspect_document", names);
         Assert.Contains("find_in_document", names);
         Assert.Contains("preview_plan", names);
@@ -65,7 +66,7 @@ public class McpServerTests
 
         options.AllowCreation = true;
         var names = OfficeAgentMcpServer.BuildToolset(options).Select(t => t.ProtocolTool.Name).ToArray();
-        Assert.Equal(17, names.Length);
+        Assert.Equal(19, names.Length);
         Assert.Contains("create_document", names);
         Assert.Contains("populate_template_batch", names);
 
@@ -615,8 +616,8 @@ public class McpServerTests
         // Every annotated name is a tool the server really publishes, so the table cannot drift.
         Assert.Equal(ToolAnnotations.ByName.Keys.OrderBy(name => name), tools.Keys.OrderBy(name => name));
 
-        // The two tools that save over a document in place are the only destructive ones.
-        Assert.Equal(new[] { "apply_plan", "edit_document" },
+        // The tools that save over a document in place are the only destructive ones.
+        Assert.Equal(new[] { "apply_plan", "edit_document", "edit_documents", "refresh_document" },
             tools.Values.Where(tool => tool.Annotations!.DestructiveHint == true).Select(tool => tool.Name).OrderBy(name => name));
         Assert.True(tools["inspect_document"].Annotations!.ReadOnlyHint);
         Assert.False(tools["remove_document"].Annotations!.ReadOnlyHint);

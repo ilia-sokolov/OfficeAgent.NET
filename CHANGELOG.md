@@ -7,6 +7,47 @@ corresponding GitHub release.
 
 ### Added
 
+- **Refresh a report or deck from a workbook.** `refresh_document` updates a Word report or
+  PowerPoint deck from an Excel workbook in one call: numbers in the text, tables and charts,
+  each through an `xl:` marker naming a workbook range that the document keeps, so the next
+  month is the same call. Values take the cell as Excel displays it, number format applied;
+  tables are filled cell by cell and grow or shrink by rows; charts take new data and keep their
+  colours and layout. A refresh is all or nothing: one unreadable binding writes nothing and is
+  named. `OfficeAgentClient.PlanDataRefresh` does the same from C#. See
+  [report refresh](docs/report-refresh.md).
+- **Three data verbs.** `fillTable` replaces a Word or PowerPoint table's cells and keeps their
+  formatting; `setChartData` replaces the data of any PowerPoint chart, including one made in
+  PowerPoint, and keeps its type, colours and layout; `bindData` writes the `xl:` marker that
+  links a Word text span or table, or a PowerPoint shape, table or chart, to a range.
+- **Cells as Excel shows them.** Excel inspection reports each cell's `formattedValue`, with its
+  number format applied, and the workbook's `definedNames`. Inspected nodes report the `name`
+  an author gave them: a PowerPoint shape's Selection Pane name or a Word table's alt-text
+  title. Number formats are read with the MIT-licensed ExcelNumberFormat package, which
+  `OfficeAgent.Excel` now depends on.
+
+- **Translate a paragraph and keep its formatting.** Inspection now gives each Word or
+  PowerPoint paragraph whose words differ in formatting a `markedText`, such as
+  `Payment is due within <1>30 days</1> of invoice.`, and `changeText` takes the rewrite as
+  `withMarked`: each tagged phrase keeps its bold, italic, colour or link formatting wherever the
+  translation puts it, and untagged text takes the paragraph's usual formatting. `expect` must
+  be the whole paragraph. Under `Tracked` the rewrite is one deletion and one insertion. A Word
+  paragraph whose text crosses a hyperlink, content control or pending revision is refused, as
+  `changeText` already refused spans that cross one. See
+  [translation and bulk edits](docs/translation-and-bulk-edits.md#translate-a-document).
+- **One plan across many documents.** `edit_documents` applies a plan to up to 100 documents
+  named by source. Each is edited and saved on its own, so one failure leaves the others saved,
+  and each returns its own `edit_document` result and receipt under a summary of committed,
+  unchanged and failed documents. `preview: true` checks every document and writes nothing. It
+  is published with the other source-addressed tools under `AllowRegistration`, is marked
+  destructive, and is refused on a server with `RequirePlanSnapshot`. See
+  [edit many documents at once](docs/translation-and-bulk-edits.md#edit-many-documents-at-once).
+- **Every match, or the exact one.** A `find` target in `edit_document`, `edit_documents` and
+  `edit_document_content` takes `"match": "all"`, which repeats the operation for every
+  occurrence, in headers, footers and notes too, and skips it where there is none, plus
+  `"caseSensitive": true` and `"wholeWord": true`. A plan whose every `"match": "all"` target
+  matched nothing is refused with `anchor-not-found` and saves nothing. A `match` that is
+  neither an index nor `"all"` is now refused rather than ignored.
+
 - **Every MCP tool says what it does to your files.** Each tool now carries MCP annotations: a
   title clients display, and explicit read-only, destructive, idempotent and open-world hints.
   Clients use them to tell tools that only read from tools that write, and some approve

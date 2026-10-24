@@ -41,6 +41,7 @@ internal sealed class ShapeNodeProvider : IPowerPointNodeProvider
                     Kind = Kind,
                     Path = path,
                     Summary = Describe(slide, element),
+                    Name = PowerPointModel.ShapeNameOf(element) is { Length: > 0 } name ? name : null,
                     Anchor = new NodeAnchor { Id = path, Kind = Kind, Path = path }
                 };
             }

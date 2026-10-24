@@ -119,6 +119,7 @@ internal sealed class SlideChartNodeProvider : IPowerPointNodeProvider
                     Kind = Kind,
                     Path = path,
                     Summary = $"slide {slide.Number}: {PowerPointModel.ShapeNameOf(frame)}",
+                    Name = PowerPointModel.ShapeNameOf(frame) is { Length: > 0 } name ? name : null,
                     Anchor = new NodeAnchor { Id = path, Kind = Kind, Path = path }
                 };
             }
