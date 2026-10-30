@@ -81,6 +81,130 @@ internal static class SlideLayouts
     /// <summary>The layout names a plan may use, for the error message when one is wrong.</summary>
     public static string Names => string.Join(", ", All.Select(l => l.Name));
 
+    /// <summary>
+    /// Every named layout the deck defines, master by master in the order PowerPoint lists
+    /// them. A layout with no name cannot be asked for, so it is left out.
+    /// </summary>
+    public static IReadOnlyList<DeckLayout> Defined(PresentationPart main)
+    {
+        var layouts = new List<DeckLayout>();
+        foreach (var master in Ordered(main))
+        {
+            var masterName = MasterName(master);
+            foreach (var part in Ordered(master))
+            {
+                var name = part.SlideLayout?.CommonSlideData?.Name?.Value;
+                if (!string.IsNullOrWhiteSpace(name))
+                    layouts.Add(new DeckLayout(part, name!, masterName));
+            }
+        }
+
+        return layouts;
+    }
+
+    /// <summary>
+    /// Resolves what a plan asked for. The five built-in names come first and keep their
+    /// meaning on every deck; anything else must be one of the deck's own layouts, by the
+    /// name PowerPoint shows for it. That is what lets an agent put a slide on a company
+    /// template's "Divider" or "Two column with logo" layout instead of the nearest generic one.
+    /// </summary>
+    public static LayoutResolution Resolve(PresentationPart main, string name)
+    {
+        if (All.Any(l => string.Equals(l.Name, name, StringComparison.OrdinalIgnoreCase)))
+        {
+            var master = main.SlideMasterParts.FirstOrDefault();
+            // A deck from someone else's template may not define the layout asked for; using
+            // whatever it does define beats refusing the edit, and beats inventing geometry.
+            var part = master is null ? null : Find(master, name) ?? master.SlideLayoutParts.FirstOrDefault();
+            return new LayoutResolution(part, name, ByDeckName: false, Error: null);
+        }
+
+        var defined = Defined(main);
+        var matches = defined
+            .Where(l => string.Equals(l.Name, name, StringComparison.OrdinalIgnoreCase))
+            .ToList();
+
+        // A template with several masters often repeats a layout name in each; the master
+        // name, as in "Brand/Title and Content", picks one.
+        if (matches.Count == 0)
+            matches = defined
+                .Where(l => string.Equals(l.QualifiedName, name, StringComparison.OrdinalIgnoreCase))
+                .ToList();
+
+        if (matches.Count == 1)
+            return new LayoutResolution(matches[0].Part, matches[0].Name, ByDeckName: true, Error: null);
+
+        if (matches.Count > 1)
+            return new LayoutResolution(null, name, ByDeckName: true,
+                $"Layout '{name}' is defined by more than one slide master. Name it with its master: " +
+                $"{string.Join(", ", matches.Select(l => $"'{l.QualifiedName}'"))}.");
+
+        var own = defined.Count == 0
+            ? "The deck defines no named layouts."
+            : $"The deck's own layouts are: {string.Join(", ", defined.Select(l => $"'{l.Name}'").Distinct(StringComparer.OrdinalIgnoreCase))}.";
+        return new LayoutResolution(null, name, ByDeckName: true,
+            $"Unknown layout '{name}'. Use one of {Names}, or a layout the deck defines. {own} " +
+            "inspect_document lists them under layouts.");
+    }
+
+    /// <summary>
+    /// The name PowerPoint's Slide Master view gives a master: its theme's name, or the
+    /// master's own name when it has one and the theme has none.
+    /// </summary>
+    private static string MasterName(SlideMasterPart master) =>
+        master.ThemePart?.Theme?.Name?.Value is { Length: > 0 } theme ? theme
+        : master.SlideMaster?.CommonSlideData?.Name?.Value ?? string.Empty;
+
+    /// <summary>Masters in the presentation's own list order, then any it does not list.</summary>
+    private static IEnumerable<SlideMasterPart> Ordered(PresentationPart main)
+    {
+        var listed = main.Presentation?.SlideMasterIdList?.Elements<SlideMasterId>()
+            .Select(id => id.RelationshipId?.Value is { } rid ? main.GetPartById(rid) as SlideMasterPart : null)
+            .OfType<SlideMasterPart>()
+            .ToList() ?? new List<SlideMasterPart>();
+        return listed.Concat(main.SlideMasterParts.Except(listed));
+    }
+
+    /// <summary>Layouts in the master's own list order, then any it does not list.</summary>
+    private static IEnumerable<SlideLayoutPart> Ordered(SlideMasterPart master)
+    {
+        var listed = master.SlideMaster?.SlideLayoutIdList?.Elements<SlideLayoutId>()
+            .Select(id => id.RelationshipId?.Value is { } rid ? master.GetPartById(rid) as SlideLayoutPart : null)
+            .OfType<SlideLayoutPart>()
+            .ToList() ?? new List<SlideLayoutPart>();
+        return listed.Concat(master.SlideLayoutParts.Except(listed));
+    }
+
+    /// <summary>
+    /// What a placeholder is for, in the words an agent uses; null for the running items
+    /// (date, footer, slide number, header), which the slide does not carry as content.
+    /// </summary>
+    public static string? KindOf(PlaceholderShape placeholder)
+    {
+        var type = placeholder.Type?.Value;
+        if (type is null || type == PlaceholderValues.Object) return "content";
+        if (type == PlaceholderValues.Title || type == PlaceholderValues.CenteredTitle) return "title";
+        if (type == PlaceholderValues.SubTitle) return "subtitle";
+        if (type == PlaceholderValues.Body) return "body";
+        if (type == PlaceholderValues.Picture || type == PlaceholderValues.ClipArt) return "picture";
+        if (type == PlaceholderValues.Chart) return "chart";
+        if (type == PlaceholderValues.Table) return "table";
+        if (type == PlaceholderValues.Diagram) return "diagram";
+        if (type == PlaceholderValues.Media) return "media";
+        return null;
+    }
+
+    /// <summary>One of the deck's own layouts: its part, its name, and its master's name.</summary>
+    internal sealed record DeckLayout(SlideLayoutPart Part, string Name, string Master)
+    {
+        /// <summary>The master-qualified form that picks one of several same-named layouts.</summary>
+        public string QualifiedName => $"{Master}/{Name}";
+    }
+
+    /// <summary>The layout a plan's name resolved to, or why it did not.</summary>
+    internal sealed record LayoutResolution(
+        SlideLayoutPart? Part, string Name, bool ByDeckName, string? Error);
+
     /// <summary>A rectangle in EMUs.</summary>
     internal readonly struct Box
     {

@@ -1000,9 +1000,11 @@ public sealed class SlideData
 {
     /// <summary>
     /// Gets the layout the slide uses: <c>title</c>, <c>titleAndContent</c> (the default
-    /// when a body is supplied), <c>sectionHeader</c>, <c>titleOnly</c>, or <c>blank</c>.
-    /// Resolved against the layouts the deck's own slide master defines, so a deck built
-    /// from a corporate template keeps that template's appearance.
+    /// when a body is supplied), <c>sectionHeader</c>, <c>titleOnly</c>, or <c>blank</c>,
+    /// resolved against the deck's own layouts by type; or the name of one of the deck's own
+    /// layouts as PowerPoint shows it, such as <c>Two Column With Logo</c>, written
+    /// <c>master/layout</c> when two masters share the name. A slide on a named layout gets
+    /// every placeholder the layout defines. <see cref="InspectResult.Layouts"/> lists them.
     /// </summary>
     public string? Layout { get; init; }
 

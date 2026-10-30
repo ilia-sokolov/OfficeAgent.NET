@@ -73,6 +73,14 @@ corresponding GitHub release.
   formulas stay off until the user turns them on. It passes `claude plugin validate`, and a test
   holds it to the directory's published submission rules. See
   [the MCP server guide](docs/mcp-server.md#claude-code-plugin).
+- **Slides on a template's own layouts.** `insertSlide` now takes the name of any layout the deck
+  defines, as PowerPoint shows it, such as `"layout": "Two Column With Logo"`, besides the five
+  built-in names. A slide on a named layout gets every placeholder the layout has, under the
+  layout's own shape names, as PowerPoint's New Slide makes it, so the ones the title and body do
+  not fill can be filled next. Inspection lists the deck's `layouts`, each with its master and
+  its placeholders. A name two masters share is refused until written as `master/layout`, and
+  an unknown name is refused with the deck's own layout names. See
+  [PowerPoint support](docs/powerpoint.md#generating-a-deck).
 - **Word styles by the name Word shows.** `styleId` on `insert`, `format` and notes, and
   `defineStyle`'s `basedOn` and `next`, take the name in Word's style gallery, such as
   `"Heading 2"` or a template's `"Body Text Blue"`, as well as the style id. See
@@ -97,6 +105,10 @@ corresponding GitHub release.
   of that type. Normal, Heading 1 to 3, List Paragraph and Table Grid are the exception: when
   a document lacks one, its standard definition is added, as Word does. Plans produced by
   document comparison keep their styles as before.
+- **A new slide's title or body must have somewhere to go.** `insertSlide` used to drop a title
+  the chosen layout had no title placeholder for, or a body it had no text placeholder for; it
+  now refuses the operation and says which. Body text no longer goes into a picture, chart,
+  table, footer or date placeholder.
 - **A `find` target's `match` must be an index or `"all"`.** Any other string is refused with
   `invalid-argument` instead of being ignored.
 

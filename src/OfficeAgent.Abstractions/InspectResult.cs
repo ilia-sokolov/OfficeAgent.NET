@@ -58,6 +58,45 @@ public sealed class InspectResult
     /// <c>Summary!$B$2</c>. Excel only; hidden and built-in names are left out.
     /// </summary>
     public IReadOnlyList<DefinedNameInfo> DefinedNames { get; init; } = Array.Empty<DefinedNameInfo>();
+
+    /// <summary>
+    /// Gets the slide layouts a deck defines, by the names PowerPoint shows, with the
+    /// placeholders each one offers. Any of these names can be given as an inserted slide's
+    /// <see cref="SlideData.Layout"/>. PowerPoint only.
+    /// </summary>
+    public IReadOnlyList<SlideLayoutInfo> Layouts { get; init; } = Array.Empty<SlideLayoutInfo>();
+}
+
+/// <summary>One slide layout a deck defines.</summary>
+public sealed class SlideLayoutInfo
+{
+    /// <summary>Gets the layout's name as PowerPoint shows it, such as <c>Two Content</c>.</summary>
+    public string Name { get; init; } = string.Empty;
+
+    /// <summary>
+    /// Gets the name of the slide master the layout belongs to. When several masters define
+    /// a layout of the same name, <c>master/name</c> picks one.
+    /// </summary>
+    public string Master { get; init; } = string.Empty;
+
+    /// <summary>
+    /// Gets the placeholders a slide on this layout offers, in layout order. Date, footer
+    /// and slide-number placeholders are left out.
+    /// </summary>
+    public IReadOnlyList<LayoutPlaceholderInfo> Placeholders { get; init; } = Array.Empty<LayoutPlaceholderInfo>();
+}
+
+/// <summary>One placeholder on a slide layout.</summary>
+public sealed class LayoutPlaceholderInfo
+{
+    /// <summary>Gets the placeholder's shape name, which an inserted slide's shape keeps.</summary>
+    public string Name { get; init; } = string.Empty;
+
+    /// <summary>
+    /// Gets what the placeholder holds: <c>title</c>, <c>subtitle</c>, <c>body</c>,
+    /// <c>content</c>, <c>picture</c>, <c>chart</c>, <c>table</c>, <c>diagram</c> or <c>media</c>.
+    /// </summary>
+    public string Kind { get; init; } = string.Empty;
 }
 
 /// <summary>A workbook defined name and the range it refers to.</summary>

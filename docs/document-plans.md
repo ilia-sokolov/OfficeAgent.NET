@@ -809,7 +809,7 @@ Moving and resizing go through `format` on the same shape node — see [PowerPoi
 
 ### `insertSlide` / `removeSlide` / `moveSlide` / `duplicateSlide`
 
-PowerPoint only; a Word document reports them as `unsupported-operation`. Several `insertSlide` operations in one plan author a whole deck — see [PowerPoint support](powerpoint.md#generating-a-deck) for the layouts and what a slide inherits from them.
+PowerPoint only; a Word document reports them as `unsupported-operation`. Several `insertSlide` operations in one plan author a whole deck — see [PowerPoint support](powerpoint.md#generating-a-deck) for the layouts and what a slide inherits from them. `layout` is one of the five built-in names or the name of one of the deck's own layouts, which `inspect_document` lists under `layouts` ([a template's own layouts](powerpoint.md#a-templates-own-layouts)).
 
 ```json
 { "op": "insertSlide",
