@@ -16,6 +16,9 @@
       "transport": {
         "type": "stdio"
       },
+      "packageArguments": [
+        { "type": "positional", "value": "--stdio" }
+      ],
       "environmentVariables": [
         {
           "name": "OfficeAgent__FileSystemConnections__0__ConnectionId",

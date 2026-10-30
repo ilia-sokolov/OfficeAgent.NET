@@ -85,6 +85,11 @@ corresponding GitHub release.
   `defineStyle`'s `basedOn` and `next`, take the name in Word's style gallery, such as
   `"Heading 2"` or a template's `"Body Text Blue"`, as well as the style id. See
   [document plans](docs/document-plans.md#styles-by-name).
+- **Listed as an MCP server on NuGet.** `OfficeAgent.Mcp` now carries the `McpServer` package
+  type and an embedded `.mcp/server.json`, so NuGet.org lists it among MCP servers and can give
+  clients a ready-made configuration.
+- **`llms.txt`.** A short guide for agents at the repository root says what OfficeAgent is good
+  and poor at, and links the documentation as plain Markdown.
 - **Formula calculation in the session connection.** `EphemeralCalculateFormulas` and
   `EphemeralRejectFormulaErrors` turn calculation on for the MCP server's in-memory session
   connection, including the one it starts with when nothing is configured, as the folder and
@@ -105,6 +110,8 @@ corresponding GitHub release.
   of that type. Normal, Heading 1 to 3, List Paragraph and Table Grid are the exception: when
   a document lacks one, its standard definition is added, as Word does. Plans produced by
   document comparison keep their styles as before.
+- **`server.json` passes `--stdio` to the NuGet package.** A client that built its configuration
+  from the MCP Registry entry started the server over HTTP and never connected.
 - **A new slide's title or body must have somewhere to go.** `insertSlide` used to drop a title
   the chosen layout had no title placeholder for, or a body it had no text placeholder for; it
   now refuses the operation and says which. Body text no longer goes into a picture, chart,

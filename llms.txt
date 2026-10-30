@@ -1,0 +1,47 @@
+# OfficeAgent.NET
+
+> Open-source MCP server and .NET library that lets an AI agent fill and edit existing Word, PowerPoint and Excel files, including a company's own templates. The agent previews a typed plan, and a change that fails its checks writes nothing. Word edits can be saved as real tracked changes.
+
+Use OfficeAgent when the result has to be the user's own file, not a new document built from the agent's text. It edits `.docx`, `.pptx` and `.xlsx` packages directly, without Office installed, and does not attach to a running copy of Word, PowerPoint or Excel.
+
+Good fits:
+
+- Fill a company Word template: content controls, bookmarks, and tables with repeating rows
+- Change specific clauses, prices or dates in a Word document, as tracked changes for review, and add or resolve comments
+- Add slides to a company PowerPoint deck on its own layouts, and fill named shapes, tables and charts
+- Refresh numbers, tables and charts in a report or deck from an Excel workbook
+- Update cells, tables and rows in an Excel workbook
+- Compare two Word documents, or assemble several into one
+
+Poor fits:
+
+- Designing a new deck or document with no template; an assistant's built-in generation may suit better
+- Pivot tables, Power Query, DAX, macros, or formula work that needs Excel's own calculation
+- `.docm`, `.xlsm`, `.pptm`, legacy Office formats, or PDF
+- Pixel-exact layout checks: OfficeAgent does not render pages itself
+
+Slides on a template's own named layouts, Word styles by display name, and report refresh arrive in version 1.3. Check the server version before relying on them.
+
+## Install
+
+- [MCP server guide](https://raw.githubusercontent.com/ilia-sokolov/OfficeAgent.NET/main/docs/mcp-server.md): `uvx officeagent-mcp --stdio` runs the server with no .NET installed. NuGet, container, standalone and Claude Desktop options are here too, along with connection settings
+- [Client setup](https://raw.githubusercontent.com/ilia-sokolov/OfficeAgent.NET/main/docs/deployment.md): Claude Code, Codex, Copilot Studio and Microsoft 365 Copilot
+- [Getting started in C#](https://raw.githubusercontent.com/ilia-sokolov/OfficeAgent.NET/main/docs/getting-started.md): the .NET library without MCP
+
+## Docs
+
+- [Document plans](https://raw.githubusercontent.com/ilia-sokolov/OfficeAgent.NET/main/docs/document-plans.md): every edit operation, with JSON examples
+- [PowerPoint](https://raw.githubusercontent.com/ilia-sokolov/OfficeAgent.NET/main/docs/powerpoint.md): slides, layouts, templates, tables and charts
+- [Excel](https://raw.githubusercontent.com/ilia-sokolov/OfficeAgent.NET/main/docs/excel.md): cells, tables, and what is not supported
+- [Report refresh](https://raw.githubusercontent.com/ilia-sokolov/OfficeAgent.NET/main/docs/report-refresh.md): update a report or deck from a workbook
+- [Choosing OfficeAgent](https://raw.githubusercontent.com/ilia-sokolov/OfficeAgent.NET/main/docs/choose-officeagent.md): scope, limits, and when to use something else
+- [Agent integration](https://raw.githubusercontent.com/ilia-sokolov/OfficeAgent.NET/main/docs/agent-integration.md): how agents should inspect, plan, preview and apply
+- [Troubleshooting](https://raw.githubusercontent.com/ilia-sokolov/OfficeAgent.NET/main/docs/troubleshooting.md): common errors and what they mean
+
+## Optional
+
+- [Native Office compatibility](https://raw.githubusercontent.com/ilia-sokolov/OfficeAgent.NET/main/docs/native-compatibility.md): what desktop Office itself observed for each operation
+- [Word preservation evidence](https://raw.githubusercontent.com/ilia-sokolov/OfficeAgent.NET/main/docs/word-preservation-evidence.md): what an edit leaves untouched
+- [Translation and bulk edits](https://raw.githubusercontent.com/ilia-sokolov/OfficeAgent.NET/main/docs/translation-and-bulk-edits.md): translate with formatting kept, and apply one plan to many documents
+- [C# API reference](https://raw.githubusercontent.com/ilia-sokolov/OfficeAgent.NET/main/docs/csharp-api.md): generated public API
+- [Changelog](https://raw.githubusercontent.com/ilia-sokolov/OfficeAgent.NET/main/CHANGELOG.md): what changed in each version

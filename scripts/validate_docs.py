@@ -109,6 +109,8 @@ def validate_release_metadata() -> list[str]:
         errors.append(f"server.json package version {package.get('version')} != {version}")
     if package.get("identifier") != "OfficeAgent.Mcp":
         errors.append("server.json package identifier is not OfficeAgent.Mcp")
+    if {"type": "positional", "value": "--stdio"} not in package.get("packageArguments", []):
+        errors.append("server.json NuGet package does not pass --stdio; without it the server starts over HTTP")
     if len(manifest.get("description", "")) > 100:
         errors.append("server.json description exceeds the registry's 100-character limit")
 

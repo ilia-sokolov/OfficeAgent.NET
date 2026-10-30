@@ -7,6 +7,7 @@
     <TargetFrameworks>net8.0;net10.0</TargetFrameworks>
     <RollForward>LatestMajor</RollForward>
     <PackAsTool>true</PackAsTool>
+    <PackageType>McpServer</PackageType>
     <ToolCommandName>officeagent-mcp</ToolCommandName>
     <Description>Model Context Protocol (MCP) server for OfficeAgent.NET: inspect and edit Word documents, PowerPoint decks, and Excel workbooks through structured plans over stdio or HTTP, with filesystem, SharePoint, session, and inline-content workflows.</Description>
   </PropertyGroup>
@@ -33,6 +34,8 @@
 
   <ItemGroup>
     <None Update="appsettings.json" CopyToOutputDirectory="PreserveNewest" Pack="false" />
+    <!-- NuGet.org builds the MCP tab of the package page from this file. -->
+    <None Include="..\..\server.json" Pack="true" PackagePath=".mcp\server.json" Visible="false" />
   </ItemGroup>
 
 </Project>
