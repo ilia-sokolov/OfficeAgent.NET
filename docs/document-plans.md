@@ -252,7 +252,7 @@ Properties (all optional):
 
 | Property | Notes |
 | --- | --- |
-| `styleId` | named paragraph style (paragraph targets) or table style (table targets) |
+| `styleId` | paragraph style (paragraph targets) or table style (table targets), by id or by the name Word shows. See [styles by name](#styles-by-name) |
 | `fontFamily`, `sizeHalfPoints` | character size: 24 = 12 pt |
 | `bold`, `italic`, `underline` | character toggles |
 | `highlight` | `yellow`, `green`, `cyan`, `magenta`, `blue`, `red`, `dark*`, `lightGray`, `black`, `white`, `none` |
@@ -302,6 +302,27 @@ Copy direct formatting from one text span to another, or clear it on the target.
 ```
 
 `scope` is `run`, `paragraph`, or `all`. Empty `expect` means the whole paragraph. Only *direct* formatting travels or is removed - a deck's layout and master, and a Word document's style definitions, are never touched, so clearing returns the text to the look its template gives it.
+
+### Styles by name
+
+A Word plan names a style by its id (`Heading2`) or by the name Word shows in its style
+gallery (`Heading 2`, a template's `Body Text Blue`), ignoring case. `inspect_document` lists
+the document's styles with both. This applies to `styleId` on `insert`, `format` and notes, and
+to `defineStyle`'s `basedOn` and `next`; a style the same plan defines counts.
+
+```json
+{ "op": "format",
+  "target":  { "paraId": "w14:…", "expect": "" },
+  "styleId": "Clause Heading" }
+```
+
+A style the document does not define is refused, with the document's styles of that type:
+Word would otherwise show the paragraph as Normal without saying so. A style of the wrong
+type, such as a table style on a paragraph, is refused too. The exception is Word's common
+built-ins, Normal, Heading 1 to 3, List Paragraph and Table Grid: when a document lacks one,
+its standard definition is added, as Word adds it the first time it is applied. Plans that
+document comparison produces (`insertParagraphs`) carry the revised document's style ids
+unchecked.
 
 ### `defineStyle`
 

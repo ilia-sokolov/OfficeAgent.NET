@@ -167,7 +167,7 @@ public sealed class WordModule : IFormatModule, IBlankDocumentFactory, IPlanVali
         return buffer.ToArray();
     }
 
-    private static Style Normal() => new(
+    internal static Style Normal() => new(
         new StyleName { Val = "Normal" },
         new PrimaryStyle())
     {
@@ -177,7 +177,7 @@ public sealed class WordModule : IFormatModule, IBlankDocumentFactory, IPlanVali
     };
 
     /// <summary>A heading that carries its own outline level, so Inspect builds an outline from it.</summary>
-    private static Style Heading(int level, string name, int halfPoints, string colour) => new(
+    internal static Style Heading(int level, string name, int halfPoints, string colour) => new(
         new StyleName { Val = name },
         new BasedOn { Val = "Normal" },
         new NextParagraphStyle { Val = "Normal" },
@@ -195,7 +195,7 @@ public sealed class WordModule : IFormatModule, IBlankDocumentFactory, IPlanVali
         StyleId = $"Heading{level}"
     };
 
-    private static Style ListParagraph() => new(
+    internal static Style ListParagraph() => new(
         new StyleName { Val = "List Paragraph" },
         new BasedOn { Val = "Normal" },
         new PrimaryStyle(),
@@ -206,7 +206,7 @@ public sealed class WordModule : IFormatModule, IBlankDocumentFactory, IPlanVali
     };
 
     /// <summary>The table style the <c>format</c> verb's <c>styleId</c> examples name.</summary>
-    private static Style TableGrid() => new(
+    internal static Style TableGrid() => new(
         new StyleName { Val = "Table Grid" },
         new PrimaryStyle(),
         new StyleTableProperties(
@@ -234,7 +234,21 @@ public sealed class WordModule : IFormatModule, IBlankDocumentFactory, IPlanVali
     public IEnumerable<ValidationError> ValidatePlan(DocumentPlan plan, ApplyContext context)
     {
         var definitions = plan.Operations.OfType<DefineStyleOp>().ToList();
-        if (definitions.Count == 0) return Array.Empty<ValidationError>();
+
+        // The styles there will be once the plan runs: the document's own, then the plan's.
+        var catalog = WordStyleNames.Catalog(context.Package);
+        foreach (var definition in definitions)
+        {
+            if (string.IsNullOrWhiteSpace(definition.StyleId)) continue;
+            var type = definition.Type?.ToLowerInvariant() ?? "paragraph";
+            catalog.RemoveAll(e => string.Equals(e.Id, definition.StyleId, StringComparison.Ordinal));
+            catalog.Add(new WordStyleNames.Entry(
+                definition.StyleId, definition.Name is { Length: > 0 } name ? name : definition.StyleId, type));
+        }
+
+        var errors = new List<ValidationError>();
+        StyleReferences(plan, catalog, errors);
+        if (definitions.Count == 0) return errors;
 
         // Everything the document already defines, then everything the plan adds, so the
         // graph is the one that will exist after the plan runs rather than before it.
@@ -250,14 +264,20 @@ public sealed class WordModule : IFormatModule, IBlankDocumentFactory, IPlanVali
         foreach (var definition in definitions)
         {
             if (string.IsNullOrWhiteSpace(definition.StyleId)) continue;
-            parents[definition.StyleId] = definition.BasedOn is { Length: > 0 } parent ? parent : null;
+            parents[definition.StyleId] = definition.BasedOn is { Length: > 0 } parent
+                ? ParentId(catalog, parent, definition)
+                : null;
         }
 
-        var errors = new List<ValidationError>();
         foreach (var definition in definitions)
         {
-            if (definition.BasedOn is not { Length: > 0 } basedOn) continue;
+            if (definition.BasedOn is not { Length: > 0 } named) continue;
             if (string.IsNullOrWhiteSpace(definition.StyleId)) continue;
+            var basedOn = ParentId(catalog, named, definition);
+
+            // A built-in parent the document lacks is added when the definition is applied.
+            if (!parents.ContainsKey(basedOn) && WordStyleNames.BuiltIn(basedOn) is { } builtIn)
+                parents[basedOn] = builtIn.GetFirstChild<BasedOn>()?.Val?.Value;
 
             if (!parents.ContainsKey(basedOn))
             {
@@ -277,6 +297,51 @@ public sealed class WordModule : IFormatModule, IBlankDocumentFactory, IPlanVali
         }
 
         return errors;
+    }
+
+    /// <summary>
+    /// The parent a definition names, as an id: by id or by the name Word shows, among
+    /// styles of the definition's own type.
+    /// </summary>
+    private static string ParentId(IReadOnlyList<WordStyleNames.Entry> catalog, string parent, DefineStyleOp definition) =>
+        WordStyleNames.Resolve(catalog, parent, definition.Type?.ToLowerInvariant() ?? "paragraph", out _) ?? parent;
+
+    /// <summary>
+    /// Refuses a style the plan names that the document will not have. Word shows a
+    /// paragraph whose style it does not know as Normal, silently, so the check has to
+    /// happen here. A defineStyle parent that matches nothing keeps its own message below.
+    /// </summary>
+    private static void StyleReferences(
+        DocumentPlan plan, IReadOnlyList<WordStyleNames.Entry> catalog, List<ValidationError> errors)
+    {
+        void Check(string? value, string type, PlanOperation operation)
+        {
+            if (value is not { Length: > 0 }) return;
+            if (WordStyleNames.Resolve(catalog, value, type, out var error) is null)
+                errors.Add(new ValidationError(ValidationErrorCodes.InvalidOperation, error!, operation.Target));
+        }
+
+        foreach (var operation in plan.Operations)
+        {
+            switch (operation)
+            {
+                case InsertOp insert:
+                    Check(insert.StyleId, "paragraph", insert);
+                    break;
+                case FormatOp { Target: TextSpanAnchor } format:
+                    Check(format.StyleId, "paragraph", format);
+                    break;
+                case FormatOp { Target: NodeAnchor { Kind: "table" } } format:
+                    Check(format.StyleId, "table", format);
+                    break;
+                case NoteOp note:
+                    Check(note.StyleId, "paragraph", note);
+                    break;
+                case DefineStyleOp { Next: { Length: > 0 } next } definition:
+                    Check(next, "paragraph", definition);
+                    break;
+            }
+        }
     }
 
     private static string? InheritanceCycle(IReadOnlyDictionary<string, string?> parents, string start)

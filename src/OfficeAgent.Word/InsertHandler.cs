@@ -55,7 +55,7 @@ internal sealed class InsertHandler : IOperationHandler
         var paragraph = WordModel.ResolveParagraph(context, anchor.ParaId)
             ?? throw new InvalidOperationException($"Paragraph '{anchor.ParaId}' vanished before apply.");
 
-        var element = BuildParagraph(op);
+        var element = BuildParagraph(context.Package, op);
 
         if (op.Position == InsertPosition.Before)
             paragraph.InsertBeforeSelf(element);
@@ -66,11 +66,14 @@ internal sealed class InsertHandler : IOperationHandler
             new WordRevisionMarker(context.Package, context.Revision).MarkParagraphInserted(element);
     }
 
-    private static Paragraph BuildParagraph(InsertOp op)
+    private static Paragraph BuildParagraph(IOpenXmlPackage package, InsertOp op)
     {
         var paragraph = new Paragraph();
         if (!string.IsNullOrEmpty(op.StyleId))
-            paragraph.ParagraphProperties = new ParagraphProperties(new ParagraphStyleId { Val = op.StyleId });
+            paragraph.ParagraphProperties = new ParagraphProperties(new ParagraphStyleId
+            {
+                Val = WordStyleNames.IdFor(package, op.StyleId!, "paragraph")
+            });
 
         paragraph.AppendChild(new Run(new Text(op.Text ?? string.Empty) { Space = SpaceProcessingModeValues.Preserve }));
         return paragraph;

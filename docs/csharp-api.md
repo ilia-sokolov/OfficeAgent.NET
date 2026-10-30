@@ -2230,6 +2230,10 @@ public const string PlanOperations = "Each operation is one object. Concrete exa
 
 // Insert a whole new table after a paragraph, or remove an entire table (table path from inspect_document.nodes):
 { \"op\": \"insertTable\", \"target\": { \"paraId\": \"w14:...\", \"expect\": \"...\" }, \"position\": \"After\", \"table\": { \"headers\": [\"Region\", \"Q1\"], \"rows\": [[\"NL\", \"41850\"]] } }
+// Use the document's own styles: styleId takes a style id or the name Word shows (\"Heading 2\", a template's \"Body Text Blue\"), as inspect_document lists them under styles.
+// A style the document does not define is refused with the ones it does; Normal, Heading 1-3, List Paragraph and Table Grid are added when missing, as Word adds them. Word only.
+{ \"op\": \"format\", \"target\": { \"paraId\": \"w14:...\", \"expect\": \"\" }, \"styleId\": \"Clause Heading\" }
+
 { \"op\": \"removeTable\",  \"target\": { \"kind\": \"table\", \"path\": \"table#0\" } }
 
 // Add or remove table rows / columns; insert or remove image; copy or clear styles. Paths come from inspect_document.nodes:

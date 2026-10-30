@@ -189,8 +189,8 @@ public sealed class InsertOp : PlanOperation, ITrackedOperation
     public string? Text { get; init; }
 
     /// <summary>
-    /// Gets the style id to apply to the inserted paragraph. Word only - a deck has no
-    /// paragraph style table.
+    /// Gets the paragraph style to apply to the inserted paragraph, by id or by the name Word
+    /// shows. Word only - a deck has no paragraph style table.
     /// </summary>
     public string? StyleId { get; init; }
 
@@ -435,10 +435,10 @@ public sealed class DefineStyleOp : PlanOperation, ITextFormat
     /// <summary>What the style applies to: <c>paragraph</c> (default), <c>character</c>, or <c>table</c>.</summary>
     public string Type { get; init; } = "paragraph";
 
-    /// <summary>The style this one inherits from; unset inherits nothing.</summary>
+    /// <summary>The style this one inherits from, by id or by the name Word shows; unset inherits nothing.</summary>
     public string? BasedOn { get; init; }
 
-    /// <summary>The style applied to the next paragraph when the user presses Enter.</summary>
+    /// <summary>The style applied to the next paragraph when the user presses Enter, by id or by name.</summary>
     public string? Next { get; init; }
 
     /// <summary>
@@ -523,7 +523,12 @@ public sealed class FormatOp : PlanOperation, ITrackedOperation, ITextFormat
     /// <inheritdoc />
     public ChangeMode? Mode { get; init; }
 
-    /// <summary>A named style to apply (paragraph style for paragraphs/rows/cells; table style for tables).</summary>
+    /// <summary>
+    /// A style to apply (paragraph style for paragraphs/rows/cells; table style for tables),
+    /// by id or, in Word, by the name Word shows. A Word style the document does not define is
+    /// refused, except the built-ins Normal, Heading 1-3, List Paragraph and Table Grid, whose
+    /// standard definitions are added.
+    /// </summary>
     public string? StyleId { get; init; }
 
     /// <summary>Font family name applied to runs (e.g. "Calibri", "Arial").</summary>
@@ -1770,8 +1775,8 @@ public sealed class NoteOp : PlanOperation, ITrackedOperation
     public string Text { get; init; } = string.Empty;
 
     /// <summary>
-    /// Gets the paragraph style for the note body. Defaults to the document's
-    /// <c>FootnoteText</c>/<c>EndnoteText</c> style when it defines one.
+    /// Gets the paragraph style for the note body, by id or by the name Word shows. Defaults
+    /// to the document's <c>FootnoteText</c>/<c>EndnoteText</c> style when it defines one.
     /// </summary>
     public string? StyleId { get; init; }
 

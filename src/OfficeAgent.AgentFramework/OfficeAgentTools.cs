@@ -610,6 +610,9 @@ public sealed class OfficeAgentTools
             "{ \"op\": \"link\", \"target\": { \"paraId\": \"w14:...\", \"expect\": \"the price list\" }, \"url\": \"https://example.com/prices\" }\n" +
             "// Continue a list the document already defines (numbering id from a \"list#N\" node in inspect_document.nodes):\n" +
             "{ \"op\": \"format\", \"target\": { \"paraId\": \"w14:...\", \"expect\": \"\" }, \"numberingId\": 42, \"listLevel\": 1 }\n\n" +
+            "// Use the document's own styles: styleId takes a style id or the name Word shows (\"Heading 2\", a template's \"Body Text Blue\"), as inspect_document lists them under styles.\n" +
+            "// A style the document does not define is refused with the ones it does; Normal, Heading 1-3, List Paragraph and Table Grid are added when missing, as Word adds them. Word only.\n" +
+            "{ \"op\": \"format\", \"target\": { \"paraId\": \"w14:...\", \"expect\": \"\" }, \"styleId\": \"Clause Heading\" }\n\n" +
             "// Define a style once instead of repeating direct formatting on every paragraph. Word only.\n" +
             "// Define it first, then apply it with format's styleId - both can sit in the same plan:\n" +
             "{ \"op\": \"defineStyle\", \"styleId\": \"Quote\", \"name\": \"Pull Quote\", \"basedOn\": \"Normal\", \"next\": \"Normal\",\n" +

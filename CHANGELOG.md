@@ -73,6 +73,10 @@ corresponding GitHub release.
   formulas stay off until the user turns them on. It passes `claude plugin validate`, and a test
   holds it to the directory's published submission rules. See
   [the MCP server guide](docs/mcp-server.md#claude-code-plugin).
+- **Word styles by the name Word shows.** `styleId` on `insert`, `format` and notes, and
+  `defineStyle`'s `basedOn` and `next`, take the name in Word's style gallery, such as
+  `"Heading 2"` or a template's `"Body Text Blue"`, as well as the style id. See
+  [document plans](docs/document-plans.md#styles-by-name).
 - **Formula calculation in the session connection.** `EphemeralCalculateFormulas` and
   `EphemeralRejectFormulaErrors` turn calculation on for the MCP server's in-memory session
   connection, including the one it starts with when nothing is configured, as the folder and
@@ -87,6 +91,12 @@ corresponding GitHub release.
 - **`fill` on a slide writes its run before `a:endParaRPr`.** It used to append the run after
   it, which the schema does not allow. An empty value now leaves the shape with no run rather
   than an empty one.
+- **A Word style the document does not define is refused.** A paragraph or table style that
+  neither the document nor the plan defines used to be written anyway, and Word showed the
+  paragraph as Normal without a word; the plan is now refused with the document's own styles
+  of that type. Normal, Heading 1 to 3, List Paragraph and Table Grid are the exception: when
+  a document lacks one, its standard definition is added, as Word does. Plans produced by
+  document comparison keep their styles as before.
 - **A `find` target's `match` must be an index or `"all"`.** Any other string is refused with
   `invalid-argument` instead of being ignored.
 
