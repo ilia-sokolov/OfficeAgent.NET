@@ -36,9 +36,7 @@ internal sealed class PlanValidator
         }
 
         if (plan.Revision is { } revision &&
-            (string.IsNullOrWhiteSpace(revision.Author) ||
-             revision.Author.Length > 255 ||
-             revision.Author.Any(char.IsControl)))
+            !RevisionAuthorRules.IsValid(revision.Author))
         {
             errors.Add(new ValidationError(
                 ValidationErrorCodes.InvalidOperation,

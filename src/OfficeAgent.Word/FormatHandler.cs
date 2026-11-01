@@ -197,7 +197,7 @@ internal sealed class FormatHandler : IOperationHandler
 
         if (op.StyleId is not null)
         {
-            ReplaceChild(properties, new TableStyle { Val = op.StyleId });
+            ReplaceChild(properties, new TableStyle { Val = WordStyleNames.IdFor(context.Package, op.StyleId, "table") });
         }
 
         if (HasBorder(op))
@@ -437,7 +437,7 @@ internal sealed class FormatHandler : IOperationHandler
         var pPr = paragraph.ParagraphProperties ??= new ParagraphProperties();
 
         if (op.StyleId is not null)
-            ReplaceChild(pPr, new ParagraphStyleId { Val = op.StyleId });
+            ReplaceChild(pPr, new ParagraphStyleId { Val = WordStyleNames.IdFor(context.Package, op.StyleId, "paragraph") });
 
         // w:pageBreakBefore is a property of the paragraph rather than a break character in
         // the text, so the page still starts here after the text above it is edited.

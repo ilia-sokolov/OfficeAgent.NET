@@ -51,6 +51,14 @@ public sealed class ApplyOptions
     public AuditActor? Actor { get; init; }
 
     /// <summary>
+    /// Gets the trusted display name written as the author of tracked changes and comments, in
+    /// place of what the plan says. The plan's own author stays on the receipt. A name the
+    /// revision author rules would refuse is ignored. Callers must derive it from trusted
+    /// authentication state, not from plan content.
+    /// </summary>
+    public string? RevisionAuthor { get; init; }
+
+    /// <summary>
     /// Gets whether a workbook's formulas are calculated after the plan applies, so the file
     /// carries correct cached values and the report lists each result. Needs a registered
     /// <see cref="IFormulaEvaluator"/>; ignored for other formats. Off by default.

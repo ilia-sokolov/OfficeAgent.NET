@@ -464,6 +464,11 @@ public sealed class SharePointDocumentProvider : IDocumentProvider, IDocumentCre
         var suffix = string.IsNullOrEmpty(graphCode) ? string.Empty : $" Graph code: {graphCode}.";
         throw response.StatusCode switch
         {
+            // Retrying cannot help a locked file, so the message says what can.
+            _ when write && IsLocked(response.StatusCode, graphCode) => Error(ProviderErrorCode.WriteRejected,
+                "The document is locked in SharePoint, for example checked out or open for exclusive editing; " +
+                "nothing was stored. Ask whoever holds the lock to check the file in or close it, or save as a " +
+                $"new document instead.{suffix}", itemId),
             HttpStatusCode.NotFound => Error(ProviderErrorCode.NotFound,
                 $"The referenced SharePoint item no longer exists.{suffix}", itemId),
             HttpStatusCode.Unauthorized or HttpStatusCode.Forbidden => Error(ProviderErrorCode.AccessDenied,
@@ -483,6 +488,9 @@ public sealed class SharePointDocumentProvider : IDocumentProvider, IDocumentCre
                 $"Graph request failed with status {(int)response.StatusCode}.{suffix}", itemId)
         };
     }
+
+    private static bool IsLocked(HttpStatusCode status, string graphCode) =>
+        (int)status == 423 || string.Equals(graphCode, "resourceLocked", StringComparison.OrdinalIgnoreCase);
 
     private static async Task<string> ReadGraphErrorCodeAsync(HttpResponseMessage response)
     {

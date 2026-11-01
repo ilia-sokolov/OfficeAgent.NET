@@ -234,7 +234,7 @@ internal sealed class CellCommentHandler : IOperationHandler
         TryAnchor(op.Target, out var anchor);
         var target = ExcelTargets.Cell(context, anchor, create: true)
             ?? throw new InvalidOperationException("Comment worksheet vanished before apply.");
-        if (op.Action == CommentAction.Add) Add(target.Part, anchor.Address, op.Author, op.Text);
+        if (op.Action == CommentAction.Add) Add(target.Part, anchor.Address, context.CommentAuthor(op.Author), op.Text);
         else Remove(target.Part, anchor.Address);
         target.Part.WorksheetRoot().Save();
     }

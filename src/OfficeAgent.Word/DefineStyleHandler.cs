@@ -108,10 +108,11 @@ internal sealed class DefineStyleHandler : IOperationHandler
         else if (isNew)
             Place(style, new StyleName { Val = op.StyleId });
 
+        // Either may name the style by the name Word shows; the definition stores the id.
         if (op.BasedOn is { Length: > 0 } basedOn)
-            Place(style, new BasedOn { Val = basedOn });
+            Place(style, new BasedOn { Val = WordStyleNames.IdFor(context.Package, basedOn, op.Type.ToLowerInvariant()) });
         if (op.Next is { Length: > 0 } next)
-            Place(style, new NextParagraphStyle { Val = next });
+            Place(style, new NextParagraphStyle { Val = WordStyleNames.IdFor(context.Package, next, "paragraph") });
 
         // A style Word does not offer in its gallery is one an author cannot find, and an
         // author who cannot find it reaches for direct formatting instead.

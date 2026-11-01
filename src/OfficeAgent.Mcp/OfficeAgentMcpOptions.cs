@@ -118,6 +118,14 @@ public sealed class OfficeAgentMcpOptions
     public bool StrictToolSchemas { get; set; } = true;
 
     /// <summary>
+    /// Gets or sets whether tracked changes and comments carry the signed-in user's display
+    /// name on a SharePoint connection using On-Behalf-Of. The plan's author stays on the
+    /// receipt. Off by default, because <c>OfficeAgent</c> is the documented default author
+    /// in 1.x; without a signed-in user nothing changes.
+    /// </summary>
+    public bool RevisionAuthorFromActor { get; set; }
+
+    /// <summary>
     /// Gets or sets whether <c>preview_plan</c>, <c>apply_plan</c> and <c>edit_document</c>
     /// refuse a plan that does not carry the snapshot from inspection, with
     /// <c>snapshot-required</c>. Defaults to <see langword="false"/>.

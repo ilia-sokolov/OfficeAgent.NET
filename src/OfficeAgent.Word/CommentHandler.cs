@@ -103,7 +103,8 @@ internal sealed class CommentHandler : IOperationHandler
         var paragraph = WordModel.ResolveParagraph(context, anchor.ParaId)
             ?? throw new InvalidOperationException($"Paragraph '{anchor.ParaId}' vanished before apply.");
 
-        var comment = NewComment(context.Package, main, op.Text, op.Author, op.Initials);
+        var comment = NewComment(
+            context.Package, main, op.Text, context.CommentAuthor(op.Author), context.CommentInitials(op.Initials));
         var id = comment.Id!.Value!;
 
         var rangeStart = new CommentRangeStart { Id = id };
@@ -182,7 +183,8 @@ internal sealed class CommentHandler : IOperationHandler
         var parentParaId = EnsureParaId(context.Package, parent);
         Extended(main, parent, parentParaId: null);
 
-        var reply = NewComment(context.Package, main, op.Text, op.Author, op.Initials);
+        var reply = NewComment(
+            context.Package, main, op.Text, context.CommentAuthor(op.Author), context.CommentInitials(op.Initials));
         Extended(main, reply, parentParaId);
 
         PlaceReplyMarkers(main, parentId: parent.Id!.Value!, replyId: reply.Id!.Value!);

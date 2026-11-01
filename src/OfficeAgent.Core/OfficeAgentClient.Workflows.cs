@@ -392,6 +392,10 @@ public sealed partial class OfficeAgentClient
         options ??= new DocumentComparisonOptions();
         if (options.MaximumParagraphs <= 0 || options.MaximumDifferences <= 0 || options.MaximumDocumentBytes <= 0)
             throw new ArgumentOutOfRangeException(nameof(options), "Comparison limits must be positive.");
+        if (EncryptedPackageDetector.IsEncrypted(original, original.Length) ||
+            EncryptedPackageDetector.IsEncrypted(revised, revised.Length))
+            throw new EncryptedDocumentException();
+
         var diagnostics = new List<WorkflowDiagnostic>();
         if (original.LongLength > options.MaximumDocumentBytes || revised.LongLength > options.MaximumDocumentBytes)
         {

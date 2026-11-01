@@ -435,6 +435,28 @@ public class SharePointProviderTests
         Assert.False(drive.HasName("refused.docx"));
     }
 
+    [Theory]
+    [InlineData((HttpStatusCode)423)]
+    [InlineData(HttpStatusCode.BadRequest)] // Graph can report the lock in its code alone
+    public async Task A_locked_file_says_why_the_save_was_refused_and_what_to_do(HttpStatusCode status)
+    {
+        using var drive = new FakeGraphDrive();
+        var itemId = drive.Seed("contract.docx", DocxFactory.Contract());
+        var provider = drive.Provider();
+        var source = await provider.RegisterAsync(drive.SourceById(itemId));
+
+        drive.UploadStatus = status;
+        drive.UploadErrorCode = "resourceLocked";
+        var error = await Assert.ThrowsAsync<DocumentProviderException>(() => provider.SaveAsync(
+            source, new MemoryStream(DocxFactory.Contract()), new SaveDocumentOptions { Mode = SaveMode.Replace }));
+
+        Assert.Equal(ProviderErrorCode.WriteRejected, error.Code);
+        Assert.Contains("locked in SharePoint", error.Message);
+        Assert.Contains("check the file in", error.Message);
+        Assert.Contains("save as a new document", error.Message);
+        Assert.Contains("Graph code: resourceLocked", error.Message);
+    }
+
     [Fact]
     public async Task A_server_error_on_upload_is_an_unknown_outcome()
     {
@@ -605,6 +627,9 @@ public class SharePointProviderTests
         /// <summary>Simulation: answer the next upload with this status without storing it.</summary>
         public HttpStatusCode? UploadStatus { get; set; }
 
+        /// <summary>The Graph error code sent with <see cref="UploadStatus"/>.</summary>
+        public string UploadErrorCode { get; set; } = "simulated";
+
         /// <summary>
         /// Simulation: store the next upload, then lose the response the way a timeout or a
         /// dropped connection does. The item exists; the caller never hears so.
@@ -728,7 +753,7 @@ public class SharePointProviderTests
                 if (request.Method == HttpMethod.Put && _drive.UploadStatus is { } simulated)
                 {
                     _drive.UploadStatus = null;
-                    return GraphError(simulated, "simulated");
+                    return GraphError(simulated, _drive.UploadErrorCode);
                 }
 
                 // PUT /items/{folderId}:/{name}:/content. Graph replaces by default;

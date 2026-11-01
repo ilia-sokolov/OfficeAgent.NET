@@ -607,6 +607,9 @@ internal static class WordDocumentAssembler
             ? Xml(owner.Length == 0 ? "_rels/.rels" : RelPath(owner)).Root!.Elements(Rel + "Relationship") : Enumerable.Empty<XElement>();
         public static Package Read(byte[] bytes, DocumentMergeLimits limits, ref long expanded, ref int parts, CancellationToken cancellationToken)
         {
+            if (EncryptedPackageDetector.IsEncrypted(bytes, bytes.Length))
+                throw new EncryptedDocumentException();
+
             var package = new Package { Original = bytes };
             using var stream = new MemoryStream(bytes, writable: false);
             using var zip = new ZipArchive(stream, ZipArchiveMode.Read);

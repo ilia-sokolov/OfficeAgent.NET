@@ -17,29 +17,47 @@ namespace OfficeAgent.PowerPoint;
 /// </remarks>
 internal static class SlideBuilder
 {
-    /// <summary>Builds the slide, filling whichever of the layout's placeholders it can.</summary>
-    public static Slide Build(SlideData data, SlideLayoutPart layoutPart)
+    /// <summary>
+    /// Builds the slide, filling whichever of the layout's placeholders it can. With
+    /// <paramref name="everyPlaceholder"/>, the layout's other placeholders are added empty
+    /// and keep the layout's own shape names, so they can be found and filled afterwards.
+    /// </summary>
+    public static Slide Build(SlideData data, SlideLayoutPart layoutPart, bool everyPlaceholder = false)
     {
+        var placeholders = PlaceholdersOf(layoutPart);
+
+        var titleTarget = data.Title is { Length: > 0 } ? placeholders.FirstOrDefault(IsTitle) : null;
+        // Body text belongs in a placeholder that holds text - content, body, or a subtitle,
+        // depending on the layout - never a picture, chart or table frame.
+        var bodyTarget = data.Body.Count > 0 ? placeholders.FirstOrDefault(TakesBody) : null;
+
         var shapes = new List<OpenXmlElement>();
         uint shapeId = 2U;
 
-        var placeholders = PlaceholdersOf(layoutPart);
-
-        if (data.Title is { Length: > 0 } title)
+        if (everyPlaceholder)
         {
-            var target = placeholders.FirstOrDefault(IsTitle);
-            if (target is not null)
-                shapes.Add(Filled(shapeId++, "Title 1", target, new[] { title }));
+            foreach (var placeholder in placeholders)
+            {
+                var kind = KindOf(placeholder);
+                if (kind is null) continue;
+
+                var name = placeholder.NonVisualShapeProperties?.NonVisualDrawingProperties?.Name?.Value
+                    ?? $"Placeholder {shapeId}";
+                var lines = placeholder == titleTarget ? new[] { data.Title! }
+                    : placeholder == bodyTarget ? data.Body
+                    : Array.Empty<string>();
+                var holdsText = kind is "title" or "subtitle" or "body" or "content";
+                shapes.Add(Filled(shapeId++, name, placeholder, lines, holdsText));
+            }
+
+            return new Slide(new CommonSlideData(SlideLayouts.BuildTree(shapes.ToArray())));
         }
 
-        if (data.Body.Count > 0)
-        {
-            // Anything that is not the title is where body text belongs - a content
-            // placeholder, a body placeholder, or a subtitle, depending on the layout.
-            var target = placeholders.FirstOrDefault(p => !IsTitle(p));
-            if (target is not null)
-                shapes.Add(Filled(shapeId, "Content Placeholder 2", target, data.Body));
-        }
+        if (titleTarget is not null)
+            shapes.Add(Filled(shapeId++, "Title 1", titleTarget, new[] { data.Title! }));
+
+        if (bodyTarget is not null)
+            shapes.Add(Filled(shapeId, "Content Placeholder 2", bodyTarget, data.Body));
 
         return new Slide(new CommonSlideData(SlideLayouts.BuildTree(shapes.ToArray())));
     }
@@ -63,6 +81,22 @@ internal static class SlideBuilder
                     Body(new[] { notes })))));
     }
 
+    /// <summary>
+    /// Why the slide's own text would not fit the layout, or null when it fits. A title or
+    /// body with no placeholder to go into would otherwise vanish without a word.
+    /// </summary>
+    public static string? Misfit(SlideData data, SlideLayoutPart layoutPart, string layoutName)
+    {
+        var placeholders = PlaceholdersOf(layoutPart);
+        if (data.Title is { Length: > 0 } && !placeholders.Any(IsTitle))
+            return $"Layout '{layoutName}' has no title placeholder, so the slide's title would be lost. " +
+                "Choose a layout with a title, or leave the title out.";
+        if (data.Body.Count > 0 && !placeholders.Any(TakesBody))
+            return $"Layout '{layoutName}' has no text placeholder for the body, so it would be lost. " +
+                "Choose a layout with a content or body placeholder, or leave the body out.";
+        return null;
+    }
+
     /// <summary>The placeholder shapes a layout defines, in the order it defines them.</summary>
     private static IReadOnlyList<Shape> PlaceholdersOf(SlideLayoutPart layoutPart) =>
         layoutPart.SlideLayout?.CommonSlideData?.ShapeTree?
@@ -81,10 +115,20 @@ internal static class SlideBuilder
         return type == PlaceholderValues.Title || type == PlaceholderValues.CenteredTitle;
     }
 
+    private static string? KindOf(Shape shape) =>
+        shape.NonVisualShapeProperties?.ApplicationNonVisualDrawingProperties?.PlaceholderShape is { } placeholder
+            ? SlideLayouts.KindOf(placeholder)
+            : null;
+
+    private static bool TakesBody(Shape shape) =>
+        KindOf(shape) is "content" or "body" or "subtitle";
+
     /// <summary>
     /// A slide shape naming the layout placeholder it inherits from, carrying only text.
+    /// A picture, chart or table placeholder carries no text body, as PowerPoint writes it.
     /// </summary>
-    private static Shape Filled(uint shapeId, string name, Shape layoutPlaceholder, IReadOnlyList<string> lines)
+    private static Shape Filled(
+        uint shapeId, string name, Shape layoutPlaceholder, IReadOnlyList<string> lines, bool holdsText = true)
     {
         var source = layoutPlaceholder.NonVisualShapeProperties?
             .ApplicationNonVisualDrawingProperties?.PlaceholderShape;
@@ -93,21 +137,27 @@ internal static class SlideBuilder
         if (source?.Type?.Value is { } type) placeholder.Type = type;
         if (source?.Index?.Value is { } index) placeholder.Index = index;
 
-        return new Shape(
+        var shape = new Shape(
             new NonVisualShapeProperties(
                 new NonVisualDrawingProperties { Id = shapeId, Name = name },
                 new NonVisualShapeDrawingProperties(new A.ShapeLocks { NoGrouping = true }),
                 new ApplicationNonVisualDrawingProperties(placeholder)),
             // Deliberately empty: an empty p:spPr is what makes the shape inherit the
             // layout's geometry. Writing a transform here would pin it instead.
-            new ShapeProperties(),
-            Body(lines));
+            new ShapeProperties());
+        if (holdsText) shape.Append(Body(lines));
+        return shape;
     }
 
     /// <summary>One paragraph per line, so a body renders as the bullets the layout styles.</summary>
     private static TextBody Body(IReadOnlyList<string> lines)
     {
         var body = new TextBody(new A.BodyProperties(), new A.ListStyle());
+
+        // An empty placeholder still needs one paragraph, or there is nothing to address
+        // when it is filled later.
+        if (lines.Count == 0)
+            body.Append(new A.Paragraph(new A.EndParagraphRunProperties { Language = "en-US" }));
 
         foreach (var line in lines)
             body.Append(new A.Paragraph(

@@ -73,6 +73,7 @@ a document must satisfy both.
 | Package larger than the compressed ceiling | `input-too-large`, naming the limit and the observed size |
 | Endless or non-seekable stream | `input-too-large` at the ceiling; reading stops there |
 | Decompression bomb | `input-too-large`, refused from the declared ratio before any part is expanded |
+| File protected by a sensitivity label or a password | `encrypted-document`; OfficeAgent does not decrypt |
 | Truncated or corrupt archive | `malformed-package` |
 | Bytes that are not an archive | `malformed-package` |
 | Duplicate part name | `malformed-package`; a duplicated name makes the package ambiguous |
@@ -81,9 +82,10 @@ a document must satisfy both.
 | Missing `[Content_Types].xml` | `malformed-package` |
 | XML deeper than the depth ceiling | `input-too-large` |
 
-Directly, these surface as `OpenXmlIngestionLimitException` and
-`OpenXmlPackageRejectedException`. Through agent and MCP tools they surface as the
-stable wire codes `input-too-large` and `malformed-package`.
+Directly, these surface as `OpenXmlIngestionLimitException`,
+`OpenXmlPackageRejectedException` and `EncryptedDocumentException`. Through agent and MCP
+tools they surface as the stable wire codes `input-too-large`, `malformed-package` and
+`encrypted-document`.
 
 The inline base64 tools are the one deliberate exception. Content that decodes but is
 not a readable package is reported as `invalid-argument` there, because on that path the

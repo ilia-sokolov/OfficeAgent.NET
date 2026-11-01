@@ -111,7 +111,7 @@ internal sealed class WordNoteHandler : IOperationHandler
 
         WordNoteStyles.Ensure(main, op.Kind);
 
-        var body = BuildNoteBody(op, id);
+        var body = BuildNoteBody(context.Package, op, id);
         notes.AppendChild(body);
 
         var reference = ReferenceRun(op.Kind, id);
@@ -264,12 +264,14 @@ internal sealed class WordNoteHandler : IOperationHandler
             : new Run(properties, new EndnoteReference { Id = id });
     }
 
-    private static OpenXmlElement BuildNoteBody(NoteOp op, long id)
+    private static OpenXmlElement BuildNoteBody(IOpenXmlPackage package, NoteOp op, long id)
     {
         var paragraph = new Paragraph(
             new ParagraphProperties(new ParagraphStyleId
             {
-                Val = op.StyleId ?? WordNoteStyles.TextStyleId(op.Kind)
+                Val = op.StyleId is { Length: > 0 } styleId
+                    ? WordStyleNames.IdFor(package, styleId, "paragraph")
+                    : WordNoteStyles.TextStyleId(op.Kind)
             }),
             new Run(
                 new RunProperties(new RunStyle { Val = WordNoteStyles.ReferenceStyleId(op.Kind) }),

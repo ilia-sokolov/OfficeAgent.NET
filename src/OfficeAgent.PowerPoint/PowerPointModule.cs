@@ -1,4 +1,5 @@
 using System.Text.RegularExpressions;
+using DocumentFormat.OpenXml.Packaging;
 using DocumentFormat.OpenXml.Presentation;
 using OfficeAgent.Abstractions;
 using OfficeAgent.Core;
@@ -285,6 +286,9 @@ public sealed class PowerPointModule : IFormatModule, IBlankDocumentFactory, IPl
                 }
         }
 
+        // At every fidelity: a host's policy check must not depend on how much it asked for.
+        nodes.AddRange(SensitivityLabels.Nodes(package.Package));
+
         return new InspectResult
         {
             Format = DocFormat.PowerPoint,
@@ -296,9 +300,31 @@ public sealed class PowerPointModule : IFormatModule, IBlankDocumentFactory, IPl
             Anchors = anchors,
             Paragraphs = paragraphs,
             StructuralAnchors = structuralAnchors,
-            Nodes = nodes
+            Nodes = nodes,
+            Layouts = Layouts(PowerPointModel.Main(package))
         };
     }
+
+    /// <summary>The deck's own layouts, so an agent can name the one a new slide should use.</summary>
+    private static IReadOnlyList<SlideLayoutInfo> Layouts(PresentationPart main) =>
+        SlideLayouts.Defined(main)
+            .Select(layout => new SlideLayoutInfo
+            {
+                Name = layout.Name,
+                Master = layout.Master,
+                Placeholders = (layout.Part.SlideLayout?.CommonSlideData?.ShapeTree?.Elements<Shape>()
+                        ?? Enumerable.Empty<Shape>())
+                    .Select(shape => (shape, placeholder: shape.NonVisualShapeProperties?
+                        .ApplicationNonVisualDrawingProperties?.PlaceholderShape))
+                    .Where(p => p.placeholder is not null && SlideLayouts.KindOf(p.placeholder) is not null)
+                    .Select(p => new LayoutPlaceholderInfo
+                    {
+                        Name = p.shape.NonVisualShapeProperties?.NonVisualDrawingProperties?.Name?.Value ?? string.Empty,
+                        Kind = SlideLayouts.KindOf(p.placeholder!)!
+                    })
+                    .ToList()
+            })
+            .ToList();
 
     /// <inheritdoc />
     public IReadOnlyList<FindHit> Find(IOpenXmlPackage package, FindQuery query)
@@ -319,7 +345,7 @@ public sealed class PowerPointModule : IFormatModule, IBlankDocumentFactory, IPl
                 foreach (Match match in regex.Matches(text))
                 {
                     if (match.Length == 0) continue;
-                    AddHit(hits, seen, paragraph.ParaId, text, match.Value, match.Index);
+                    AddHit(hits, seen, paragraph.ParaId, paragraph.Location, text, match.Value, match.Index);
                 }
             }
             else
@@ -329,7 +355,7 @@ public sealed class PowerPointModule : IFormatModule, IBlankDocumentFactory, IPl
                 {
                     var index = text.IndexOf(query.Pattern, from, comparison);
                     if (index < 0) break;
-                    AddHit(hits, seen, paragraph.ParaId, text, text.Substring(index, query.Pattern.Length), index);
+                    AddHit(hits, seen, paragraph.ParaId, paragraph.Location, text, text.Substring(index, query.Pattern.Length), index);
                     from = index + query.Pattern.Length;
                 }
             }
@@ -365,6 +391,7 @@ public sealed class PowerPointModule : IFormatModule, IBlankDocumentFactory, IPl
         List<FindHit> hits,
         Dictionary<string, int> seen,
         string paraId,
+        string location,
         string paragraphText,
         string matched,
         int index)
@@ -376,7 +403,8 @@ public sealed class PowerPointModule : IFormatModule, IBlankDocumentFactory, IPl
         {
             Anchor = new TextSpanAnchor { Id = paraId, ParaId = paraId, Expect = matched, Occurrence = occurrence },
             Text = matched,
-            Context = PowerPointModel.Snippet(paragraphText, index, matched.Length)
+            Context = PowerPointModel.Snippet(paragraphText, index, matched.Length),
+            Location = location
         });
     }
 

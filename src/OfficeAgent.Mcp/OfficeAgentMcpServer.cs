@@ -127,6 +127,11 @@ public static class OfficeAgentMcpServer
         // the operator that is what happened.
         AddFormats(services);
         services.AddOfficeAgent();
+        services.TryAddSingleton(new OfficeAgentClientOptions
+        {
+            RevisionAuthorFromActor = options.RevisionAuthorFromActor
+        });
+        services.TryAddSingleton<IAuditActorProvider, OnBehalfOfActorProvider>();
         services.TryAddSingleton<IConnectionAccessPolicy, AllowAllConnectionAccessPolicy>();
         services.TryAddSingleton<ITrustedPrincipalAccessor, AnonymousPrincipalAccessor>();
 

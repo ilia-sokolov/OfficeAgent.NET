@@ -187,6 +187,21 @@ application permissions. An app-only connection cannot use `Replace` for that
 case; use On-Behalf-Of/delegated access or a separately validated workflow, and
 include a labeled file in preflight tests.
 
+### Sensitivity labels and protected files
+
+Inspection lists a document's Microsoft Purview sensitivity label as a `sensitivityLabel`
+node, with the label id, its name when the file records one, and whether a person or a default
+applied it. A document with no label has no node. Labels are read from the `MSIP_Label_*`
+custom properties and from `docMetadata/LabelInfo.xml`, which current versions of Office write.
+
+OfficeAgent never changes a label: no plan operation can target one, and saving leaves both
+stores as they were. Labelled files are otherwise edited normally. Whether an agent may touch a
+"Highly Confidential" document is the host's decision, and the node gives it what it needs to
+decide.
+
+A file a label or password has encrypted is refused with `encrypted-document` when it is
+opened, before any plan runs. OfficeAgent does not decrypt, and decryption is not planned.
+
 ## Remove (unregister) a document
 
 `OfficeAgentClient.RemoveAsync` unregisters a document, by canonical reference or by `(connectionId, documentId)`:

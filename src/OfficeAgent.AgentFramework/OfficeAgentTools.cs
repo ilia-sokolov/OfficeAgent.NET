@@ -332,7 +332,7 @@ public sealed class OfficeAgentTools
         - Template slots: a deck has no content controls, so a fillable slot is the SHAPE NAME a template sets (PowerPoint's Selection Pane shows them). They arrive in inspect_document.contentControls with kind "shapeName". Fill one by name: { "op": "fill", "target": { "tag": "ClientName" }, "value": "Northwind Traders" }. A name used on more than one slide comes back as ambiguous-anchor; qualify it as "slide256/ClientName".
         - copyStyles makes one line look like another and clearStyles strips direct formatting so the layout's own styling shows again: { "op": "clearStyles", "target": { "paraId": "slide257/shape3/p0", "expect": "" }, "scope": "all" }. scope is "run", "paragraph" or "all". Only direct a:pPr/a:rPr travel - the layout and master are never touched.
         - Sections are the named slide groups in the thumbnail pane: { "op": "section", "action": "Add", "name": "Financials", "target": { "kind": "slide", "path": "slide#257" } } starts one at that slide. "Rename" and "Remove" target a section node from inspect_document.nodes; removing a section keeps its slides. Sections follow the deck automatically as slides are added, moved, copied and removed - you never maintain them by hand.
-        - Slides: insertSlide adds one, and several in one plan is how you author a whole deck. { "op": "insertSlide", "slide": { "layout": "titleAndContent", "title": "FY27 Priorities", "body": ["Finish the migration", "Rebuild the pipeline"], "notes": "Do not commit to a date." } }. Layouts are title, titleAndContent, sectionHeader, titleOnly, blank; omit "layout" and one is chosen from what you supply. Position defaults to the end of the deck - use "position": "Start"/"Before"/"After" with a slide target to place it elsewhere.
+        - Slides: insertSlide adds one, and several in one plan is how you author a whole deck. { "op": "insertSlide", "slide": { "layout": "titleAndContent", "title": "FY27 Priorities", "body": ["Finish the migration", "Rebuild the pipeline"], "notes": "Do not commit to a date." } }. Layouts are title, titleAndContent, sectionHeader, titleOnly, blank, or the name of one of the deck's own layouts as inspect_document lists them under layouts (a company template's "Two Column With Logo"); write "master/layout" when two masters share a name. Omit "layout" and one is chosen from what you supply. A slide on a named layout gets every placeholder the layout has, empty except for the title and the first text placeholder; re-inspect and fill the others with changeText (expect "") after applying. Position defaults to the end of the deck - use "position": "Start"/"Before"/"After" with a slide target to place it elsewhere.
         - removeSlide, moveSlide and duplicateSlide take a slide target: { "op": "moveSlide", "target": { "kind": "slide", "path": "slide#259" }, "position": "After", "relativeTo": "slide#256" }. duplicateSlide defaults to landing right after the original. Removing the deck's only slide is refused, because PowerPoint cannot open a deck with none.
         - A slide added in one plan cannot be edited by a later operation in that SAME plan - its id does not exist until the plan is applied. Set its text through insertSlide's own title/body/notes, or apply, re-inspect, then edit.
         - format on a deck covers bold, italic, underline, sizeHalfPoints, fontFamily, color, highlight and alignment on text; widthPx/heightPx on an image; xPx/yPx/widthPx/heightPx, fillColor, lineColor, lineWidthPx and verticalAlignment on a shape; and fillColor on a slide. Word-only measures (styleId, indents, spacing, borders) are refused rather than ignored. Anchor the span you want styled, or use an empty "expect" to style a whole paragraph.
@@ -610,6 +610,9 @@ public sealed class OfficeAgentTools
             "{ \"op\": \"link\", \"target\": { \"paraId\": \"w14:...\", \"expect\": \"the price list\" }, \"url\": \"https://example.com/prices\" }\n" +
             "// Continue a list the document already defines (numbering id from a \"list#N\" node in inspect_document.nodes):\n" +
             "{ \"op\": \"format\", \"target\": { \"paraId\": \"w14:...\", \"expect\": \"\" }, \"numberingId\": 42, \"listLevel\": 1 }\n\n" +
+            "// Use the document's own styles: styleId takes a style id or the name Word shows (\"Heading 2\", a template's \"Body Text Blue\"), as inspect_document lists them under styles.\n" +
+            "// A style the document does not define is refused with the ones it does; Normal, Heading 1-3, List Paragraph and Table Grid are added when missing, as Word adds them. Word only.\n" +
+            "{ \"op\": \"format\", \"target\": { \"paraId\": \"w14:...\", \"expect\": \"\" }, \"styleId\": \"Clause Heading\" }\n\n" +
             "// Define a style once instead of repeating direct formatting on every paragraph. Word only.\n" +
             "// Define it first, then apply it with format's styleId - both can sit in the same plan:\n" +
             "{ \"op\": \"defineStyle\", \"styleId\": \"Quote\", \"name\": \"Pull Quote\", \"basedOn\": \"Normal\", \"next\": \"Normal\",\n" +
@@ -877,6 +880,7 @@ public sealed class OfficeAgentTools
         ["styles"] = result.Styles.Styles.Select(s => new { s.Id, s.Name, s.InUseCount }),
         ["worksheets"] = result.Worksheets,
         ["definedNames"] = result.DefinedNames,
+        ["layouts"] = result.Layouts,
         ["cells"] = result.Cells
     };
 
@@ -1497,10 +1501,12 @@ public sealed class OfficeAgentTools
         }
         // A host ingestion ceiling is not a corrupted copy, and saying so would send the
         // caller to re-fetch a document that would breach the same limit again. Those two
-        // keep their own stable codes; everything else is still reported as bad input.
+        // keep their own stable codes, as does an encrypted file, which no re-fetch can fix;
+        // everything else is still reported as bad input.
         catch (Exception ex) when (ex is not OperationCanceledException
                                    and not OutOfMemoryException
-                                   and not OpenXmlIngestionLimitException)
+                                   and not OpenXmlIngestionLimitException
+                                   and not EncryptedDocumentException)
         {
             throw new ArgumentException(
                 "contentBase64 decoded, but the bytes are not a readable .docx, .pptx, or .xlsx package. " +
@@ -1529,6 +1535,7 @@ public sealed class OfficeAgentTools
         catch (RegexMatchTimeoutException) { return ContentError(name, ToolErrorCodes.RegexTimeout, RegexTimeoutMessage); }
         catch (OpenXmlIngestionLimitException ex) { return ContentError(name, OpenXmlIngestionLimitException.Code, ex.Message); }
         catch (OpenXmlPackageRejectedException ex) { return ContentError(name, OpenXmlPackageRejectedException.Code, ex.Message); }
+        catch (EncryptedDocumentException ex) { return ContentError(name, EncryptedDocumentException.Code, ex.Message); }
         catch (JsonException ex) { return ContentError(name, ToolErrorCodes.InvalidJson, ex.Message); }
         catch (ArgumentException ex) { return ContentError(name, ToolErrorCodes.InvalidArgument, ex.Message); }
         catch (Exception) { return ContentError(name, ToolErrorCodes.InternalError, "An unexpected internal error occurred."); }
@@ -1682,6 +1689,7 @@ public sealed class OfficeAgentTools
         catch (RegexMatchTimeoutException) { return SerializeError(ToolErrorCodes.RegexTimeout, RegexTimeoutMessage); }
         catch (OpenXmlIngestionLimitException ex) { return SerializeError(OpenXmlIngestionLimitException.Code, ex.Message); }
         catch (OpenXmlPackageRejectedException ex) { return SerializeError(OpenXmlPackageRejectedException.Code, ex.Message); }
+        catch (EncryptedDocumentException ex) { return SerializeError(EncryptedDocumentException.Code, ex.Message); }
         catch (JsonException ex) { return SerializeError(ToolErrorCodes.InvalidJson, ex.Message); }
         catch (ArgumentException ex) { return SerializeError(ToolErrorCodes.InvalidArgument, ex.Message); }
         catch (DocumentProviderException ex)

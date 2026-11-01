@@ -4298,6 +4298,7 @@ $.contentControls[].kind: string
 $.contentControls[].tag: string
 $.definedNames: array
 $.format: string
+$.layouts: array
 $.nodes: array
 $.nodes[]: object
 $.nodes[].kind: string
@@ -4327,6 +4328,7 @@ $.cells: array
 $.contentControls: array
 $.definedNames: array
 $.format: string
+$.layouts: array
 $.nodes: array
 $.nodes[]: object
 $.nodes[].kind: string
@@ -4363,6 +4365,14 @@ $.contentControls[].kind: string
 $.contentControls[].tag: string
 $.definedNames: array
 $.format: string
+$.layouts: array
+$.layouts[]: object
+$.layouts[].master: string
+$.layouts[].name: string
+$.layouts[].placeholders: array
+$.layouts[].placeholders[]: object
+$.layouts[].placeholders[].kind: string
+$.layouts[].placeholders[].name: string
 $.nodes: array
 $.nodes[]: object
 $.nodes[].kind: string
@@ -4398,6 +4408,7 @@ $.cells: array
 $.contentControls: array
 $.definedNames: array
 $.format: string
+$.layouts: array
 $.nodes: array
 $.nodes[]: object
 $.nodes[].kind: string
@@ -4509,6 +4520,7 @@ $.cells: array
 $.contentControls: array
 $.definedNames: array
 $.format: string
+$.layouts: array
 $.nodes: array
 $.nodes[]: object
 $.nodes[].kind: string
@@ -4672,6 +4684,7 @@ $.contentType: string
 $.definedNames: array
 $.documentId: string
 $.format: string
+$.layouts: array
 $.name: string
 $.nodes: array
 $.nodes[]: object
@@ -5485,6 +5498,7 @@ OfficeAgent:FileSystemConnections[]:MaximumBytes: Int64 = 104857600
 OfficeAgent:FileSystemConnections[]:RejectFormulaErrors: Boolean = false
 OfficeAgent:FileSystemConnections[]:RootPath: String = ""
 OfficeAgent:RequirePlanSnapshot: Boolean = false
+OfficeAgent:RevisionAuthorFromActor: Boolean = false
 OfficeAgent:SharePointConnections[]:AllowedExtensions: IList<String> = [".docx"]
 OfficeAgent:SharePointConnections[]:AppOnlyScope: String = "https://graph.microsoft.com/.default"
 OfficeAgent:SharePointConnections[]:AuthMode: String = "appOnly"
@@ -5963,6 +5977,7 @@ Anchors = []
 Cells = []
 DefinedNames = []
 Format = Word
+Layouts = []
 Nodes = []
 Outline = []
 Paragraphs = []
@@ -5970,6 +5985,13 @@ Snapshot.ETag = ""
 StructuralAnchors = []
 Styles.Styles = []
 Worksheets = []
+```
+
+### `OfficeAgent.Abstractions.LayoutPlaceholderInfo`
+
+```text
+Kind = ""
+Name = ""
 ```
 
 ### `OfficeAgent.Abstractions.LinkOp`
@@ -6173,6 +6195,14 @@ SlideId = ""
 
 ```text
 Body = []
+```
+
+### `OfficeAgent.Abstractions.SlideLayoutInfo`
+
+```text
+Master = ""
+Name = ""
+Placeholders = []
 ```
 
 ### `OfficeAgent.Abstractions.SnapshotToken`

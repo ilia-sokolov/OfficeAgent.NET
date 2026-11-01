@@ -348,6 +348,14 @@ internal static class NativeCorpus
 
         yield return new Case("p-insertslide", "powerpoint", "insertSlide", "Two slides added to a blank deck",
             module.CreateBlank(), three, new Dictionary<string, object> { ["slides"] = 3, ["textContains"] = new[] { "Second", "Closing point" } }, AnyPart, true);
+        yield return P("p-insertslide-layout", "insertSlide", "Slides on a template's own named layouts, one under a second master",
+            SlideTemplateLayoutTests.CompanyTemplate(),
+            new PlanOperation[]
+            {
+                new InsertSlideOp { Slide = new SlideData { Layout = "Two Column With Logo", Title = "Why Northwind", Body = new[] { "Twelve years in logistics" } } },
+                new InsertSlideOp { Slide = new SlideData { Layout = "Brand Two/Agenda", Title = "Agenda", Body = new[] { "Scope", "Pricing" } } }
+            },
+            new() { ["slides"] = 3, ["textContains"] = new[] { "Why Northwind", "Twelve years in logistics", "Pricing" } }, visual: true);
         yield return P("p-removeslide", "removeSlide", "Remove a slide", three,
             new PlanOperation[] { new RemoveSlideOp { Target = new NodeAnchor { Kind = "slide", Path = slides[1] } } },
             new() { ["slides"] = 2, ["textExcludes"] = new[] { "Another point" } });

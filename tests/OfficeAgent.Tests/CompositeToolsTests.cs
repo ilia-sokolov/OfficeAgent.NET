@@ -103,7 +103,8 @@ public class CompositeToolsTests
 
         Assert.False(refused.RootElement.GetProperty("committed").GetBoolean());
         Assert.Equal("ambiguous-anchor", error.GetProperty("code").GetString());
-        Assert.Contains("match 0:", error.GetProperty("message").GetString());
+        // Each candidate says where it lives, so a header can be told from the body.
+        Assert.Contains("match 0 (body):", error.GetProperty("message").GetString());
         Assert.Contains("\"match\"", error.GetProperty("message").GetString());
 
         // A failed edit still leaves a usable handle rather than making the agent re-register.
@@ -294,7 +295,7 @@ public class CompositeToolsTests
             .Select(p => p.GetProperty("text").GetString()));
     }
 
-    private sealed class CompositeWorkspace : IDisposable
+    internal sealed class CompositeWorkspace : IDisposable
     {
         private readonly ServiceProvider _services;
 

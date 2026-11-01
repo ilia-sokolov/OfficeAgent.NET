@@ -67,6 +67,11 @@ caller. A host supplies that identity separately through `ApplyOptions.Actor`,
 `SaveDocumentOptions.Actor`, or an `IAuditActorProvider`; it appears only in the audit
 receipt. Plan JSON cannot set the audit actor.
 
+A host can opt in to showing that identity in the document: with
+`OfficeAgentClientOptions.RevisionAuthorFromActor`, or `ApplyOptions.RevisionAuthor` for one call,
+tracked changes and comments carry the trusted name instead, and the plan's author stays on the
+receipt. The default remains `OfficeAgent` throughout 1.x.
+
 Authors must contain 1 to 255 visible characters and no control characters. An invalid
 author rejects the plan before mutation.
 
@@ -252,7 +257,7 @@ Properties (all optional):
 
 | Property | Notes |
 | --- | --- |
-| `styleId` | named paragraph style (paragraph targets) or table style (table targets) |
+| `styleId` | paragraph style (paragraph targets) or table style (table targets), by id or by the name Word shows. See [styles by name](#styles-by-name) |
 | `fontFamily`, `sizeHalfPoints` | character size: 24 = 12 pt |
 | `bold`, `italic`, `underline` | character toggles |
 | `highlight` | `yellow`, `green`, `cyan`, `magenta`, `blue`, `red`, `dark*`, `lightGray`, `black`, `white`, `none` |
@@ -302,6 +307,27 @@ Copy direct formatting from one text span to another, or clear it on the target.
 ```
 
 `scope` is `run`, `paragraph`, or `all`. Empty `expect` means the whole paragraph. Only *direct* formatting travels or is removed - a deck's layout and master, and a Word document's style definitions, are never touched, so clearing returns the text to the look its template gives it.
+
+### Styles by name
+
+A Word plan names a style by its id (`Heading2`) or by the name Word shows in its style
+gallery (`Heading 2`, a template's `Body Text Blue`), ignoring case. `inspect_document` lists
+the document's styles with both. This applies to `styleId` on `insert`, `format` and notes, and
+to `defineStyle`'s `basedOn` and `next`; a style the same plan defines counts.
+
+```json
+{ "op": "format",
+  "target":  { "paraId": "w14:…", "expect": "" },
+  "styleId": "Clause Heading" }
+```
+
+A style the document does not define is refused, with the document's styles of that type:
+Word would otherwise show the paragraph as Normal without saying so. A style of the wrong
+type, such as a table style on a paragraph, is refused too. The exception is Word's common
+built-ins, Normal, Heading 1 to 3, List Paragraph and Table Grid: when a document lacks one,
+its standard definition is added, as Word adds it the first time it is applied. Plans that
+document comparison produces (`insertParagraphs`) carry the revised document's style ids
+unchecked.
 
 ### `defineStyle`
 
@@ -788,7 +814,7 @@ Moving and resizing go through `format` on the same shape node — see [PowerPoi
 
 ### `insertSlide` / `removeSlide` / `moveSlide` / `duplicateSlide`
 
-PowerPoint only; a Word document reports them as `unsupported-operation`. Several `insertSlide` operations in one plan author a whole deck — see [PowerPoint support](powerpoint.md#generating-a-deck) for the layouts and what a slide inherits from them.
+PowerPoint only; a Word document reports them as `unsupported-operation`. Several `insertSlide` operations in one plan author a whole deck — see [PowerPoint support](powerpoint.md#generating-a-deck) for the layouts and what a slide inherits from them. `layout` is one of the five built-in names or the name of one of the deck's own layouts, which `inspect_document` lists under `layouts` ([a template's own layouts](powerpoint.md#a-templates-own-layouts)).
 
 ```json
 { "op": "insertSlide",
@@ -968,6 +994,7 @@ Returned by `preview_plan` and `apply_plan` in the `errors` array. Stable wire c
 | `input-too-large` | The document exceeds a host ingestion ceiling. The message names the limit and the observed value. See [ingestion limits](ingestion-limits.md). |
 | `unsupported-table-change`, `unsupported-image-change`, `unsupported-note-change`, `unsupported-header-footer-change`, `unsupported-style-definition-change`, `unsupported-numbering-change` | A comparison found a difference in that area that it cannot represent as a plan. The findings it did detect are still returned; the plan is withheld. See [comparison coverage](document-workflows.md#reading-comparison-coverage). |
 | `unsupported-table-markup-change` | A table cell's words and its formatting both changed. The text change is not reproduced, because doing so would flatten the formatting. |
+| `encrypted-document` | The file is protected by a sensitivity label or a password. OfficeAgent does not decrypt, so remove the protection in Office or use a copy without it. Re-sending it will not help |
 | `malformed-package` | The document is not a package this engine will open: corrupt, truncated, carrying a duplicate or traversing part name, or declaring a document type definition. See [ingestion limits](ingestion-limits.md). |
 
 Provider boundary errors (`apply_plan` only) use a separate set of wire codes - see [document-providers.md](document-providers.md).

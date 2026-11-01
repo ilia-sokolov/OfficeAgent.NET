@@ -73,6 +73,44 @@ corresponding GitHub release.
   formulas stay off until the user turns them on. It passes `claude plugin validate`, and a test
   holds it to the directory's published submission rules. See
   [the MCP server guide](docs/mcp-server.md#claude-code-plugin).
+- **Slides on a template's own layouts.** `insertSlide` now takes the name of any layout the deck
+  defines, as PowerPoint shows it, such as `"layout": "Two Column With Logo"`, besides the five
+  built-in names. A slide on a named layout gets every placeholder the layout has, under the
+  layout's own shape names, as PowerPoint's New Slide makes it, so the ones the title and body do
+  not fill can be filled next. Inspection lists the deck's `layouts`, each with its master and
+  its placeholders. A name two masters share is refused until written as `master/layout`, and
+  an unknown name is refused with the deck's own layout names. See
+  [PowerPoint support](docs/powerpoint.md#generating-a-deck).
+- **Word styles by the name Word shows.** `styleId` on `insert`, `format` and notes, and
+  `defineStyle`'s `basedOn` and `next`, take the name in Word's style gallery, such as
+  `"Heading 2"` or a template's `"Body Text Blue"`, as well as the style id. See
+  [document plans](docs/document-plans.md#styles-by-name).
+- **Listed as an MCP server on NuGet.** `OfficeAgent.Mcp` now carries the `McpServer` package
+  type and an embedded `.mcp/server.json`, so NuGet.org lists it among MCP servers and can give
+  clients a ready-made configuration.
+- **`llms.txt`.** A short guide for agents at the repository root says what OfficeAgent is good
+  and poor at, and links the documentation as plain Markdown.
+- **Sensitivity labels are reported and kept.** Inspection lists a document's Microsoft Purview
+  label as a `sensitivityLabel` node, with its id, its name when recorded, and how it was
+  applied, from the `MSIP_Label_*` properties or `docMetadata/LabelInfo.xml`. No operation can
+  change a label, and saving keeps it. See
+  [sensitivity labels](docs/document-providers.md#sensitivity-labels-and-protected-files).
+- **Encrypted files are named as encrypted.** A file protected by a sensitivity label or a
+  password is refused with the new `encrypted-document` code when it is opened, in every format,
+  instead of being reported as a corrupt package. `EncryptedDocumentException` is the direct API
+  equivalent. OfficeAgent does not decrypt.
+- **Hosted edits name the signed-in user.** On an `onBehalfOf` connection, receipts now carry
+  the user as `actor`, taken from the token Entra accepted in the exchange. With
+  `RevisionAuthorFromActor` on, tracked changes and comments carry that user's display name and
+  the plan's author stays on the receipt. It is off by default, because `OfficeAgent` is the
+  documented default author in 1.x. `ApplyOptions.RevisionAuthor`, `OfficeAgentClientOptions` and
+  `OnBehalfOfActorProvider` are the direct API equivalents. See
+  [identity](docs/deployment.md#authentication--identity).
+- **Deploy to Azure, and a Copilot Studio connector.** `deploy/azure` is a repeatable Container
+  Apps deployment with Entra authentication in front of the server, a persistent registration
+  index, and the settings Copilot Studio needs. `deploy/copilot-studio` holds connector
+  definitions for OAuth and API-key setups, with import steps. See
+  [Azure](deploy/azure/README.md) and [the connector](deploy/copilot-studio/README.md).
 - **Formula calculation in the session connection.** `EphemeralCalculateFormulas` and
   `EphemeralRejectFormulaErrors` turn calculation on for the MCP server's in-memory session
   connection, including the one it starts with when nothing is configured, as the folder and
@@ -87,6 +125,25 @@ corresponding GitHub release.
 - **`fill` on a slide writes its run before `a:endParaRPr`.** It used to append the run after
   it, which the schema does not allow. An empty value now leaves the shape with no run rather
   than an empty one.
+- **A Word style the document does not define is refused.** A paragraph or table style that
+  neither the document nor the plan defines used to be written anyway, and Word showed the
+  paragraph as Normal without a word; the plan is now refused with the document's own styles
+  of that type. Normal, Heading 1 to 3, List Paragraph and Table Grid are the exception: when
+  a document lacks one, its standard definition is added, as Word does. Plans produced by
+  document comparison keep their styles as before.
+- **`server.json` passes `--stdio` to the NuGet package.** A client that built its configuration
+  from the MCP Registry entry started the server over HTTP and never connected.
+- **A new slide's title or body must have somewhere to go.** `insertSlide` used to drop a title
+  the chosen layout had no title placeholder for, or a body it had no text placeholder for; it
+  now refuses the operation and says which. Body text no longer goes into a picture, chart,
+  table, footer or date placeholder.
+- **A file locked in SharePoint says so.** A save refused because the file is checked out or
+  open for exclusive editing keeps the `write-rejected` code, and its message now names the lock
+  and the two ways forward.
+- **Find results on a deck say where they are.** `find_in_document` reports `slide` or `notes` as
+  each hit's `location`, as it already did for Word.
+- **Ambiguous `find` targets name each candidate's location,** such as `match 0 (body):`, so an
+  agent can tell a header from the body before choosing `match`.
 - **A `find` target's `match` must be an index or `"all"`.** Any other string is refused with
   `invalid-argument` instead of being ignored.
 

@@ -80,6 +80,7 @@ public static ApplyOptions Commit { get; }
 public bool DryRun { get; init; }
 public static ApplyOptions Preview { get; }
 public bool RejectFormulaErrors { get; init; }
+public string? RevisionAuthor { get; init; }
 ```
 
 ### `OfficeAgent.Abstractions.ApplyOutcome`
@@ -670,6 +671,14 @@ public SlidePosition Position { get; init; }
 public string? RelativeTo { get; init; }
 ```
 
+### `OfficeAgent.Abstractions.EncryptedDocumentException`
+
+```csharp
+public sealed class EncryptedDocumentException : System.Exception, System.Runtime.Serialization.ISerializable
+public EncryptedDocumentException();
+public const string Code = "encrypted-document";
+```
+
 ### `OfficeAgent.Abstractions.EngineCapabilities`
 
 ```csharp
@@ -1084,6 +1093,7 @@ public IReadOnlyList<Anchor> Anchors { get; init; }
 public IReadOnlyList<CellInfo> Cells { get; init; }
 public IReadOnlyList<DefinedNameInfo> DefinedNames { get; init; }
 public DocumentFormat Format { get; init; }
+public IReadOnlyList<SlideLayoutInfo> Layouts { get; init; }
 public IReadOnlyList<NodeInfo> Nodes { get; init; }
 public IReadOnlyList<OutlineNode> Outline { get; init; }
 public IReadOnlyList<ParagraphInfo> Paragraphs { get; init; }
@@ -1091,6 +1101,15 @@ public SnapshotToken Snapshot { get; init; }
 public IReadOnlyList<StructuralAnchor> StructuralAnchors { get; init; }
 public StyleCatalog Styles { get; init; }
 public IReadOnlyList<WorksheetInfo> Worksheets { get; init; }
+```
+
+### `OfficeAgent.Abstractions.LayoutPlaceholderInfo`
+
+```csharp
+public sealed class LayoutPlaceholderInfo
+public LayoutPlaceholderInfo();
+public string Kind { get; init; }
+public string Name { get; init; }
 ```
 
 ### `OfficeAgent.Abstractions.LinkOp`
@@ -1199,6 +1218,14 @@ public NoteKind Kind { get; init; }
 public ChangeMode? Mode { get; init; }
 public string? StyleId { get; init; }
 public string Text { get; init; }
+```
+
+### `OfficeAgent.Abstractions.OfficeAgentClientOptions`
+
+```csharp
+public sealed class OfficeAgentClientOptions
+public OfficeAgentClientOptions();
+public bool RevisionAuthorFromActor { get; init; }
 ```
 
 ### `OfficeAgent.Abstractions.OpenXmlIngestionLimitException`
@@ -1592,6 +1619,16 @@ public IReadOnlyList<string> Body { get; init; }
 public string? Layout { get; init; }
 public string? Notes { get; init; }
 public string? Title { get; init; }
+```
+
+### `OfficeAgent.Abstractions.SlideLayoutInfo`
+
+```csharp
+public sealed class SlideLayoutInfo
+public SlideLayoutInfo();
+public string Master { get; init; }
+public string Name { get; init; }
+public IReadOnlyList<LayoutPlaceholderInfo> Placeholders { get; init; }
 ```
 
 ### `OfficeAgent.Abstractions.SlidePosition`
@@ -2210,6 +2247,10 @@ public const string PlanOperations = "Each operation is one object. Concrete exa
 // Continue a list the document already defines (numbering id from a \"list#N\" node in inspect_document.nodes):
 { \"op\": \"format\", \"target\": { \"paraId\": \"w14:...\", \"expect\": \"\" }, \"numberingId\": 42, \"listLevel\": 1 }
 
+// Use the document's own styles: styleId takes a style id or the name Word shows (\"Heading 2\", a template's \"Body Text Blue\"), as inspect_document lists them under styles.
+// A style the document does not define is refused with the ones it does; Normal, Heading 1-3, List Paragraph and Table Grid are added when missing, as Word adds them. Word only.
+{ \"op\": \"format\", \"target\": { \"paraId\": \"w14:...\", \"expect\": \"\" }, \"styleId\": \"Clause Heading\" }
+
 // Define a style once instead of repeating direct formatting on every paragraph. Word only.
 // Define it first, then apply it with format's styleId - both can sit in the same plan:
 { \"op\": \"defineStyle\", \"styleId\": \"Quote\", \"name\": \"Pull Quote\", \"basedOn\": \"Normal\", \"next\": \"Normal\",
@@ -2320,7 +2361,7 @@ Working with a PowerPoint deck
 - Template slots: a deck has no content controls, so a fillable slot is the SHAPE NAME a template sets (PowerPoint's Selection Pane shows them). They arrive in inspect_document.contentControls with kind \"shapeName\". Fill one by name: { \"op\": \"fill\", \"target\": { \"tag\": \"ClientName\" }, \"value\": \"Northwind Traders\" }. A name used on more than one slide comes back as ambiguous-anchor; qualify it as \"slide256/ClientName\".
 - copyStyles makes one line look like another and clearStyles strips direct formatting so the layout's own styling shows again: { \"op\": \"clearStyles\", \"target\": { \"paraId\": \"slide257/shape3/p0\", \"expect\": \"\" }, \"scope\": \"all\" }. scope is \"run\", \"paragraph\" or \"all\". Only direct a:pPr/a:rPr travel - the layout and master are never touched.
 - Sections are the named slide groups in the thumbnail pane: { \"op\": \"section\", \"action\": \"Add\", \"name\": \"Financials\", \"target\": { \"kind\": \"slide\", \"path\": \"slide#257\" } } starts one at that slide. \"Rename\" and \"Remove\" target a section node from inspect_document.nodes; removing a section keeps its slides. Sections follow the deck automatically as slides are added, moved, copied and removed - you never maintain them by hand.
-- Slides: insertSlide adds one, and several in one plan is how you author a whole deck. { \"op\": \"insertSlide\", \"slide\": { \"layout\": \"titleAndContent\", \"title\": \"FY27 Priorities\", \"body\": [\"Finish the migration\", \"Rebuild the pipeline\"], \"notes\": \"Do not commit to a date.\" } }. Layouts are title, titleAndContent, sectionHeader, titleOnly, blank; omit \"layout\" and one is chosen from what you supply. Position defaults to the end of the deck - use \"position\": \"Start\"/\"Before\"/\"After\" with a slide target to place it elsewhere.
+- Slides: insertSlide adds one, and several in one plan is how you author a whole deck. { \"op\": \"insertSlide\", \"slide\": { \"layout\": \"titleAndContent\", \"title\": \"FY27 Priorities\", \"body\": [\"Finish the migration\", \"Rebuild the pipeline\"], \"notes\": \"Do not commit to a date.\" } }. Layouts are title, titleAndContent, sectionHeader, titleOnly, blank, or the name of one of the deck's own layouts as inspect_document lists them under layouts (a company template's \"Two Column With Logo\"); write \"master/layout\" when two masters share a name. Omit \"layout\" and one is chosen from what you supply. A slide on a named layout gets every placeholder the layout has, empty except for the title and the first text placeholder; re-inspect and fill the others with changeText (expect \"\") after applying. Position defaults to the end of the deck - use \"position\": \"Start\"/\"Before\"/\"After\" with a slide target to place it elsewhere.
 - removeSlide, moveSlide and duplicateSlide take a slide target: { \"op\": \"moveSlide\", \"target\": { \"kind\": \"slide\", \"path\": \"slide#259\" }, \"position\": \"After\", \"relativeTo\": \"slide#256\" }. duplicateSlide defaults to landing right after the original. Removing the deck's only slide is refused, because PowerPoint cannot open a deck with none.
 - A slide added in one plan cannot be edited by a later operation in that SAME plan - its id does not exist until the plan is applied. Set its text through insertSlide's own title/body/notes, or apply, re-inspect, then edit.
 - format on a deck covers bold, italic, underline, sizeHalfPoints, fontFamily, color, highlight and alignment on text; widthPx/heightPx on an image; xPx/yPx/widthPx/heightPx, fillColor, lineColor, lineWidthPx and verticalAlignment on a shape; and fillColor on a slide. Word-only measures (styleId, indents, spacing, borders) are refused rather than ignored. Anchor the span you want styled, or use an empty \"expect\" to style a whole paragraph.
@@ -2389,6 +2430,9 @@ public ApplyContext(IOpenXmlPackage package, InspectResult inspection, IReadOnly
 public InspectResult Inspection { get; }
 public IOpenXmlPackage Package { get; }
 public RevisionMetadata Revision { get; }
+public string? TrustedAuthor { get; init; }
+public string CommentAuthor(string requested);
+public string CommentInitials(string requested);
 public string ResolveAlias(string anchorId);
 ```
 
@@ -2756,6 +2800,7 @@ public OfficeAgentClient(DocumentProviderRegistry providers, params IFormatModul
 public OfficeAgentClient(IDocumentService service);
 public OfficeAgentClient(IDocumentService service, DocumentProviderRegistry providers, ILoggerFactory? loggerFactory = null);
 public OfficeAgentClient(IDocumentService service, DocumentProviderRegistry providers, ILoggerFactory? loggerFactory, IEnumerable<IBlankDocumentFactory> blankDocumentFactories, IAuditActorProvider? auditActorProvider = null);
+public OfficeAgentClient(IDocumentService service, DocumentProviderRegistry providers, ILoggerFactory? loggerFactory, IEnumerable<IBlankDocumentFactory> blankDocumentFactories, IAuditActorProvider? auditActorProvider, OfficeAgentClientOptions? options);
 public OfficeAgentClient(params IFormatModule[] modules);
 public const int MaximumRefreshCells = 10000;
 public IReadOnlyList<string> CreatableExtensions { get; }
@@ -3036,6 +3081,7 @@ public string TenantId { get; set; }
 ```csharp
 public static class GraphUserContext
 public static string? CurrentUserAccessToken { get; }
+public static AuditActor? ValidatedActor { get; }
 public static IDisposable Push(string? userAccessToken);
 ```
 
@@ -3082,6 +3128,14 @@ public sealed class OnBehalfOfAccessTokenProvider : OfficeAgent.SharePoint.IAcce
 public OnBehalfOfAccessTokenProvider(OnBehalfOfOptions options, HttpClient httpClient);
 public OnBehalfOfAccessTokenProvider(OnBehalfOfOptions options, HttpClient httpClient, Func<string?> userTokenAccessor);
 public Task<string> GetAccessTokenAsync(CancellationToken cancellationToken = default);
+```
+
+### `OfficeAgent.SharePoint.OnBehalfOfActorProvider`
+
+```csharp
+public sealed class OnBehalfOfActorProvider : OfficeAgent.Core.IAuditActorProvider
+public OnBehalfOfActorProvider();
+public AuditActor? GetCurrentActor();
 ```
 
 ### `OfficeAgent.SharePoint.OnBehalfOfOptions`

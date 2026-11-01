@@ -176,12 +176,17 @@ public sealed class OnBehalfOfAccessTokenProvider : IAccessTokenProvider
 
         var key = CacheKey(userAssertion!);
         if (_cache.TryGetValue(key, out var cached) && DateTimeOffset.UtcNow < cached.ExpiresAt)
+        {
+            // A cached result is an earlier exchange of this same assertion.
+            GraphUserContext.MarkValidated(userAssertion!);
             return cached.Token;
+        }
 
         var (token, expiresIn) = await ExchangeAsync(userAssertion!, cancellationToken).ConfigureAwait(false);
         var entry = new CachedToken(token, DateTimeOffset.UtcNow.AddSeconds(Math.Max(60, expiresIn - 60)));
         _cache[key] = entry;
         PruneExpired();
+        GraphUserContext.MarkValidated(userAssertion!);
         return token;
     }
 

@@ -50,7 +50,8 @@ public static class ServiceCollectionExtensions
             sp.GetRequiredService<DocumentProviderRegistry>(),
             sp.GetService<ILoggerFactory>() ?? NullLoggerFactory.Instance,
             sp.GetServices<IFormatModule>().OfType<IBlankDocumentFactory>(),
-            sp.GetService<IAuditActorProvider>()));
+            sp.GetService<IAuditActorProvider>(),
+            sp.GetService<OfficeAgentClientOptions>()));
         return services;
     }
 }

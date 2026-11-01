@@ -80,7 +80,7 @@ jobs:
       # Test the exact tag being published. workflow_dispatch can target a tag
       # that never went through the main build, so the gate has to live here.
       - name: Restore
-        run: dotnet restore OfficeAgent.NET.sln
+        run: dotnet restore OfficeAgent.NET.sln --locked-mode
 
       - name: Audit NuGet dependencies
         run: python scripts/check_vulnerable_packages.py

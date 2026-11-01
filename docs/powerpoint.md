@@ -355,12 +355,52 @@ single call:
 | `titleOnly` | title. The default when only a `title` is supplied |
 | `blank` | none. The default when neither is supplied |
 
-`layout` is resolved against the layouts **the deck itself defines**, matched by
-PresentationML layout type. A deck created here ships all five; a deck built from
-a corporate template is matched against that template's layouts, so its styling
-wins. A layout the deck does not define falls back to the deck's first rather
+These five names are resolved against the layouts **the deck itself defines**,
+matched by PresentationML layout type. A deck created here ships all five; a deck
+built from a corporate template is matched against that template's layouts, so its
+styling wins. A layout the deck does not define falls back to the deck's first rather
 than failing — a slide in the wrong layout is recoverable, a refused edit on
 someone's template is just an obstacle.
+
+### A template's own layouts
+
+A company template usually defines layouts no generic name reaches: "Divider",
+"Two Column With Logo", "Agenda". `layout` also takes any of them by the name
+PowerPoint shows, ignoring case. `inspect_document` lists them under `layouts`,
+each with its master and its placeholders:
+
+```jsonc
+"layouts": [
+  { "name": "Two Column With Logo", "master": "Northwind",
+    "placeholders": [ { "name": "Title 1",      "kind": "title" },
+                      { "name": "Left Column",  "kind": "content" },
+                      { "name": "Right Column", "kind": "content" },
+                      { "name": "Logo",         "kind": "picture" } ] } ]
+```
+
+```json
+{ "op": "insertSlide",
+  "slide": { "layout": "Two Column With Logo",
+             "title": "Why Northwind",
+             "body": [ "Twelve years in logistics", "Offices in four countries" ] } }
+```
+
+- The five built-in names come first, so a template layout called "Blank" is
+  reached by `blank` through its type, as before.
+- A slide on a named layout gets **every placeholder the layout defines**, as
+  PowerPoint's New Slide does, under the layout's own shape names. `title` fills
+  the title, `body` the first content, body or subtitle placeholder, and the rest
+  arrive empty. After applying, inspect again and fill them with `changeText`
+  (`"expect": ""`) or `fill` by shape name. Picture, chart and table placeholders
+  arrive as empty frames; date, footer and slide-number placeholders are left to
+  `headerFooter`.
+- Templates with several masters often repeat a name. An ambiguous name is refused
+  with the qualified forms to use instead, such as `"Brand Two/Agenda"`, where the
+  first part is the master's name as `layouts` reports it.
+- An unknown name is refused with the deck's own layout names.
+
+On any layout, a `title` with no title placeholder to go into, or a `body` with no
+text placeholder, is refused rather than dropped.
 
 An inserted slide carries no geometry of its own: its shapes name the layout's
 placeholders and leave `p:spPr` empty, so position, size, font, and bullet

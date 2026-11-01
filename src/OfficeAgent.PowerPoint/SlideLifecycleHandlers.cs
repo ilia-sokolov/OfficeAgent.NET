@@ -144,12 +144,16 @@ internal sealed class SlideInsertHandler : IOperationHandler
     {
         var op = (InsertSlideOp)operation;
 
-        var layoutName = op.Slide.Layout ?? SlideLayouts.DefaultFor(op.Slide);
-        if (!SlideLayouts.All.Any(l => string.Equals(l.Name, layoutName, StringComparison.OrdinalIgnoreCase)))
+        var layout = SlideLayouts.Resolve(
+            PowerPointModel.Main(context.Package), op.Slide.Layout ?? SlideLayouts.DefaultFor(op.Slide));
+        if (layout.Error is not null)
             return OperationPreview.Fail(new ValidationError(
-                ValidationErrorCodes.InvalidOperation,
-                $"Unknown layout '{layoutName}'. Expected one of: {SlideLayouts.Names}.",
-                op.Target));
+                ValidationErrorCodes.InvalidOperation, layout.Error, op.Target));
+        var layoutName = layout.Name;
+
+        if (layout.Part is not null && SlideBuilder.Misfit(op.Slide, layout.Part, layoutName) is { } misfit)
+            return OperationPreview.Fail(new ValidationError(
+                ValidationErrorCodes.InvalidOperation, misfit, op.Target));
 
         var error = SlideList.ResolveReference(
             context, op.Position, RelativePath(op), op.Target, "insertSlide", out var reference);
@@ -174,20 +178,18 @@ internal sealed class SlideInsertHandler : IOperationHandler
     public void Apply(ApplyContext context, PlanOperation operation)
     {
         var op = (InsertSlideOp)operation;
-        var layoutName = op.Slide.Layout ?? SlideLayouts.DefaultFor(op.Slide);
 
         var main = PowerPointModel.Main(context.Package);
-        var master = main.SlideMasterParts.FirstOrDefault()
-            ?? throw new InvalidOperationException("The presentation has no slide master.");
-
-        // A deck from someone else's template may not define the layout asked for; using
-        // whatever it does define beats refusing the edit, and beats inventing geometry.
-        var layoutPart = SlideLayouts.Find(master, layoutName)
-            ?? master.SlideLayoutParts.FirstOrDefault()
-            ?? throw new InvalidOperationException("The slide master defines no layouts.");
+        var layout = SlideLayouts.Resolve(main, op.Slide.Layout ?? SlideLayouts.DefaultFor(op.Slide));
+        if (layout.Error is not null) throw new InvalidOperationException(layout.Error);
+        var layoutPart = layout.Part
+            ?? throw new InvalidOperationException("The presentation has no slide master with a layout.");
 
         var slidePart = main.AddNewPart<SlidePart>();
-        slidePart.Slide = SlideBuilder.Build(op.Slide, layoutPart);
+        // A layout picked by the deck's own name was designed by the template's author, so
+        // the slide gets every placeholder it defines, as PowerPoint's New Slide does; each
+        // can then be filled. The built-in names keep their established two-shape slide.
+        slidePart.Slide = SlideBuilder.Build(op.Slide, layoutPart, everyPlaceholder: layout.ByDeckName);
         slidePart.AddPart(layoutPart);
 
         if (op.Slide.Notes is { Length: > 0 } notes)

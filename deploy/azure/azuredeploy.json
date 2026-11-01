@@ -1,0 +1,326 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "metadata": {
+    "_generator": {
+      "name": "bicep",
+      "version": "0.46.1.21595",
+      "templateHash": "3466289423126377092"
+    }
+  },
+  "parameters": {
+    "location": {
+      "type": "string",
+      "defaultValue": "[resourceGroup().location]",
+      "metadata": {
+        "description": "Region for every resource."
+      }
+    },
+    "name": {
+      "type": "string",
+      "defaultValue": "officeagent",
+      "minLength": 3,
+      "maxLength": 20,
+      "metadata": {
+        "description": "Base name for the resources. Lowercase letters, digits and hyphens."
+      }
+    },
+    "image": {
+      "type": "string",
+      "defaultValue": "ghcr.io/ilia-sokolov/officeagent-mcp:1.2.0",
+      "metadata": {
+        "description": "Server image. Pin an exact version; review release notes before moving it."
+      }
+    },
+    "tenantId": {
+      "type": "string",
+      "defaultValue": "[subscription().tenantId]",
+      "metadata": {
+        "description": "Entra tenant of the signed-in users."
+      }
+    },
+    "apiClientId": {
+      "type": "string",
+      "metadata": {
+        "description": "Application (client) id of the middle-tier API app registration."
+      }
+    },
+    "apiClientSecret": {
+      "type": "securestring",
+      "metadata": {
+        "description": "Client secret of that app registration, used for the On-Behalf-Of exchange."
+      }
+    },
+    "connectionId": {
+      "type": "string",
+      "defaultValue": "sharepoint",
+      "metadata": {
+        "description": "Connection id agents address documents under."
+      }
+    },
+    "minReplicas": {
+      "type": "int",
+      "defaultValue": 1,
+      "minValue": 0,
+      "maxValue": 1,
+      "metadata": {
+        "description": "Instances kept running. 0 saves money, and the first call after idle starts slowly."
+      }
+    },
+    "revisionAuthorFromActor": {
+      "type": "bool",
+      "defaultValue": false,
+      "metadata": {
+        "description": "Author tracked changes and comments with the signed-in user's display name."
+      }
+    }
+  },
+  "variables": {
+    "suffix": "[uniqueString(resourceGroup().id, parameters('name'))]",
+    "share": "officeagent-data",
+    "issuer": "[format('{0}{1}/v2.0', environment().authentication.loginEndpoint, parameters('tenantId'))]"
+  },
+  "resources": [
+    {
+      "type": "Microsoft.OperationalInsights/workspaces",
+      "apiVersion": "2023-09-01",
+      "name": "[format('{0}-logs-{1}', parameters('name'), variables('suffix'))]",
+      "location": "[parameters('location')]",
+      "properties": {
+        "sku": {
+          "name": "PerGB2018"
+        },
+        "retentionInDays": 30
+      }
+    },
+    {
+      "type": "Microsoft.Storage/storageAccounts",
+      "apiVersion": "2023-05-01",
+      "name": "[take(format('oa{0}', variables('suffix')), 24)]",
+      "location": "[parameters('location')]",
+      "sku": {
+        "name": "Standard_LRS"
+      },
+      "kind": "StorageV2",
+      "properties": {
+        "minimumTlsVersion": "TLS1_2",
+        "allowBlobPublicAccess": false,
+        "supportsHttpsTrafficOnly": true
+      }
+    },
+    {
+      "type": "Microsoft.Storage/storageAccounts/fileServices",
+      "apiVersion": "2023-05-01",
+      "name": "[format('{0}/{1}', take(format('oa{0}', variables('suffix')), 24), 'default')]",
+      "dependsOn": [
+        "[resourceId('Microsoft.Storage/storageAccounts', take(format('oa{0}', variables('suffix')), 24))]"
+      ]
+    },
+    {
+      "type": "Microsoft.Storage/storageAccounts/fileServices/shares",
+      "apiVersion": "2023-05-01",
+      "name": "[format('{0}/{1}/{2}', take(format('oa{0}', variables('suffix')), 24), 'default', variables('share'))]",
+      "properties": {
+        "shareQuota": 1
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.Storage/storageAccounts/fileServices', take(format('oa{0}', variables('suffix')), 24), 'default')]"
+      ]
+    },
+    {
+      "type": "Microsoft.App/managedEnvironments",
+      "apiVersion": "2024-03-01",
+      "name": "[format('{0}-env-{1}', parameters('name'), variables('suffix'))]",
+      "location": "[parameters('location')]",
+      "properties": {
+        "appLogsConfiguration": {
+          "destination": "log-analytics",
+          "logAnalyticsConfiguration": {
+            "customerId": "[reference(resourceId('Microsoft.OperationalInsights/workspaces', format('{0}-logs-{1}', parameters('name'), variables('suffix'))), '2023-09-01').customerId]",
+            "sharedKey": "[listKeys(resourceId('Microsoft.OperationalInsights/workspaces', format('{0}-logs-{1}', parameters('name'), variables('suffix'))), '2023-09-01').primarySharedKey]"
+          }
+        }
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.OperationalInsights/workspaces', format('{0}-logs-{1}', parameters('name'), variables('suffix')))]"
+      ]
+    },
+    {
+      "type": "Microsoft.App/managedEnvironments/storages",
+      "apiVersion": "2024-03-01",
+      "name": "[format('{0}/{1}', format('{0}-env-{1}', parameters('name'), variables('suffix')), 'data')]",
+      "properties": {
+        "azureFile": {
+          "accountName": "[take(format('oa{0}', variables('suffix')), 24)]",
+          "accountKey": "[listKeys(resourceId('Microsoft.Storage/storageAccounts', take(format('oa{0}', variables('suffix')), 24)), '2023-05-01').keys[0].value]",
+          "shareName": "[variables('share')]",
+          "accessMode": "ReadWrite"
+        }
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.Storage/storageAccounts/fileServices/shares', take(format('oa{0}', variables('suffix')), 24), 'default', variables('share'))]",
+        "[resourceId('Microsoft.App/managedEnvironments', format('{0}-env-{1}', parameters('name'), variables('suffix')))]",
+        "[resourceId('Microsoft.Storage/storageAccounts', take(format('oa{0}', variables('suffix')), 24))]"
+      ]
+    },
+    {
+      "type": "Microsoft.App/containerApps",
+      "apiVersion": "2024-03-01",
+      "name": "[parameters('name')]",
+      "location": "[parameters('location')]",
+      "properties": {
+        "managedEnvironmentId": "[resourceId('Microsoft.App/managedEnvironments', format('{0}-env-{1}', parameters('name'), variables('suffix')))]",
+        "configuration": {
+          "ingress": {
+            "external": true,
+            "targetPort": 8080,
+            "allowInsecure": false
+          },
+          "secrets": [
+            {
+              "name": "api-client-secret",
+              "value": "[parameters('apiClientSecret')]"
+            }
+          ]
+        },
+        "template": {
+          "containers": [
+            {
+              "name": "officeagent-mcp",
+              "image": "[parameters('image')]",
+              "resources": {
+                "cpu": "[json('0.5')]",
+                "memory": "1Gi"
+              },
+              "env": [
+                {
+                  "name": "OfficeAgent__StrictToolSchemas",
+                  "value": "false"
+                },
+                {
+                  "name": "OfficeAgent__RequirePlanSnapshot",
+                  "value": "true"
+                },
+                {
+                  "name": "OfficeAgent__RevisionAuthorFromActor",
+                  "value": "[string(parameters('revisionAuthorFromActor'))]"
+                },
+                {
+                  "name": "OfficeAgent__SharePointConnections__0__ConnectionId",
+                  "value": "[parameters('connectionId')]"
+                },
+                {
+                  "name": "OfficeAgent__SharePointConnections__0__AuthMode",
+                  "value": "onBehalfOf"
+                },
+                {
+                  "name": "OfficeAgent__SharePointConnections__0__TenantId",
+                  "value": "[parameters('tenantId')]"
+                },
+                {
+                  "name": "OfficeAgent__SharePointConnections__0__ClientId",
+                  "value": "[parameters('apiClientId')]"
+                },
+                {
+                  "name": "OfficeAgent__SharePointConnections__0__ClientSecret",
+                  "secretRef": "api-client-secret"
+                },
+                {
+                  "name": "OfficeAgent__SharePointConnections__0__RegistrationIndexPath",
+                  "value": "/data/registrations.json"
+                },
+                {
+                  "name": "OfficeAgent__SharePointConnections__0__AllowedExtensions__0",
+                  "value": ".docx"
+                },
+                {
+                  "name": "OfficeAgent__SharePointConnections__0__AllowedExtensions__1",
+                  "value": ".pptx"
+                },
+                {
+                  "name": "OfficeAgent__SharePointConnections__0__AllowedExtensions__2",
+                  "value": ".xlsx"
+                }
+              ],
+              "volumeMounts": [
+                {
+                  "volumeName": "data",
+                  "mountPath": "/data"
+                }
+              ],
+              "probes": [
+                {
+                  "type": "Liveness",
+                  "httpGet": {
+                    "path": "/healthz",
+                    "port": 8080
+                  },
+                  "initialDelaySeconds": 10,
+                  "periodSeconds": 30
+                }
+              ]
+            }
+          ],
+          "scale": {
+            "minReplicas": "[parameters('minReplicas')]",
+            "maxReplicas": 1
+          },
+          "volumes": [
+            {
+              "name": "data",
+              "storageType": "AzureFile",
+              "storageName": "data"
+            }
+          ]
+        }
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.App/managedEnvironments/storages', format('{0}-env-{1}', parameters('name'), variables('suffix')), 'data')]",
+        "[resourceId('Microsoft.App/managedEnvironments', format('{0}-env-{1}', parameters('name'), variables('suffix')))]"
+      ]
+    },
+    {
+      "type": "Microsoft.App/containerApps/authConfigs",
+      "apiVersion": "2024-03-01",
+      "name": "[format('{0}/{1}', parameters('name'), 'current')]",
+      "properties": {
+        "platform": {
+          "enabled": true
+        },
+        "globalValidation": {
+          "unauthenticatedClientAction": "Return401",
+          "excludedPaths": [
+            "/healthz"
+          ]
+        },
+        "identityProviders": {
+          "azureActiveDirectory": {
+            "enabled": true,
+            "registration": {
+              "clientId": "[parameters('apiClientId')]",
+              "openIdIssuer": "[variables('issuer')]"
+            },
+            "validation": {
+              "allowedAudiences": [
+                "[parameters('apiClientId')]",
+                "[format('api://{0}', parameters('apiClientId'))]"
+              ]
+            }
+          }
+        }
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.App/containerApps', parameters('name'))]"
+      ]
+    }
+  ],
+  "outputs": {
+    "serverUrl": {
+      "type": "string",
+      "metadata": {
+        "description": "MCP endpoint to give a client."
+      },
+      "value": "[format('https://{0}/', reference(resourceId('Microsoft.App/containerApps', parameters('name')), '2024-03-01').configuration.ingress.fqdn)]"
+    }
+  }
+}

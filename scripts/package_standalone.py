@@ -134,6 +134,9 @@ def publish(dotnet: str, standalone: dict, rid: str, version: str, work: Path) -
         # repository's obj folders exactly as the solution build left them.
         "--artifacts-path", str(work / "build"),
         "--nologo",
+        # Lock files have no runtime-specific section, so a runtime-specific restore would rewrite
+        # the committed ones. The solution restore has verified those; this keeps them untouched.
+        f"-p:OfficeAgentLockFileRoot={work / 'locks'}",
         "-p:PublishSingleFile=true",
         "-p:DebugType=none",
         "-p:GenerateDocumentationFile=false",
