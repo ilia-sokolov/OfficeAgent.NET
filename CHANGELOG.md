@@ -116,6 +116,13 @@ corresponding GitHub release.
   the chosen layout had no title placeholder for, or a body it had no text placeholder for; it
   now refuses the operation and says which. Body text no longer goes into a picture, chart,
   table, footer or date placeholder.
+- **A file locked in SharePoint says so.** A save refused because the file is checked out or
+  open for exclusive editing keeps the `write-rejected` code, and its message now names the lock
+  and the two ways forward.
+- **Find results on a deck say where they are.** `find_in_document` reports `slide` or `notes` as
+  each hit's `location`, as it already did for Word.
+- **Ambiguous `find` targets name each candidate's location,** such as `match 0 (body):`, so an
+  agent can tell a header from the body before choosing `match`.
 - **A `find` target's `match` must be an index or `"all"`.** Any other string is refused with
   `invalid-argument` instead of being ignored.
 

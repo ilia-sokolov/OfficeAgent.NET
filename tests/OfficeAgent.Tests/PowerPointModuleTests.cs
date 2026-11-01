@@ -84,6 +84,10 @@ public class PowerPointModuleTests
         var bullet = hits.Where(h => ((TextSpanAnchor)h.Anchor!).ParaId.Contains("shape3")).ToList();
         Assert.Equal(2, bullet.Count);
         Assert.Equal(new[] { 0, 1 }, bullet.Select(h => ((TextSpanAnchor)h.Anchor!).Occurrence));
+
+        // Find agrees with inspection about where each match lives.
+        Assert.All(bullet, h => Assert.Equal("slide", h.Location));
+        Assert.Equal("notes", Assert.Single(hits.Except(bullet)).Location);
     }
 
     [Fact]

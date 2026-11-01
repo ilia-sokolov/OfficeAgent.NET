@@ -218,7 +218,10 @@ internal sealed class FindTargetResolver
 
         if (hits.Count > 1)
         {
-            var candidates = string.Join("; ", hits.Select((hit, i) => $"match {i}: …{hit.Context}…"));
+            var candidates = string.Join("; ", hits.Select((hit, i) =>
+                hit.Location is { Length: > 0 } location
+                    ? $"match {i} ({location}): …{hit.Context}…"
+                    : $"match {i}: …{hit.Context}…"));
             failures.Add(new Failure(ValidationErrorCodes.AmbiguousAnchor,
                 $"Operation {operationIndex}: \"{pattern}\" matches {hits.Count} times, so it is unclear which one to edit. " +
                 $"Re-issue the operation with \"match\": <index>, or use more surrounding text. Candidates - {candidates}"));
