@@ -3,7 +3,7 @@ WORKDIR /src
 
 COPY global.json Directory.Build.props OfficeAgent.NET.sln ./
 COPY src/ ./src/
-RUN dotnet restore src/OfficeAgent.Mcp/OfficeAgent.Mcp.csproj
+RUN dotnet restore src/OfficeAgent.Mcp/OfficeAgent.Mcp.csproj --locked-mode
 
 RUN dotnet publish src/OfficeAgent.Mcp/OfficeAgent.Mcp.csproj \
     -c Release -f net10.0 --no-restore -o /app

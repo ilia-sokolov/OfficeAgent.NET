@@ -61,6 +61,16 @@ The library multi-targets `netstandard2.0;net8.0`. Tests run on `net8.0`; build 
 
 The [maintenance guide](docs/maintenance.md) describes the checks, the release process and the systems a maintainer needs.
 
+### Lock files
+
+Projects in the solution restore from a committed `packages.lock.json`, and CI restores with
+`--locked-mode`, so a stale lock file fails the build. After changing a package reference, refresh
+the lock files and commit them with the change:
+
+```bash
+dotnet restore OfficeAgent.NET.sln --force-evaluate
+```
+
 ## What we want PRs for
 
 - Bug fixes with a regression test.

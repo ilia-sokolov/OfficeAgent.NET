@@ -54,7 +54,7 @@ jobs:
           python scripts/validate_server_manifest.py
 
       - name: Restore
-        run: dotnet restore OfficeAgent.NET.sln
+        run: dotnet restore OfficeAgent.NET.sln --locked-mode
 
       - name: Audit NuGet dependencies
         if: matrix.os == 'ubuntu-latest'
@@ -139,8 +139,11 @@ jobs:
             8.0.x
             10.0.x
 
+      - name: Restore
+        run: dotnet restore OfficeAgent.NET.sln --locked-mode
+
       - name: Build with the pinned SDK
-        run: dotnet build OfficeAgent.NET.sln --configuration Release
+        run: dotnet build OfficeAgent.NET.sln --no-restore --configuration Release
 
       - name: Test on the .NET 10 runtime
         env:

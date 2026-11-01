@@ -14,6 +14,18 @@
     <NoWarn>$(NoWarn);OFFICEAGENT001</NoWarn>
   </PropertyGroup>
 
+  <!-- Projects in OfficeAgent.NET.sln restore from a committed packages.lock.json, so CI builds
+       exactly what was reviewed. Skills and the plugin hand their projects to consumers, and
+       deploy and RequirementsReview are outside the solution, so they stay out. -->
+  <PropertyGroup Condition="!$([MSBuild]::MakeRelative('$(MSBuildThisFileDirectory)', '$(MSBuildProjectDirectory)').StartsWith('skills'))
+                            And !$([MSBuild]::MakeRelative('$(MSBuildThisFileDirectory)', '$(MSBuildProjectDirectory)').StartsWith('plugins'))
+                            And !$([MSBuild]::MakeRelative('$(MSBuildThisFileDirectory)', '$(MSBuildProjectDirectory)').StartsWith('deploy'))
+                            And !$(MSBuildProjectName.StartsWith('RequirementsReview'))">
+    <RestorePackagesWithLockFile>true</RestorePackagesWithLockFile>
+    <!-- A runtime-specific publish would rewrite the committed files, so it writes elsewhere. -->
+    <NuGetLockFilePath Condition="'$(OfficeAgentLockFileRoot)' != ''">$(OfficeAgentLockFileRoot)/$(MSBuildProjectName).lock.json</NuGetLockFilePath>
+  </PropertyGroup>
+
   <PropertyGroup>
     <Version>1.2.0</Version>
     <Authors>Ilia Sokolov</Authors>
