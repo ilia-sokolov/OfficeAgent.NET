@@ -121,7 +121,8 @@ docker run --rm -p 8080:8080 \
 ```
 
 Deploy the same image to Azure Container Apps, App Service, or another container
-platform. `/healthz` is a **liveness** endpoint: it proves that the process and
+platform. The [Azure template](../deploy/azure/README.md) deploys it to Container Apps with
+Entra authentication in front, which covers B2 for that platform. `/healthz` is a **liveness** endpoint: it proves that the process and
 configuration started, not that a provider is reachable or authorized. Add a
 deployment-time provider preflight (for example, register and inspect a harmless
 test document) when readiness matters.
@@ -177,6 +178,9 @@ bearer_token_env_var = "OFFICEAGENT_TOKEN"
 
 **Copilot Studio:**
 
+The steps below use Copilot Studio's wizard. For a definition an administrator can version and
+review, import the [connector](../deploy/copilot-studio/README.md) instead.
+
 1. Start the server with `OfficeAgent__StrictToolSchemas=false`. Copilot Studio asks the user for every required tool input the model leaves out and cannot send an empty string, so with the default strict schemas it asks for a `newName` before every in-place save and never completes one. For agents that edit documents people rely on, also set `OfficeAgent__RequirePlanSnapshot=true` so a retried call cannot apply the same plan twice. See [the MCP server settings](mcp-server.md#settings).
 2. Make sure the agent uses **generative orchestration** (Settings) - MCP tools require it.
 3. **Tools → Add a tool → New tool → Model Context Protocol.**
@@ -211,10 +215,6 @@ Two layers, kept separate:
 | `onBehalfOf` | The signed-in user | Multi-user hosted agents. Effective access is the intersection of the app's consented delegated Graph permissions and the user's SharePoint permissions. Requires OAuth, an inbound token for the middle-tier API (`ClientId`), and a delegated Graph scope such as `Files.ReadWrite.All`. Hosted HTTP only. |
 | `appOnly` (default) | A shared app identity | Unattended agents. Every caller shares that identity, so isolate audiences with separate deployments and identities where necessary. Prefer `Sites.Selected`, then explicitly assign the app to each allowed site with the required `write` role. |
 
-`Sites.Selected` admin consent does not grant access by itself. A SharePoint or
-Graph administrator must also create a site permission for the application on
-each intended site and grant `write` (or another sufficient role). Verify that
-assignment before starting the server.
 On an `onBehalfOf` connection, receipts name the signed-in user. Once Entra has accepted the
 caller's token in the On-Behalf-Of exchange, the server takes `oid`, `iss` and `name` from it and
 records them as the receipt's `actor`. Nothing is read from a header alone or from plan JSON, so
@@ -225,6 +225,10 @@ Tracked changes and comments still show `OfficeAgent`, or the plan's author, unl
 `OfficeAgent__RevisionAuthorFromActor=true`. They then show the user's display name, and the
 plan's author stays on the receipt.
 
+`Sites.Selected` admin consent does not grant access by itself. A SharePoint or
+Graph administrator must also create a site permission for the application on
+each intended site and grant `write` (or another sufficient role). Verify that
+assignment before starting the server.
 
 ### Pre-flight checklist for a hosted deployment
 

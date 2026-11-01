@@ -1,0 +1,30 @@
+swagger: '2.0'
+info:
+  title: OfficeAgent
+  description: Fill and edit your own Word, PowerPoint and Excel files in SharePoint with previewed plans and real tracked changes.
+  version: 1.2.0
+host: YOUR_SERVER_HOST
+basePath: /
+schemes:
+  - https
+paths:
+  /:
+    post:
+      summary: OfficeAgent MCP server
+      description: Inspect, preview and edit Word, PowerPoint and Excel documents.
+      x-ms-agentic-protocol: mcp-streamable-1.0
+      operationId: InvokeMCP
+      responses:
+        '200':
+          description: Success
+securityDefinitions:
+  entra:
+    type: oauth2
+    flow: accessCode
+    authorizationUrl: https://login.microsoftonline.com/YOUR_TENANT_ID/oauth2/v2.0/authorize
+    tokenUrl: https://login.microsoftonline.com/YOUR_TENANT_ID/oauth2/v2.0/token
+    scopes:
+      api://YOUR_API_CLIENT_ID/access_as_user: Work with documents as the signed-in user
+security:
+  - entra:
+      - api://YOUR_API_CLIENT_ID/access_as_user

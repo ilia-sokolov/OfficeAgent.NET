@@ -106,6 +106,11 @@ corresponding GitHub release.
   documented default author in 1.x. `ApplyOptions.RevisionAuthor`, `OfficeAgentClientOptions` and
   `OnBehalfOfActorProvider` are the direct API equivalents. See
   [identity](docs/deployment.md#authentication--identity).
+- **Deploy to Azure, and a Copilot Studio connector.** `deploy/azure` is a repeatable Container
+  Apps deployment with Entra authentication in front of the server, a persistent registration
+  index, and the settings Copilot Studio needs. `deploy/copilot-studio` holds connector
+  definitions for OAuth and API-key setups, with import steps. See
+  [Azure](deploy/azure/README.md) and [the connector](deploy/copilot-studio/README.md).
 - **Formula calculation in the session connection.** `EphemeralCalculateFormulas` and
   `EphemeralRejectFormulaErrors` turn calculation on for the MCP server's in-memory session
   connection, including the one it starts with when nothing is configured, as the folder and
