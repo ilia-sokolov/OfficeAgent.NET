@@ -90,6 +90,15 @@ corresponding GitHub release.
   clients a ready-made configuration.
 - **`llms.txt`.** A short guide for agents at the repository root says what OfficeAgent is good
   and poor at, and links the documentation as plain Markdown.
+- **Sensitivity labels are reported and kept.** Inspection lists a document's Microsoft Purview
+  label as a `sensitivityLabel` node, with its id, its name when recorded, and how it was
+  applied, from the `MSIP_Label_*` properties or `docMetadata/LabelInfo.xml`. No operation can
+  change a label, and saving keeps it. See
+  [sensitivity labels](docs/document-providers.md#sensitivity-labels-and-protected-files).
+- **Encrypted files are named as encrypted.** A file protected by a sensitivity label or a
+  password is refused with the new `encrypted-document` code when it is opened, in every format,
+  instead of being reported as a corrupt package. `EncryptedDocumentException` is the direct API
+  equivalent. OfficeAgent does not decrypt.
 - **Formula calculation in the session connection.** `EphemeralCalculateFormulas` and
   `EphemeralRejectFormulaErrors` turn calculation on for the MCP server's in-memory session
   connection, including the one it starts with when nothing is configured, as the folder and

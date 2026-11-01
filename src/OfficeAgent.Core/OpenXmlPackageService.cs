@@ -234,6 +234,11 @@ internal sealed class OpenXmlPackageService
 
     private IOpenXmlPackage OpenOwned(MemoryStream memory, bool editable)
     {
+        // Before the archive check: an encrypted file is not an archive, and calling it a
+        // corrupt one would send the caller looking for damage that is not there.
+        if (EncryptedPackageDetector.IsEncrypted(memory.GetBuffer(), (int)memory.Length))
+            throw new EncryptedDocumentException();
+
         var format = Inspect(memory);
         memory.Position = 0;
 

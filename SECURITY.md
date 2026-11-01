@@ -20,6 +20,13 @@ Fixes also depend on the .NET runtime underneath. A problem that reproduces only
 Microsoft no longer supports is not guaranteed a fix; see
 [runtime support](SUPPORT.md#runtime-and-platform-compatibility).
 
+## Protected content
+
+OfficeAgent does not decrypt. A file protected by a sensitivity label or a password is refused
+with `encrypted-document` when it is opened. A label on a file that is not encrypted is reported
+by inspection and kept on every save; policy about labelled files belongs to the host. See
+[sensitivity labels and protected files](docs/document-providers.md#sensitivity-labels-and-protected-files).
+
 ## Report a vulnerability privately
 
 Use [GitHub private vulnerability reporting](https://github.com/ilia-sokolov/OfficeAgent.NET/security/advisories/new).

@@ -671,6 +671,14 @@ public string? RelativeTo { get; init; }
 ```
 
 ### `OfficeAgent.Abstractions.EngineCapabilities`
+### `OfficeAgent.Abstractions.EncryptedDocumentException`
+
+```csharp
+public sealed class EncryptedDocumentException : System.Exception, System.Runtime.Serialization.ISerializable
+public EncryptedDocumentException();
+public const string Code = "encrypted-document";
+```
+
 
 ```csharp
 public sealed class EngineCapabilities

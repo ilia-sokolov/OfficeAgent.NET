@@ -141,6 +141,7 @@ public sealed class ExcelModule : IFormatModule, IBlankDocumentFactory, IApplyTi
         }
 
         nodes.AddRange(PackageCoreProperties.Nodes(document));
+        nodes.AddRange(SensitivityLabels.Nodes(document));
 
         foreach (var node in nodes)
             if (node.Anchor is not null) anchors.Add(node.Anchor);

@@ -5498,6 +5498,7 @@ OfficeAgent:FileSystemConnections[]:MaximumBytes: Int64 = 104857600
 OfficeAgent:FileSystemConnections[]:RejectFormulaErrors: Boolean = false
 OfficeAgent:FileSystemConnections[]:RootPath: String = ""
 OfficeAgent:RequirePlanSnapshot: Boolean = false
+OfficeAgent:RevisionAuthorFromActor: Boolean = false
 OfficeAgent:SharePointConnections[]:AllowedExtensions: IList<String> = [".docx"]
 OfficeAgent:SharePointConnections[]:AppOnlyScope: String = "https://graph.microsoft.com/.default"
 OfficeAgent:SharePointConnections[]:AuthMode: String = "appOnly"

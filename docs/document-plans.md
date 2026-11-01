@@ -992,3 +992,4 @@ Returned by `preview_plan` and `apply_plan` in the `errors` array. Stable wire c
 | `malformed-package` | The document is not a package this engine will open: corrupt, truncated, carrying a duplicate or traversing part name, or declaring a document type definition. See [ingestion limits](ingestion-limits.md). |
 
 Provider boundary errors (`apply_plan` only) use a separate set of wire codes - see [document-providers.md](document-providers.md).
+| `encrypted-document` | The file is protected by a sensitivity label or a password. OfficeAgent does not decrypt, so remove the protection in Office or use a copy without it. Re-sending it will not help |

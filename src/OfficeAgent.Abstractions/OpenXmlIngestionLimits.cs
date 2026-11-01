@@ -152,3 +152,20 @@ public sealed class OpenXmlPackageRejectedException : Exception
     {
     }
 }
+
+/// <summary>
+/// Thrown when a file is protected by a sensitivity label or a password. OfficeAgent does not
+/// decrypt, so it cannot read or edit such a file.
+/// </summary>
+public sealed class EncryptedDocumentException : Exception
+{
+    /// <summary>The stable wire code reported to agents and tools.</summary>
+    public const string Code = "encrypted-document";
+
+    /// <summary>Initializes the exception with the standard explanation.</summary>
+    public EncryptedDocumentException()
+        : base("The file is protected by a sensitivity label or a password, and OfficeAgent cannot " +
+               "open it. Remove the protection in Office, or use a copy without it.")
+    {
+    }
+}
