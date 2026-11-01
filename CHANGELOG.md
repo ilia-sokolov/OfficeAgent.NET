@@ -99,6 +99,13 @@ corresponding GitHub release.
   password is refused with the new `encrypted-document` code when it is opened, in every format,
   instead of being reported as a corrupt package. `EncryptedDocumentException` is the direct API
   equivalent. OfficeAgent does not decrypt.
+- **Hosted edits name the signed-in user.** On an `onBehalfOf` connection, receipts now carry
+  the user as `actor`, taken from the token Entra accepted in the exchange. With
+  `RevisionAuthorFromActor` on, tracked changes and comments carry that user's display name and
+  the plan's author stays on the receipt. It is off by default, because `OfficeAgent` is the
+  documented default author in 1.x. `ApplyOptions.RevisionAuthor`, `OfficeAgentClientOptions` and
+  `OnBehalfOfActorProvider` are the direct API equivalents. See
+  [identity](docs/deployment.md#authentication--identity).
 - **Formula calculation in the session connection.** `EphemeralCalculateFormulas` and
   `EphemeralRejectFormulaErrors` turn calculation on for the MCP server's in-memory session
   connection, including the one it starts with when nothing is configured, as the folder and

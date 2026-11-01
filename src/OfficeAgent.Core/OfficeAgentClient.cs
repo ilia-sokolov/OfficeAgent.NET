@@ -33,6 +33,7 @@ public sealed partial class OfficeAgentClient
     private readonly IReadOnlyList<IBlankDocumentFactory> _blankDocumentFactories;
     private readonly ILogger _logger;
     private readonly IAuditActorProvider? _auditActorProvider;
+    private readonly OfficeAgentClientOptions _options;
 
     /// <summary>
     /// Initializes a client over format modules, for documents passed in as handles or bytes,
@@ -80,12 +81,27 @@ public sealed partial class OfficeAgentClient
         ILoggerFactory? loggerFactory,
         IEnumerable<IBlankDocumentFactory> blankDocumentFactories,
         IAuditActorProvider? auditActorProvider = null)
+        : this(service, providers, loggerFactory, blankDocumentFactories, auditActorProvider, options: null)
+    {
+    }
+
+    /// <summary>
+    /// Initializes a client over a service, a provider registry and client-wide options.
+    /// </summary>
+    public OfficeAgentClient(
+        IDocumentService service,
+        DocumentProviderRegistry providers,
+        ILoggerFactory? loggerFactory,
+        IEnumerable<IBlankDocumentFactory> blankDocumentFactories,
+        IAuditActorProvider? auditActorProvider,
+        OfficeAgentClientOptions? options)
         : this(
             service,
             providers,
             (blankDocumentFactories ?? throw new ArgumentNullException(nameof(blankDocumentFactories))).ToArray(),
             loggerFactory,
-            auditActorProvider)
+            auditActorProvider,
+            options)
     {
     }
 
@@ -94,13 +110,15 @@ public sealed partial class OfficeAgentClient
         DocumentProviderRegistry providers,
         IReadOnlyList<IBlankDocumentFactory> blankDocumentFactories,
         ILoggerFactory? loggerFactory,
-        IAuditActorProvider? auditActorProvider = null)
+        IAuditActorProvider? auditActorProvider = null,
+        OfficeAgentClientOptions? options = null)
     {
         _service = service ?? throw new ArgumentNullException(nameof(service));
         _providers = providers ?? throw new ArgumentNullException(nameof(providers));
         _logger = (loggerFactory ?? NullLoggerFactory.Instance).CreateLogger(OfficeAgentTelemetry.LogCategory);
         _blankDocumentFactories = blankDocumentFactories;
         _auditActorProvider = auditActorProvider;
+        _options = options ?? new OfficeAgentClientOptions();
     }
 
     // ---- Core surface (DocumentHandle) ----
@@ -291,7 +309,7 @@ public sealed partial class OfficeAgentClient
             using var applied = await ApplyAsync(
                 new StreamHandle(new MemoryStream(bytes, writable: false), name),
                 plan,
-                WithCalculation(new ApplyOptions { DryRun = false, Actor = ResolveActor(explicitActor: null) }, provider),
+                WithCalculation(Attributed(dryRun: false, explicitActor: null), provider),
                 cancellationToken).ConfigureAwait(false);
 
             if (!applied.Committed)
@@ -534,7 +552,7 @@ public sealed partial class OfficeAgentClient
         return await ApplyAsync(
             new StreamHandle(content.Stream, content.Reference.Name),
             plan,
-            WithCalculation(new ApplyOptions { DryRun = true, Actor = ResolveActor(explicitActor: null) }, provider),
+            WithCalculation(Attributed(dryRun: true, explicitActor: null), provider),
             cancellationToken).ConfigureAwait(false);
     }
 
@@ -555,7 +573,7 @@ public sealed partial class OfficeAgentClient
         using var result = await ApplyAsync(
             new StreamHandle(content.Stream, content.Reference.Name),
             plan,
-            WithCalculation(new ApplyOptions { DryRun = false, Actor = ResolveActor(saveOpts.Actor) }, provider),
+            WithCalculation(Attributed(dryRun: false, saveOpts.Actor), provider),
             cancellationToken).ConfigureAwait(false);
 
         if (!result.Committed)
@@ -604,6 +622,7 @@ public sealed partial class OfficeAgentClient
             {
                 DryRun = options.DryRun,
                 Actor = options.Actor,
+                RevisionAuthor = options.RevisionAuthor,
                 CalculateFormulas = true,
                 RejectFormulaErrors = calculation.RejectFormulaErrors
             }
@@ -774,6 +793,22 @@ public sealed partial class OfficeAgentClient
 
     private AuditActor? ResolveActor(AuditActor? explicitActor) =>
         explicitActor ?? _auditActorProvider?.GetCurrentActor();
+
+    /// <summary>The apply options carrying who is acting and, when the host opts in, the author to write.</summary>
+    private ApplyOptions Attributed(bool dryRun, AuditActor? explicitActor)
+    {
+        var actor = ResolveActor(explicitActor);
+        return new ApplyOptions
+        {
+            DryRun = dryRun,
+            Actor = actor,
+            RevisionAuthor = _options.RevisionAuthorFromActor ? UsableAuthor(actor?.DisplayName) : null
+        };
+    }
+
+    /// <summary>A display name the revision author rules accept; anything else leaves the plan's author.</summary>
+    private static string? UsableAuthor(string? name) =>
+        string.IsNullOrWhiteSpace(name) || name!.Length > 255 || name.Any(char.IsControl) ? null : name;
 
     private static ApplyReceipt WithOutputDocument(ApplyReceipt receipt, DocumentReference document) => new()
     {

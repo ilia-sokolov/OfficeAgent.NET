@@ -215,6 +215,16 @@ Two layers, kept separate:
 Graph administrator must also create a site permission for the application on
 each intended site and grant `write` (or another sufficient role). Verify that
 assignment before starting the server.
+On an `onBehalfOf` connection, receipts name the signed-in user. Once Entra has accepted the
+caller's token in the On-Behalf-Of exchange, the server takes `oid`, `iss` and `name` from it and
+records them as the receipt's `actor`. Nothing is read from a header alone or from plan JSON, so
+stdio, filesystem and `appOnly` calls have no actor. A document created by a plan, with no earlier
+read in that request, has no actor either, because the exchange has not happened yet.
+
+Tracked changes and comments still show `OfficeAgent`, or the plan's author, unless you set
+`OfficeAgent__RevisionAuthorFromActor=true`. They then show the user's display name, and the
+plan's author stays on the receipt.
+
 
 ### Pre-flight checklist for a hosted deployment
 

@@ -67,6 +67,11 @@ caller. A host supplies that identity separately through `ApplyOptions.Actor`,
 `SaveDocumentOptions.Actor`, or an `IAuditActorProvider`; it appears only in the audit
 receipt. Plan JSON cannot set the audit actor.
 
+A host can opt in to showing that identity in the document: with
+`OfficeAgentClientOptions.RevisionAuthorFromActor`, or `ApplyOptions.RevisionAuthor` for one call,
+tracked changes and comments carry the trusted name instead, and the plan's author stays on the
+receipt. The default remains `OfficeAgent` throughout 1.x.
+
 Authors must contain 1 to 255 visible characters and no control characters. An invalid
 author rejects the plan before mutation.
 
@@ -989,7 +994,7 @@ Returned by `preview_plan` and `apply_plan` in the `errors` array. Stable wire c
 | `input-too-large` | The document exceeds a host ingestion ceiling. The message names the limit and the observed value. See [ingestion limits](ingestion-limits.md). |
 | `unsupported-table-change`, `unsupported-image-change`, `unsupported-note-change`, `unsupported-header-footer-change`, `unsupported-style-definition-change`, `unsupported-numbering-change` | A comparison found a difference in that area that it cannot represent as a plan. The findings it did detect are still returned; the plan is withheld. See [comparison coverage](document-workflows.md#reading-comparison-coverage). |
 | `unsupported-table-markup-change` | A table cell's words and its formatting both changed. The text change is not reproduced, because doing so would flatten the formatting. |
+| `encrypted-document` | The file is protected by a sensitivity label or a password. OfficeAgent does not decrypt, so remove the protection in Office or use a copy without it. Re-sending it will not help |
 | `malformed-package` | The document is not a package this engine will open: corrupt, truncated, carrying a duplicate or traversing part name, or declaring a document type definition. See [ingestion limits](ingestion-limits.md). |
 
 Provider boundary errors (`apply_plan` only) use a separate set of wire codes - see [document-providers.md](document-providers.md).
-| `encrypted-document` | The file is protected by a sensitivity label or a password. OfficeAgent does not decrypt, so remove the protection in Office or use a copy without it. Re-sending it will not help |

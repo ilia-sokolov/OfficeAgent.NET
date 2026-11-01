@@ -159,7 +159,8 @@ internal sealed class SlideCommentHandler : IOperationHandler
 
         var slide = ResolveSlide(context, anchor)
             ?? throw new InvalidOperationException($"Slide '{anchor.Path}' vanished before apply.");
-        SlideCommentWriter.Add(map, slide, op, _clock.GetUtcNow());
+        SlideCommentWriter.Add(
+            map, slide, op, _clock.GetUtcNow(), context.CommentAuthor(op.Author), context.CommentInitials(op.Initials));
     }
 
     private static OperationPreview PreviewAdd(CommentOp op, NodeAnchor anchor, ApplyContext context)
@@ -255,9 +256,10 @@ internal static class SlideCommentWriter
     }
 
     /// <summary>Adds one comment to a slide, creating the author and comment parts as needed.</summary>
-    public static void Add(PowerPointObjectMap map, SlideRef slide, CommentOp op, DateTimeOffset now)
+    public static void Add(
+        PowerPointObjectMap map, SlideRef slide, CommentOp op, DateTimeOffset now, string author, string initials)
     {
-        var authorId = EnsureAuthor(map, op.Author, op.Initials);
+        var authorId = EnsureAuthor(map, author, initials);
 
         var part = slide.Part.GetPartsOfType<PowerPointCommentPart>().FirstOrDefault();
         if (part is null)

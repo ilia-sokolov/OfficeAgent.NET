@@ -173,6 +173,25 @@ public sealed class ApplyContext
     /// <summary>Gets the revision identity resolved once for this apply.</summary>
     public RevisionMetadata Revision { get; }
 
+    /// <summary>
+    /// Gets the host's trusted author name, when it replaces what the plan says. Comments carry
+    /// their author on the operation rather than on <see cref="Revision"/>, so comment handlers
+    /// read this through <see cref="CommentAuthor"/> and <see cref="CommentInitials"/>.
+    /// </summary>
+    public string? TrustedAuthor { get; init; }
+
+    /// <summary>The author a comment is written with.</summary>
+    public string CommentAuthor(string requested) => TrustedAuthor ?? requested;
+
+    /// <summary>The initials a comment is written with, taken from the trusted author when there is one.</summary>
+    public string CommentInitials(string requested) =>
+        TrustedAuthor is null
+            ? requested
+            : string.Concat(TrustedAuthor
+                .Split(new[] { ' ' }, StringSplitOptions.RemoveEmptyEntries)
+                .Take(3)
+                .Select(word => char.ToUpperInvariant(word[0])));
+
     /// <summary>Initializes a new instance of the <see cref="ApplyContext"/> class.</summary>
     /// <param name="package">The open package.</param>
     /// <param name="inspection">The inspection captured for the package.</param>

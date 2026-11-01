@@ -80,6 +80,7 @@ public static ApplyOptions Commit { get; }
 public bool DryRun { get; init; }
 public static ApplyOptions Preview { get; }
 public bool RejectFormulaErrors { get; init; }
+public string? RevisionAuthor { get; init; }
 ```
 
 ### `OfficeAgent.Abstractions.ApplyOutcome`
@@ -670,7 +671,6 @@ public SlidePosition Position { get; init; }
 public string? RelativeTo { get; init; }
 ```
 
-### `OfficeAgent.Abstractions.EngineCapabilities`
 ### `OfficeAgent.Abstractions.EncryptedDocumentException`
 
 ```csharp
@@ -679,6 +679,7 @@ public EncryptedDocumentException();
 public const string Code = "encrypted-document";
 ```
 
+### `OfficeAgent.Abstractions.EngineCapabilities`
 
 ```csharp
 public sealed class EngineCapabilities
@@ -1217,6 +1218,14 @@ public NoteKind Kind { get; init; }
 public ChangeMode? Mode { get; init; }
 public string? StyleId { get; init; }
 public string Text { get; init; }
+```
+
+### `OfficeAgent.Abstractions.OfficeAgentClientOptions`
+
+```csharp
+public sealed class OfficeAgentClientOptions
+public OfficeAgentClientOptions();
+public bool RevisionAuthorFromActor { get; init; }
 ```
 
 ### `OfficeAgent.Abstractions.OpenXmlIngestionLimitException`
@@ -2421,6 +2430,9 @@ public ApplyContext(IOpenXmlPackage package, InspectResult inspection, IReadOnly
 public InspectResult Inspection { get; }
 public IOpenXmlPackage Package { get; }
 public RevisionMetadata Revision { get; }
+public string? TrustedAuthor { get; init; }
+public string CommentAuthor(string requested);
+public string CommentInitials(string requested);
 public string ResolveAlias(string anchorId);
 ```
 
@@ -2788,6 +2800,7 @@ public OfficeAgentClient(DocumentProviderRegistry providers, params IFormatModul
 public OfficeAgentClient(IDocumentService service);
 public OfficeAgentClient(IDocumentService service, DocumentProviderRegistry providers, ILoggerFactory? loggerFactory = null);
 public OfficeAgentClient(IDocumentService service, DocumentProviderRegistry providers, ILoggerFactory? loggerFactory, IEnumerable<IBlankDocumentFactory> blankDocumentFactories, IAuditActorProvider? auditActorProvider = null);
+public OfficeAgentClient(IDocumentService service, DocumentProviderRegistry providers, ILoggerFactory? loggerFactory, IEnumerable<IBlankDocumentFactory> blankDocumentFactories, IAuditActorProvider? auditActorProvider, OfficeAgentClientOptions? options);
 public OfficeAgentClient(params IFormatModule[] modules);
 public const int MaximumRefreshCells = 10000;
 public IReadOnlyList<string> CreatableExtensions { get; }
@@ -3068,6 +3081,7 @@ public string TenantId { get; set; }
 ```csharp
 public static class GraphUserContext
 public static string? CurrentUserAccessToken { get; }
+public static AuditActor? ValidatedActor { get; }
 public static IDisposable Push(string? userAccessToken);
 ```
 
@@ -3114,6 +3128,14 @@ public sealed class OnBehalfOfAccessTokenProvider : OfficeAgent.SharePoint.IAcce
 public OnBehalfOfAccessTokenProvider(OnBehalfOfOptions options, HttpClient httpClient);
 public OnBehalfOfAccessTokenProvider(OnBehalfOfOptions options, HttpClient httpClient, Func<string?> userTokenAccessor);
 public Task<string> GetAccessTokenAsync(CancellationToken cancellationToken = default);
+```
+
+### `OfficeAgent.SharePoint.OnBehalfOfActorProvider`
+
+```csharp
+public sealed class OnBehalfOfActorProvider : OfficeAgent.Core.IAuditActorProvider
+public OnBehalfOfActorProvider();
+public AuditActor? GetCurrentActor();
 ```
 
 ### `OfficeAgent.SharePoint.OnBehalfOfOptions`

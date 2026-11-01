@@ -128,6 +128,11 @@ internal sealed class FlowOrchestrator
 
         var sw = Stopwatch.StartNew();
         var (report, _, attemptedAt, revision) = ValidateForApply(bytes, plan);
+
+        // The document takes the trusted author; the receipt keeps what the plan said.
+        var written = options.RevisionAuthor is { Length: > 0 } author
+            ? new RevisionMetadata { Author = author, TimestampUtc = revision.TimestampUtc }
+            : revision;
         var planHash = Hash(JsonSerializer.SerializeToUtf8Bytes(plan));
         var inputHash = Hash(bytes);
 
@@ -141,7 +146,10 @@ internal sealed class FlowOrchestrator
             {
                 var scratchAliases = scratchModule.Stabilize(scratch);
                 var scratchSnapshot = scratchModule.Inspect(scratch, InspectOptions.Default);
-                var scratchContext = new ApplyContext(scratch, scratchSnapshot, scratchAliases, revision);
+                var scratchContext = new ApplyContext(scratch, scratchSnapshot, scratchAliases, written)
+                {
+                    TrustedAuthor = options.RevisionAuthor
+                };
                 if (_transaction.ApplyAtomic(scratchContext, plan, scratchModule, cancellationToken).Success)
                 {
                     scratchModule.Stabilize(scratch);
@@ -175,7 +183,10 @@ internal sealed class FlowOrchestrator
 
         var aliases = commitModule.Stabilize(commitPackage);
         var commitSnapshot = commitModule.Inspect(commitPackage, InspectOptions.Default);
-        var context = new ApplyContext(commitPackage, commitSnapshot, aliases, revision);
+        var context = new ApplyContext(commitPackage, commitSnapshot, aliases, written)
+        {
+            TrustedAuthor = options.RevisionAuthor
+        };
 
         var outcome = _transaction.ApplyAtomic(context, plan, commitModule, cancellationToken);
         if (!outcome.Success)
