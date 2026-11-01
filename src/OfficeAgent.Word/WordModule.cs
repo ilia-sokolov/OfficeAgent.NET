@@ -416,6 +416,9 @@ public sealed class WordModule : IFormatModule, IBlankDocumentFactory, IPlanVali
                 }
         }
 
+        // At every fidelity: a host's policy check must not depend on how much it asked for.
+        nodes.AddRange(SensitivityLabels.Nodes(package.Package));
+
         return new InspectResult
         {
             Format = DocFormat.Word,

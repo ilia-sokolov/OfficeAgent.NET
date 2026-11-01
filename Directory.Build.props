@@ -10,16 +10,20 @@
   <!-- The engine seams are [Experimental] with OFFICEAGENT001 (docs/compatibility.md). The
        engine, its tests and tools are built from them, so they suppress it. Samples do not:
        a sample is host code, and a host that needs a seam has left the stable 1.x surface. -->
-  <PropertyGroup Condition="!$([MSBuild]::MakeRelative('$(MSBuildThisFileDirectory)', '$(MSBuildProjectDirectory)').StartsWith('samples'))">
+  <PropertyGroup>
+    <OfficeAgentProjectPath>$([MSBuild]::MakeRelative('$(MSBuildThisFileDirectory)', '$(MSBuildProjectDirectory)'))</OfficeAgentProjectPath>
+  </PropertyGroup>
+
+  <PropertyGroup Condition="!$(OfficeAgentProjectPath.StartsWith('samples'))">
     <NoWarn>$(NoWarn);OFFICEAGENT001</NoWarn>
   </PropertyGroup>
 
   <!-- Projects in OfficeAgent.NET.sln restore from a committed packages.lock.json, so CI builds
        exactly what was reviewed. Skills and the plugin hand their projects to consumers, and
        deploy and RequirementsReview are outside the solution, so they stay out. -->
-  <PropertyGroup Condition="!$([MSBuild]::MakeRelative('$(MSBuildThisFileDirectory)', '$(MSBuildProjectDirectory)').StartsWith('skills'))
-                            And !$([MSBuild]::MakeRelative('$(MSBuildThisFileDirectory)', '$(MSBuildProjectDirectory)').StartsWith('plugins'))
-                            And !$([MSBuild]::MakeRelative('$(MSBuildThisFileDirectory)', '$(MSBuildProjectDirectory)').StartsWith('deploy'))
+  <PropertyGroup Condition="!$(OfficeAgentProjectPath.StartsWith('skills'))
+                            And !$(OfficeAgentProjectPath.StartsWith('plugins'))
+                            And !$(OfficeAgentProjectPath.StartsWith('deploy'))
                             And !$(MSBuildProjectName.StartsWith('RequirementsReview'))">
     <RestorePackagesWithLockFile>true</RestorePackagesWithLockFile>
     <!-- A runtime-specific publish would rewrite the committed files, so it writes elsewhere. -->

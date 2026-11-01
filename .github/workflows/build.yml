@@ -204,7 +204,7 @@ jobs:
           echo "candidate $CANDIDATE_VERSION at $GITHUB_SHA on $RUNNER_OS, .NET $OFFICEAGENT_EXPECT_RUNTIME_MAJOR runtime"
 
       - name: Pack every package at the candidate version
-        run: dotnet pack OfficeAgent.NET.sln --configuration Release -p:Version="$CANDIDATE_VERSION" --output ./candidate
+        run: dotnet pack OfficeAgent.NET.sln --configuration Release -p:RestoreLockedMode=true -p:Version="$CANDIDATE_VERSION" --output ./candidate
 
       - name: Require exactly the ten candidate packages
         run: |
@@ -253,7 +253,7 @@ jobs:
             10.0.x
 
       - name: Renderer sandbox reference tests
-        run: dotnet test tests/OfficeAgent.RenderSandbox.Tests --configuration Release --logger "trx" --results-directory ./TestResults
+        run: dotnet test tests/OfficeAgent.RenderSandbox.Tests --configuration Release -p:RestoreLockedMode=true --logger "trx" --results-directory ./TestResults
 
       - name: Upload test results
         if: always()

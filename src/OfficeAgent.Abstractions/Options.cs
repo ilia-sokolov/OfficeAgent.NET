@@ -52,8 +52,9 @@ public sealed class ApplyOptions
 
     /// <summary>
     /// Gets the trusted display name written as the author of tracked changes and comments, in
-    /// place of what the plan says. The plan's own author stays on the receipt. Callers must
-    /// derive it from trusted authentication state, not from plan content.
+    /// place of what the plan says. The plan's own author stays on the receipt. A name the
+    /// revision author rules would refuse is ignored. Callers must derive it from trusted
+    /// authentication state, not from plan content.
     /// </summary>
     public string? RevisionAuthor { get; init; }
 

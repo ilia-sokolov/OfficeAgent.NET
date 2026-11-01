@@ -24,10 +24,13 @@ Create the middle-tier API app registration in Entra ID:
 1. Register an application and note its **Application (client) ID**.
 2. Under **Expose an API**, set the Application ID URI to `api://<client-id>` and add a scope
    named `access_as_user`.
-3. Under **API permissions**, add the delegated Microsoft Graph permissions your documents need,
+3. In the app's **Manifest**, set the access token version to `2` (`requestedAccessTokenVersion`,
+   or `accessTokenAcceptedVersion` in the older manifest format). The default issues v1 tokens,
+   which the template's authentication rejects with `401`.
+4. Under **API permissions**, add the delegated Microsoft Graph permissions your documents need,
    such as `Files.ReadWrite.All`, and grant admin consent.
-4. Under **Certificates & secrets**, create a client secret.
-5. Under **Token configuration**, make sure the token includes the `name` claim if you want
+5. Under **Certificates & secrets**, create a client secret.
+6. Under **Token configuration**, make sure the token includes the `name` claim if you want
    receipts to carry display names.
 
 Every user in the tenant who can get a token for this app can call the server. Each one acts as

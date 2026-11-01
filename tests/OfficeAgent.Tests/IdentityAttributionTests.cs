@@ -171,6 +171,41 @@ public class IdentityAttributionTests
     }
 
     [Fact]
+    public async Task Initials_are_whole_letters_when_a_name_starts_with_an_emoji()
+    {
+        var (bytes, _) = await CommitAsUser(
+            new OfficeAgentClientOptions { RevisionAuthorFromActor = true },
+            new AuditActor { Subject = "oid", DisplayName = "\U0001F600 Alice Smith" });
+
+        Assert.Equal("AS", CommentInitials(bytes));
+    }
+
+    [Theory]
+    [InlineData("")]
+    [InlineData("   ")]
+    [InlineData("Alice\nSmith")]
+    public void A_host_supplied_author_follows_the_same_rules(string author)
+    {
+        var client = new OfficeAgentClient(new WordModule());
+        var bytes = DocxFactory.Contract();
+        var hit = client.Find(new StreamHandle(new MemoryStream(bytes), "c.docx"), new FindQuery { Pattern = "Acme Corp" })[0];
+
+        using var applied = client.Apply(new StreamHandle(new MemoryStream(bytes), "c.docx"), new DocumentPlan
+        {
+            Revision = new RevisionMetadata { Author = "Agent Name" },
+            Operations = new PlanOperation[]
+            {
+                new ChangeTextOp { Target = hit.Anchor, With = "Globex", Mode = ChangeMode.Tracked },
+                new CommentOp { Target = hit.Anchor, Text = "Check", Author = "Agent Name" }
+            }
+        }, new ApplyOptions { DryRun = false, RevisionAuthor = author });
+
+        Assert.True(applied.Committed, string.Join("; ", applied.Report.Errors.Select(e => e.Message)));
+        Assert.Equal(new[] { "Agent Name" }, RevisionAuthors(applied.ToBytes()));
+        Assert.Equal(new[] { "Agent Name" }, CommentAuthors(applied.ToBytes()));
+    }
+
+    [Fact]
     public void A_trusted_author_reaches_workbook_and_deck_comments()
     {
         var options = new ApplyOptions { DryRun = false, RevisionAuthor = "Alice Smith" };

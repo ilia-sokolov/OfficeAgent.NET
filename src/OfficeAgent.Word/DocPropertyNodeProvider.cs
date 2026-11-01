@@ -32,9 +32,6 @@ internal sealed class DocPropertyNodeProvider : IWordNodeProvider
         foreach (var node in PackageCoreProperties.Nodes(map.Doc))
             yield return node;
 
-        foreach (var node in SensitivityLabels.Nodes(map.Doc))
-            yield return node;
-
         var mode = ReadCompatibilityMode(map.Main);
         yield return new NodeInfo
         {

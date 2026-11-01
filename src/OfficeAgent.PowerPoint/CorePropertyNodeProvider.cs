@@ -11,8 +11,7 @@ internal sealed class CorePropertyNodeProvider : IPowerPointNodeProvider
 {
     public string Kind => PackageCoreProperties.Kind;
 
-    public IEnumerable<NodeInfo> Enumerate(PowerPointObjectMap map) =>
-        PackageCoreProperties.Nodes(map.Doc).Concat(SensitivityLabels.Nodes(map.Doc));
+    public IEnumerable<NodeInfo> Enumerate(PowerPointObjectMap map) => PackageCoreProperties.Nodes(map.Doc);
 
     public ResolvedNode? Resolve(NodeAnchor anchor, PowerPointObjectMap map)
     {

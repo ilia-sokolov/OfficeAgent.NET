@@ -6,6 +6,7 @@ using DocumentFormat.OpenXml.Packaging;
 using OfficeAgent.Abstractions;
 using OfficeAgent.AgentFramework;
 using OfficeAgent.Core;
+using OfficeAgent.Core.DocumentProviders;
 using OfficeAgent.Excel;
 using OfficeAgent.PowerPoint;
 using OfficeAgent.Word;
@@ -68,6 +69,30 @@ public class ProtectedContentTests
         // The inline tools call unreadable bytes a bad copy; re-sending this one cannot help.
         var inline = await tools.EditDocumentContent(Convert.ToBase64String(Encrypted("encrypted.xlsx")), plan);
         Assert.Contains(EncryptedDocumentException.Code, inline);
+    }
+
+    [Fact]
+    public void Comparing_an_encrypted_document_names_the_protection()
+    {
+        // Comparison reads the package itself, so it must not call this an oversized input.
+        var client = new OfficeAgentClient(new WordModule());
+
+        Assert.Throws<EncryptedDocumentException>(() =>
+            client.CompareDocuments(Encrypted("encrypted.xlsx"), DocxFactory.Contract()));
+        Assert.Throws<EncryptedDocumentException>(() =>
+            client.CompareDocuments(DocxFactory.Contract(), Encrypted("encrypted.xlsx")));
+    }
+
+    [Fact]
+    public async Task Merging_an_encrypted_document_names_the_protection()
+    {
+        var store = new MemoryDocumentProvider("docs");
+        var left = store.Add("a.docx", DocxFactory.Contract());
+        var right = store.Add("b.docx", Encrypted("encrypted.xlsx"));
+        var client = new OfficeAgentClient(new DocumentProviderRegistry(new[] { store }), new WordModule());
+
+        await Assert.ThrowsAsync<EncryptedDocumentException>(() =>
+            client.PreviewMergeAsync(new() { Sources = new[] { right, left } }));
     }
 
     [Fact]
@@ -190,6 +215,42 @@ public class ProtectedContentTests
         var node = Assert.Single(client.Inspect(new StreamHandle(new MemoryStream(labelled)))
             .Nodes, n => n.Kind == "sensitivityLabel");
         Assert.Equal("Confidential", node.Name);
+    }
+
+    [Theory]
+    [InlineData(Fidelity.Outline)]
+    [InlineData(Fidelity.Structure)]
+    [InlineData(Fidelity.Content)]
+    public void A_label_is_reported_at_every_fidelity(Fidelity fidelity)
+    {
+        // A policy check must not pass because it asked for less detail.
+        foreach (var (client, bytes) in Formats())
+        {
+            var labelled = WithProperties(bytes, enabled: "true");
+
+            var nodes = client.Inspect(
+                new StreamHandle(new MemoryStream(labelled)), new InspectOptions { Fidelity = fidelity }).Nodes;
+
+            Assert.Single(nodes, n => n.Kind == "sensitivityLabel");
+        }
+    }
+
+    [Fact]
+    public void Metadata_that_is_not_readable_does_not_block_the_document()
+    {
+        // The part is unrelated to any edit, and it opened fine before labels were read.
+        var (client, bytes) = Formats().First();
+        var damaged = Edit(bytes, package =>
+        {
+            var part = ((WordprocessingDocument)package).AddCustomFilePropertiesPart();
+            using var stream = part.GetStream(FileMode.Create);
+            var content = Encoding.UTF8.GetBytes("<!DOCTYPE x><not-closed>");
+            stream.Write(content, 0, content.Length);
+        });
+
+        var inspection = client.Inspect(new StreamHandle(new MemoryStream(damaged), "c.docx"));
+
+        Assert.DoesNotContain(inspection.Nodes, n => n.Kind == "sensitivityLabel");
     }
 
     [Fact]

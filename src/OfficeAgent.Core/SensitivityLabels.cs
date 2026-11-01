@@ -39,8 +39,8 @@ internal static class SensitivityLabels
     public static IEnumerable<NodeInfo> Nodes(OpenXmlPackage package)
     {
         var labels = new SortedDictionary<string, Label>(StringComparer.Ordinal);
-        ReadProperties(package, labels);
-        ReadLabelInfo(package, labels);
+        Tolerating(() => ReadProperties(package, labels));
+        Tolerating(() => ReadLabelInfo(package, labels));
 
         foreach (var pair in labels)
         {
@@ -52,6 +52,21 @@ internal static class SensitivityLabels
                 Summary = Describe(pair.Key, pair.Value),
                 Name = pair.Value.Name
             };
+        }
+    }
+
+    /// <summary>
+    /// A metadata part that is not readable XML costs this report, not the document: an edit
+    /// leaves the part alone, and it was fine to open before anyone looked for a label in it.
+    /// </summary>
+    private static void Tolerating(Action read)
+    {
+        try
+        {
+            read();
+        }
+        catch (XmlException)
+        {
         }
     }
 

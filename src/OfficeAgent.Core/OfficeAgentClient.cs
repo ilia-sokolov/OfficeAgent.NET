@@ -802,13 +802,9 @@ public sealed partial class OfficeAgentClient
         {
             DryRun = dryRun,
             Actor = actor,
-            RevisionAuthor = _options.RevisionAuthorFromActor ? UsableAuthor(actor?.DisplayName) : null
+            RevisionAuthor = _options.RevisionAuthorFromActor ? actor?.DisplayName : null
         };
     }
-
-    /// <summary>A display name the revision author rules accept; anything else leaves the plan's author.</summary>
-    private static string? UsableAuthor(string? name) =>
-        string.IsNullOrWhiteSpace(name) || name!.Length > 255 || name.Any(char.IsControl) ? null : name;
 
     private static ApplyReceipt WithOutputDocument(ApplyReceipt receipt, DocumentReference document) => new()
     {

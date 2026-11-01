@@ -184,13 +184,19 @@ public sealed class ApplyContext
     public string CommentAuthor(string requested) => TrustedAuthor ?? requested;
 
     /// <summary>The initials a comment is written with, taken from the trusted author when there is one.</summary>
-    public string CommentInitials(string requested) =>
-        TrustedAuthor is null
-            ? requested
-            : string.Concat(TrustedAuthor
-                .Split(new[] { ' ' }, StringSplitOptions.RemoveEmptyEntries)
-                .Take(3)
-                .Select(word => char.ToUpperInvariant(word[0])));
+    public string CommentInitials(string requested)
+    {
+        if (TrustedAuthor is null) return requested;
+
+        // First letter of each word: half a surrogate pair is not valid XML.
+        var initials = string.Concat(TrustedAuthor
+            .Split(new[] { ' ' }, StringSplitOptions.RemoveEmptyEntries)
+            .Select(word => word.FirstOrDefault(char.IsLetterOrDigit))
+            .Where(letter => letter != default)
+            .Take(3)
+            .Select(char.ToUpperInvariant));
+        return initials.Length > 0 ? initials : requested;
+    }
 
     /// <summary>Initializes a new instance of the <see cref="ApplyContext"/> class.</summary>
     /// <param name="package">The open package.</param>
