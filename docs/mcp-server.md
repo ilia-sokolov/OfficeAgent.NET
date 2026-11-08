@@ -96,8 +96,9 @@ with `"mode": "Direct"`.
 ### Claude Code plugin
 
 `plugins/officeagent` is a Claude plugin that bundles the server with the two agent skills. It
-starts the server with `uvx officeagent-mcp==<version> --stdio`, so [uv](https://docs.astral.sh/uv/)
-must be installed, and roots the server's one folder connection at `.`, the project folder Claude Code starts
+starts the server with `uv run --locked --isolated officeagent-mcp --stdio` against the
+`pyproject.toml` and `uv.lock` in the plugin folder, which pin `officeagent-mcp` to one version
+and each platform's wheel to its SHA-256. [uv](https://docs.astral.sh/uv/) must be installed, and roots the server's one folder connection at `.`, the project folder Claude Code starts
 it in. Creating documents and calculating formulas are plugin options that
 stay off until the user turns them on. Try it with:
 

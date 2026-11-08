@@ -379,9 +379,11 @@ fix a broken one in the next release.
 ### Update the Claude plugin
 
 Once PyPI serves the new `officeagent-mcp`, move the plugin to it: set `version` in
-`plugins/officeagent/.claude-plugin/plugin.json` and the `officeagent-mcp==` pin in
-`plugins/officeagent/.mcp.json` to the release version, run
-`python scripts/sync_claude_plugin.py`, and commit. Anthropic's directory follows `main` and
+`plugins/officeagent/.claude-plugin/plugin.json`, and `version` and the `officeagent-mcp==` pin
+in `plugins/officeagent/pyproject.toml`, to the release version. Run `uv lock` in
+`plugins/officeagent` to refresh `uv.lock`, run `python scripts/sync_claude_plugin.py`, and
+commit. The directory holds a server started with a bare `uvx` or `npx` package for review, so
+the plugin always starts it from the lock. Anthropic's directory follows `main` and
 scans the new commit; a version that runs a package from PyPI is always held for a reviewer
 before it goes live.
 

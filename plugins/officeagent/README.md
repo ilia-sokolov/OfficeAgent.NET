@@ -36,7 +36,7 @@ Two options are off until you turn them on in the plugin's settings:
 ## Requirements
 
 The server is the `officeagent-mcp` package from PyPI, started with
-[uv](https://docs.astral.sh/uv/)'s `uvx` command, so install uv first. The package carries a
+[uv](https://docs.astral.sh/uv/)'s `uv run` command, so install uv first. The package carries a
 self-contained server executable; neither .NET nor Microsoft Office is needed. It runs on
 Windows (x64, Arm64), macOS 15 or later, and Linux with glibc 2.27 or later.
 
@@ -45,8 +45,10 @@ computer. In claude.ai chat the skills load without it.
 
 ## What it runs and what data it sends
 
-- On first use, `uvx` downloads `officeagent-mcp` version 1.2.0 from PyPI, pinned to that exact
-  version, and runs it on your computer.
+- On first use, uv downloads `officeagent-mcp` version 1.2.0 from PyPI and runs it on your
+  computer. The plugin's `uv.lock` pins that exact version and the SHA-256 of each platform's
+  package, and uv refuses a download that does not match. uv builds the environment in its own
+  cache, not in the plugin or your project.
 - The server reads and writes documents only inside your project folder. To give each
   document an id, it keeps a small index at `.officeagent/index.json` in that folder.
 - It sends nothing anywhere. It has no telemetry, analytics or update checks, and it never
