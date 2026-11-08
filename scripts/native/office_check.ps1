@@ -109,6 +109,11 @@ function Check-Word($app, $case, [string]$path) {
             $authors = @($doc.Revisions | ForEach-Object { $_.Author } | Sort-Object -Unique)
             Check 'revision authors' ($e.revisionAuthors -join ', ') ($authors -join ', ') ((@($e.revisionAuthors) -join '|') -eq ($authors -join '|'))
         }
+        if (Has $e 'revisionTexts') {
+            # What Word marks, in document order: a narrowed redline must mark only these words.
+            $texts = @($doc.Revisions | ForEach-Object { $_.Range.Text })
+            Check 'revision texts in document order' ($e.revisionTexts -join ' | ') ($texts -join ' | ') ((@($e.revisionTexts) -join '|') -eq ($texts -join '|'))
+        }
         if ((Has $e 'textContains') -and -not $tracked) { ContainsAll $text $e.textContains 'text' }
         if ((Has $e 'textExcludes') -and -not $tracked) { ExcludesAll $text $e.textExcludes 'text' }
         if (Has $e 'commentsAtLeast') { Check 'comments at least' $e.commentsAtLeast $doc.Comments.Count ($doc.Comments.Count -ge $e.commentsAtLeast) }
@@ -396,8 +401,17 @@ function Check-Book($app, $case, [string]$path) {
 
 # ── run ───────────────────────────────────────────────────────────────────────────────────
 
+$imageOf = @{ 'Word.Application' = 'WINWORD'; 'PowerPoint.Application' = 'POWERPNT'; 'Excel.Application' = 'EXCEL' }
 function New-App([string]$prog) {
+    # The worker quits the application it drives, so it must be one this worker started. If COM
+    # handed back an instance that was already running, someone's own Office, leave it alone.
+    $before = @(Get-Process $imageOf[$prog] -ErrorAction SilentlyContinue | ForEach-Object Id)
     $app = New-Object -ComObject $prog
+    $started = @(Get-Process $imageOf[$prog] -ErrorAction SilentlyContinue | Where-Object { $before -notcontains $_.Id })
+    if ($started.Count -eq 0) {
+        [void][Runtime.InteropServices.Marshal]::ReleaseComObject($app)
+        throw "$prog attached to an instance this run did not start; close it or run where no one is using Office"
+    }
     switch ($prog) {
         'Word.Application' { $app.Visible = $false; $app.DisplayAlerts = $wdAlertsNone }
         'PowerPoint.Application' { $app.DisplayAlerts = 1 }  # ppAlertsNone

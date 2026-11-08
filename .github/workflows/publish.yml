@@ -172,6 +172,33 @@ jobs:
             artifacts/OfficeAgent.AgentFramework.${{ steps.release.outputs.version }}.snupkg
           sbom-path: artifacts/OfficeAgent.AgentFramework.${{ steps.release.outputs.version }}.cdx.json
 
+      - name: Attest OfficeAgent.AmazonS3 SBOM
+        if: ${{ !inputs.dry_run }}
+        uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2
+        with:
+          subject-path: |
+            artifacts/OfficeAgent.AmazonS3.${{ steps.release.outputs.version }}.nupkg
+            artifacts/OfficeAgent.AmazonS3.${{ steps.release.outputs.version }}.snupkg
+          sbom-path: artifacts/OfficeAgent.AmazonS3.${{ steps.release.outputs.version }}.cdx.json
+
+      - name: Attest OfficeAgent.AzureBlob SBOM
+        if: ${{ !inputs.dry_run }}
+        uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2
+        with:
+          subject-path: |
+            artifacts/OfficeAgent.AzureBlob.${{ steps.release.outputs.version }}.nupkg
+            artifacts/OfficeAgent.AzureBlob.${{ steps.release.outputs.version }}.snupkg
+          sbom-path: artifacts/OfficeAgent.AzureBlob.${{ steps.release.outputs.version }}.cdx.json
+
+      - name: Attest OfficeAgent.Box SBOM
+        if: ${{ !inputs.dry_run }}
+        uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2
+        with:
+          subject-path: |
+            artifacts/OfficeAgent.Box.${{ steps.release.outputs.version }}.nupkg
+            artifacts/OfficeAgent.Box.${{ steps.release.outputs.version }}.snupkg
+          sbom-path: artifacts/OfficeAgent.Box.${{ steps.release.outputs.version }}.cdx.json
+
       - name: Attest OfficeAgent.Core SBOM
         if: ${{ !inputs.dry_run }}
         uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2
@@ -198,6 +225,24 @@ jobs:
             artifacts/OfficeAgent.Excel.Calculation.${{ steps.release.outputs.version }}.nupkg
             artifacts/OfficeAgent.Excel.Calculation.${{ steps.release.outputs.version }}.snupkg
           sbom-path: artifacts/OfficeAgent.Excel.Calculation.${{ steps.release.outputs.version }}.cdx.json
+
+      - name: Attest OfficeAgent.GoogleDrive SBOM
+        if: ${{ !inputs.dry_run }}
+        uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2
+        with:
+          subject-path: |
+            artifacts/OfficeAgent.GoogleDrive.${{ steps.release.outputs.version }}.nupkg
+            artifacts/OfficeAgent.GoogleDrive.${{ steps.release.outputs.version }}.snupkg
+          sbom-path: artifacts/OfficeAgent.GoogleDrive.${{ steps.release.outputs.version }}.cdx.json
+
+      - name: Attest OfficeAgent.IManage SBOM
+        if: ${{ !inputs.dry_run }}
+        uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2
+        with:
+          subject-path: |
+            artifacts/OfficeAgent.IManage.${{ steps.release.outputs.version }}.nupkg
+            artifacts/OfficeAgent.IManage.${{ steps.release.outputs.version }}.snupkg
+          sbom-path: artifacts/OfficeAgent.IManage.${{ steps.release.outputs.version }}.cdx.json
 
       - name: Attest OfficeAgent.Mcp SBOM
         if: ${{ !inputs.dry_run }}

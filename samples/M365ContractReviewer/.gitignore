@@ -1,0 +1,6 @@
+# Agents Toolkit output and per-user files
+appPackage/build/
+env/.env.*.user
+env/.env.local
+.localConfigs
+.DS_Store

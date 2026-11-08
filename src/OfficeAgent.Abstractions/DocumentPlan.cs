@@ -150,11 +150,49 @@ public sealed class ChangeTextOp : PlanOperation, ITrackedOperation
     public ChangeMode Mode { get; init; } = ChangeMode.Tracked;
 
     /// <summary>
+    /// Gets how much of the matched text a tracked replacement marks.
+    /// <see cref="ChangeGranularity.Span"/>, the default, deletes the whole matched text and
+    /// inserts the whole replacement. <see cref="ChangeGranularity.Minimal"/> keeps the words
+    /// the matched text and <see cref="With"/> share at the start and the end, and marks only
+    /// the words between them.
+    /// </summary>
+    /// <remarks>
+    /// Only a <see cref="ChangeMode.Tracked"/> edit written with <see cref="With"/> is narrowed;
+    /// a <see cref="ChangeMode.Direct"/> edit and a <see cref="WithMarked"/> rewrite ignore this
+    /// value. The connection-addressed agent tools fill an omitted value from the connection's
+    /// default. <see cref="ChangeGranularity.Minimal"/> becomes the default in 2.0.
+    /// </remarks>
+    public ChangeGranularity Granularity { get; init; } = ChangeGranularity.Span;
+
+    /// <summary>
     /// The non-nullable <see cref="Mode"/> above is this operation's wire contract and
     /// predates <see cref="ITrackedOperation"/>; the interface view is explicit so the
     /// property keeps its shape for existing callers.
     /// </summary>
     ChangeMode? ITrackedOperation.Mode => Mode;
+}
+
+/// <summary>
+/// Specifies how much of the matched text a tracked <see cref="ChangeTextOp"/> marks as
+/// changed.
+/// </summary>
+public enum ChangeGranularity
+{
+    /// <summary>
+    /// The whole matched text is marked deleted and the whole replacement inserted. This is
+    /// the default in 1.x.
+    /// </summary>
+    Span,
+
+    /// <summary>
+    /// Only the words that differ are marked. Words are runs of non-whitespace compared
+    /// exactly, so punctuation and case are part of a word. The words the matched text and the
+    /// replacement share at the start and at the end, with the whitespace between them, are
+    /// kept as they are; an empty middle on one side becomes a pure insertion or a pure
+    /// deletion. When the words to delete carry different character formatting, the
+    /// operation falls back to <see cref="Span"/> and its change reports a warning.
+    /// </summary>
+    Minimal
 }
 
 /// <summary>

@@ -16,9 +16,14 @@ body:
       options:
         - OfficeAgent.Abstractions
         - OfficeAgent.AgentFramework
+        - OfficeAgent.Box
+        - OfficeAgent.AmazonS3
+        - OfficeAgent.AzureBlob
         - OfficeAgent.Core
         - OfficeAgent.Excel
         - OfficeAgent.Excel.Calculation
+        - OfficeAgent.IManage
+        - OfficeAgent.GoogleDrive
         - OfficeAgent.Mcp
         - OfficeAgent.PowerPoint
         - OfficeAgent.Rendering

@@ -48,7 +48,7 @@ Use `~/.claude/skills` instead of `~/.codex/skills` for Claude Code. Install int
 
 The `officeagent-integration` skill includes a disposable recipe project. Its [recipe instructions](../skills/officeagent-integration/references/recipes.md) cover a tracked Word edit, template population, complete-plan comparison, and an unsupported-operation refusal. Install the required OfficeAgent packages separately as those instructions describe.
 
-For MCP, install the tool separately and follow [deployment and client setup](deployment.md#option-a---local-stdio-for-claude-code-and-codex). Confirm OfficeAgent appears in the client's MCP tool list before relying on it.
+For MCP, install the tool separately and follow [deployment and client setup](deployment.md#option-a---local-stdio-for-claude-code-codex-and-google-adk). Confirm OfficeAgent appears in the client's MCP tool list before relying on it.
 
 ## Remove a skill
 

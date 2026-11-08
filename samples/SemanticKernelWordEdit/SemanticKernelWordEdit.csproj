@@ -1,0 +1,29 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net8.0</TargetFramework>
+    <IsPackable>false</IsPackable>
+    <GenerateDocumentationFile>false</GenerateDocumentationFile>
+    <RootNamespace>OfficeAgent.Samples.SemanticKernelWordEdit</RootNamespace>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\OfficeAgent.Abstractions\OfficeAgent.Abstractions.csproj" />
+    <ProjectReference Include="..\..\src\OfficeAgent.Core\OfficeAgent.Core.csproj" />
+    <ProjectReference Include="..\..\src\OfficeAgent.Word\OfficeAgent.Word.csproj" />
+    <ProjectReference Include="..\..\src\OfficeAgent.AgentFramework\OfficeAgent.AgentFramework.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Azure.Identity" Version="1.21.0" />
+    <PackageReference Include="DocumentFormat.OpenXml" Version="3.5.1" />
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection" Version="10.0.13" />
+    <PackageReference Include="Microsoft.SemanticKernel.Connectors.OpenAI" Version="1.81.0" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Include="..\documents\services-agreement.docx" Link="services-agreement.docx" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
+</Project>

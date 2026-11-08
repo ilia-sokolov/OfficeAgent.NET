@@ -75,94 +75,98 @@ hash list is kept with the private release evidence.
 
 <!-- native-matrix:begin -->
 
-84 of 84 cases pass and 3 of 3 corrupt controls are caught, on Office 16.0.20527.20088, Microsoft Windows 11 Pro 10.0.26200. Full hashes are in the corpus manifest.
+88 of 88 cases pass and 3 of 3 corrupt controls are caught, on Office 16.0.20527.20088, Microsoft Windows 11 Pro 10.0.26300. Full hashes are in the corpus manifest.
 
 | Format | Operation | Case | Native checks | Visual | Output SHA-256 |
 | --- | --- | --- | --- | --- | --- |
-| Word | `changeText` | Tracked replacement of a phrase | 7 passed: revisions at least; revisions after accept all; accepted text contains 'Globex Inc.'; revisions after reject all; rejected text contains 'Acme Corp'; rejected text excludes 'Globex'; Word-saved copy reopens with the same revision count | yes | `c122f00b5b413439…` |
-| Word | `revision` | Two authors' tracked edits in successive commits | 9 passed: revision authors; revisions after accept all; accepted text contains 'Globex Inc.'; accepted text contains 'Northwind Traders'; revisions after reject all; rejected text contains 'Acme Corp'; rejected text excludes 'Northwind'; rejected text excludes 'Globex'; Word-saved copy reopens with the same revision count | yes | `9a5d01b47cbd44bc…` |
-| Word | `insertParagraphs` | Tracked paragraph insertion | 6 passed: revisions at least; revisions after accept all; accepted text contains 'Inserted obligation paragraph.'; revisions after reject all; rejected text excludes 'Inserted obligation paragraph.'; Word-saved copy reopens with the same revision count |  | `51c054a54c1216f0…` |
-| Word | `removeParagraph` | Tracked paragraph removal | 6 passed: revisions at least; revisions after accept all; accepted text excludes 'Service Agreement'; revisions after reject all; rejected text contains 'Service Agreement'; Word-saved copy reopens with the same revision count |  | `1cdc0f95a065a534…` |
-| Word | `format` | Tracked formatting change | 4 passed: revisions at least; revisions after accept all; accepted text contains 'Acme Corp'; Word-saved copy reopens with the same revision count |  | `09dff872cf253a97…` |
-| Word | `insert` | Direct paragraph insertion after a found phrase | 3 passed: revisions; text contains 'The Supplier is Acme Corp.'; Word-saved copy reopens with the same revision count |  | `560636f26f90f67d…` |
+| Word | `changeText` | Tracked replacement of a phrase | 7 passed: revisions at least; revisions after accept all; accepted text contains 'Globex Inc.'; revisions after reject all; rejected text contains 'Acme Corp'; rejected text excludes 'Globex'; Word-saved copy reopens with the same revision count | yes | `39ff92c79c8fca92…` |
+| Word | `changeText` | Tracked replacement marking only the changed word | 9 passed: revisions; revision texts in document order; revisions after accept all; accepted text contains 'due within forty-five days of invoice.'; accepted text excludes 'thirty days of invoice'; revisions after reject all; rejected text contains 'due within thirty days of invoice.'; rejected text excludes 'forty-five'; Word-saved copy reopens with the same revision count | yes | `627d15febd726e47…` |
+| Word | `changeText` | Tracked pure insertion inside a sentence | 8 passed: revisions; revision texts in document order; revisions after accept all; accepted text contains 'limited to 125% of the cap in clause 9.'; revisions after reject all; rejected text contains 'limited to the cap in clause 9.'; rejected text excludes '125%'; Word-saved copy reopens with the same revision count |  | `9b85dbd6ef1483ce…` |
+| Word | `changeText` | Tracked pure deletion inside a sentence | 8 passed: revisions; revision texts in document order; revisions after accept all; accepted text contains 'Notice is due within thirty days in writing.'; accepted text excludes 'unless extended'; revisions after reject all; rejected text contains 'Notice is due within thirty days unless extended in writing.'; Word-saved copy reopens with the same revision count |  | `e65d98568b76ea7e…` |
+| Word | `changeText` | Changed words in two formats fall back to a whole-span redline | 8 passed: revisions at least; revisions after accept all; accepted text contains 'raised within forty-five weeks of receipt.'; accepted text excludes 'within thirty days of receipt'; revisions after reject all; rejected text contains 'raised within thirty days of receipt.'; rejected text excludes 'forty-five'; Word-saved copy reopens with the same revision count |  | `dbf532c6c452427a…` |
+| Word | `revision` | Two authors' tracked edits in successive commits | 9 passed: revision authors; revisions after accept all; accepted text contains 'Globex Inc.'; accepted text contains 'Northwind Traders'; revisions after reject all; rejected text contains 'Acme Corp'; rejected text excludes 'Northwind'; rejected text excludes 'Globex'; Word-saved copy reopens with the same revision count | yes | `5946cd02714e2796…` |
+| Word | `insertParagraphs` | Tracked paragraph insertion | 6 passed: revisions at least; revisions after accept all; accepted text contains 'Inserted obligation paragraph.'; revisions after reject all; rejected text excludes 'Inserted obligation paragraph.'; Word-saved copy reopens with the same revision count |  | `e8d3c38e9bea4979…` |
+| Word | `removeParagraph` | Tracked paragraph removal | 6 passed: revisions at least; revisions after accept all; accepted text excludes 'Service Agreement'; revisions after reject all; rejected text contains 'Service Agreement'; Word-saved copy reopens with the same revision count |  | `6abd2c39ce8b4f90…` |
+| Word | `format` | Tracked formatting change | 4 passed: revisions at least; revisions after accept all; accepted text contains 'Acme Corp'; Word-saved copy reopens with the same revision count |  | `7a5d1a7b1db82aaf…` |
+| Word | `insert` | Direct paragraph insertion after a found phrase | 3 passed: revisions; text contains 'The Supplier is Acme Corp.'; Word-saved copy reopens with the same revision count |  | `e277fd433bdc946e…` |
 | Word | `revision` | Accept every pending revision | 4 passed: revisions; text contains 'approved'; text excludes 'draft'; Word-saved copy reopens with the same revision count |  | `226c10c440c4de55…` |
 | Word | `revision` | Reject every pending revision | 4 passed: revisions; text contains 'draft'; text excludes 'approved'; Word-saved copy reopens with the same revision count |  | `d1120bbc067a3a0d…` |
-| Word | `comment` | Comment beside existing review threads | 3 passed: text contains 'Numbered obligation'; comments at least; Word-saved copy reopens with the same revision count | yes | `eb2d60bd907f55f4…` |
-| Word | `note` | Footnote | 3 passed: footnotes; footnote text; Word-saved copy reopens with the same revision count | yes | `a0e789b8c1c81c85…` |
-| Word | `note` | Endnote | 3 passed: endnotes; endnote text; Word-saved copy reopens with the same revision count |  | `fa3c7d94c3dbaef9…` |
+| Word | `comment` | Comment beside existing review threads | 3 passed: text contains 'Numbered obligation'; comments at least; Word-saved copy reopens with the same revision count | yes | `4ea4b2c02122006b…` |
+| Word | `note` | Footnote | 3 passed: footnotes; footnote text; Word-saved copy reopens with the same revision count | yes | `3db8bb87e75d45ce…` |
+| Word | `note` | Endnote | 3 passed: endnotes; endnote text; Word-saved copy reopens with the same revision count |  | `0218e425d36643e1…` |
 | Word | `fill` | Fill a nested content control | 3 passed: text contains 'Contoso Holdings'; content controls at least; Word-saved copy reopens with the same revision count |  | `47cf36bb2fcc9094…` |
-| Word | `insertTable` | Insert a 3x3 table | 5 passed: text contains 'Widget'; tables; table rows; table columns; Word-saved copy reopens with the same revision count | yes | `62abcb62cfe4d7d6…` |
-| Word | `insertTableRows` | Append table rows | 4 passed: text contains 'Sprocket'; tables; table rows; Word-saved copy reopens with the same revision count |  | `115d94debc9f63ee…` |
-| Word | `removeTableRows` | Remove a table row | 4 passed: text excludes 'Gadget'; tables; table rows; Word-saved copy reopens with the same revision count |  | `d2bffba0fc882bc8…` |
-| Word | `insertTableColumns` | Insert a table column | 4 passed: text contains 'Total'; tables; table columns; Word-saved copy reopens with the same revision count |  | `b8481037fd026dd8…` |
-| Word | `removeTableColumns` | Remove a table column | 4 passed: text excludes 'Price'; tables; table columns; Word-saved copy reopens with the same revision count |  | `ad83956d1d5b8ada…` |
-| Word | `removeTableColumns` | Tracked column removal, resolved in Word | 9 passed: revisions at least; table columns; revisions after accept all; accepted text excludes 'Price'; table columns after accept all; revisions after reject all; rejected text contains 'Price'; table columns after reject all; Word-saved copy reopens with the same revision count |  | `9e1cfbd402801e04…` |
-| Word | `repeatTableRow` | Repeat a template row per record | 7 passed: text contains 'Widget'; text contains 'Gadget'; text contains 'Sprocket'; text excludes '{{'; tables; table rows; Word-saved copy reopens with the same revision count | yes | `1fe72e7a65d387d3…` |
-| Word | `mergeTableCells` | Merge the header row's first two cells | 7 passed: text contains 'Item'; text contains 'Qty'; text contains 'Widget'; tables; table rows; cells in the first row; Word-saved copy reopens with the same revision count | yes | `ecae077d185a9324…` |
-| Word | `removeTable` | Remove a table | 3 passed: text excludes 'Widget'; tables; Word-saved copy reopens with the same revision count |  | `49bf22f0010df6f1…` |
-| Word | `fillTable` | Refill a table from data, growing it by a row | 8 passed: text contains 'Gizmo'; text contains 'Thingamajig'; text excludes 'Widget'; text excludes 'Gadget'; tables; table rows; table columns; Word-saved copy reopens with the same revision count | yes | `b6359cab97e54591…` |
-| Word | `bindData` | Link a phrase to a workbook cell | 4 passed: text contains 'Acme Corp shall provide'; content controls at least; content control tagged 'xl:Summary!B2'; Word-saved copy reopens with the same revision count |  | `005009f80053579a…` |
-| Word | `bindData` | Link a table to a workbook range | 4 passed: text contains 'Widget'; tables; table alt-text title; Word-saved copy reopens with the same revision count |  | `e04a11a4316d7515…` |
-| Word | `insertImage` | Insert an inline picture | 2 passed: inline pictures; Word-saved copy reopens with the same revision count | yes | `55b649d9b92ea872…` |
-| Word | `removeImage` | Remove the picture | 2 passed: inline pictures; Word-saved copy reopens with the same revision count |  | `41a779aa3000445d…` |
-| Word | `backgroundImage` | Page background picture | 2 passed: header holds a picture behind text; Word-saved copy reopens with the same revision count | yes | `cf6dcd5b14603de6…` |
-| Word | `headerFooter` | Header, footer and page number | 3 passed: header contains 'Contoso'; footer contains 'Services agreement'; Word-saved copy reopens with the same revision count | yes | `0c1b6c9352172cc0…` |
-| Word | `pageSetup` | Landscape A4 with wide margins | 2 passed: landscape; Word-saved copy reopens with the same revision count | yes | `035806b4f39d8ac3…` |
-| Word | `insertBreak` | Page break | 2 passed: pages at least; Word-saved copy reopens with the same revision count | yes | `9036235c0a269afd…` |
-| Word | `setProperty` | Document title property | 2 passed: title property; Word-saved copy reopens with the same revision count |  | `dc982bef6f6a6b83…` |
-| Word | `setProperty` | Compatibility mode set to Word 2010 | 2 passed: compatibility mode; Word-saved copy reopens with the same revision count |  | `72411c578025d16b…` |
-| Word | `link` | Hyperlink on existing text | 6 passed: revisions; hyperlinks; hyperlink address; hyperlink text; Word reads the same text as in the input; Word-saved copy reopens with the same revision count |  | `efa7f4af17c3e8b8…` |
-| Word | `format` | A paragraph attached to the document's existing list | 2 passed: list numbers in document order; Word-saved copy reopens with the same revision count |  | `f888bb65b47e70f0…` |
-| Word | `defineStyle` | Define and apply a heading style | 2 passed: style 'Contract Heading' exists; Word-saved copy reopens with the same revision count |  | `b2637b7cb48c33ce…` |
-| Word | `clearStyles` | Clear direct formatting on a bolded phrase | 3 passed: revisions; Word reads the same text as in the input; Word-saved copy reopens with the same revision count |  | `49bf22f0010df6f1…` |
+| Word | `insertTable` | Insert a 3x3 table | 5 passed: text contains 'Widget'; tables; table rows; table columns; Word-saved copy reopens with the same revision count | yes | `a09f3854e91b4b84…` |
+| Word | `insertTableRows` | Append table rows | 4 passed: text contains 'Sprocket'; tables; table rows; Word-saved copy reopens with the same revision count |  | `e453a56d79288d67…` |
+| Word | `removeTableRows` | Remove a table row | 4 passed: text excludes 'Gadget'; tables; table rows; Word-saved copy reopens with the same revision count |  | `7d60d113aeb603a4…` |
+| Word | `insertTableColumns` | Insert a table column | 4 passed: text contains 'Total'; tables; table columns; Word-saved copy reopens with the same revision count |  | `1eb32ea05040fb31…` |
+| Word | `removeTableColumns` | Remove a table column | 4 passed: text excludes 'Price'; tables; table columns; Word-saved copy reopens with the same revision count |  | `43b191b884c658c4…` |
+| Word | `removeTableColumns` | Tracked column removal, resolved in Word | 9 passed: revisions at least; table columns; revisions after accept all; accepted text excludes 'Price'; table columns after accept all; revisions after reject all; rejected text contains 'Price'; table columns after reject all; Word-saved copy reopens with the same revision count |  | `f497ffb6075db3b1…` |
+| Word | `repeatTableRow` | Repeat a template row per record | 7 passed: text contains 'Widget'; text contains 'Gadget'; text contains 'Sprocket'; text excludes '{{'; tables; table rows; Word-saved copy reopens with the same revision count | yes | `25a7572b5aca7acc…` |
+| Word | `mergeTableCells` | Merge the header row's first two cells | 7 passed: text contains 'Item'; text contains 'Qty'; text contains 'Widget'; tables; table rows; cells in the first row; Word-saved copy reopens with the same revision count | yes | `e71fb78760bcfa41…` |
+| Word | `removeTable` | Remove a table | 3 passed: text excludes 'Widget'; tables; Word-saved copy reopens with the same revision count |  | `d954c7ea3f872d25…` |
+| Word | `fillTable` | Refill a table from data, growing it by a row | 8 passed: text contains 'Gizmo'; text contains 'Thingamajig'; text excludes 'Widget'; text excludes 'Gadget'; tables; table rows; table columns; Word-saved copy reopens with the same revision count | yes | `0221b64bce1d0e79…` |
+| Word | `bindData` | Link a phrase to a workbook cell | 4 passed: text contains 'Acme Corp shall provide'; content controls at least; content control tagged 'xl:Summary!B2'; Word-saved copy reopens with the same revision count |  | `4c06b6114820e901…` |
+| Word | `bindData` | Link a table to a workbook range | 4 passed: text contains 'Widget'; tables; table alt-text title; Word-saved copy reopens with the same revision count |  | `3a1089398b13e385…` |
+| Word | `insertImage` | Insert an inline picture | 2 passed: inline pictures; Word-saved copy reopens with the same revision count | yes | `f46daafd3fee8943…` |
+| Word | `removeImage` | Remove the picture | 2 passed: inline pictures; Word-saved copy reopens with the same revision count |  | `2b98fc9a75c23631…` |
+| Word | `backgroundImage` | Page background picture | 2 passed: header holds a picture behind text; Word-saved copy reopens with the same revision count | yes | `03c551cc882e4e09…` |
+| Word | `headerFooter` | Header, footer and page number | 3 passed: header contains 'Contoso'; footer contains 'Services agreement'; Word-saved copy reopens with the same revision count | yes | `97e96b2e43e1f000…` |
+| Word | `pageSetup` | Landscape A4 with wide margins | 2 passed: landscape; Word-saved copy reopens with the same revision count | yes | `5e6fc8229e6453a3…` |
+| Word | `insertBreak` | Page break | 2 passed: pages at least; Word-saved copy reopens with the same revision count | yes | `daef1e38cbcd272e…` |
+| Word | `setProperty` | Document title property | 2 passed: title property; Word-saved copy reopens with the same revision count |  | `a041508cb68f79e3…` |
+| Word | `setProperty` | Compatibility mode set to Word 2010 | 2 passed: compatibility mode; Word-saved copy reopens with the same revision count |  | `26085bafb4271475…` |
+| Word | `link` | Hyperlink on existing text | 6 passed: revisions; hyperlinks; hyperlink address; hyperlink text; Word reads the same text as in the input; Word-saved copy reopens with the same revision count |  | `c704d84613fbe705…` |
+| Word | `format` | A paragraph attached to the document's existing list | 2 passed: list numbers in document order; Word-saved copy reopens with the same revision count |  | `9c4af4080b230794…` |
+| Word | `defineStyle` | Define and apply a heading style | 2 passed: style 'Contract Heading' exists; Word-saved copy reopens with the same revision count |  | `989cf4de5217f61d…` |
+| Word | `clearStyles` | Clear direct formatting on a bolded phrase | 3 passed: revisions; Word reads the same text as in the input; Word-saved copy reopens with the same revision count |  | `d954c7ea3f872d25…` |
 | Word | `clearStyles` | Clear formatting on runs written without xml:space | 2 passed: text contains 'Quarterly target'; Word-saved copy reopens with the same revision count |  | `14083271bed742cd…` |
 | Word | `copyStyles` | Copy direct formatting between paragraphs | 2 passed: Word reads the same text as in the input; Word-saved copy reopens with the same revision count |  | `c2713a3eeca90607…` |
-| Word | `create` | Blank document from OfficeAgent, then written | 4 passed: revisions; text contains 'Created by OfficeAgent.'; Word compatibility mode; Word-saved copy reopens with the same revision count |  | `94af8c323acbfdb7…` |
-| Word | `template` | Template with a slot and a repeating row, populated | 7 passed: text contains 'Fabrikam Ltd'; text contains 'Consulting'; text contains 'Support'; text excludes '{{'; text excludes 'CUSTOMER'; table rows; Word-saved copy reopens with the same revision count | yes | `4f60e8114de75485…` |
-| Word | `template` | Template image slot bound through a template batch on the filesystem provider | 5 passed: text contains 'Quote for Fabrikam Ltd'; text excludes 'CUSTOMER'; picture size in points; inline pictures; Word-saved copy reopens with the same revision count | yes | `76150217641ecf37…` |
-| Word | `comparison` | Comparison redline of a table-cell edit | 10 passed: revisions at least; tables; table rows; revisions after accept all; accepted text contains 'Gizmo'; accepted text excludes 'Gadget'; revisions after reject all; rejected text contains 'Gadget'; rejected text excludes 'Gizmo'; Word-saved copy reopens with the same revision count | yes | `0491621357233b1e…` |
-| Word | `comparison` | Comparison redline between two versions | 7 passed: revisions at least; revisions after accept all; accepted text contains 'Globex Inc.'; revisions after reject all; rejected text contains 'Acme Corp'; rejected text excludes 'Globex'; Word-saved copy reopens with the same revision count | yes | `45cbfe2709c8b6aa…` |
-| Word | `assembly` | Two documents assembled, each keeping its header | 6 passed: revisions; text contains 'Acme Corp'; text contains 'Appendix A: rate card.'; sections at least; Word compatibility mode; Word-saved copy reopens with the same revision count | yes | `64f6b73adac9059a…` |
-| PowerPoint | `insertSlide` | Two slides added to a blank deck | 4 passed: slides; text contains 'Second'; text contains 'Closing point'; PowerPoint-saved copy reopens with the same slide count | yes | `26ec2e9949c85f04…` |
-| PowerPoint | `insertSlide` | Slides on a template's own named layouts, one under a second master | 5 passed: slides; text contains 'Why Northwind'; text contains 'Twelve years in logistics'; text contains 'Pricing'; PowerPoint-saved copy reopens with the same slide count | yes | `0993a04d19a36bba…` |
-| PowerPoint | `removeSlide` | Remove a slide | 3 passed: slides; text excludes 'Another point'; PowerPoint-saved copy reopens with the same slide count |  | `5ee4aec2cbdea5cf…` |
-| PowerPoint | `moveSlide` | Move the last slide first | 3 passed: slides; first slide contains 'Third'; PowerPoint-saved copy reopens with the same slide count |  | `50087e4fd599435f…` |
-| PowerPoint | `duplicateSlide` | Duplicate a slide | 2 passed: slides; PowerPoint-saved copy reopens with the same slide count |  | `4c7bdf44a0a04260…` |
-| PowerPoint | `section` | Add a section | 3 passed: sections at least; section 'Financials'; PowerPoint-saved copy reopens with the same slide count |  | `ade91707e1a7615e…` |
-| PowerPoint | `transition` | Fade transition on every slide | 3 passed: slides; every slide has a transition; PowerPoint-saved copy reopens with the same slide count |  | `973e62f101ba6a8f…` |
-| PowerPoint | `animate` | Fade-in animation on a shape | 2 passed: animations at least; PowerPoint-saved copy reopens with the same slide count |  | `190b87e8f29d8cbd…` |
-| PowerPoint | `headerFooter` | Footer and slide numbers | 2 passed: footer contains 'Confidential'; PowerPoint-saved copy reopens with the same slide count | yes | `e24989259733dd2f…` |
-| PowerPoint | `insertShape` | Insert a text box | 2 passed: text contains 'Accent'; PowerPoint-saved copy reopens with the same slide count | yes | `16204d92aa1026ba…` |
-| PowerPoint | `removeShape` | Remove the text box | 2 passed: text excludes 'Accent'; PowerPoint-saved copy reopens with the same slide count |  | `fa1b8f69fcf6deea…` |
-| PowerPoint | `insertChart` | Native column chart with embedded data | 4 passed: charts; chart data opens for editing; chart series values; PowerPoint-saved copy reopens with the same slide count | yes | `56f639a4ca7a6b4a…` |
-| PowerPoint | `updateChart` | Replace the chart's data | 4 passed: charts; chart data opens for editing; chart series values; PowerPoint-saved copy reopens with the same slide count | yes | `a4af2434694dd67f…` |
-| PowerPoint | `setChartData` | New data in an existing chart, growing it to two series | 5 passed: charts; chart data opens for editing; chart series values; chart series; PowerPoint-saved copy reopens with the same slide count | yes | `ce8a28e8d733c97d…` |
-| PowerPoint | `template` | Template chart slot bound through a template batch on the filesystem provider | 4 passed: charts; chart data opens for editing; chart series values; PowerPoint-saved copy reopens with the same slide count | yes | `bfb4f652eaf2bcca…` |
-| PowerPoint | `insertImage` | Insert a picture | 2 passed: pictures; PowerPoint-saved copy reopens with the same slide count | yes | `511afa687e8660e4…` |
-| PowerPoint | `removeImage` | Remove the picture | 2 passed: pictures; PowerPoint-saved copy reopens with the same slide count |  | `81abd3547166f708…` |
-| PowerPoint | `backgroundImage` | Slide background picture | 2 passed: slide background is a picture; PowerPoint-saved copy reopens with the same slide count | yes | `4f8491f91ac63583…` |
-| PowerPoint | `insertMedia` | Embedded video with a poster frame | 2 passed: media objects; PowerPoint-saved copy reopens with the same slide count |  | `4b6f0baf99b73d06…` |
-| PowerPoint | `insertTable` | Insert a table | 3 passed: text contains 'EMEA'; tables; PowerPoint-saved copy reopens with the same slide count | yes | `05c57b6c751d5323…` |
-| PowerPoint | `insertTableRows` | Append a table row | 3 passed: text contains 'APAC'; tables; PowerPoint-saved copy reopens with the same slide count |  | `9c88ecbe1d580289…` |
-| PowerPoint | `removeTableRows` | Remove a table row | 2 passed: tables; PowerPoint-saved copy reopens with the same slide count |  | `bafb7842bbc00846…` |
-| PowerPoint | `insertTableColumns` | Insert a table column | 3 passed: text contains 'Q2'; tables; PowerPoint-saved copy reopens with the same slide count |  | `66f806c5daf1a788…` |
-| PowerPoint | `removeTableColumns` | Remove a table column | 2 passed: tables; PowerPoint-saved copy reopens with the same slide count |  | `f24d36d2393bb860…` |
-| PowerPoint | `removeTable` | Remove the table | 2 passed: tables; PowerPoint-saved copy reopens with the same slide count |  | `afcf3a69768a2f98…` |
-| PowerPoint | `fillTable` | Refill a table from data, growing it by a row | 5 passed: text contains 'North'; text contains 'South'; text excludes 'EMEA'; tables; PowerPoint-saved copy reopens with the same slide count | yes | `771c4400af2440a9…` |
-| PowerPoint | `bindData` | Link a shape to a workbook cell | 3 passed: slides; shape named 'xl:Revenue'; PowerPoint-saved copy reopens with the same slide count |  | `1277a93228848f62…` |
-| PowerPoint | `changeText` | Replace the title text | 2 passed: text contains 'Revised title'; PowerPoint-saved copy reopens with the same slide count |  | `c133b76c1d5c5bf6…` |
-| PowerPoint | `insert` | Insert a paragraph after the title | 2 passed: text contains 'Draft for discussion'; PowerPoint-saved copy reopens with the same slide count |  | `6ef83da1d6ff607b…` |
-| PowerPoint | `format` | Bold, coloured title | 2 passed: text contains 'Second'; PowerPoint-saved copy reopens with the same slide count | yes | `a4bfc86ece328bb1…` |
-| PowerPoint | `clearStyles` | Clear direct formatting on the title | 2 passed: text contains 'Second'; PowerPoint-saved copy reopens with the same slide count |  | `89271e4132dd9d49…` |
-| PowerPoint | `copyStyles` | Copy paragraph formatting between lines | 2 passed: slides; PowerPoint-saved copy reopens with the same slide count |  | `89271e4132dd9d49…` |
-| PowerPoint | `comment` | Modern comment on a slide | 2 passed: comments at least; PowerPoint-saved copy reopens with the same slide count |  | `3bbab3f5582f1de8…` |
-| PowerPoint | `setProperty` | Deck title property | 2 passed: title property; PowerPoint-saved copy reopens with the same slide count |  | `6eac1daf6b4152b7…` |
-| PowerPoint | `fill` | Fill a named template shape | 3 passed: text contains 'Northwind Traders Limited'; text excludes '[CLIENT]'; PowerPoint-saved copy reopens with the same slide count | yes | `c61338ad97915da2…` |
-| Excel | `setCell` | Text, numbers and a SUM formula | 6 passed: no Excel repair log; A1 value; B2 value; B4 value; B4 formula; Excel-saved copy reopens | yes | `c7b9bc7149f74a07…` |
-| Excel | `calculation` | 107 allowlisted formulas calculated by the engine, recalculated by Excel | 3 passed: no Excel repair log; formulas where Excel agrees with the cached value; Excel-saved copy reopens |  | `c107e055f55a6ea7…` |
-| Excel | `setProperty` | Workbook title property | 3 passed: title property; no Excel repair log; Excel-saved copy reopens |  | `3e6568bda752b73c…` |
-| Excel | `comment` | Cell comment | 3 passed: no Excel repair log; comments at least; Excel-saved copy reopens |  | `8f109b9501351fe8…` |
-| Excel | `appendTableRows` | Append rows to an Excel table | 5 passed: no Excel repair log; cells contains 'APAC'; tables; table data rows grew by; Excel-saved copy reopens | yes | `367df558186cb0d8…` |
+| Word | `create` | Blank document from OfficeAgent, then written | 4 passed: revisions; text contains 'Created by OfficeAgent.'; Word compatibility mode; Word-saved copy reopens with the same revision count |  | `d8d7aba9b4f61f28…` |
+| Word | `template` | Template with a slot and a repeating row, populated | 7 passed: text contains 'Fabrikam Ltd'; text contains 'Consulting'; text contains 'Support'; text excludes '{{'; text excludes 'CUSTOMER'; table rows; Word-saved copy reopens with the same revision count | yes | `115943cb55557fc5…` |
+| Word | `template` | Template image slot bound through a template batch on the filesystem provider | 5 passed: text contains 'Quote for Fabrikam Ltd'; text excludes 'CUSTOMER'; picture size in points; inline pictures; Word-saved copy reopens with the same revision count | yes | `56f12340a31d4189…` |
+| Word | `comparison` | Comparison redline of a table-cell edit | 10 passed: revisions at least; tables; table rows; revisions after accept all; accepted text contains 'Gizmo'; accepted text excludes 'Gadget'; revisions after reject all; rejected text contains 'Gadget'; rejected text excludes 'Gizmo'; Word-saved copy reopens with the same revision count | yes | `01d557b9763fd17a…` |
+| Word | `comparison` | Comparison redline between two versions | 7 passed: revisions at least; revisions after accept all; accepted text contains 'Globex Inc.'; revisions after reject all; rejected text contains 'Acme Corp'; rejected text excludes 'Globex'; Word-saved copy reopens with the same revision count | yes | `2e542bfa1bf6d67f…` |
+| Word | `assembly` | Two documents assembled, each keeping its header | 6 passed: revisions; text contains 'Acme Corp'; text contains 'Appendix A: rate card.'; sections at least; Word compatibility mode; Word-saved copy reopens with the same revision count | yes | `99237cb9ca5f4781…` |
+| PowerPoint | `insertSlide` | Two slides added to a blank deck | 4 passed: slides; text contains 'Second'; text contains 'Closing point'; PowerPoint-saved copy reopens with the same slide count | yes | `c369b319484c226d…` |
+| PowerPoint | `insertSlide` | Slides on a template's own named layouts, one under a second master | 5 passed: slides; text contains 'Why Northwind'; text contains 'Twelve years in logistics'; text contains 'Pricing'; PowerPoint-saved copy reopens with the same slide count | yes | `c5636978158a28c5…` |
+| PowerPoint | `removeSlide` | Remove a slide | 3 passed: slides; text excludes 'Another point'; PowerPoint-saved copy reopens with the same slide count |  | `939a2f5c09b00fc2…` |
+| PowerPoint | `moveSlide` | Move the last slide first | 3 passed: slides; first slide contains 'Third'; PowerPoint-saved copy reopens with the same slide count |  | `5368867ca27d94ac…` |
+| PowerPoint | `duplicateSlide` | Duplicate a slide | 2 passed: slides; PowerPoint-saved copy reopens with the same slide count |  | `383cbe4db3fe925d…` |
+| PowerPoint | `section` | Add a section | 3 passed: sections at least; section 'Financials'; PowerPoint-saved copy reopens with the same slide count |  | `752ff22cdf07d599…` |
+| PowerPoint | `transition` | Fade transition on every slide | 3 passed: slides; every slide has a transition; PowerPoint-saved copy reopens with the same slide count |  | `934de378a69f7015…` |
+| PowerPoint | `animate` | Fade-in animation on a shape | 2 passed: animations at least; PowerPoint-saved copy reopens with the same slide count |  | `e9ea21671d749da0…` |
+| PowerPoint | `headerFooter` | Footer and slide numbers | 2 passed: footer contains 'Confidential'; PowerPoint-saved copy reopens with the same slide count | yes | `b403d9cb7734bacd…` |
+| PowerPoint | `insertShape` | Insert a text box | 2 passed: text contains 'Accent'; PowerPoint-saved copy reopens with the same slide count | yes | `59526ef9f72508a3…` |
+| PowerPoint | `removeShape` | Remove the text box | 2 passed: text excludes 'Accent'; PowerPoint-saved copy reopens with the same slide count |  | `8af8653dc63321de…` |
+| PowerPoint | `insertChart` | Native column chart with embedded data | 4 passed: charts; chart data opens for editing; chart series values; PowerPoint-saved copy reopens with the same slide count | yes | `e12b0c8f0263df9b…` |
+| PowerPoint | `updateChart` | Replace the chart's data | 4 passed: charts; chart data opens for editing; chart series values; PowerPoint-saved copy reopens with the same slide count | yes | `5124cb4056e673c8…` |
+| PowerPoint | `setChartData` | New data in an existing chart, growing it to two series | 5 passed: charts; chart data opens for editing; chart series values; chart series; PowerPoint-saved copy reopens with the same slide count | yes | `73a46936e8a7d03f…` |
+| PowerPoint | `template` | Template chart slot bound through a template batch on the filesystem provider | 4 passed: charts; chart data opens for editing; chart series values; PowerPoint-saved copy reopens with the same slide count | yes | `c32c269c8bee121d…` |
+| PowerPoint | `insertImage` | Insert a picture | 2 passed: pictures; PowerPoint-saved copy reopens with the same slide count | yes | `14b324e4348d5a9d…` |
+| PowerPoint | `removeImage` | Remove the picture | 2 passed: pictures; PowerPoint-saved copy reopens with the same slide count |  | `ec3de4bb6174d920…` |
+| PowerPoint | `backgroundImage` | Slide background picture | 2 passed: slide background is a picture; PowerPoint-saved copy reopens with the same slide count | yes | `9e48aff6b59d14ed…` |
+| PowerPoint | `insertMedia` | Embedded video with a poster frame | 2 passed: media objects; PowerPoint-saved copy reopens with the same slide count |  | `18ccf30541ee1cdd…` |
+| PowerPoint | `insertTable` | Insert a table | 3 passed: text contains 'EMEA'; tables; PowerPoint-saved copy reopens with the same slide count | yes | `8c6f62a74a7041d8…` |
+| PowerPoint | `insertTableRows` | Append a table row | 3 passed: text contains 'APAC'; tables; PowerPoint-saved copy reopens with the same slide count |  | `7d5dce31c1498ff8…` |
+| PowerPoint | `removeTableRows` | Remove a table row | 2 passed: tables; PowerPoint-saved copy reopens with the same slide count |  | `2aa3caf4b5148b70…` |
+| PowerPoint | `insertTableColumns` | Insert a table column | 3 passed: text contains 'Q2'; tables; PowerPoint-saved copy reopens with the same slide count |  | `8f79650bd694d776…` |
+| PowerPoint | `removeTableColumns` | Remove a table column | 2 passed: tables; PowerPoint-saved copy reopens with the same slide count |  | `b75587ac94a33a6c…` |
+| PowerPoint | `removeTable` | Remove the table | 2 passed: tables; PowerPoint-saved copy reopens with the same slide count |  | `74b17810cbbe9059…` |
+| PowerPoint | `fillTable` | Refill a table from data, growing it by a row | 5 passed: text contains 'North'; text contains 'South'; text excludes 'EMEA'; tables; PowerPoint-saved copy reopens with the same slide count | yes | `561def2abf7531d7…` |
+| PowerPoint | `bindData` | Link a shape to a workbook cell | 3 passed: slides; shape named 'xl:Revenue'; PowerPoint-saved copy reopens with the same slide count |  | `de16b78a00339c09…` |
+| PowerPoint | `changeText` | Replace the title text | 2 passed: text contains 'Revised title'; PowerPoint-saved copy reopens with the same slide count |  | `c0dd02cb0123cc48…` |
+| PowerPoint | `insert` | Insert a paragraph after the title | 2 passed: text contains 'Draft for discussion'; PowerPoint-saved copy reopens with the same slide count |  | `001e94d7e417a0f2…` |
+| PowerPoint | `format` | Bold, coloured title | 2 passed: text contains 'Second'; PowerPoint-saved copy reopens with the same slide count | yes | `d2fababf7ea56848…` |
+| PowerPoint | `clearStyles` | Clear direct formatting on the title | 2 passed: text contains 'Second'; PowerPoint-saved copy reopens with the same slide count |  | `79d0aaafe8c531d3…` |
+| PowerPoint | `copyStyles` | Copy paragraph formatting between lines | 2 passed: slides; PowerPoint-saved copy reopens with the same slide count |  | `79d0aaafe8c531d3…` |
+| PowerPoint | `comment` | Modern comment on a slide | 2 passed: comments at least; PowerPoint-saved copy reopens with the same slide count |  | `e3fdee4c766f48ce…` |
+| PowerPoint | `setProperty` | Deck title property | 2 passed: title property; PowerPoint-saved copy reopens with the same slide count |  | `34907d6c008cec6e…` |
+| PowerPoint | `fill` | Fill a named template shape | 3 passed: text contains 'Northwind Traders Limited'; text excludes '[CLIENT]'; PowerPoint-saved copy reopens with the same slide count | yes | `309a4a2b2ea368b7…` |
+| Excel | `setCell` | Text, numbers and a SUM formula | 6 passed: no Excel repair log; A1 value; B2 value; B4 value; B4 formula; Excel-saved copy reopens | yes | `87b044a69410df05…` |
+| Excel | `calculation` | 107 allowlisted formulas calculated by the engine, recalculated by Excel | 3 passed: no Excel repair log; formulas where Excel agrees with the cached value; Excel-saved copy reopens |  | `11636b84178ddac6…` |
+| Excel | `setProperty` | Workbook title property | 3 passed: title property; no Excel repair log; Excel-saved copy reopens |  | `eb55995ae121bac8…` |
+| Excel | `comment` | Cell comment | 3 passed: no Excel repair log; comments at least; Excel-saved copy reopens |  | `e0ce712e772a7247…` |
+| Excel | `appendTableRows` | Append rows to an Excel table | 5 passed: no Excel repair log; cells contains 'APAC'; tables; table data rows grew by; Excel-saved copy reopens | yes | `27ce04b6c5ebe1f9…` |
 
 <!-- native-matrix:end -->
 
@@ -199,6 +203,11 @@ through the filesystem provider, and no file appears beside it
 - **A tracked column removal stays visible until accepted.** Word shows the column, marked
   deleted, until the revision is accepted. The corpus accepts it (2 columns) and rejects it
   (3 columns) in Word.
+- **A narrowed redline is exactly the changed words.** For `changeText` with granularity
+  `Minimal`, Word lists only the narrowed revisions (`thirty` and `forty-five`; a lone insertion
+  of `125% of `; a lone deletion of `unless extended `), and accepting or rejecting them gives
+  each sentence back whole. The fallback case, whose words to delete are bold and plain, is a
+  whole-span redline as `Span` writes it.
 - **A template image is drawn at the size the binding gives.** `TemplateImageValue.WidthPx`
   and `HeightPx` default to 200 by 200, whatever the picture's own shape, so a binding that
   omits them shows a 2:1 photograph square. Set both to the picture's proportions. The corpus
@@ -231,6 +240,8 @@ powershell -NoProfile -ExecutionPolicy Bypass -File scripts/native/office_check.
 ```
 
 The harness drives Word, PowerPoint and Excel through COM and closes them when it finishes. It
-kills any instance of an application that stops answering, so run it where no one is using Office.
+drives only an instance it started: if COM hands back one that was already running, the case
+fails and that instance is left alone. When a case stops answering, it kills the instances of that
+application started since the case began, so run it where no one is starting Office.
 It writes `results.json` beside the manifest, Office-saved copies to `roundtrip/`, and PDFs of
 each visual case and of its input to `pdf/`.

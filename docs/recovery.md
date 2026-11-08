@@ -86,10 +86,16 @@ none is retried automatically. What the providers do enforce makes a careful ret
 "Version" is the provider's version token: the content SHA-256 for filesystem and memory, and
 the eTag for SharePoint.
 
+The other storage providers report the same error codes and write outcomes, through the MCP
+server as well as in code. Their `Replace` is conditional in its own way: Box, Azure Blob and
+Amazon S3 send `If-Match`, enforced by the service; iManage compares the latest version under a
+document lock; Google Drive compares the head revision just before it uploads, which Drive does
+not enforce. See [document providers](document-providers.md) for each one.
+
 | Workflow | Package-byte hash | Semantic snapshot | Provider version | Preview intent hash | Conditional write |
 | --- | --- | --- | --- | --- | --- |
-| Edit, `Replace` | receipt `inputSha256` and `outputSha256` | plan `snapshot`, refused as `stale-snapshot` | checked at save; defaults to the version read | receipt `planSha256` (recorded, not a preview token) | filesystem: check and replace under a per-item in-process gate; memory: atomic under a lock; SharePoint: `If-Match`, enforced by Graph |
-| Edit, `NewVersion` or `NewDocument` | as above | as above | source version checked at save | as above | new name: filesystem no-overwrite rename; memory name check under its lock; SharePoint `conflictBehavior=fail` |
+| Edit, `Replace` | receipt `inputSha256` and `outputSha256` | plan `snapshot`, refused as `stale-snapshot` | checked at save; defaults to the version read | receipt `planSha256` (recorded, not a preview token) | filesystem: check and replace under a per-item in-process gate; memory: atomic under a lock; SharePoint, Box, Azure Blob and S3: `If-Match`, enforced by the service; iManage: version compared, then the document locked while a new version uploads; Google Drive: head revision re-read just before upload, no server-side check |
+| Edit, `NewVersion` or `NewDocument` | as above | as above | source version checked at save | as above | new name: filesystem no-overwrite rename; memory name check under its lock; SharePoint `conflictBehavior=fail`; Box 409 on a taken name; Azure Blob and S3 `If-None-Match: *`; iManage: `NewVersion` adds a version, `NewDocument` checks the name in the folder; Google Drive name check in the folder before upload |
 | Document creation | receipt hashes over the blank package and its output | none (a new document) | none | receipt `planSha256` | as for a new name |
 | Template batch | receipt per item | none | none | batch token (template and batch SHA-256), refused as `stale-batch-preview` | as for a new name, per item |
 | Document assembly | SHA-256 of every source, rechecked at commit | none | none | merge `planSha256`, refused if changed | create with `conflictBehavior=fail` or no-overwrite rename |

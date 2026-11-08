@@ -4,6 +4,7 @@ using OfficeAgent.Abstractions;
 using OfficeAgent.AgentFramework;
 using OfficeAgent.Core;
 using OfficeAgent.Excel;
+using OfficeAgent.IManage;
 using OfficeAgent.PowerPoint;
 using OfficeAgent.Rendering;
 using OfficeAgent.SharePoint;
@@ -27,12 +28,17 @@ public sealed class StabilityClassificationTests
     {
         typeof(DocumentPlan).Assembly,
         typeof(OfficeAgentTools).Assembly,
+        typeof(OfficeAgent.AmazonS3.AmazonS3DocumentProvider).Assembly,
+        typeof(OfficeAgent.AzureBlob.AzureBlobDocumentProvider).Assembly,
         typeof(OfficeAgentClient).Assembly,
         typeof(ExcelModule).Assembly,
         typeof(OfficeAgent.Excel.Calculation.ClosedXmlFormulaEvaluator).Assembly,
+        typeof(IManageDocumentProvider).Assembly,
         typeof(PowerPointModule).Assembly,
         typeof(LibreOfficeDocumentRenderer).Assembly,
         typeof(SharePointDocumentProvider).Assembly,
+        typeof(OfficeAgent.GoogleDrive.GoogleDriveDocumentProvider).Assembly,
+        typeof(OfficeAgent.Box.BoxDocumentProvider).Assembly,
         typeof(WordModule).Assembly,
     };
 
@@ -42,12 +48,21 @@ public sealed class StabilityClassificationTests
         "OfficeAgent.Abstractions.IDocumentRenderer",
         "OfficeAgent.Abstractions.IFormulaEvaluator",
         "OfficeAgent.AgentFramework.IConnectionAccessPolicy",
+        "OfficeAgent.Box.IBoxAccessTokenProvider",
+        "OfficeAgent.Box.IBoxRegistrationStore",
         "OfficeAgent.AgentFramework.ITrustedPrincipalAccessor",
+        "OfficeAgent.AmazonS3.IAmazonS3RegistrationStore",
+        "OfficeAgent.AzureBlob.IAzureBlobRegistrationStore",
         "OfficeAgent.Core.DocumentProviders.IConnectionCalculationDefaults",
         "OfficeAgent.Core.DocumentProviders.IConnectionEditingDefaults",
+        "OfficeAgent.Core.DocumentProviders.IConnectionGranularityDefaults",
         "OfficeAgent.Core.DocumentProviders.IDocumentCreatingProvider",
         "OfficeAgent.Core.DocumentProviders.IDocumentProvider",
         "OfficeAgent.Core.IAuditActorProvider",
+        "OfficeAgent.IManage.IIManageAccessTokenProvider",
+        "OfficeAgent.IManage.IIManageRegistrationStore",
+        "OfficeAgent.GoogleDrive.IGoogleDriveAccessTokenProvider",
+        "OfficeAgent.GoogleDrive.IGoogleDriveRegistrationStore",
         "OfficeAgent.SharePoint.IAccessTokenProvider",
         "OfficeAgent.SharePoint.ISharePointRegistrationStore",
     };

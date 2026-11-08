@@ -98,6 +98,14 @@ public sealed class OfficeAgentToolsOptions
     /// changes: properties a tool does not define are still refused.
     /// </remarks>
     public bool StrictToolSchemas { get; init; } = true;
+
+    /// <summary>
+    /// Gets the sentence <c>register_document</c> and <c>open_document</c> use to say what a
+    /// source is, or <see langword="null"/> for the default, which describes filesystem paths
+    /// and SharePoint URLs. A host whose connections use other providers names their sources
+    /// here, such as an iManage document id or a Box file URL.
+    /// </summary>
+    public string? SourceDescription { get; init; }
 }
 
 /// <summary>
@@ -308,6 +316,7 @@ public sealed class OfficeAgentTools
         - Change mode: in a Word document default to "Tracked" unless the user explicitly approves direct edits. "mode" is not only for changeText - it belongs on every verb that changes content (insert, insertParagraphs, removeParagraph, insertTable, removeTable, the table row/column verbs including repeatTableRow, insertImage, removeImage, format, fill, insertBreak, note), and Word tracks all of them when it is omitted. A tracked structural edit is a real redline: an added paragraph and its paragraph mark come back as insertions, a removed row stays in place struck through until someone accepts it, and a format records what it replaced. A PowerPoint deck has no tracked-changes representation and REFUSES mode "Tracked" on any of these, so use "Direct" there and say that edits to a deck cannot be redlined; add a comment if the change needs to be flagged for review.
         - Translating or rewriting a document: work paragraph by paragraph, so headings, lists, tables, headers and footers keep their structure and styles. A paragraph whose words differ in formatting has a markedText in inspect_document, such as "Payment is due within <1>30 days</1> of invoice." Rewrite it keeping each <n>…</n> around the words that should carry that formatting - wherever the translation puts them - and send it as withMarked with expect set to the paragraph's full text: { "op": "changeText", "target": { "paraId": "w14:…", "expect": "Payment is due within 30 days of invoice." }, "withMarked": "Betaling binnen <1>30 dagen</1> na factuurdatum." }. A paragraph without markedText takes a plain "with". Leave paragraphs that are only numbers, codes or names as they are. In a workbook, setCell the text cells and leave formulas alone.
         - To delete text, use changeText with an empty "with": { "op": "changeText", "target": { "paraId": "w14:…", "expect": " unless terminated earlier" }, "with": "", "mode": "Tracked" }. Under Tracked it is one deletion a reviewer can accept or reject. Include the space next to the deleted words in expect so the sentence keeps one space. There is no separate delete verb; to remove a whole paragraph use removeParagraph.
+        - A tracked changeText marks the whole expect as deleted and the whole with as inserted. Add "granularity": "Minimal" to mark only the words that differ, so a reviewer sees ~~thirty~~ forty-five rather than a retyped clause, and adding words is a pure insertion. If a change's warning says it fell back to Span, the words to delete carried different formatting and the whole expect was marked.
         - Reviewing an existing Word redline: inspect_document.nodes lists every revision (kind "revision") with its author and date, under paths like "ins#7", "del#7", "markIns#7" (a paragraph split), "rowIns#7"/"rowDel#7", "cellIns#7"/"cellDel#7", and "runFormat#7"/"paraFormat#7" (formatting changes). Resolve them with { "op": "revision", "target": { "kind": "revision", "path": "…" }, "action": "Accept" | "Reject" } - "all" takes every revision in the document and "author:<name>" takes one person's.
         - Editing a document that already has tracked changes: inspect_document and find_in_document show the text as it would read if every pending change were accepted, so pending insertions are visible and pending deletions are not. An edit clear of the existing revisions, or wholly inside one pending insertion, is applied normally. An edit that spans a pending deletion, or reaches out of one revision into ordinary text, is refused with revision-overlap and nothing is written, because the resulting redline would no longer reject back to the original text. Resolving somebody else's revision is always an explicit revision operation, never a side effect of an edit.
         - Word comments are a conversation, not a write-only log: inspect_document.nodes lists each one (kind "comment") with its author, its text, whether it is resolved, and which comment it replies to. Answer one with action "Reply", close it with "Resolve", delete it with "Remove". Read the open comments before editing a document under review - they usually say what the edit should be.
@@ -367,7 +376,7 @@ public sealed class OfficeAgentTools
     public const string RegistrationPromptGuidance = """
 
         Document registration
-        - register_document(connectionId, source) registers an existing document with a host-configured connection and returns its opaque documentId. The source is connection-specific: a path under a filesystem connection's root, or - for a SharePoint connection - the document's SharePoint/OneDrive URL or a "driveId/itemId" pair. Never pass credentials.
+        - register_document(connectionId, source) registers an existing document with a host-configured connection and returns its opaque documentId. The source is connection-specific: a path under a filesystem connection's root, or the document's URL or id in the connection's store, such as a SharePoint/OneDrive URL or "driveId/itemId" pair. The register_document description says what each configured connection accepts. Never pass credentials.
         - remove_document(connectionId, documentId) removes the registration only - the underlying file is never deleted. Remove temporary registrations you made with register_document once the work is done, but keep the final document's output registration until the host has delivered it.
         - Register a document only when the user names a file the host has not already given you an id for; otherwise use the ids you were given.
 
@@ -449,7 +458,9 @@ public sealed class OfficeAgentTools
             functions.Add(AIFunctionFactory.Create(RegisterDocument, Opts(schema,
                 "register_document",
                 "Register an existing document with a host-configured provider connection and return its opaque documentId. " +
-                "source is connection-specific: for a filesystem connection, a path under its root; for a SharePoint connection, the document's SharePoint/OneDrive URL (e.g. 'https://contoso.sharepoint.com/:w:/s/…') or a 'driveId/itemId' pair (e.g. 'b!9a3f…/01ABCDEF'). " +
+                (options.SourceDescription is { } registerSource
+                    ? registerSource.TrimEnd() + " "
+                    : "source is connection-specific: for a filesystem connection, a path under its root; for a SharePoint connection, the document's SharePoint/OneDrive URL (e.g. 'https://contoso.sharepoint.com/:w:/s/…') or a 'driveId/itemId' pair (e.g. 'b!9a3f…/01ABCDEF'). ") +
                 "Never pass credentials. Returns {connectionId, documentId, name, contentType, version}.")));
             functions.Add(AIFunctionFactory.Create(RemoveDocument, Opts(schema,
                 "remove_document",
@@ -458,7 +469,9 @@ public sealed class OfficeAgentTools
             functions.Add(AIFunctionFactory.Create(OpenDocument, Opts(schema,
                 "open_document",
                 "Open a document the user named by source: registers it and returns its inspection in one call - use this instead of register_document followed by inspect_document. " +
-                "source is connection-specific, exactly as for register_document: a path under a filesystem connection's root, or a SharePoint/OneDrive URL or 'driveId/itemId' pair. " +
+                (options.SourceDescription is { } openSource
+                    ? openSource.TrimEnd() + " "
+                    : "source is connection-specific, exactly as for register_document: a path under a filesystem connection's root, or a SharePoint/OneDrive URL or 'driveId/itemId' pair. ") +
                 "Returns {connectionId, documentId, name, contentType, version} followed by the inspect_document payload (snapshot, outline, paragraphs, contentControls, nodes, styles). " +
                 "Keep documentId for follow-up calls; paging works as in inspect_document.")));
             functions.Add(AIFunctionFactory.Create(EditDocument, Opts(schema,
@@ -583,6 +596,8 @@ public sealed class OfficeAgentTools
         "Each operation is one object. Concrete examples:\n\n" +
             "// Replace text:\n" +
             "{ \"op\": \"changeText\", \"target\": { \"paraId\": \"w14:...\", \"expect\": \"Acme Corp\", \"occurrence\": 0 }, \"with\": \"Globex Inc.\", \"mode\": \"Tracked\" }\n\n" +
+            "// Mark only the words that change (Word, Tracked): \"granularity\": \"Minimal\" keeps the words expect and with share at the start and end, so \"thirty days\" -> \"forty-five days\" marks only thirty -> forty-five, and \"the cap\" -> \"125% of the cap\" is a pure insertion. \"Span\", the default unless the connection sets one, marks the whole expect:\n" +
+            "{ \"op\": \"changeText\", \"target\": { \"paraId\": \"w14:...\", \"expect\": \"thirty days\" }, \"with\": \"forty-five days\", \"mode\": \"Tracked\", \"granularity\": \"Minimal\" }\n\n" +
             "// Rewrite or translate a whole paragraph and keep its bold, italic, colour and links. inspect_document gives a paragraph whose words differ in formatting a markedText such as\n" +
             "// \"Payment is due within <1>30 days</1> of invoice.\" Keep each <n>…</n> around the words that should carry that formatting, wherever they land; untagged text takes the paragraph's usual formatting.\n" +
             "// expect is the paragraph's complete text. Word and PowerPoint:\n" +
@@ -1951,11 +1966,38 @@ public sealed class OfficeAgentTools
         return planObject;
     }
 
+    /// <summary>
+    /// Writes the connection's default granularity into every <c>changeText</c> that did not
+    /// name one. On the JSON for the same reason as <see cref="ApplyDefaultChangeMode"/>: once
+    /// deserialized, an absent <c>granularity</c> is indistinguishable from an explicit
+    /// <c>Span</c>, and an explicit value must always win.
+    /// </summary>
+    private static JsonObject ApplyDefaultChangeGranularity(JsonObject planObject, ChangeGranularity connectionDefault)
+    {
+        if (connectionDefault == ChangeGranularity.Span) return planObject;
+        if (planObject["operations"] is not JsonArray operations) return planObject;
+
+        foreach (var operation in operations)
+        {
+            if (operation is not JsonObject op) continue;
+            if (op["op"]?.GetValue<string>() is not { } verb ||
+                !string.Equals(verb, "changeText", StringComparison.OrdinalIgnoreCase)) continue;
+            // Matched as the plan reader matches names, case-insensitively.
+            if (op.Any(pair => string.Equals(pair.Key, "granularity", StringComparison.OrdinalIgnoreCase))) continue;
+
+            op["granularity"] = connectionDefault.ToString();
+        }
+
+        return planObject;
+    }
+
     private DocumentPlan DeserializePlan(string planJson, string connectionId) =>
         DeserializePlan(ParsePlanObject(planJson), connectionId);
 
     private DocumentPlan DeserializePlan(JsonObject planObject, string connectionId) =>
-        DeserializePlan(ApplyDefaultChangeMode(planObject, _client.DefaultChangeModeFor(connectionId)));
+        DeserializePlan(ApplyDefaultChangeGranularity(
+            ApplyDefaultChangeMode(planObject, _client.DefaultChangeModeFor(connectionId)),
+            _client.DefaultChangeGranularityFor(connectionId)));
 
     private static DocumentPlan DeserializePlan(JsonObject planObject)
     {
@@ -1997,7 +2039,8 @@ public sealed class OfficeAgentTools
                 c.Verb,
                 target = SummariseAnchor(c.Target),
                 c.Before, c.After, c.Context, c.BlastRadius,
-                capability = c.Capability.ToString()
+                capability = c.Capability.ToString(),
+                c.Warning
             }),
             errors = report.Errors.Select(e => new
             {
@@ -2033,7 +2076,8 @@ public sealed class OfficeAgentTools
                 c.Verb,
                 target = SummariseAnchor(c.Target),
                 c.Before, c.After, c.Context, c.BlastRadius,
-                capability = c.Capability.ToString()
+                capability = c.Capability.ToString(),
+                c.Warning
             }),
             errors = report.Errors.Select(e => new
             {

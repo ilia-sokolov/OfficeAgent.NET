@@ -64,6 +64,7 @@ target: Anchor
 Type: `OfficeAgent.Abstractions.ChangeTextOp`
 
 ```text
+granularity: ChangeGranularity
 mode: ChangeMode
 target: Anchor
 with: String
@@ -2379,6 +2380,12 @@ Type: `OfficeAgent.Abstractions.TemplateBatchResult`
                     "target": true,
                     "verb": {
                       "type": "string"
+                    },
+                    "warning": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
                     }
                   },
                   "type": "object"
@@ -2842,6 +2849,7 @@ $.changes[].target.kind: string
 $.changes[].target.occurrence: number
 $.changes[].target.paraId: string
 $.changes[].verb: string
+$.changes[].warning: null
 $.committed: boolean
 $.errors: array
 $.isValid: boolean
@@ -2891,6 +2899,7 @@ $.changes[].target.kind: string
 $.changes[].target.occurrence: number
 $.changes[].target.paraId: string
 $.changes[].verb: string
+$.changes[].warning: null
 $.committed: boolean
 $.errors: array
 $.isValid: boolean
@@ -3275,6 +3284,7 @@ $.plan.contractVersion: string
 $.plan.format: string
 $.plan.operations: array
 $.plan.operations[]: object
+$.plan.operations[].granularity: string
 $.plan.operations[].mode: string
 $.plan.operations[].op: string
 $.plan.operations[].target: object
@@ -3360,6 +3370,7 @@ $.changes[].target.kind: string
 $.changes[].target.occurrence: number
 $.changes[].target.paraId: string
 $.changes[].verb: string
+$.changes[].warning: null
 $.committed: boolean
 $.errors: array
 $.isValid: boolean
@@ -3508,6 +3519,7 @@ $.changes[].target.kind: string
 $.changes[].target.occurrence: number
 $.changes[].target.paraId: string
 $.changes[].verb: string
+$.changes[].warning: null
 $.committed: boolean
 $.contentBase64: string
 $.contentBytes: number
@@ -3696,6 +3708,7 @@ $.changes[].target.kind: string
 $.changes[].target.occurrence: number
 $.changes[].target.paraId: string
 $.changes[].verb: string
+$.changes[].warning: null
 $.committed: boolean
 $.errors: array
 $.isValid: boolean
@@ -3838,6 +3851,7 @@ $.changes[].target.kind: string
 $.changes[].target.occurrence: number
 $.changes[].target.paraId: string
 $.changes[].verb: string
+$.changes[].warning: null
 $.committed: boolean
 $.contentBase64: string
 $.contentBytes: number
@@ -3876,6 +3890,7 @@ $.changes[].target.kind: string
 $.changes[].target.occurrence: number
 $.changes[].target.paraId: string
 $.changes[].verb: string
+$.changes[].warning: null
 $.committed: boolean
 $.contentBase64: null
 $.contentBytes: null
@@ -3953,6 +3968,7 @@ $.items[].changes[].target.kind: string
 $.items[].changes[].target.occurrence: number
 $.items[].changes[].target.paraId: string
 $.items[].changes[].verb: string
+$.items[].changes[].warning: null
 $.items[].committed: boolean
 $.items[].errors: array
 $.items[].errors[]: object
@@ -4015,6 +4031,7 @@ $.items[].changes[].target.kind: string
 $.items[].changes[].target.occurrence: number
 $.items[].changes[].target.paraId: string
 $.items[].changes[].verb: string
+$.items[].changes[].warning: null
 $.items[].committed: boolean
 $.items[].errors: array
 $.items[].errors[]: object
@@ -4572,8 +4589,13 @@ State: connections visible
 ```text
 $: array
 $[]: object
+$[].allowedExtensions: array
+$[].allowedExtensions[]: string
+$[].calculatesFormulas: boolean
 $[].canCreateDocuments: boolean
 $[].connectionId: string
+$[].defaultChangeGranularity: string
+$[].defaultChangeMode: string
 $[].provider: string
 ```
 
@@ -4792,6 +4814,7 @@ $.items[].report.changes[].target.id: string
 $.items[].report.changes[].target.kind: string
 $.items[].report.changes[].target.tag: string
 $.items[].report.changes[].verb: string
+$.items[].report.changes[].warning: null
 $.items[].report.errors: array
 $.items[].report.isValid: boolean
 ```
@@ -4871,6 +4894,7 @@ $.items[].report.changes[].target.id: string
 $.items[].report.changes[].target.kind: string
 $.items[].report.changes[].target.tag: string
 $.items[].report.changes[].verb: string
+$.items[].report.changes[].warning: null
 $.items[].report.errors: array
 $.items[].report.isValid: boolean
 ```
@@ -4965,6 +4989,7 @@ $.changes[].target.kind: string
 $.changes[].target.occurrence: number
 $.changes[].target.paraId: string
 $.changes[].verb: string
+$.changes[].warning: null
 $.committed: boolean
 $.errors: array
 $.isValid: boolean
@@ -5219,6 +5244,7 @@ $.changes[].target.kind: string
 $.changes[].target.structuralKind: string
 $.changes[].target.tag: string
 $.changes[].verb: string
+$.changes[].warning: null
 $.committed: boolean
 $.errors: array
 $.isValid: boolean
@@ -5274,6 +5300,7 @@ $.changes[].target.kind: string
 $.changes[].target.structuralKind: string
 $.changes[].target.tag: string
 $.changes[].verb: string
+$.changes[].warning: null
 $.committed: boolean
 $.errors: array
 $.isValid: boolean
@@ -5486,6 +5513,47 @@ their defaults as constructed; `[]` marks a list whose elements take the keys be
 OfficeAgent:AllowCreation: Boolean = false
 OfficeAgent:AllowInlineContent: Boolean = false
 OfficeAgent:AllowRegistration: Boolean = true
+OfficeAgent:AmazonS3Connections[]:AllowedExtensions: IList<String> = [".docx"]
+OfficeAgent:AmazonS3Connections[]:BucketName: String = ""
+OfficeAgent:AmazonS3Connections[]:CalculateFormulas: Boolean = false
+OfficeAgent:AmazonS3Connections[]:ConnectionId: String = ""
+OfficeAgent:AmazonS3Connections[]:DefaultChangeGranularity: String = "Span"
+OfficeAgent:AmazonS3Connections[]:DefaultChangeMode: String = "Tracked"
+OfficeAgent:AmazonS3Connections[]:ForcePathStyle: Boolean = false
+OfficeAgent:AmazonS3Connections[]:KeyPrefix: String = ""
+OfficeAgent:AmazonS3Connections[]:MaximumBytes: Int64 = 104857600
+OfficeAgent:AmazonS3Connections[]:Region: String = ""
+OfficeAgent:AmazonS3Connections[]:RegistrationIndexPath: String = ""
+OfficeAgent:AmazonS3Connections[]:RejectFormulaErrors: Boolean = false
+OfficeAgent:AmazonS3Connections[]:ServiceUrl: String = ""
+OfficeAgent:AzureBlobConnections[]:AllowedExtensions: IList<String> = [".docx"]
+OfficeAgent:AzureBlobConnections[]:CalculateFormulas: Boolean = false
+OfficeAgent:AzureBlobConnections[]:ConnectionId: String = ""
+OfficeAgent:AzureBlobConnections[]:ConnectionString: String = ""
+OfficeAgent:AzureBlobConnections[]:ContainerName: String = ""
+OfficeAgent:AzureBlobConnections[]:DefaultChangeGranularity: String = "Span"
+OfficeAgent:AzureBlobConnections[]:DefaultChangeMode: String = "Tracked"
+OfficeAgent:AzureBlobConnections[]:ManagedIdentityClientId: String = ""
+OfficeAgent:AzureBlobConnections[]:MaximumBytes: Int64 = 104857600
+OfficeAgent:AzureBlobConnections[]:Prefix: String = ""
+OfficeAgent:AzureBlobConnections[]:RegistrationIndexPath: String = ""
+OfficeAgent:AzureBlobConnections[]:RejectFormulaErrors: Boolean = false
+OfficeAgent:AzureBlobConnections[]:ServiceUri: String = ""
+OfficeAgent:BoxConnections[]:AllowedExtensions: IList<String> = [".docx"]
+OfficeAgent:BoxConnections[]:ApiBaseUrl: String = "https://api.box.com/2.0"
+OfficeAgent:BoxConnections[]:CalculateFormulas: Boolean = false
+OfficeAgent:BoxConnections[]:ClientId: String = ""
+OfficeAgent:BoxConnections[]:ClientSecret: String = ""
+OfficeAgent:BoxConnections[]:ConnectionId: String = ""
+OfficeAgent:BoxConnections[]:CreationFolderId: String = ""
+OfficeAgent:BoxConnections[]:DefaultChangeGranularity: String = "Span"
+OfficeAgent:BoxConnections[]:DefaultChangeMode: String = "Tracked"
+OfficeAgent:BoxConnections[]:MaximumBytes: Int64 = 52428800
+OfficeAgent:BoxConnections[]:RegistrationIndexPath: String = ""
+OfficeAgent:BoxConnections[]:RejectFormulaErrors: Boolean = false
+OfficeAgent:BoxConnections[]:SubjectId: String = ""
+OfficeAgent:BoxConnections[]:SubjectType: String = "Enterprise"
+OfficeAgent:BoxConnections[]:UploadBaseUrl: String = "https://upload.box.com/api/2.0"
 OfficeAgent:EphemeralCalculateFormulas: Boolean = false
 OfficeAgent:EphemeralConnectionId: String = ""
 OfficeAgent:EphemeralMaximumTotalBytes: Int64 = 104857600
@@ -5493,10 +5561,48 @@ OfficeAgent:EphemeralRejectFormulaErrors: Boolean = false
 OfficeAgent:FileSystemConnections[]:AllowedExtensions: IList<String> = [".docx"]
 OfficeAgent:FileSystemConnections[]:CalculateFormulas: Boolean = false
 OfficeAgent:FileSystemConnections[]:ConnectionId: String = ""
+OfficeAgent:FileSystemConnections[]:DefaultChangeGranularity: String = "Span"
 OfficeAgent:FileSystemConnections[]:DefaultChangeMode: String = "Tracked"
 OfficeAgent:FileSystemConnections[]:MaximumBytes: Int64 = 104857600
 OfficeAgent:FileSystemConnections[]:RejectFormulaErrors: Boolean = false
 OfficeAgent:FileSystemConnections[]:RootPath: String = ""
+OfficeAgent:GoogleDriveConnections[]:AllowedExtensions: IList<String> = [".docx"]
+OfficeAgent:GoogleDriveConnections[]:ApiBaseUrl: String = "https://www.googleapis.com/drive/v3"
+OfficeAgent:GoogleDriveConnections[]:CalculateFormulas: Boolean = false
+OfficeAgent:GoogleDriveConnections[]:ConnectionId: String = ""
+OfficeAgent:GoogleDriveConnections[]:CreationFolderId: String = ""
+OfficeAgent:GoogleDriveConnections[]:DefaultChangeGranularity: String = "Span"
+OfficeAgent:GoogleDriveConnections[]:DefaultChangeMode: String = "Tracked"
+OfficeAgent:GoogleDriveConnections[]:KeyFilePath: String = ""
+OfficeAgent:GoogleDriveConnections[]:KeyJson: String = ""
+OfficeAgent:GoogleDriveConnections[]:MaximumBytes: Int64 = 104857600
+OfficeAgent:GoogleDriveConnections[]:RegistrationIndexPath: String = ""
+OfficeAgent:GoogleDriveConnections[]:RejectFormulaErrors: Boolean = false
+OfficeAgent:GoogleDriveConnections[]:Scope: String = "https://www.googleapis.com/auth/drive"
+OfficeAgent:GoogleDriveConnections[]:Subject: String = ""
+OfficeAgent:GoogleDriveConnections[]:UploadBaseUrl: String = "https://www.googleapis.com/upload/drive/v3"
+OfficeAgent:IManageConnections[]:AllowedExtensions: IList<String> = [".docx"]
+OfficeAgent:IManageConnections[]:ApiBasePath: String = "/work/api/v2"
+OfficeAgent:IManageConnections[]:CalculateFormulas: Boolean = false
+OfficeAgent:IManageConnections[]:ClientId: String = ""
+OfficeAgent:IManageConnections[]:ClientSecret: String = ""
+OfficeAgent:IManageConnections[]:ConnectionId: String = ""
+OfficeAgent:IManageConnections[]:CreationDocumentClass: String = ""
+OfficeAgent:IManageConnections[]:CreationFolderId: String = ""
+OfficeAgent:IManageConnections[]:CustomerId: String = ""
+OfficeAgent:IManageConnections[]:DefaultChangeGranularity: String = "Span"
+OfficeAgent:IManageConnections[]:DefaultChangeMode: String = "Tracked"
+OfficeAgent:IManageConnections[]:GrantType: String = "Password"
+OfficeAgent:IManageConnections[]:LockDuringSave: Boolean = true
+OfficeAgent:IManageConnections[]:MaximumBytes: Int64 = 104857600
+OfficeAgent:IManageConnections[]:Password: String = ""
+OfficeAgent:IManageConnections[]:RefreshToken: String = ""
+OfficeAgent:IManageConnections[]:RegistrationIndexPath: String = ""
+OfficeAgent:IManageConnections[]:RejectFormulaErrors: Boolean = false
+OfficeAgent:IManageConnections[]:SaveComment: String = "Saved by OfficeAgent."
+OfficeAgent:IManageConnections[]:ServerUrl: String = ""
+OfficeAgent:IManageConnections[]:TokenPath: String = "/auth/oauth2/token"
+OfficeAgent:IManageConnections[]:Username: String = ""
 OfficeAgent:RequirePlanSnapshot: Boolean = false
 OfficeAgent:RevisionAuthorFromActor: Boolean = false
 OfficeAgent:SharePointConnections[]:AllowedExtensions: IList<String> = [".docx"]
@@ -5508,6 +5614,7 @@ OfficeAgent:SharePointConnections[]:ClientSecret: String = ""
 OfficeAgent:SharePointConnections[]:ConnectionId: String = ""
 OfficeAgent:SharePointConnections[]:CreationDriveId: String = ""
 OfficeAgent:SharePointConnections[]:CreationFolderItemId: String = ""
+OfficeAgent:SharePointConnections[]:DefaultChangeGranularity: String = "Span"
 OfficeAgent:SharePointConnections[]:DefaultChangeMode: String = "Tracked"
 OfficeAgent:SharePointConnections[]:GraphBaseUrl: String = "https://graph.microsoft.com/v1.0"
 OfficeAgent:SharePointConnections[]:LoginAuthority: String = "https://login.microsoftonline.com"
@@ -5600,6 +5707,7 @@ Errors = []
 ### `OfficeAgent.Abstractions.ChangeTextOp`
 
 ```text
+Granularity = Span
 Mode = Tracked
 With = ""
 ```
@@ -6458,11 +6566,66 @@ AllowConnectionAddressing = true
 StrictToolSchemas = true
 ```
 
+### `OfficeAgent.AmazonS3.AmazonS3DocumentProviderOptions`
+
+```text
+AllowedExtensions = [".docx"]
+BucketName = ""
+ConnectionId = ""
+DefaultChangeGranularity = Span
+DefaultChangeMode = Tracked
+KeyPrefix = ""
+MaximumBytes = 104857600
+Region = ""
+RegistrationIndexPath = ""
+ServiceUrl = ""
+```
+
+### `OfficeAgent.AzureBlob.AzureBlobDocumentProviderOptions`
+
+```text
+AllowedExtensions = [".docx"]
+ConnectionId = ""
+ConnectionString = ""
+ContainerName = ""
+DefaultChangeGranularity = Span
+DefaultChangeMode = Tracked
+ManagedIdentityClientId = ""
+MaximumBytes = 104857600
+Prefix = ""
+RegistrationIndexPath = ""
+ServiceUri = ""
+```
+
+### `OfficeAgent.Box.BoxClientCredentialsOptions`
+
+```text
+ClientId = ""
+ClientSecret = ""
+SubjectId = ""
+SubjectType = Enterprise
+TokenUrl = "https://api.box.com/oauth2/token"
+```
+
+### `OfficeAgent.Box.BoxDocumentProviderOptions`
+
+```text
+AllowedExtensions = [".docx"]
+ApiBaseUrl = "https://api.box.com/2.0"
+ConnectionId = ""
+CreationFolderId = ""
+DefaultChangeGranularity = Span
+DefaultChangeMode = Tracked
+MaximumBytes = 52428800
+UploadBaseUrl = "https://upload.box.com/api/2.0"
+```
+
 ### `OfficeAgent.Core.DocumentProviders.FileSystemDocumentProviderOptions`
 
 ```text
 AllowedExtensions = [".docx"]
 ConnectionId = ""
+DefaultChangeGranularity = Span
 DefaultChangeMode = Tracked
 MaximumBytes = 104857600
 RootPath = ""
@@ -6472,6 +6635,7 @@ RootPath = ""
 
 ```text
 AllowedExtensions = [".docx",".pptx",".xlsx"]
+DefaultChangeGranularity = Span
 DefaultChangeMode = Tracked
 MaximumBytes = 26214400
 MaximumTotalBytes = 104857600
@@ -6482,6 +6646,62 @@ MaximumTotalBytes = 104857600
 ```text
 Report.Changes = []
 Report.Errors = []
+```
+
+### `OfficeAgent.GoogleDrive.GoogleDriveDocumentProviderOptions`
+
+```text
+AllowedExtensions = [".docx"]
+ApiBaseUrl = "https://www.googleapis.com/drive/v3"
+ConnectionId = ""
+CreationFolderId = ""
+DefaultChangeGranularity = Span
+DefaultChangeMode = Tracked
+MaximumBytes = 104857600
+UploadBaseUrl = "https://www.googleapis.com/upload/drive/v3"
+```
+
+### `OfficeAgent.GoogleDrive.GoogleServiceAccountOptions`
+
+```text
+ClientEmail = ""
+KeyJson = ""
+PrivateKey = ""
+PrivateKeyId = ""
+Scope = "https://www.googleapis.com/auth/drive"
+Subject = ""
+TokenUri = "https://oauth2.googleapis.com/token"
+```
+
+### `OfficeAgent.IManage.IManageDocumentProviderOptions`
+
+```text
+AllowedExtensions = [".docx"]
+ApiBasePath = "/work/api/v2"
+ConnectionId = ""
+CreationDocumentClass = ""
+CreationFolderId = ""
+CustomerId = ""
+DefaultChangeGranularity = Span
+DefaultChangeMode = Tracked
+LockDuringSave = true
+MaximumBytes = 104857600
+SaveComment = "Saved by OfficeAgent."
+ServerUrl = ""
+```
+
+### `OfficeAgent.IManage.IManageOAuthOptions`
+
+```text
+ClientId = ""
+ClientSecret = ""
+GrantType = Password
+Password = ""
+RefreshToken = ""
+Scope = "user"
+ServerUrl = ""
+TokenPath = "/auth/oauth2/token"
+Username = ""
 ```
 
 ### `OfficeAgent.Rendering.LibreOfficeRendererOptions`
@@ -6520,7 +6740,10 @@ AllowedExtensions = [".docx"]
 ConnectionId = ""
 CreationDriveId = ""
 CreationFolderItemId = ""
+DefaultChangeGranularity = Span
 DefaultChangeMode = Tracked
 GraphBaseUrl = "https://graph.microsoft.com/v1.0"
 MaximumBytes = 104857600
+UploadSessionChunkBytes = 10485760
+UploadSessionThresholdBytes = 4194304
 ```

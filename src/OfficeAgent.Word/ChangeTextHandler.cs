@@ -84,16 +84,71 @@ internal sealed class ChangeTextHandler : IOperationHandler
                 "wholly outside the pending revision.",
                 anchor));
 
+        // The preview shows what will actually be marked, so a narrowed edit reports only the
+        // words it deletes and inserts.
+        var edit = Resolve(op, paragraph, start, after);
         return OperationPreview.Ok(new ProposedChange
         {
             Target = anchor,
             Verb = "changeText",
-            Before = anchor.Expect,
-            After = after,
+            Before = anchor.Expect.Substring(edit.Offset, edit.DeleteLength),
+            After = edit.Insert,
             Context = WordModel.Snippet(text, start, anchor.Expect.Length),
-            BlastRadius = 1
+            BlastRadius = 1,
+            Warning = edit.Warning
         });
     }
+
+    /// <summary>
+    /// What a <c>changeText</c> deletes and inserts inside its matched span: the whole span
+    /// unless the operation asked for <see cref="ChangeGranularity.Minimal"/> on a tracked
+    /// <c>with</c> edit, in which case only the words that differ. Preview and apply both call
+    /// this, so the preview reports exactly what apply marks.
+    /// </summary>
+    /// <param name="op">The operation.</param>
+    /// <param name="paragraph">The paragraph holding the span, read but not changed.</param>
+    /// <param name="start">Where the matched span starts in the paragraph's logical text.</param>
+    /// <param name="replacement">The replacement text, already read from a marked rewrite.</param>
+    private static Edit Resolve(ChangeTextOp op, OpenXmlElement paragraph, int start, string replacement)
+    {
+        var expect = ((TextSpanAnchor)op.Target).Expect;
+        var whole = new Edit(0, expect.Length, replacement, null);
+
+        // A direct edit leaves no marks to narrow, and a marked rewrite carries formatting
+        // for the whole paragraph, so both keep the span.
+        if (op.Granularity != ChangeGranularity.Minimal || op.Mode != ChangeMode.Tracked || op.WithMarked is not null)
+            return whole;
+
+        var (offset, deleteLength, insert) = MinimalTextEdit.Narrow(expect, replacement);
+
+        // Deleting words that carry different formatting would need a deletion per format
+        // and an insertion in one of them; the whole-span replacement Word users already know
+        // is the honest fallback, and the change says so.
+        if (deleteLength > 0 && HasMixedFormatting(paragraph, start + offset, deleteLength))
+            return whole with
+            {
+                Warning = "granularity Minimal fell back to Span: the words to delete, '" +
+                          expect.Substring(offset, deleteLength) + "', carry different character formatting, " +
+                          "so the whole matched text is marked as deleted and the replacement as inserted."
+            };
+
+        return new Edit(offset, deleteLength, insert, null);
+    }
+
+    /// <summary>Whether the text runs a span covers carry more than one character formatting.</summary>
+    private static bool HasMixedFormatting(OpenXmlElement paragraph, int start, int length) =>
+        CoveredRuns(paragraph, start, length)
+            .Where(run => WordModel.Dialect.GetRunText(run).Length > 0)
+            .Select(run => run.GetFirstChild<RunProperties>()?.OuterXml ?? string.Empty)
+            .Distinct(StringComparer.Ordinal)
+            .Skip(1)
+            .Any();
+
+    /// <summary>
+    /// The part of a matched span an edit replaces: <c>DeleteLength</c> characters from
+    /// <c>Offset</c>, relative to the span, give way to <c>Insert</c>.
+    /// </summary>
+    private sealed record Edit(int Offset, int DeleteLength, string Insert, string? Warning);
 
     /// <summary>
     /// Describes why a span cannot be safely redlined, or null when it can.
@@ -209,17 +264,71 @@ internal sealed class ChangeTextHandler : IOperationHandler
         if (start < 0)
             throw new InvalidOperationException($"Expected text '{anchor.Expect}' not found at apply time.");
 
-        var covered = WordModel.Text.IsolateSpan(paragraph, start, anchor.Expect.Length);
+        var edit = Resolve(op, paragraph, start, replacement);
+
+        // Nothing differs: a narrowed edit has nothing to mark.
+        if (edit.DeleteLength == 0 && edit.Insert.Length == 0) return;
+
+        if (edit.DeleteLength == 0)
+        {
+            InsertTracked(context, paragraph, start, anchor.Expect.Length, edit.Offset, edit.Insert);
+            return;
+        }
+
+        var covered = WordModel.Text.IsolateSpan(paragraph, start + edit.Offset, edit.DeleteLength);
         if (covered.Count == 0)
             throw new InvalidOperationException("Span isolation produced no runs.");
 
         if (op.Mode == ChangeMode.Direct)
         {
-            if (markedRuns is null) ApplyDirect(covered, replacement);
+            if (markedRuns is null) ApplyDirect(covered, edit.Insert);
             else ApplyDirectRuns(covered, markedRuns);
         }
         else
-            ApplyTracked(context, covered, replacement, markedRuns);
+            ApplyTracked(context, covered, edit.Insert, markedRuns);
+    }
+
+    /// <summary>
+    /// Writes a pure tracked insertion at <paramref name="offset"/> inside the matched span
+    /// <c>[start, start + length)</c>. The new run takes the character formatting of the text
+    /// before it, as typing in Word does, or of the text after it when the insertion opens
+    /// the span. Only the span's own runs are split, so nothing outside it is touched.
+    /// </summary>
+    private static void InsertTracked(ApplyContext context, OpenXmlElement paragraph, int start, int length, int offset, string text)
+    {
+        OpenXmlElement neighbour;
+        bool after;
+        if (offset > 0)
+        {
+            var before = WordModel.Text.IsolateSpan(paragraph, start, offset);
+            if (before.Count == 0) throw new InvalidOperationException("Span isolation produced no runs.");
+            neighbour = before[before.Count - 1];
+            after = true;
+        }
+        else
+        {
+            var following = WordModel.Text.IsolateSpan(paragraph, start, length);
+            if (following.Count == 0) throw new InvalidOperationException("Span isolation produced no runs.");
+            neighbour = following[0];
+            after = false;
+        }
+
+        var run = new Run();
+        if (neighbour.GetFirstChild<RunProperties>() is { } properties)
+            run.AppendChild(properties.CloneNode(deep: true));
+        WordModel.Dialect.SetRunText(run, text);
+
+        var revision = context.Revision;
+        var inserted = WordRevisions.Stamp(
+            new InsertedRun(),
+            new WordRevisionIdAllocator(context.Package).Next().ToString(),
+            revision.Author,
+            revision.TimestampUtc!.Value.UtcDateTime);
+        inserted.AppendChild(run);
+
+        var parent = neighbour.Parent ?? throw new InvalidOperationException("Run has no parent paragraph.");
+        if (after) parent.InsertAfter(inserted, neighbour);
+        else parent.InsertBefore(inserted, neighbour);
     }
 
     /// <summary>

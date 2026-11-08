@@ -102,6 +102,20 @@ fails identically. A genuine ceiling breach still reports `input-too-large`.
 - Diagnostics name the limit, the ceiling, and the observed value, and stay short. A
   refusal never echoes document content back to the caller.
 
+## How the limits are tested
+
+`BoundedIngestionTests` checks each ceiling at, below and above its boundary with hand-built
+packages, and runs a fixed set of malformed seeds through every entry point.
+
+Beyond the unit tests, a fuzz target feeds the ingestion path inputs nobody wrote by hand:
+[`tests/OfficeAgent.Fuzz`](../tests/OfficeAgent.Fuzz/README.md). It wraps arbitrary bytes in a
+`StreamHandle` and inspects them through a client with the Word, PowerPoint and Excel modules,
+under the default ceilings, using SharpFuzz and libFuzzer, seeded from `samples/documents` and the
+test corpus. An input must produce a result or one of the three refusals above. Any other
+exception, a hang past 10 seconds, more than 2 GiB of live managed memory, more than 1 GiB
+allocated by one inspection, or a refusal message of 600 characters or more is a finding. It runs
+locally from its README; it is not part of CI.
+
 ## Tuning
 
 Raise `MaximumCompressedBytes` and `MaximumPartBytes` together when your documents carry

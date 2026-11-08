@@ -1,0 +1,39 @@
+{
+    "$schema": "https://developer.microsoft.com/json-schemas/teams/v1.30/MicrosoftTeams.schema.json",
+    "manifestVersion": "1.30",
+    "version": "1.0.0",
+    "id": "${{TEAMS_APP_ID}}",
+    "developer": {
+        "name": "OfficeAgent.NET sample",
+        "websiteUrl": "https://github.com/ilia-sokolov/OfficeAgent.NET",
+        "privacyUrl": "https://github.com/ilia-sokolov/OfficeAgent.NET/blob/main/PRIVACY.md",
+        "termsOfUseUrl": "https://github.com/ilia-sokolov/OfficeAgent.NET/blob/main/LICENSE"
+    },
+    "icons": {
+        "color": "color.png",
+        "outline": "outline.png"
+    },
+    "name": {
+        "short": "Contract Reviewer${{APP_NAME_SUFFIX}}",
+        "full": "Contract Redline Reviewer"
+    },
+    "description": {
+        "short": "Redline Word contracts in SharePoint as tracked changes.",
+        "full": "Reviews a Word contract stored in SharePoint or OneDrive, proposes redlines as tracked changes a reviewer can accept or reject, and adds comments on clauses that need a human decision. It works through a hosted OfficeAgent MCP server, acting as the signed-in user."
+    },
+    "accentColor": "#FFFFFF",
+    "composeExtensions": [],
+    "copilotAgents": {
+        "declarativeAgents": [
+            {
+                "id": "declarativeAgent",
+                "file": "declarativeAgent.json"
+            }
+        ]
+    },
+    "permissions": [
+        "identity",
+        "messageTeamMembers"
+    ],
+    "validDomains": []
+}

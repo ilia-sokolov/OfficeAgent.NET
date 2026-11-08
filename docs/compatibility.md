@@ -97,6 +97,9 @@ These are part of the contract and are recorded in the [wire contract's defaults
 - A Word edit that names no `mode` is tracked. Connections default to `Tracked`, and so does
   `ChangeTextOp.Mode`. PowerPoint refuses an explicit `Tracked` rather than writing an untracked
   edit.
+- A tracked `changeText` that names no `granularity` marks the whole matched text (`Span`).
+  Connections, the MCP server and `ChangeTextOp.Granularity` all default to `Span` throughout
+  1.x; `Minimal`, which marks only the words that differ, is opt-in and becomes the default in 2.0.
 - Creation, registration and inline content are opt-in on the in-process tools. On the MCP server,
   registration defaults to on and creation to off.
 - Every ingestion ceiling, and every merge, comparison and template-batch limit, keeps its default.
@@ -161,10 +164,11 @@ add members to them:
 
 | Interface | Implemented to |
 | --- | --- |
-| `IDocumentProvider`, `IDocumentCreatingProvider`, `IConnectionEditingDefaults`, `IConnectionCalculationDefaults` | Add a storage backend |
+| `IDocumentProvider`, `IDocumentCreatingProvider`, `IConnectionEditingDefaults`, `IConnectionGranularityDefaults`, `IConnectionCalculationDefaults` | Add a storage backend |
 | `IConnectionAccessPolicy`, `ITrustedPrincipalAccessor` | Authorise tool calls |
 | `IAuditActorProvider` | Stamp receipts with the acting user |
 | `IAccessTokenProvider`, `ISharePointRegistrationStore` | Customise SharePoint authentication and registration |
+| `IAzureBlobRegistrationStore`, `IAmazonS3RegistrationStore` | Share Azure Blob or Amazon S3 registrations across host instances |
 | `IDocumentRenderer` | Plug in a renderer |
 | `IFormulaEvaluator` | Plug in a formula calculation engine |
 

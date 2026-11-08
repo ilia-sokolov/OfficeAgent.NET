@@ -139,6 +139,22 @@ public interface IConnectionEditingDefaults
 }
 
 /// <summary>
+/// Optional <see cref="IDocumentProvider"/> capability: how much of the matched text a tracked
+/// <c>changeText</c> marks on one connection. Separate from <see cref="IConnectionEditingDefaults"/>
+/// so existing custom providers keep compiling and simply take
+/// <see cref="ChangeGranularity.Span"/>.
+/// </summary>
+public interface IConnectionGranularityDefaults
+{
+    /// <summary>
+    /// Gets the granularity applied to a <c>changeText</c> operation that does not state one.
+    /// <see cref="ChangeGranularity.Span"/> marks the whole matched text;
+    /// <see cref="ChangeGranularity.Minimal"/> marks only the words that differ.
+    /// </summary>
+    ChangeGranularity DefaultChangeGranularity { get; }
+}
+
+/// <summary>
 /// Optional <see cref="IDocumentProvider"/> capability: whether workbooks edited through one
 /// connection have their formulas calculated. Separate from <see cref="IDocumentProvider"/>
 /// and <see cref="IConnectionEditingDefaults"/> so existing custom providers keep compiling
@@ -243,6 +259,24 @@ public sealed class DocumentProviderRegistry
         return matches.Length == 1 && matches[0] is IConnectionEditingDefaults defaults
             ? defaults.DefaultChangeMode
             : ChangeMode.Tracked;
+    }
+
+    /// <summary>
+    /// Returns the granularity a connection applies to a <c>changeText</c> that does not state
+    /// one. An unknown or ambiguous connection, or one whose provider declares no preference,
+    /// yields <see cref="ChangeGranularity.Span"/>, the global default in 1.x. Like
+    /// <see cref="DefaultChangeModeFor"/>, this does not throw.
+    /// </summary>
+    public ChangeGranularity DefaultChangeGranularityFor(string connectionId)
+    {
+        if (string.IsNullOrWhiteSpace(connectionId)) return ChangeGranularity.Span;
+
+        var matches = _providers.Where(p =>
+            string.Equals(p.ConnectionId, connectionId, StringComparison.Ordinal)).ToArray();
+
+        return matches.Length == 1 && matches[0] is IConnectionGranularityDefaults defaults
+            ? defaults.DefaultChangeGranularity
+            : ChangeGranularity.Span;
     }
 
     /// <summary>Returns the set of registered <c>(Provider, ConnectionId)</c> pairs for host enumeration.</summary>

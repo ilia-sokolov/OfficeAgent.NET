@@ -550,6 +550,218 @@ public class SharePointProviderTests
         Assert.DoesNotContain("graph.fake", json);
     }
 
+    // ── Upload sessions (#57) ────────────────────────────────────────────────────────────
+    // Saves at or above the threshold go through a Graph upload session. The fake keeps each
+    // session's bytes and stores the file only when the last byte arrives, as Graph does.
+
+    private const int ChunkUnit = 320 * 1024;
+
+    private static byte[] LargeContent()
+    {
+        // Three full 320 KiB chunks and a short last one.
+        var bytes = new byte[3 * ChunkUnit + 16_960];
+        new Random(57).NextBytes(bytes);
+        return bytes;
+    }
+
+    private static SharePointDocumentProvider SessionProvider(FakeGraphDrive drive) =>
+        drive.Provider(uploadSessionThresholdBytes: 512 * 1024, uploadSessionChunkBytes: ChunkUnit);
+
+    [Fact]
+    public async Task A_large_replace_uploads_in_320_KiB_chunks_without_the_bearer_token()
+    {
+        using var drive = new FakeGraphDrive();
+        var itemId = drive.Seed("contract.docx", DocxFactory.Contract());
+        var provider = SessionProvider(drive);
+        var source = await provider.RegisterAsync(drive.SourceById(itemId));
+        var content = LargeContent();
+
+        var replaced = await provider.SaveAsync(source, new MemoryStream(content), new SaveDocumentOptions { Mode = SaveMode.Replace });
+
+        Assert.Equal(source.ItemId, replaced.ItemId);
+        Assert.NotEqual(source.Version, replaced.Version);
+        Assert.Equal(content, drive.BytesNamed("contract.docx"));
+        Assert.Equal(1, drive.SessionsCreated);
+        Assert.Equal(new[] { ChunkUnit, ChunkUnit, ChunkUnit, 16_960 }, drive.ChunkSizes);
+        Assert.All(drive.ChunkSizes.Take(drive.ChunkSizes.Count - 1), size => Assert.Equal(0, size % ChunkUnit));
+        // Replace keeps its precondition: the session request carries If-Match with the ETag read.
+        Assert.Equal(source.Version, drive.SessionIfMatch);
+        Assert.Equal("replace", drive.SessionConflictBehavior);
+        // The token goes to Graph, never to the pre-authenticated upload URL.
+        Assert.True(drive.SawAuthorizedGraphCall);
+        Assert.False(drive.SawAuthorizedUploadCall);
+    }
+
+    [Fact]
+    public async Task A_save_below_the_threshold_is_still_one_request()
+    {
+        using var drive = new FakeGraphDrive();
+        var itemId = drive.Seed("contract.docx", DocxFactory.Contract());
+        var provider = drive.Provider();
+        var source = await provider.RegisterAsync(drive.SourceById(itemId));
+
+        await provider.SaveAsync(source, new MemoryStream(DocxFactory.Contract()), new SaveDocumentOptions { Mode = SaveMode.NewVersion });
+
+        Assert.True(drive.HasName("contract.v2.docx"));
+        Assert.Equal(0, drive.SessionsCreated);
+        Assert.Empty(drive.ChunkSizes);
+    }
+
+    [Theory]
+    [InlineData(ChunkFault.DropBeforeStore, 5)]   // the chunk never landed: it is sent again
+    [InlineData(ChunkFault.ServerError, 5)]       // a 503: sent again after Retry-After
+    [InlineData(ChunkFault.StoreThenDrop, 4)]     // it landed but the reply was lost: resume after it
+    public async Task A_failed_chunk_is_retried_from_the_range_the_session_expects(ChunkFault fault, int puts)
+    {
+        using var drive = new FakeGraphDrive();
+        drive.ChunkFaults[1] = fault;
+        var itemId = drive.Seed("contract.docx", DocxFactory.Contract());
+        var provider = SessionProvider(drive);
+        var source = await provider.RegisterAsync(drive.SourceById(itemId));
+        var content = LargeContent();
+
+        var saved = await provider.SaveAsync(source, new MemoryStream(content),
+            new SaveDocumentOptions { Mode = SaveMode.NewDocument, NewName = "large.docx" });
+
+        Assert.Equal("large.docx", saved.Name);
+        Assert.Equal(content, drive.BytesNamed("large.docx"));
+        Assert.Equal(puts, drive.ChunkSizes.Count);
+        Assert.Equal("fail", drive.SessionConflictBehavior);
+        Assert.Equal(0, drive.SessionsCancelled);
+    }
+
+    [Fact]
+    public async Task A_chunk_that_keeps_failing_is_rejected_and_its_session_cancelled()
+    {
+        using var drive = new FakeGraphDrive();
+        for (var put = 1; put <= 4; put++) drive.ChunkFaults[put] = ChunkFault.ServerError;
+        var itemId = drive.Seed("contract.docx", DocxFactory.Contract());
+        var provider = SessionProvider(drive);
+        var source = await provider.RegisterAsync(drive.SourceById(itemId));
+
+        var error = await Assert.ThrowsAsync<DocumentProviderException>(() => provider.SaveAsync(source,
+            new MemoryStream(LargeContent()), new SaveDocumentOptions { Mode = SaveMode.NewDocument, NewName = "large.docx" }));
+
+        Assert.Equal(ProviderErrorCode.WriteRejected, error.Code);
+        Assert.Contains("nothing was stored", error.Message);
+        Assert.False(drive.HasName("large.docx"));
+        Assert.Equal(1, drive.SessionsCancelled);
+    }
+
+    [Fact]
+    public async Task A_replace_whose_item_changed_is_refused_when_the_session_opens()
+    {
+        using var drive = new FakeGraphDrive { ChangeItemAtSessionStart = true };
+        var original = DocxFactory.Contract();
+        var itemId = drive.Seed("contract.docx", original);
+        var provider = SessionProvider(drive);
+        var source = await provider.RegisterAsync(drive.SourceById(itemId));
+
+        var error = await Assert.ThrowsAsync<DocumentVersionConflictException>(() => provider.SaveAsync(
+            source, new MemoryStream(LargeContent()), new SaveDocumentOptions { Mode = SaveMode.Replace }));
+
+        Assert.Equal(ProviderErrorCode.VersionConflict, error.Code);
+        Assert.Equal(original, drive.BytesNamed("contract.docx"));
+        Assert.Empty(drive.ChunkSizes);
+    }
+
+    [Fact]
+    public async Task A_replace_whose_item_changed_during_the_session_is_refused_at_the_last_chunk()
+    {
+        // Graph's documentation does not say whether If-Match is checked again at commit. If it is,
+        // the 412 arrives on the last chunk: a refusal, so nothing was stored and the session goes.
+        using var drive = new FakeGraphDrive { ChangeItemDuringSession = true };
+        var original = DocxFactory.Contract();
+        var itemId = drive.Seed("contract.docx", original);
+        var provider = SessionProvider(drive);
+        var source = await provider.RegisterAsync(drive.SourceById(itemId));
+
+        await Assert.ThrowsAsync<DocumentVersionConflictException>(() => provider.SaveAsync(
+            source, new MemoryStream(LargeContent()), new SaveDocumentOptions { Mode = SaveMode.Replace }));
+
+        Assert.Equal(original, drive.BytesNamed("contract.docx"));
+        Assert.Equal(1, drive.SessionsCancelled);
+    }
+
+    [Fact]
+    public async Task A_taken_name_reported_on_the_last_chunk_is_refused_and_its_session_cancelled()
+    {
+        using var drive = new FakeGraphDrive();
+        var itemId = drive.Seed("contract.docx", DocxFactory.Contract());
+        var taken = DocxFactory.Contract();
+        drive.Seed("taken.docx", taken);
+        var provider = SessionProvider(drive);
+        var source = await provider.RegisterAsync(drive.SourceById(itemId));
+
+        var error = await Assert.ThrowsAsync<DocumentProviderException>(() => provider.SaveAsync(source,
+            new MemoryStream(LargeContent()), new SaveDocumentOptions { Mode = SaveMode.NewDocument, NewName = "taken.docx" }));
+
+        Assert.Equal(ProviderErrorCode.AlreadyExists, error.Code);
+        Assert.Equal(taken, drive.BytesNamed("taken.docx"));
+        Assert.Equal(1, drive.SessionsCancelled);
+    }
+
+    [Fact]
+    public async Task A_session_expiring_mid_upload_is_rejected_with_nothing_stored()
+    {
+        using var drive = new FakeGraphDrive();
+        drive.ChunkFaults[2] = ChunkFault.ExpireSession;
+        var itemId = drive.Seed("contract.docx", DocxFactory.Contract());
+        var provider = SessionProvider(drive);
+        var source = await provider.RegisterAsync(drive.SourceById(itemId));
+
+        var error = await Assert.ThrowsAsync<DocumentProviderException>(() => provider.SaveAsync(source,
+            new MemoryStream(LargeContent()), new SaveDocumentOptions { Mode = SaveMode.NewDocument, NewName = "large.docx" }));
+
+        Assert.Equal(ProviderErrorCode.WriteRejected, error.Code);
+        Assert.Contains("expired", error.Message);
+        Assert.False(drive.HasName("large.docx"));
+    }
+
+    [Fact]
+    public async Task A_lost_response_to_the_last_chunk_is_unknown()
+    {
+        using var drive = new FakeGraphDrive();
+        drive.ChunkFaults[3] = ChunkFault.StoreThenLoseResponse;
+        var itemId = drive.Seed("contract.docx", DocxFactory.Contract());
+        var provider = SessionProvider(drive);
+        var source = await provider.RegisterAsync(drive.SourceById(itemId));
+        var content = LargeContent();
+
+        var error = await Assert.ThrowsAsync<DocumentProviderException>(() => provider.SaveAsync(source,
+            new MemoryStream(content), new SaveDocumentOptions { Mode = SaveMode.NewDocument, NewName = "large.docx" }));
+
+        Assert.Equal(ProviderErrorCode.OutcomeUnknown, error.Code);
+        Assert.Equal(content, drive.BytesNamed("large.docx"));
+    }
+
+    [Fact]
+    public async Task A_lost_response_to_the_last_chunk_is_unknown_and_reconcilable_through_the_engine()
+    {
+        using var drive = new FakeGraphDrive();
+        drive.ChunkFaults[0] = ChunkFault.StoreThenLoseResponse;
+        var provider = drive.Provider(uploadSessionThresholdBytes: 1, uploadSessionChunkBytes: ChunkUnit);
+
+        var error = await Assert.ThrowsAsync<DocumentWriteOutcomeUnknownException>(() =>
+            EngineOver(provider).CreateAsync("legal", "lost.docx"));
+
+        Assert.Equal(1, drive.SessionsCreated);
+        Assert.Equal("lost.docx", error.OutputName);
+        Assert.Equal(Sha256(drive.BytesNamed("lost.docx")), error.OutputSha256);
+    }
+
+    [Theory]
+    [InlineData(0L, ChunkUnit)]
+    [InlineData(250L * 1000 * 1000 + 1, ChunkUnit)]
+    [InlineData(4L * 1024 * 1024, 100_000)]
+    [InlineData(4L * 1024 * 1024, 192 * ChunkUnit)] // 60 MiB: Graph wants less
+    public void Upload_session_options_are_validated(long threshold, int chunk)
+    {
+        using var drive = new FakeGraphDrive();
+        Assert.Throws<ArgumentOutOfRangeException>(() =>
+            drive.Provider(uploadSessionThresholdBytes: threshold, uploadSessionChunkBytes: chunk));
+    }
+
     private static void AssertLocated(FakeGraphDrive drive, DocumentRegistrationFailedException error, string name, string? sourceItemId)
     {
         Assert.IsAssignableFrom<DocumentWriteRecoveryException>(error);
@@ -603,11 +815,31 @@ public class SharePointProviderTests
             Task.FromResult(false);
     }
 
+    /// <summary>A simulated failure of one chunk PUT to an upload session.</summary>
+    public enum ChunkFault
+    {
+        /// <summary>The connection drops before the chunk is stored.</summary>
+        DropBeforeStore,
+
+        /// <summary>The chunk is stored, then the connection drops before the reply.</summary>
+        StoreThenDrop,
+
+        /// <summary>A 503 with <c>Retry-After: 0</c>; the chunk is not stored.</summary>
+        ServerError,
+
+        /// <summary>The session has expired: it is gone and the chunk gets a 404.</summary>
+        ExpireSession,
+
+        /// <summary>The chunk is stored (committing the file when it is the last), then the reply is lost.</summary>
+        StoreThenLoseResponse
+    }
+
     private sealed class FakeGraphDrive : IDisposable
     {
         private const string GraphBase = "https://graph.fake/v1.0";
         public const string DriveId = "fakedrive";
         private const string DownloadHost = "https://download.fake";
+        private const string UploadHost = "https://upload.fake/session/";
         private const string ShareHost = "https://contoso.fake/doc";
         public const string FolderId = "folder-contracts";
 
@@ -635,6 +867,28 @@ public class SharePointProviderTests
         /// dropped connection does. The item exists; the caller never hears so.
         /// </summary>
         public bool StoreThenLoseResponse { get; set; }
+
+        private readonly Dictionary<string, Session> _sessions = new(StringComparer.Ordinal);
+        private int _nextSession;
+        private int _chunkPuts;
+
+        /// <summary>Simulated failures of chunk PUTs, keyed by the PUT's 0-based position across the drive.</summary>
+        public Dictionary<int, ChunkFault> ChunkFaults { get; } = new();
+
+        /// <summary>Simulation: the item changes after its ETag was read and before its session opens.</summary>
+        public bool ChangeItemAtSessionStart { get; init; }
+
+        /// <summary>Simulation: the item changes after the session's first chunk.</summary>
+        public bool ChangeItemDuringSession { get; init; }
+
+        public int SessionsCreated { get; private set; }
+        public int SessionsCancelled { get; private set; }
+        public string? SessionIfMatch { get; private set; }
+        public string? SessionConflictBehavior { get; private set; }
+        public bool SawAuthorizedUploadCall { get; private set; }
+
+        /// <summary>The size of every chunk PUT received, retries included, in order.</summary>
+        public List<int> ChunkSizes { get; } = new();
 
         /// <summary>The bytes stored under a name, for reconciliation assertions.</summary>
         public byte[] BytesNamed(string name) => _byName[name].Bytes;
@@ -665,12 +919,16 @@ public class SharePointProviderTests
         public SharePointDocumentProvider Provider(
             long maximumBytes = 100 * 1024 * 1024,
             bool configureCreation = true,
-            ISharePointRegistrationStore? registrationStore = null) => new(
+            ISharePointRegistrationStore? registrationStore = null,
+            long uploadSessionThresholdBytes = 4 * 1024 * 1024,
+            int uploadSessionChunkBytes = 10 * 1024 * 1024) => new(
             new SharePointDocumentProviderOptions
             {
                 ConnectionId = "legal",
                 GraphBaseUrl = GraphBase,
                 MaximumBytes = maximumBytes,
+                UploadSessionThresholdBytes = uploadSessionThresholdBytes,
+                UploadSessionChunkBytes = uploadSessionChunkBytes,
                 CreationDriveId = configureCreation ? DriveId : string.Empty,
                 CreationFolderItemId = configureCreation ? FolderId : string.Empty
             },
@@ -697,6 +955,147 @@ public class SharePointProviderTests
             public string ETag = "";
         }
 
+        /// <summary>One upload session: what it targets and the bytes received so far.</summary>
+        private sealed class Session
+        {
+            public string? ReplaceItemId;
+            public string? Name;
+            public string? IfMatch;
+            public readonly MemoryStream Received = new();
+            public bool Changed;
+        }
+
+        /// <summary>POST createUploadSession, for an item by id (replace) or a folder and name (new).</summary>
+        private HttpResponseMessage OpenSession(HttpRequestMessage request, string rest)
+        {
+            var session = new Session();
+            using (var body = JsonDocument.Parse(request.Content!.ReadAsStringAsync().GetAwaiter().GetResult()))
+            {
+                var item = body.RootElement.GetProperty("item");
+                SessionConflictBehavior = item.GetProperty("@microsoft.graph.conflictBehavior").GetString();
+                session.Name = item.TryGetProperty("name", out var name) ? name.GetString() : null;
+            }
+            SessionIfMatch = request.Headers.TryGetValues("If-Match", out var ifMatch) ? ifMatch.Single() : null;
+            session.IfMatch = SessionIfMatch;
+
+            var path = rest.Substring(0, rest.Length - "/createUploadSession".Length);
+            if (path.EndsWith(":", StringComparison.Ordinal))
+            {
+                // {folderId}:/{name}: - a new file. The name must match the body's.
+                if (!path.StartsWith(FolderId + ":/", StringComparison.Ordinal))
+                    return Handler.GraphError(HttpStatusCode.NotFound, "itemNotFound");
+                var name = Uri.UnescapeDataString(path.Substring(FolderId.Length + 2, path.Length - FolderId.Length - 3));
+                if (!string.Equals(name, session.Name, StringComparison.Ordinal))
+                    return Handler.GraphError(HttpStatusCode.BadRequest, "invalidRequest");
+            }
+            else
+            {
+                if (!_byId.TryGetValue(path, out var entry))
+                    return Handler.GraphError(HttpStatusCode.NotFound, "itemNotFound");
+                if (ChangeItemAtSessionStart) entry.ETag = NextETag();
+                if (session.IfMatch is not null && session.IfMatch != entry.ETag)
+                    return Handler.GraphError(HttpStatusCode.PreconditionFailed, "resourceModified");
+                session.ReplaceItemId = path;
+            }
+
+            var id = $"s{++_nextSession}";
+            _sessions[id] = session;
+            SessionsCreated++;
+            return Handler.Json(new Dictionary<string, object?>
+            {
+                ["uploadUrl"] = UploadHost + id,
+                ["expirationDateTime"] = "2026-11-03T00:00:00Z"
+            });
+        }
+
+        /// <summary>PUT, GET and DELETE on a session's pre-authenticated upload URL.</summary>
+        private HttpResponseMessage Upload(HttpRequestMessage request, string id)
+        {
+            if (request.Headers.Authorization is not null) SawAuthorizedUploadCall = true;
+            ChunkFault? fault = null;
+            byte[]? chunk = null;
+            if (request.Method == HttpMethod.Put)
+            {
+                chunk = request.Content!.ReadAsByteArrayAsync().GetAwaiter().GetResult();
+                ChunkSizes.Add(chunk.Length);
+                if (ChunkFaults.TryGetValue(_chunkPuts++, out var simulated)) fault = simulated;
+                if (fault == ChunkFault.ExpireSession) _sessions.Remove(id);
+            }
+
+            if (!_sessions.TryGetValue(id, out var session))
+                return Handler.GraphError(HttpStatusCode.NotFound, "itemNotFound");
+
+            if (request.Method == HttpMethod.Delete)
+            {
+                _sessions.Remove(id);
+                SessionsCancelled++;
+                return new HttpResponseMessage(HttpStatusCode.NoContent);
+            }
+            if (request.Method == HttpMethod.Get)
+                return Expecting(session, HttpStatusCode.OK);
+
+            if (fault == ChunkFault.DropBeforeStore)
+                throw new HttpRequestException("The connection was reset.");
+            if (fault == ChunkFault.ServerError)
+            {
+                var busy = Handler.GraphError(HttpStatusCode.ServiceUnavailable, "serviceNotAvailable");
+                busy.Headers.RetryAfter = new System.Net.Http.Headers.RetryConditionHeaderValue(TimeSpan.Zero);
+                return busy;
+            }
+
+            var range = request.Content!.Headers.ContentRange!;
+            if (range.From != session.Received.Length || range.To != range.From + chunk!.Length - 1)
+                return Handler.GraphError(HttpStatusCode.RequestedRangeNotSatisfiable, "invalidRange");
+            session.Received.Write(chunk, 0, chunk.Length);
+
+            if (ChangeItemDuringSession && !session.Changed && session.ReplaceItemId is { } changing)
+            {
+                session.Changed = true;
+                _byId[changing].ETag = NextETag();
+            }
+
+            if (session.Received.Length < range.Length)
+            {
+                if (fault == ChunkFault.StoreThenDrop)
+                    throw new HttpRequestException("The connection was reset after the chunk was stored.");
+                return Expecting(session, HttpStatusCode.Accepted);
+            }
+
+            // The last byte arrived: commit. A refused commit leaves the session open, as Graph does.
+            HttpResponseMessage committed;
+            if (session.ReplaceItemId is { } replaceId)
+            {
+                var entry = _byId[replaceId];
+                if (session.IfMatch is not null && session.IfMatch != entry.ETag)
+                    return Handler.GraphError(HttpStatusCode.PreconditionFailed, "resourceModified");
+                entry.Bytes = session.Received.ToArray();
+                entry.ETag = NextETag();
+                committed = Handler.Item(entry);
+            }
+            else
+            {
+                if (_byName.ContainsKey(session.Name!))
+                    return Handler.GraphError(HttpStatusCode.Conflict, "nameAlreadyExists");
+                committed = Handler.Item(_byId[Seed(session.Name!, session.Received.ToArray())]);
+                committed.StatusCode = HttpStatusCode.Created;
+            }
+            _sessions.Remove(id);
+            if (fault == ChunkFault.StoreThenLoseResponse)
+                throw new TaskCanceledException("The request timed out after the upload was stored.");
+            return committed;
+        }
+
+        private static HttpResponseMessage Expecting(Session session, HttpStatusCode status)
+        {
+            var response = Handler.Json(new Dictionary<string, object?>
+            {
+                ["expirationDateTime"] = "2026-11-03T00:00:00Z",
+                ["nextExpectedRanges"] = new[] { $"{session.Received.Length}-" }
+            });
+            response.StatusCode = status;
+            return response;
+        }
+
         private sealed class Handler : HttpMessageHandler
         {
             private readonly FakeGraphDrive _drive;
@@ -716,6 +1115,10 @@ public class SharePointProviderTests
                         ? Bytes(file.Bytes)
                         : Status(HttpStatusCode.NotFound));
                 }
+
+                // The pre-authenticated upload URL of a session: no bearer token expected.
+                if (url.StartsWith(UploadHost, StringComparison.Ordinal))
+                    return Task.FromResult(_drive.Upload(request, url.Substring(UploadHost.Length)));
 
                 if (!authorized)
                     return Task.FromResult(Status(HttpStatusCode.Unauthorized));
@@ -749,6 +1152,9 @@ public class SharePointProviderTests
                 if (!rest.StartsWith("/items/", StringComparison.Ordinal))
                     return Status(HttpStatusCode.NotFound);
                 rest = rest.Substring("/items/".Length);
+
+                if (request.Method == HttpMethod.Post && rest.EndsWith("/createUploadSession", StringComparison.Ordinal))
+                    return _drive.OpenSession(request, rest);
 
                 if (request.Method == HttpMethod.Put && _drive.UploadStatus is { } simulated)
                 {
@@ -838,7 +1244,7 @@ public class SharePointProviderTests
                 return Encoding.UTF8.GetString(Convert.FromBase64String(b64));
             }
 
-            private static HttpResponseMessage Item(Entry entry) => Json(new Dictionary<string, object?>
+            internal static HttpResponseMessage Item(Entry entry) => Json(new Dictionary<string, object?>
             {
                 ["id"] = entry.Id,
                 ["name"] = entry.Name,
@@ -856,7 +1262,7 @@ public class SharePointProviderTests
                 ["@microsoft.graph.downloadUrl"] = $"{DownloadHost}/{entry.Id}"
             });
 
-            private static HttpResponseMessage Json(object payload) => new(HttpStatusCode.OK)
+            internal static HttpResponseMessage Json(object payload) => new(HttpStatusCode.OK)
             {
                 Content = new StringContent(JsonSerializer.Serialize(payload), Encoding.UTF8, "application/json")
             };
@@ -868,7 +1274,7 @@ public class SharePointProviderTests
 
             private static HttpResponseMessage Status(HttpStatusCode code) => new(code);
 
-            private static HttpResponseMessage GraphError(
+            internal static HttpResponseMessage GraphError(
                 HttpStatusCode status,
                 string code,
                 string? message = null) => new(status)

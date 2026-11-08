@@ -26,6 +26,9 @@ public sealed class RenderingOptionalTests
             typeof(DocumentPlan).Assembly, typeof(OfficeAgentClient).Assembly, typeof(WordModule).Assembly,
             typeof(PowerPointModule).Assembly, typeof(ExcelModule).Assembly, typeof(OfficeAgentTools).Assembly,
             typeof(SharePointDocumentProvider).Assembly, typeof(OfficeAgent.Mcp.OfficeAgentMcpOptions).Assembly,
+            typeof(OfficeAgent.IManage.IManageDocumentProvider).Assembly,
+            typeof(OfficeAgent.AzureBlob.AzureBlobDocumentProvider).Assembly,
+            typeof(OfficeAgent.AmazonS3.AmazonS3DocumentProvider).Assembly,
         };
         var rendering = typeof(LibreOfficeDocumentRenderer).Assembly.GetName().Name;
         foreach (var assembly in others)

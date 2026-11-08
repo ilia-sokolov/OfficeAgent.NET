@@ -1,8 +1,9 @@
 # Deployment & client setup
 
 This is the power-user manual for connecting the OfficeAgent MCP server to the
-agents that can use it: **Claude Code**, **OpenAI Codex CLI**, **Microsoft
-Copilot Studio**, and **Microsoft 365 Copilot**. For what the server *is* and the
+agents that can use it: **Claude Code**, **OpenAI Codex CLI**, **Google ADK**,
+**Microsoft Copilot Studio**, **Microsoft 365 Copilot**, **Microsoft Foundry Agent
+Service**, and **ChatGPT**. For what the server *is* and the
 full configuration reference, see [the MCP server guide](mcp-server.md); this
 page is about wiring each client.
 
@@ -12,19 +13,22 @@ Your deployment follows from which clients you need:
 | --- | --- | --- |
 | Claude Code | stdio **or** remote HTTP | None (it launches the server) - or point at a hosted URL |
 | OpenAI Codex CLI | stdio **or** streamable HTTP | None - or point at a hosted URL |
+| Google ADK | stdio **or** streamable HTTP | None (the agent launches the server) - or point at a hosted URL |
 | Copilot Studio | streamable HTTP only | **A public HTTPS endpoint** |
 | Microsoft 365 Copilot | streamable HTTP only (declarative-agent action) | **A public HTTPS endpoint** |
+| Microsoft Foundry Agent Service | streamable HTTP only | **An HTTPS endpoint**, public or in your virtual network |
+| ChatGPT | streamable HTTP only | **A public HTTPS endpoint** with OAuth |
 
-If your client list is only the two CLI agents, **Option A** (local, zero infra)
-is enough. The moment Copilot Studio or Microsoft 365 Copilot is in scope, you
-need **Option B** (one hosted server) - and the CLI agents can use that same
-hosted server too.
+If every client runs on your machine - Claude Code, Codex, or an ADK agent -
+**Option A** (local, zero infra) is enough. The moment Copilot Studio, Microsoft
+365 Copilot, Foundry, or ChatGPT is in scope, you need **Option B** (one hosted
+server) - and the local agents can use that same hosted server too.
 
 ---
 
-## Option A - Local (stdio), for Claude Code and Codex
+## Option A - Local (stdio), for Claude Code, Codex and Google ADK
 
-The CLI agent launches `officeagent-mcp` as a child process. Nothing is exposed
+The agent launches `officeagent-mcp` as a child process. Nothing is exposed
 to the network; credentials stay in your local environment. ~10 minutes, no
 admin.
 
@@ -76,19 +80,60 @@ args = ["--stdio"]
 env = { "OfficeAgent__FileSystemConnections__0__ConnectionId" = "documents", "OfficeAgent__FileSystemConnections__0__RootPath" = "/Users/me/Documents/agent-workspace" }
 ```
 
+**2c. Google ADK** (Python) - install ADK with its MCP extra. Without the extra, ADK 2.x
+installs no MCP client.
+
+```bash
+pip install "google-adk[mcp]"
+```
+
+```python
+from google.adk.agents import LlmAgent
+from google.adk.tools.mcp_tool import McpToolset
+from google.adk.tools.mcp_tool.mcp_session_manager import StdioConnectionParams
+from mcp import StdioServerParameters
+
+officeagent = McpToolset(
+    connection_params=StdioConnectionParams(
+        server_params=StdioServerParameters(
+            command="officeagent-mcp",
+            args=["--stdio"],
+            env={
+                "OfficeAgent__FileSystemConnections__0__ConnectionId": "documents",
+                "OfficeAgent__FileSystemConnections__0__RootPath": "/Users/me/Documents/agent-workspace",
+            },
+        ),
+        timeout=30,
+    ),
+)
+
+root_agent = LlmAgent(
+    model="gemini-flash-latest",
+    name="document_editor",
+    instruction="Inspect and edit Office documents with the OfficeAgent tools.",
+    tools=[officeagent],
+)
+```
+
+The launched server gets `PATH` and a few other basics, plus `env`. Other variables in your
+shell do not reach it, so put every `OfficeAgent__` setting in `env`. `timeout` is how long ADK
+waits for each response, 5 seconds by default. Outside `adk web`, call
+`await officeagent.close()` when you are done, so the server process ends.
+
 **3. Verify.** `claude mcp list` (Claude Code) or `codex mcp list` (Codex) should
-show the server connected; inside a session `/mcp` lists its tools.
+show the server connected; inside a session `/mcp` lists its tools. In ADK,
+`await officeagent.get_tools()` returns them.
 
 > SharePoint over stdio uses `appOnly` - there is no inbound user token locally, so
 > the On-Behalf-Of mode is a hosted-HTTP feature (Option B).
 
 ---
 
-## Option B - Hosted (HTTP), for all four clients
+## Option B - Hosted (HTTP), for every client
 
 Deploy the server once over HTTPS; every client attaches to that URL. This is
-required for Copilot Studio and Microsoft 365 Copilot, and the CLI agents can
-use it too.
+required for Copilot Studio, Microsoft 365 Copilot, Foundry, and ChatGPT, and the
+local agents can use it too.
 
 ### B1. Host the server
 
@@ -176,6 +221,27 @@ url = "https://officeagent.example.com/"
 bearer_token_env_var = "OFFICEAGENT_TOKEN"
 ```
 
+**Google ADK** (remote) - keep the key in an environment variable:
+
+```python
+import os
+from google.adk.tools.mcp_tool import McpToolset
+from google.adk.tools.mcp_tool.mcp_session_manager import StreamableHTTPConnectionParams
+
+officeagent = McpToolset(
+    connection_params=StreamableHTTPConnectionParams(
+        url="https://officeagent.example.com/",
+        headers={"x-api-key": os.environ["OFFICEAGENT_KEY"]},
+        timeout=30,
+    ),
+)
+```
+
+Use the header name your gateway checks. For `onBehalfOf`, send
+`Authorization: Bearer <token>` with the user's token for the middle-tier API instead. To
+set it per user, pass `header_provider`, a function ADK calls before each tool call to get
+extra headers.
+
 **Copilot Studio:**
 
 The steps below use Copilot Studio's wizard. For a definition an administrator can version and
@@ -196,8 +262,101 @@ Microsoft 365 Agents Toolkit; the toolkit writes the manifests, no hand-editing)
 3. The toolkit fills in `declarativeAgent.json`, `ai-plugin.json`, and `manifest.json` (the MCP server is wrapped as an API-plugin action).
 4. **Provision** and start debugging to sideload the agent into Microsoft 365 Copilot for testing; publish through the Agent Store or admin deployment.
 
-> Client configuration surfaces (Codex TOML keys, the Copilot Studio wizard, the
-> Agents Toolkit flow) change quickly. If a step doesn't match, check the current
+To start from a working project instead, use the
+[M365ContractReviewer sample](../samples/M365ContractReviewer/): a contract redline reviewer whose
+action is the hosted server, with Entra single sign-on for On-Behalf-Of, review instructions based
+on the word-document-review skill, and provisioning steps.
+
+**Microsoft Foundry Agent Service:**
+
+Foundry calls only remote MCP servers, so it needs this hosted server. A private endpoint in
+your virtual network needs Foundry's Standard Agent Setup with private networking.
+
+Pick the authentication that matches your SharePoint `AuthMode`:
+
+| Foundry authentication | Use with | Notes |
+| --- | --- | --- |
+| Key-based (a **Custom keys** project connection) | `appOnly`, behind a gateway that checks the key | Set the credential name to the header your gateway reads, such as `x-api-key`. Anyone with access to the Foundry project can read the key. |
+| Microsoft Entra: project managed identity or agent identity | `appOnly`, behind a gateway that accepts that identity's token | There is no signed-in user, so `onBehalfOf` cannot work. |
+| OAuth identity passthrough, with **custom OAuth** | `onBehalfOf`, such as the [Azure template](../deploy/azure/README.md) | Each user signs in once per connection. Use your own Entra app registration. |
+
+For OAuth identity passthrough against the Azure template, enter a client id and secret of an
+app registration allowed to request `access_as_user`, the Entra v2 authorize and token URLs
+for your tenant (the token URL also serves as the refresh URL), and the scopes
+`api://<client-id>/access_as_user offline_access`, separated by a space. Then add the redirect
+URL Foundry shows to that app registration. Users need the **Foundry Agent Consumer** role on
+the project, and must be in the project's tenant.
+
+1. Start the server with `OfficeAgent__RequirePlanSnapshot=true` for agents that edit documents people rely on, as for Copilot Studio. Leave `StrictToolSchemas` at its default. If the agent stops to ask for an input it left out, such as `newName`, set `OfficeAgent__StrictToolSchemas=false`.
+2. In the Foundry portal, open **Tools**, select **Connect a tool**, then **Custom** and **MCP**.
+3. Enter a name and the **server URL** (your gateway endpoint), and choose the authentication from the table.
+4. Add the tool to an agent and try it in the playground.
+
+In code, with the Azure AI Projects SDK for Python (`pip install "azure-ai-projects>=2.0.0" azure-identity`):
+
+```python
+from azure.ai.projects import AIProjectClient
+from azure.ai.projects.models import MCPTool, PromptAgentDefinition
+from azure.identity import DefaultAzureCredential
+
+with AIProjectClient(
+    endpoint="https://<resource>.services.ai.azure.com/api/projects/<project>",
+    credential=DefaultAzureCredential(),
+    allow_preview=True,
+) as project:
+    agent = project.agents.create_version(
+        agent_name="officeagent",
+        definition=PromptAgentDefinition(
+            model="gpt-5-mini",  # a model deployed in your project
+            instructions="Inspect and edit Office documents with the OfficeAgent tools.",
+            tools=[
+                MCPTool(
+                    server_label="officeagent",
+                    server_url="https://officeagent.example.com/",
+                    require_approval="always",
+                    project_connection_id="officeagent",  # the connection that holds the auth
+                )
+            ],
+        ),
+    )
+```
+
+In .NET, `ResponseTool.CreateMcpTool` in `Azure.AI.Extensions.OpenAI` builds the same tool;
+set its `ProjectConnectionId`.
+
+- `require_approval` defaults to `always`. Each call then returns an `mcp_approval_request`, and runs only after you answer with an `mcp_approval_response` in the same conversation. Foundry also takes `never`, or lists of tools under `never` or `always`, so read-only tools can run without approval.
+- `allowed_tools` limits the tools the agent sees. Leaving it out, or passing an empty list, allows all of them.
+- Foundry refuses a tool schema that uses `anyOf` or `allOf`, or gives a parameter several types. OfficeAgent's schemas use none of these, with either `StrictToolSchemas` setting.
+- A call that is not streamed fails after 100 seconds. Split work that could take longer, such as `edit_documents` over many files.
+
+**ChatGPT:**
+
+Custom MCP servers are available to ChatGPT Business and Enterprise/Edu workspaces, on the web
+only. Admins and owners can add them; on Enterprise/Edu, admins can let other members add them
+too. Only admins and owners can publish one to the workspace.
+
+ChatGPT authenticates with OAuth 2.1 or not at all. It cannot send an API key or a custom header,
+and it does not support machine-to-machine grants. So:
+
+- An API-key gateway does not work with ChatGPT, and the server must not run without authentication (see B2). Use OAuth.
+- ChatGPT follows the MCP authorization spec. Your gateway must publish protected resource metadata at `/.well-known/oauth-protected-resource`, or name it in a `WWW-Authenticate` header on `401`. Your authorization server must support PKCE with `S256`, and one of client ID metadata documents, dynamic client registration, or a client you register for ChatGPT. ChatGPT sends `resource=<server URL>` and expects the token's audience to match. Check all of this against your gateway and identity provider before you rely on ChatGPT.
+- With `onBehalfOf`, the token must be the user's Entra token for the middle-tier API, because the server exchanges it. A gateway that issues its own tokens works only with `appOnly`.
+- Include `offline_access` in the scopes, or users have to sign in again when the first token expires.
+
+1. Start the server with `OfficeAgent__RequirePlanSnapshot=true` for agents that edit documents people rely on. Leave `StrictToolSchemas` at its default. If ChatGPT stops to ask for an input the model left out, such as `newName`, set `OfficeAgent__StrictToolSchemas=false`.
+2. In ChatGPT, open **Plugins**, select the plus button, then **Add custom MCP server**.
+3. Enter a name and a description.
+4. Under **Connection**, enter the **server URL** (your gateway endpoint). OfficeAgent serves MCP at `/`, not `/mcp`.
+5. Configure OAuth, review the risk warning, and select **I understand and want to continue**.
+6. Select **Create as a plugin** and review the tools it found.
+7. Start a new conversation, type `@`, and pick the plugin. ChatGPT may ask the user to confirm a write; the server marks its writing tools in their MCP annotations.
+
+After upgrading the server, open the plugin and select **Refresh** so ChatGPT reads the new tool
+list. Enterprise/Edu admins can turn off tools, such as `register_document`, with
+**Configure Actions** when publishing.
+
+> Client configuration surfaces (Codex TOML keys, ADK's connection classes, the Copilot Studio
+> wizard, the Agents Toolkit flow, the Foundry portal, ChatGPT's Plugins page) change quickly. If a step doesn't match, check the current
 > vendor docs linked at the bottom - the server side is stable; only the client
 > UIs move.
 
@@ -248,11 +407,11 @@ assignment before starting the server.
 
 ## Which recipe should I pick?
 
-- **Only Claude Code and/or Codex, single developer:** Option A. No hosting, no admin.
-- **Copilot Studio or Microsoft 365 Copilot in scope, or a shared team capability:** Option B. The CLI agents can point at the hosted server too.
-- **Both audiences:** run both - the same binary, Option A locally for the dev loop and Option B hosted for the Microsoft agents.
+- **Only Claude Code, Codex, or an ADK agent, single developer:** Option A. No hosting, no admin.
+- **Copilot Studio, Microsoft 365 Copilot, Foundry, or ChatGPT in scope, or a shared team capability:** Option B. The local agents can point at the hosted server too.
+- **Both audiences:** run both - the same binary, Option A locally for the dev loop and Option B hosted for the other agents.
 
-Note that the Microsoft-agent path always needs **one tenant-admin step** (consent for the Graph permissions, and Agent Store / admin deployment for M365 Copilot), so it is never purely self-service the way the CLI path is.
+Note that the Microsoft-agent path always needs **one tenant-admin step** (consent for the Graph permissions, and Agent Store / admin deployment for M365 Copilot), so it is never purely self-service the way the CLI path is. ChatGPT needs a workspace admin or owner to add or publish the server.
 
 ---
 
@@ -264,3 +423,8 @@ Note that the Microsoft-agent path always needs **one tenant-admin step** (conse
 - Codex MCP: <https://developers.openai.com/codex/mcp>
 - Copilot Studio MCP: <https://learn.microsoft.com/en-us/microsoft-copilot-studio/mcp-add-existing-server-to-agent>
 - Microsoft 365 Copilot declarative agents with MCP: <https://learn.microsoft.com/en-us/microsoft-365/copilot/extensibility/build-mcp-plugins>
+- Foundry Agent Service MCP tool: <https://learn.microsoft.com/en-us/azure/foundry/agents/how-to/tools/model-context-protocol>
+- Foundry MCP server authentication: <https://learn.microsoft.com/en-us/azure/foundry/agents/how-to/mcp-authentication>
+- Google ADK MCP tools: <https://adk.dev/tools-custom/mcp-tools/>
+- ChatGPT custom MCP servers: <https://help.openai.com/en/articles/12584461>
+- ChatGPT connection and authentication: <https://developers.openai.com/plugins/deploy/connect-chatgpt>, <https://developers.openai.com/plugins/build/auth>

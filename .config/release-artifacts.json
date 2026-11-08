@@ -20,6 +20,21 @@
       "frameworks": ["netstandard2.0", "net8.0"]
     },
     {
+      "id": "OfficeAgent.AmazonS3",
+      "project": "src/OfficeAgent.AmazonS3/OfficeAgent.AmazonS3.csproj",
+      "frameworks": ["netstandard2.0", "net8.0"]
+    },
+    {
+      "id": "OfficeAgent.AzureBlob",
+      "project": "src/OfficeAgent.AzureBlob/OfficeAgent.AzureBlob.csproj",
+      "frameworks": ["netstandard2.0", "net8.0"]
+    },
+    {
+      "id": "OfficeAgent.Box",
+      "project": "src/OfficeAgent.Box/OfficeAgent.Box.csproj",
+      "frameworks": ["netstandard2.0", "net8.0"]
+    },
+    {
       "id": "OfficeAgent.Core",
       "project": "src/OfficeAgent.Core/OfficeAgent.Core.csproj",
       "frameworks": ["netstandard2.0", "net8.0"]
@@ -32,6 +47,16 @@
     {
       "id": "OfficeAgent.Excel.Calculation",
       "project": "src/OfficeAgent.Excel.Calculation/OfficeAgent.Excel.Calculation.csproj",
+      "frameworks": ["netstandard2.0", "net8.0"]
+    },
+    {
+      "id": "OfficeAgent.GoogleDrive",
+      "project": "src/OfficeAgent.GoogleDrive/OfficeAgent.GoogleDrive.csproj",
+      "frameworks": ["netstandard2.0", "net8.0"]
+    },
+    {
+      "id": "OfficeAgent.IManage",
+      "project": "src/OfficeAgent.IManage/OfficeAgent.IManage.csproj",
       "frameworks": ["netstandard2.0", "net8.0"]
     },
     {

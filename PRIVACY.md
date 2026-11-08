@@ -21,6 +21,12 @@ OfficeAgent reads and edits only the documents you, or the host that runs it, po
 - **SharePoint connections**, if a host configures one. OfficeAgent reads and writes the
   documents it is given through Microsoft Graph, using the credentials the host supplies. A
   host can choose to keep the id-to-document mapping in a file it names.
+- **iManage Work connections**, if a host configures one. OfficeAgent reads documents and saves
+  new versions and documents through the iManage Work REST API, using the credentials the host
+  supplies. A host can choose to keep the id-to-document mapping in a file it names.
+- **Google Drive, Box, Azure Blob Storage and Amazon S3 connections**, if a host configures one
+  in code. OfficeAgent reads and writes the documents it is given through that service's API,
+  using the credentials the host supplies, and keeps the id-to-document mapping the same way.
 - **Session connections** keep documents in memory only, for as long as the server runs.
 - **Inline content tools** receive a document in the request and return the result in the
   response; they store nothing.
@@ -35,10 +41,19 @@ server writes them to its own console. They stay on the machine unless the host 
 
 ## Third-party sharing
 
-OfficeAgent sends nothing to any third party. The one exception is a SharePoint connection
-that a host configures: OfficeAgent then talks to Microsoft Graph and Microsoft Entra ID in
-that host's own Microsoft 365 tenant, to read and save documents and to obtain access tokens.
-Microsoft's privacy statement governs that service.
+OfficeAgent sends nothing to any third party. The exceptions are storage connections that a
+host configures, each of which talks only to the service the host names, to read and save
+documents and to obtain access tokens:
+
+- A SharePoint connection talks to Microsoft Graph and Microsoft Entra ID in that host's own
+  Microsoft 365 tenant. Microsoft's privacy statement governs that service.
+- An iManage Work connection talks to the iManage server the host names, iManage Cloud or the
+  host's own. The host's agreement with iManage governs that service.
+- A Google Drive connection talks to the Google Drive API and Google's OAuth token endpoint, and
+  a Box connection to the Box API and Box's token endpoint. Google's and Box's privacy policies
+  govern those services.
+- An Azure Blob Storage or Amazon S3 connection reads and saves documents in that host's own
+  storage account or bucket.
 
 ## Data retention
 

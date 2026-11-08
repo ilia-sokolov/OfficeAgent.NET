@@ -30,6 +30,11 @@
     <ProjectReference Include="..\..\src\OfficeAgent.Core\OfficeAgent.Core.csproj" />
     <ProjectReference Include="..\..\src\OfficeAgent.Abstractions\OfficeAgent.Abstractions.csproj" />
     <ProjectReference Include="..\..\src\OfficeAgent.SharePoint\OfficeAgent.SharePoint.csproj" />
+    <ProjectReference Include="..\..\src\OfficeAgent.IManage\OfficeAgent.IManage.csproj" />
+    <ProjectReference Include="..\..\src\OfficeAgent.GoogleDrive\OfficeAgent.GoogleDrive.csproj" />
+    <ProjectReference Include="..\..\src\OfficeAgent.Box\OfficeAgent.Box.csproj" />
+    <ProjectReference Include="..\..\src\OfficeAgent.AzureBlob\OfficeAgent.AzureBlob.csproj" />
+    <ProjectReference Include="..\..\src\OfficeAgent.AmazonS3\OfficeAgent.AmazonS3.csproj" />
     <ProjectReference Include="..\..\src\OfficeAgent.Mcp\OfficeAgent.Mcp.csproj" />
     <ProjectReference Include="..\..\src\OfficeAgent.PowerPoint\OfficeAgent.PowerPoint.csproj" />
     <ProjectReference Include="..\..\src\OfficeAgent.Excel\OfficeAgent.Excel.csproj" />

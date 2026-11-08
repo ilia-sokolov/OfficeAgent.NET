@@ -217,6 +217,14 @@ public string? Formula { get; init; }
 public string? RawValue { get; init; }
 ```
 
+### `OfficeAgent.Abstractions.ChangeGranularity`
+
+```csharp
+public enum ChangeGranularity : System.IComparable, System.IConvertible, System.IFormattable, System.ISpanFormattable
+Span = 0
+Minimal = 1
+```
+
 ### `OfficeAgent.Abstractions.ChangeMode`
 
 ```csharp
@@ -242,6 +250,7 @@ public static ChangeReport Invalid(params ValidationError[] errors);
 ```csharp
 public sealed class ChangeTextOp : OfficeAgent.Abstractions.PlanOperation, OfficeAgent.Abstractions.ITrackedOperation
 public ChangeTextOp();
+public ChangeGranularity Granularity { get; init; }
 public ChangeMode Mode { get; init; }
 public string With { get; init; }
 public string? WithMarked { get; init; }
@@ -1354,6 +1363,7 @@ public Capability Capability { get; init; }
 public string Context { get; init; }
 public Anchor? Target { get; init; }
 public string Verb { get; init; }
+public string? Warning { get; init; }
 ```
 
 ### `OfficeAgent.Abstractions.RemoveImageOp`
@@ -2213,6 +2223,9 @@ public const string PlanOperations = "Each operation is one object. Concrete exa
 // Replace text:
 { \"op\": \"changeText\", \"target\": { \"paraId\": \"w14:...\", \"expect\": \"Acme Corp\", \"occurrence\": 0 }, \"with\": \"Globex Inc.\", \"mode\": \"Tracked\" }
 
+// Mark only the words that change (Word, Tracked): \"granularity\": \"Minimal\" keeps the words expect and with share at the start and end, so \"thirty days\" -> \"forty-five days\" marks only thirty -> forty-five, and \"the cap\" -> \"125% of the cap\" is a pure insertion. \"Span\", the default unless the connection sets one, marks the whole expect:
+{ \"op\": \"changeText\", \"target\": { \"paraId\": \"w14:...\", \"expect\": \"thirty days\" }, \"with\": \"forty-five days\", \"mode\": \"Tracked\", \"granularity\": \"Minimal\" }
+
 // Rewrite or translate a whole paragraph and keep its bold, italic, colour and links. inspect_document gives a paragraph whose words differ in formatting a markedText such as
 // \"Payment is due within <1>30 days</1> of invoice.\" Keep each <n>…</n> around the words that should carry that formatting, wherever they land; untagged text takes the paragraph's usual formatting.
 // expect is the paragraph's complete text. Word and PowerPoint:
@@ -2301,7 +2314,7 @@ public const string PlanOperations = "Each operation is one object. Concrete exa
 { \"op\": \"appendTableRows\", \"target\": { \"kind\": \"spreadsheetTable\", \"path\": \"table#7/Sales\" }, \"rows\": [[\"APAC\",\"15\"]] }";
 public const string RegistrationPromptGuidance = "
 Document registration
-- register_document(connectionId, source) registers an existing document with a host-configured connection and returns its opaque documentId. The source is connection-specific: a path under a filesystem connection's root, or - for a SharePoint connection - the document's SharePoint/OneDrive URL or a \"driveId/itemId\" pair. Never pass credentials.
+- register_document(connectionId, source) registers an existing document with a host-configured connection and returns its opaque documentId. The source is connection-specific: a path under a filesystem connection's root, or the document's URL or id in the connection's store, such as a SharePoint/OneDrive URL or \"driveId/itemId\" pair. The register_document description says what each configured connection accepts. Never pass credentials.
 - remove_document(connectionId, documentId) removes the registration only - the underlying file is never deleted. Remove temporary registrations you made with register_document once the work is done, but keep the final document's output registration until the host has delivered it.
 - Register a document only when the user names a file the host has not already given you an id for; otherwise use the ids you were given.
 
@@ -2337,6 +2350,7 @@ Plan shape, anchors, safety loop
 - Change mode: in a Word document default to \"Tracked\" unless the user explicitly approves direct edits. \"mode\" is not only for changeText - it belongs on every verb that changes content (insert, insertParagraphs, removeParagraph, insertTable, removeTable, the table row/column verbs including repeatTableRow, insertImage, removeImage, format, fill, insertBreak, note), and Word tracks all of them when it is omitted. A tracked structural edit is a real redline: an added paragraph and its paragraph mark come back as insertions, a removed row stays in place struck through until someone accepts it, and a format records what it replaced. A PowerPoint deck has no tracked-changes representation and REFUSES mode \"Tracked\" on any of these, so use \"Direct\" there and say that edits to a deck cannot be redlined; add a comment if the change needs to be flagged for review.
 - Translating or rewriting a document: work paragraph by paragraph, so headings, lists, tables, headers and footers keep their structure and styles. A paragraph whose words differ in formatting has a markedText in inspect_document, such as \"Payment is due within <1>30 days</1> of invoice.\" Rewrite it keeping each <n>…</n> around the words that should carry that formatting - wherever the translation puts them - and send it as withMarked with expect set to the paragraph's full text: { \"op\": \"changeText\", \"target\": { \"paraId\": \"w14:…\", \"expect\": \"Payment is due within 30 days of invoice.\" }, \"withMarked\": \"Betaling binnen <1>30 dagen</1> na factuurdatum.\" }. A paragraph without markedText takes a plain \"with\". Leave paragraphs that are only numbers, codes or names as they are. In a workbook, setCell the text cells and leave formulas alone.
 - To delete text, use changeText with an empty \"with\": { \"op\": \"changeText\", \"target\": { \"paraId\": \"w14:…\", \"expect\": \" unless terminated earlier\" }, \"with\": \"\", \"mode\": \"Tracked\" }. Under Tracked it is one deletion a reviewer can accept or reject. Include the space next to the deleted words in expect so the sentence keeps one space. There is no separate delete verb; to remove a whole paragraph use removeParagraph.
+- A tracked changeText marks the whole expect as deleted and the whole with as inserted. Add \"granularity\": \"Minimal\" to mark only the words that differ, so a reviewer sees ~~thirty~~ forty-five rather than a retyped clause, and adding words is a pure insertion. If a change's warning says it fell back to Span, the words to delete carried different formatting and the whole expect was marked.
 - Reviewing an existing Word redline: inspect_document.nodes lists every revision (kind \"revision\") with its author and date, under paths like \"ins#7\", \"del#7\", \"markIns#7\" (a paragraph split), \"rowIns#7\"/\"rowDel#7\", \"cellIns#7\"/\"cellDel#7\", and \"runFormat#7\"/\"paraFormat#7\" (formatting changes). Resolve them with { \"op\": \"revision\", \"target\": { \"kind\": \"revision\", \"path\": \"…\" }, \"action\": \"Accept\" | \"Reject\" } - \"all\" takes every revision in the document and \"author:<name>\" takes one person's.
 - Editing a document that already has tracked changes: inspect_document and find_in_document show the text as it would read if every pending change were accepted, so pending insertions are visible and pending deletions are not. An edit clear of the existing revisions, or wholly inside one pending insertion, is applied normally. An edit that spans a pending deletion, or reaches out of one revision into ordinary text, is refused with revision-overlap and nothing is written, because the resulting redline would no longer reject back to the original text. Resolving somebody else's revision is always an explicit revision operation, never a side effect of an edit.
 - Word comments are a conversation, not a write-only log: inspect_document.nodes lists each one (kind \"comment\") with its author, its text, whether it is resolved, and which comment it replies to. Answer one with action \"Reply\", close it with \"Resolve\", delete it with \"Remove\". Read the open comments before editing a document under review - they usually say what the edit should be.
@@ -2416,7 +2430,249 @@ public bool AllowCreation { get; init; }
 public bool AllowEphemeralDocuments { get; init; }
 public bool AllowInlineContent { get; init; }
 public bool AllowRegistration { get; init; }
+public string? SourceDescription { get; init; }
 public bool StrictToolSchemas { get; init; }
+```
+
+## OfficeAgent.AmazonS3
+
+### `OfficeAgent.AmazonS3.AmazonS3DocumentProvider`
+
+```csharp
+public sealed class AmazonS3DocumentProvider : OfficeAgent.Core.DocumentProviders.IConnectionCalculationDefaults, OfficeAgent.Core.DocumentProviders.IConnectionEditingDefaults, OfficeAgent.Core.DocumentProviders.IConnectionGranularityDefaults, OfficeAgent.Core.DocumentProviders.IDocumentCreatingProvider, OfficeAgent.Core.DocumentProviders.IDocumentProvider
+public AmazonS3DocumentProvider(AmazonS3DocumentProviderOptions options, IAmazonS3 client, IAmazonS3RegistrationStore? registrationStore = null);
+public AmazonS3DocumentProvider(AmazonS3DocumentProviderOptions options, IAmazonS3RegistrationStore? registrationStore = null);
+public const string ProviderName = "amazons3";
+public bool CalculateFormulas { get; }
+public string ConnectionId { get; }
+public ChangeGranularity DefaultChangeGranularity { get; }
+public ChangeMode DefaultChangeMode { get; }
+public string Provider { get; }
+public bool RejectFormulaErrors { get; }
+public Task RemoveAsync(DocumentReference reference, CancellationToken cancellationToken = default);
+public Task<DocumentContent> OpenReadAsync(DocumentReference reference, CancellationToken cancellationToken = default);
+public Task<DocumentReference> CreateAsync(string name, Stream content, CancellationToken cancellationToken = default);
+public Task<DocumentReference> RegisterAsync(string source, CancellationToken cancellationToken = default);
+public Task<DocumentReference> SaveAsync(DocumentReference source, Stream content, SaveDocumentOptions options, CancellationToken cancellationToken = default);
+```
+
+### `OfficeAgent.AmazonS3.AmazonS3DocumentProviderOptions`
+
+```csharp
+public sealed class AmazonS3DocumentProviderOptions
+public AmazonS3DocumentProviderOptions();
+public IReadOnlyCollection<string> AllowedExtensions { get; set; }
+public string BucketName { get; set; }
+public bool CalculateFormulas { get; set; }
+public string ConnectionId { get; set; }
+public ChangeGranularity DefaultChangeGranularity { get; set; }
+public ChangeMode DefaultChangeMode { get; set; }
+public bool ForcePathStyle { get; set; }
+public string KeyPrefix { get; set; }
+public long MaximumBytes { get; set; }
+public string Region { get; set; }
+public string RegistrationIndexPath { get; set; }
+public bool RejectFormulaErrors { get; set; }
+public string ServiceUrl { get; set; }
+```
+
+### `OfficeAgent.AmazonS3.IAmazonS3RegistrationStore`
+
+```csharp
+public interface IAmazonS3RegistrationStore
+public Task<bool> RemoveAsync(string registrationId, CancellationToken cancellationToken = default);
+public Task<string> AddAsync(string key, CancellationToken cancellationToken = default);
+public Task<string?> ResolveAsync(string registrationId, CancellationToken cancellationToken = default);
+```
+
+### `OfficeAgent.AmazonS3.ServiceCollectionExtensions`
+
+```csharp
+public static class ServiceCollectionExtensions
+public static IServiceCollection AddAmazonS3DocumentProvider(IServiceCollection services, string connectionId, Action<AmazonS3DocumentProviderOptions>? configure = null);
+public static IServiceCollection AddAmazonS3DocumentProvider(IServiceCollection services, string connectionId, Func<IServiceProvider, IAmazonS3> clientFactory, Action<AmazonS3DocumentProviderOptions>? configure = null);
+```
+
+## OfficeAgent.AzureBlob
+
+### `OfficeAgent.AzureBlob.AzureBlobDocumentProvider`
+
+```csharp
+public sealed class AzureBlobDocumentProvider : OfficeAgent.Core.DocumentProviders.IConnectionCalculationDefaults, OfficeAgent.Core.DocumentProviders.IConnectionEditingDefaults, OfficeAgent.Core.DocumentProviders.IConnectionGranularityDefaults, OfficeAgent.Core.DocumentProviders.IDocumentCreatingProvider, OfficeAgent.Core.DocumentProviders.IDocumentProvider
+public AzureBlobDocumentProvider(AzureBlobDocumentProviderOptions options, BlobContainerClient container, IAzureBlobRegistrationStore? registrationStore = null);
+public AzureBlobDocumentProvider(AzureBlobDocumentProviderOptions options, IAzureBlobRegistrationStore? registrationStore = null);
+public const string ProviderName = "azureblob";
+public bool CalculateFormulas { get; }
+public string ConnectionId { get; }
+public ChangeGranularity DefaultChangeGranularity { get; }
+public ChangeMode DefaultChangeMode { get; }
+public string Provider { get; }
+public bool RejectFormulaErrors { get; }
+public Task RemoveAsync(DocumentReference reference, CancellationToken cancellationToken = default);
+public Task<DocumentContent> OpenReadAsync(DocumentReference reference, CancellationToken cancellationToken = default);
+public Task<DocumentReference> CreateAsync(string name, Stream content, CancellationToken cancellationToken = default);
+public Task<DocumentReference> RegisterAsync(string source, CancellationToken cancellationToken = default);
+public Task<DocumentReference> SaveAsync(DocumentReference source, Stream content, SaveDocumentOptions options, CancellationToken cancellationToken = default);
+```
+
+### `OfficeAgent.AzureBlob.AzureBlobDocumentProviderOptions`
+
+```csharp
+public sealed class AzureBlobDocumentProviderOptions
+public AzureBlobDocumentProviderOptions();
+public IReadOnlyCollection<string> AllowedExtensions { get; set; }
+public bool CalculateFormulas { get; set; }
+public string ConnectionId { get; set; }
+public string ConnectionString { get; set; }
+public string ContainerName { get; set; }
+public ChangeGranularity DefaultChangeGranularity { get; set; }
+public ChangeMode DefaultChangeMode { get; set; }
+public string ManagedIdentityClientId { get; set; }
+public long MaximumBytes { get; set; }
+public string Prefix { get; set; }
+public string RegistrationIndexPath { get; set; }
+public bool RejectFormulaErrors { get; set; }
+public string ServiceUri { get; set; }
+```
+
+### `OfficeAgent.AzureBlob.IAzureBlobRegistrationStore`
+
+```csharp
+public interface IAzureBlobRegistrationStore
+public Task<bool> RemoveAsync(string registrationId, CancellationToken cancellationToken = default);
+public Task<string> AddAsync(string blobName, CancellationToken cancellationToken = default);
+public Task<string?> ResolveAsync(string registrationId, CancellationToken cancellationToken = default);
+```
+
+### `OfficeAgent.AzureBlob.ServiceCollectionExtensions`
+
+```csharp
+public static class ServiceCollectionExtensions
+public static IServiceCollection AddAzureBlobDocumentProvider(IServiceCollection services, string connectionId, Action<AzureBlobDocumentProviderOptions>? configure = null);
+public static IServiceCollection AddAzureBlobDocumentProvider(IServiceCollection services, string connectionId, Func<IServiceProvider, BlobContainerClient> containerFactory, Action<AzureBlobDocumentProviderOptions>? configure = null);
+```
+
+## OfficeAgent.Box
+
+### `OfficeAgent.Box.BoxClientCredentialsAccessTokenProvider`
+
+```csharp
+public sealed class BoxClientCredentialsAccessTokenProvider : OfficeAgent.Box.IBoxAccessTokenProvider
+public BoxClientCredentialsAccessTokenProvider(BoxClientCredentialsOptions options, HttpClient httpClient);
+public Task<string> GetAccessTokenAsync(CancellationToken cancellationToken = default);
+```
+
+### `OfficeAgent.Box.BoxClientCredentialsOptions`
+
+```csharp
+public sealed class BoxClientCredentialsOptions
+public BoxClientCredentialsOptions();
+public string ClientId { get; set; }
+public string ClientSecret { get; set; }
+public string SubjectId { get; set; }
+public BoxSubjectType SubjectType { get; set; }
+public string TokenUrl { get; set; }
+```
+
+### `OfficeAgent.Box.BoxDocumentProvider`
+
+```csharp
+public sealed class BoxDocumentProvider : OfficeAgent.Core.DocumentProviders.IConnectionCalculationDefaults, OfficeAgent.Core.DocumentProviders.IConnectionEditingDefaults, OfficeAgent.Core.DocumentProviders.IConnectionGranularityDefaults, OfficeAgent.Core.DocumentProviders.IDocumentCreatingProvider, OfficeAgent.Core.DocumentProviders.IDocumentProvider
+public BoxDocumentProvider(BoxDocumentProviderOptions options, HttpClient httpClient, IBoxAccessTokenProvider tokenProvider, IBoxRegistrationStore? registrationStore = null);
+public const string ProviderName = "box";
+public bool CalculateFormulas { get; }
+public string ConnectionId { get; }
+public ChangeGranularity DefaultChangeGranularity { get; }
+public ChangeMode DefaultChangeMode { get; }
+public string Provider { get; }
+public bool RejectFormulaErrors { get; }
+public Task RemoveAsync(DocumentReference reference, CancellationToken cancellationToken = default);
+public Task<DocumentContent> OpenReadAsync(DocumentReference reference, CancellationToken cancellationToken = default);
+public Task<DocumentReference> CreateAsync(string name, Stream content, CancellationToken cancellationToken = default);
+public Task<DocumentReference> RegisterAsync(string source, CancellationToken cancellationToken = default);
+public Task<DocumentReference> SaveAsync(DocumentReference source, Stream content, SaveDocumentOptions options, CancellationToken cancellationToken = default);
+```
+
+### `OfficeAgent.Box.BoxDocumentProviderOptions`
+
+```csharp
+public sealed class BoxDocumentProviderOptions
+public BoxDocumentProviderOptions();
+public IReadOnlyCollection<string> AllowedExtensions { get; set; }
+public string ApiBaseUrl { get; set; }
+public bool CalculateFormulas { get; set; }
+public string ConnectionId { get; set; }
+public string CreationFolderId { get; set; }
+public ChangeGranularity DefaultChangeGranularity { get; set; }
+public ChangeMode DefaultChangeMode { get; set; }
+public long MaximumBytes { get; set; }
+public bool RejectFormulaErrors { get; set; }
+public string UploadBaseUrl { get; set; }
+```
+
+### `OfficeAgent.Box.BoxFileRef`
+
+```csharp
+public struct BoxFileRef : System.IEquatable<OfficeAgent.Box.BoxFileRef>
+public BoxFileRef(string FileId);
+public string FileId { get; init; }
+public bool Equals(BoxFileRef other);
+public override bool Equals(object obj);
+public override int GetHashCode();
+public override string ToString();
+public void Deconstruct(out string FileId);
+```
+
+### `OfficeAgent.Box.BoxServiceCollectionExtensions`
+
+```csharp
+public static class BoxServiceCollectionExtensions
+public static IServiceCollection AddBoxClientCredentialsAuthentication(IServiceCollection services, Action<BoxClientCredentialsOptions> configure);
+public static IServiceCollection AddBoxDocumentProvider(IServiceCollection services, string connectionId, Action<BoxDocumentProviderOptions>? configure = null);
+```
+
+### `OfficeAgent.Box.BoxSubjectType`
+
+```csharp
+public enum BoxSubjectType : System.IComparable, System.IConvertible, System.IFormattable, System.ISpanFormattable
+Enterprise = 0
+User = 1
+```
+
+### `OfficeAgent.Box.IBoxAccessTokenProvider`
+
+```csharp
+public interface IBoxAccessTokenProvider
+public Task<string> GetAccessTokenAsync(CancellationToken cancellationToken = default);
+```
+
+### `OfficeAgent.Box.IBoxRegistrationStore`
+
+```csharp
+public interface IBoxRegistrationStore
+public Task<BoxFileRef?> ResolveAsync(string registrationId, CancellationToken cancellationToken = default);
+public Task<bool> RemoveAsync(string registrationId, CancellationToken cancellationToken = default);
+public Task<string> AddAsync(BoxFileRef file, CancellationToken cancellationToken = default);
+```
+
+### `OfficeAgent.Box.InMemoryBoxRegistrationStore`
+
+```csharp
+public sealed class InMemoryBoxRegistrationStore : OfficeAgent.Box.IBoxRegistrationStore
+public InMemoryBoxRegistrationStore();
+public Task<BoxFileRef?> ResolveAsync(string registrationId, CancellationToken cancellationToken = default);
+public Task<bool> RemoveAsync(string registrationId, CancellationToken cancellationToken = default);
+public Task<string> AddAsync(BoxFileRef file, CancellationToken cancellationToken = default);
+```
+
+### `OfficeAgent.Box.JsonFileBoxRegistrationStore`
+
+```csharp
+public sealed class JsonFileBoxRegistrationStore : OfficeAgent.Box.IBoxRegistrationStore
+public JsonFileBoxRegistrationStore(string path);
+public Task<BoxFileRef?> ResolveAsync(string registrationId, CancellationToken cancellationToken = default);
+public Task<bool> RemoveAsync(string registrationId, CancellationToken cancellationToken = default);
+public Task<string> AddAsync(BoxFileRef file, CancellationToken cancellationToken = default);
 ```
 
 ## OfficeAgent.Core
@@ -2484,6 +2740,7 @@ public sealed class DocumentProviderRegistry
 public DocumentProviderRegistry(IEnumerable<IDocumentProvider> providers);
 public IReadOnlyList<IDocumentProvider> All { get; }
 public IReadOnlyList<ValueTuple<string, string>> Connections { get; }
+public ChangeGranularity DefaultChangeGranularityFor(string connectionId);
 public ChangeMode DefaultChangeModeFor(string connectionId);
 public IDocumentProvider Resolve(DocumentReference reference);
 public IDocumentProvider ResolveConnection(string connectionId);
@@ -2525,11 +2782,12 @@ public string OutputSha256 { get; }
 ### `OfficeAgent.Core.DocumentProviders.FileSystemDocumentProvider`
 
 ```csharp
-public sealed class FileSystemDocumentProvider : OfficeAgent.Core.DocumentProviders.IConnectionCalculationDefaults, OfficeAgent.Core.DocumentProviders.IConnectionEditingDefaults, OfficeAgent.Core.DocumentProviders.IDocumentCreatingProvider, OfficeAgent.Core.DocumentProviders.IDocumentProvider
+public sealed class FileSystemDocumentProvider : OfficeAgent.Core.DocumentProviders.IConnectionCalculationDefaults, OfficeAgent.Core.DocumentProviders.IConnectionEditingDefaults, OfficeAgent.Core.DocumentProviders.IConnectionGranularityDefaults, OfficeAgent.Core.DocumentProviders.IDocumentCreatingProvider, OfficeAgent.Core.DocumentProviders.IDocumentProvider
 public FileSystemDocumentProvider(FileSystemDocumentProviderOptions options);
 public const string ProviderName = "filesystem";
 public bool CalculateFormulas { get; }
 public string ConnectionId { get; }
+public ChangeGranularity DefaultChangeGranularity { get; }
 public ChangeMode DefaultChangeMode { get; }
 public string Provider { get; }
 public bool RejectFormulaErrors { get; }
@@ -2548,6 +2806,7 @@ public FileSystemDocumentProviderOptions();
 public IReadOnlyCollection<string> AllowedExtensions { get; set; }
 public bool CalculateFormulas { get; set; }
 public string ConnectionId { get; set; }
+public ChangeGranularity DefaultChangeGranularity { get; set; }
 public ChangeMode DefaultChangeMode { get; set; }
 public long MaximumBytes { get; set; }
 public bool RejectFormulaErrors { get; set; }
@@ -2567,6 +2826,13 @@ public bool RejectFormulaErrors { get; }
 ```csharp
 public interface IConnectionEditingDefaults
 public ChangeMode DefaultChangeMode { get; }
+```
+
+### `OfficeAgent.Core.DocumentProviders.IConnectionGranularityDefaults`
+
+```csharp
+public interface IConnectionGranularityDefaults
+public ChangeGranularity DefaultChangeGranularity { get; }
 ```
 
 ### `OfficeAgent.Core.DocumentProviders.IDocumentCreatingProvider`
@@ -2591,12 +2857,13 @@ public Task<DocumentReference> SaveAsync(DocumentReference source, Stream conten
 ### `OfficeAgent.Core.DocumentProviders.MemoryDocumentProvider`
 
 ```csharp
-public sealed class MemoryDocumentProvider : OfficeAgent.Core.DocumentProviders.IConnectionCalculationDefaults, OfficeAgent.Core.DocumentProviders.IConnectionEditingDefaults, OfficeAgent.Core.DocumentProviders.IDocumentCreatingProvider, OfficeAgent.Core.DocumentProviders.IDocumentProvider
+public sealed class MemoryDocumentProvider : OfficeAgent.Core.DocumentProviders.IConnectionCalculationDefaults, OfficeAgent.Core.DocumentProviders.IConnectionEditingDefaults, OfficeAgent.Core.DocumentProviders.IConnectionGranularityDefaults, OfficeAgent.Core.DocumentProviders.IDocumentCreatingProvider, OfficeAgent.Core.DocumentProviders.IDocumentProvider
 public MemoryDocumentProvider(string connectionId, MemoryDocumentProviderOptions? options = null);
 public const string ProviderName = "memory";
 public bool CalculateFormulas { get; }
 public string ConnectionId { get; }
 public int Count { get; }
+public ChangeGranularity DefaultChangeGranularity { get; }
 public ChangeMode DefaultChangeMode { get; }
 public string Provider { get; }
 public bool RejectFormulaErrors { get; }
@@ -2619,6 +2886,7 @@ public sealed class MemoryDocumentProviderOptions
 public MemoryDocumentProviderOptions();
 public IList<string> AllowedExtensions { get; set; }
 public bool CalculateFormulas { get; set; }
+public ChangeGranularity DefaultChangeGranularity { get; set; }
 public ChangeMode DefaultChangeMode { get; set; }
 public long MaximumBytes { get; set; }
 public long MaximumTotalBytes { get; set; }
@@ -2808,6 +3076,7 @@ public DocumentMergeLimits MergeLimits { get; init; }
 public TemplateBatchLimits TemplateLimits { get; }
 public ApplyResult Apply(DocumentHandle handle, DocumentPlan plan, ApplyOptions? options = null);
 public ApplyResult Commit(DocumentHandle handle, DocumentPlan plan);
+public ChangeGranularity DefaultChangeGranularityFor(string connectionId);
 public ChangeMode DefaultChangeModeFor(string connectionId);
 public ChangeReport Preview(DocumentHandle handle, DocumentPlan plan);
 public DataRefreshPlan PlanDataRefresh(byte[] document, byte[] workbook);
@@ -2949,6 +3218,267 @@ public FormulaEvaluation Evaluate(byte[] workbook, CancellationToken cancellatio
 ```csharp
 public static class ServiceCollectionExtensions
 public static IServiceCollection AddExcelFormulaCalculation(IServiceCollection services);
+```
+
+## OfficeAgent.GoogleDrive
+
+### `OfficeAgent.GoogleDrive.GoogleDriveDocumentProvider`
+
+```csharp
+public sealed class GoogleDriveDocumentProvider : OfficeAgent.Core.DocumentProviders.IConnectionCalculationDefaults, OfficeAgent.Core.DocumentProviders.IConnectionEditingDefaults, OfficeAgent.Core.DocumentProviders.IConnectionGranularityDefaults, OfficeAgent.Core.DocumentProviders.IDocumentCreatingProvider, OfficeAgent.Core.DocumentProviders.IDocumentProvider
+public GoogleDriveDocumentProvider(GoogleDriveDocumentProviderOptions options, HttpClient httpClient, IGoogleDriveAccessTokenProvider tokenProvider, IGoogleDriveRegistrationStore? registrationStore = null);
+public const string ProviderName = "googledrive";
+public bool CalculateFormulas { get; }
+public string ConnectionId { get; }
+public ChangeGranularity DefaultChangeGranularity { get; }
+public ChangeMode DefaultChangeMode { get; }
+public string Provider { get; }
+public bool RejectFormulaErrors { get; }
+public Task RemoveAsync(DocumentReference reference, CancellationToken cancellationToken = default);
+public Task<DocumentContent> OpenReadAsync(DocumentReference reference, CancellationToken cancellationToken = default);
+public Task<DocumentReference> CreateAsync(string name, Stream content, CancellationToken cancellationToken = default);
+public Task<DocumentReference> RegisterAsync(string source, CancellationToken cancellationToken = default);
+public Task<DocumentReference> SaveAsync(DocumentReference source, Stream content, SaveDocumentOptions options, CancellationToken cancellationToken = default);
+```
+
+### `OfficeAgent.GoogleDrive.GoogleDriveDocumentProviderOptions`
+
+```csharp
+public sealed class GoogleDriveDocumentProviderOptions
+public GoogleDriveDocumentProviderOptions();
+public IReadOnlyCollection<string> AllowedExtensions { get; set; }
+public string ApiBaseUrl { get; set; }
+public bool CalculateFormulas { get; set; }
+public string ConnectionId { get; set; }
+public string CreationFolderId { get; set; }
+public ChangeGranularity DefaultChangeGranularity { get; set; }
+public ChangeMode DefaultChangeMode { get; set; }
+public long MaximumBytes { get; set; }
+public bool RejectFormulaErrors { get; set; }
+public string UploadBaseUrl { get; set; }
+```
+
+### `OfficeAgent.GoogleDrive.GoogleDriveFileRef`
+
+```csharp
+public struct GoogleDriveFileRef : System.IEquatable<OfficeAgent.GoogleDrive.GoogleDriveFileRef>
+public GoogleDriveFileRef(string FileId);
+public string FileId { get; init; }
+public bool Equals(GoogleDriveFileRef other);
+public override bool Equals(object obj);
+public override int GetHashCode();
+public override string ToString();
+public void Deconstruct(out string FileId);
+```
+
+### `OfficeAgent.GoogleDrive.GoogleDriveScopes`
+
+```csharp
+public static class GoogleDriveScopes
+public const string Drive = "https://www.googleapis.com/auth/drive";
+public const string DriveFile = "https://www.googleapis.com/auth/drive.file";
+```
+
+### `OfficeAgent.GoogleDrive.GoogleDriveServiceCollectionExtensions`
+
+```csharp
+public static class GoogleDriveServiceCollectionExtensions
+public static IServiceCollection AddGoogleDriveDocumentProvider(IServiceCollection services, string connectionId, Action<GoogleDriveDocumentProviderOptions>? configure = null);
+public static IServiceCollection AddGoogleDriveServiceAccountAuthentication(IServiceCollection services, Action<GoogleServiceAccountOptions> configure);
+```
+
+### `OfficeAgent.GoogleDrive.GoogleServiceAccountAccessTokenProvider`
+
+```csharp
+public sealed class GoogleServiceAccountAccessTokenProvider : OfficeAgent.GoogleDrive.IGoogleDriveAccessTokenProvider
+public GoogleServiceAccountAccessTokenProvider(GoogleServiceAccountOptions options, HttpClient httpClient);
+public Task<string> GetAccessTokenAsync(CancellationToken cancellationToken = default);
+```
+
+### `OfficeAgent.GoogleDrive.GoogleServiceAccountOptions`
+
+```csharp
+public sealed class GoogleServiceAccountOptions
+public GoogleServiceAccountOptions();
+public string ClientEmail { get; set; }
+public string KeyJson { get; set; }
+public string PrivateKey { get; set; }
+public string PrivateKeyId { get; set; }
+public string Scope { get; set; }
+public string Subject { get; set; }
+public string TokenUri { get; set; }
+```
+
+### `OfficeAgent.GoogleDrive.IGoogleDriveAccessTokenProvider`
+
+```csharp
+public interface IGoogleDriveAccessTokenProvider
+public Task<string> GetAccessTokenAsync(CancellationToken cancellationToken = default);
+```
+
+### `OfficeAgent.GoogleDrive.IGoogleDriveRegistrationStore`
+
+```csharp
+public interface IGoogleDriveRegistrationStore
+public Task<GoogleDriveFileRef?> ResolveAsync(string registrationId, CancellationToken cancellationToken = default);
+public Task<bool> RemoveAsync(string registrationId, CancellationToken cancellationToken = default);
+public Task<string> AddAsync(GoogleDriveFileRef file, CancellationToken cancellationToken = default);
+```
+
+### `OfficeAgent.GoogleDrive.InMemoryGoogleDriveRegistrationStore`
+
+```csharp
+public sealed class InMemoryGoogleDriveRegistrationStore : OfficeAgent.GoogleDrive.IGoogleDriveRegistrationStore
+public InMemoryGoogleDriveRegistrationStore();
+public Task<GoogleDriveFileRef?> ResolveAsync(string registrationId, CancellationToken cancellationToken = default);
+public Task<bool> RemoveAsync(string registrationId, CancellationToken cancellationToken = default);
+public Task<string> AddAsync(GoogleDriveFileRef file, CancellationToken cancellationToken = default);
+```
+
+### `OfficeAgent.GoogleDrive.JsonFileGoogleDriveRegistrationStore`
+
+```csharp
+public sealed class JsonFileGoogleDriveRegistrationStore : OfficeAgent.GoogleDrive.IGoogleDriveRegistrationStore
+public JsonFileGoogleDriveRegistrationStore(string path);
+public Task<GoogleDriveFileRef?> ResolveAsync(string registrationId, CancellationToken cancellationToken = default);
+public Task<bool> RemoveAsync(string registrationId, CancellationToken cancellationToken = default);
+public Task<string> AddAsync(GoogleDriveFileRef file, CancellationToken cancellationToken = default);
+```
+
+## OfficeAgent.IManage
+
+### `OfficeAgent.IManage.IIManageAccessTokenProvider`
+
+```csharp
+public interface IIManageAccessTokenProvider
+public Task<string> GetAccessTokenAsync(CancellationToken cancellationToken = default);
+```
+
+### `OfficeAgent.IManage.IIManageRegistrationStore`
+
+```csharp
+public interface IIManageRegistrationStore
+public Task<IManageDocumentRef?> ResolveAsync(string registrationId, CancellationToken cancellationToken = default);
+public Task<bool> RemoveAsync(string registrationId, CancellationToken cancellationToken = default);
+public Task<string> AddAsync(IManageDocumentRef document, CancellationToken cancellationToken = default);
+```
+
+### `OfficeAgent.IManage.IManageDocumentProvider`
+
+```csharp
+public sealed class IManageDocumentProvider : OfficeAgent.Core.DocumentProviders.IConnectionCalculationDefaults, OfficeAgent.Core.DocumentProviders.IConnectionEditingDefaults, OfficeAgent.Core.DocumentProviders.IConnectionGranularityDefaults, OfficeAgent.Core.DocumentProviders.IDocumentCreatingProvider, OfficeAgent.Core.DocumentProviders.IDocumentProvider
+public IManageDocumentProvider(IManageDocumentProviderOptions options, HttpClient httpClient, IIManageAccessTokenProvider tokenProvider, IIManageRegistrationStore? registrationStore = null);
+public const string ProviderName = "imanage";
+public bool CalculateFormulas { get; }
+public string ConnectionId { get; }
+public ChangeGranularity DefaultChangeGranularity { get; }
+public ChangeMode DefaultChangeMode { get; }
+public string Provider { get; }
+public bool RejectFormulaErrors { get; }
+public Task RemoveAsync(DocumentReference reference, CancellationToken cancellationToken = default);
+public Task<DocumentContent> OpenReadAsync(DocumentReference reference, CancellationToken cancellationToken = default);
+public Task<DocumentReference> CreateAsync(string name, Stream content, CancellationToken cancellationToken = default);
+public Task<DocumentReference> RegisterAsync(string source, CancellationToken cancellationToken = default);
+public Task<DocumentReference> SaveAsync(DocumentReference source, Stream content, SaveDocumentOptions options, CancellationToken cancellationToken = default);
+public static HttpClient CreateHttpClient();
+```
+
+### `OfficeAgent.IManage.IManageDocumentProviderOptions`
+
+```csharp
+public sealed class IManageDocumentProviderOptions
+public IManageDocumentProviderOptions();
+public IReadOnlyCollection<string> AllowedExtensions { get; set; }
+public string ApiBasePath { get; set; }
+public bool CalculateFormulas { get; set; }
+public string ConnectionId { get; set; }
+public string CreationDocumentClass { get; set; }
+public string CreationFolderId { get; set; }
+public string CustomerId { get; set; }
+public ChangeGranularity DefaultChangeGranularity { get; set; }
+public ChangeMode DefaultChangeMode { get; set; }
+public bool LockDuringSave { get; set; }
+public long MaximumBytes { get; set; }
+public bool RejectFormulaErrors { get; set; }
+public string SaveComment { get; set; }
+public string ServerUrl { get; set; }
+```
+
+### `OfficeAgent.IManage.IManageDocumentRef`
+
+```csharp
+public struct IManageDocumentRef : System.IEquatable<OfficeAgent.IManage.IManageDocumentRef>
+public IManageDocumentRef(string Library, long DocumentNumber, int Version);
+public string DocumentId { get; }
+public long DocumentNumber { get; init; }
+public string Library { get; init; }
+public int Version { get; init; }
+public bool Equals(IManageDocumentRef other);
+public override bool Equals(object obj);
+public override int GetHashCode();
+public override string ToString();
+public void Deconstruct(out string Library, out long DocumentNumber, out int Version);
+```
+
+### `OfficeAgent.IManage.IManageGrantType`
+
+```csharp
+public enum IManageGrantType : System.IComparable, System.IConvertible, System.IFormattable, System.ISpanFormattable
+Password = 0
+RefreshToken = 1
+ClientCredentials = 2
+```
+
+### `OfficeAgent.IManage.IManageOAuthOptions`
+
+```csharp
+public sealed class IManageOAuthOptions
+public IManageOAuthOptions();
+public string ClientId { get; set; }
+public string ClientSecret { get; set; }
+public IManageGrantType GrantType { get; set; }
+public string Password { get; set; }
+public string RefreshToken { get; set; }
+public string Scope { get; set; }
+public string ServerUrl { get; set; }
+public string TokenPath { get; set; }
+public string Username { get; set; }
+```
+
+### `OfficeAgent.IManage.IManageOAuthTokenProvider`
+
+```csharp
+public sealed class IManageOAuthTokenProvider : OfficeAgent.IManage.IIManageAccessTokenProvider
+public IManageOAuthTokenProvider(IManageOAuthOptions options, HttpClient httpClient);
+public Task<string> GetAccessTokenAsync(CancellationToken cancellationToken = default);
+```
+
+### `OfficeAgent.IManage.InMemoryIManageRegistrationStore`
+
+```csharp
+public sealed class InMemoryIManageRegistrationStore : OfficeAgent.IManage.IIManageRegistrationStore
+public InMemoryIManageRegistrationStore();
+public Task<IManageDocumentRef?> ResolveAsync(string registrationId, CancellationToken cancellationToken = default);
+public Task<bool> RemoveAsync(string registrationId, CancellationToken cancellationToken = default);
+public Task<string> AddAsync(IManageDocumentRef document, CancellationToken cancellationToken = default);
+```
+
+### `OfficeAgent.IManage.JsonFileIManageRegistrationStore`
+
+```csharp
+public sealed class JsonFileIManageRegistrationStore : OfficeAgent.IManage.IIManageRegistrationStore
+public JsonFileIManageRegistrationStore(string path);
+public Task<IManageDocumentRef?> ResolveAsync(string registrationId, CancellationToken cancellationToken = default);
+public Task<bool> RemoveAsync(string registrationId, CancellationToken cancellationToken = default);
+public Task<string> AddAsync(IManageDocumentRef document, CancellationToken cancellationToken = default);
+```
+
+### `OfficeAgent.IManage.ServiceCollectionExtensions`
+
+```csharp
+public static class ServiceCollectionExtensions
+public static IServiceCollection AddIManageDocumentProvider(IServiceCollection services, string connectionId, Action<IManageDocumentProviderOptions> configure);
+public static IServiceCollection AddIManageOAuthAuthentication(IServiceCollection services, Action<IManageOAuthOptions> configure);
 ```
 
 ## OfficeAgent.PowerPoint
@@ -3161,11 +3691,12 @@ public static IServiceCollection AddSharePointOnBehalfOfAuthentication(IServiceC
 ### `OfficeAgent.SharePoint.SharePointDocumentProvider`
 
 ```csharp
-public sealed class SharePointDocumentProvider : OfficeAgent.Core.DocumentProviders.IConnectionCalculationDefaults, OfficeAgent.Core.DocumentProviders.IConnectionEditingDefaults, OfficeAgent.Core.DocumentProviders.IDocumentCreatingProvider, OfficeAgent.Core.DocumentProviders.IDocumentProvider
+public sealed class SharePointDocumentProvider : OfficeAgent.Core.DocumentProviders.IConnectionCalculationDefaults, OfficeAgent.Core.DocumentProviders.IConnectionEditingDefaults, OfficeAgent.Core.DocumentProviders.IConnectionGranularityDefaults, OfficeAgent.Core.DocumentProviders.IDocumentCreatingProvider, OfficeAgent.Core.DocumentProviders.IDocumentProvider
 public SharePointDocumentProvider(SharePointDocumentProviderOptions options, HttpClient httpClient, IAccessTokenProvider tokenProvider, ISharePointRegistrationStore? registrationStore = null);
 public const string ProviderName = "sharepoint";
 public bool CalculateFormulas { get; }
 public string ConnectionId { get; }
+public ChangeGranularity DefaultChangeGranularity { get; }
 public ChangeMode DefaultChangeMode { get; }
 public string Provider { get; }
 public bool RejectFormulaErrors { get; }
@@ -3186,10 +3717,13 @@ public bool CalculateFormulas { get; set; }
 public string ConnectionId { get; set; }
 public string CreationDriveId { get; set; }
 public string CreationFolderItemId { get; set; }
+public ChangeGranularity DefaultChangeGranularity { get; set; }
 public ChangeMode DefaultChangeMode { get; set; }
 public string GraphBaseUrl { get; set; }
 public long MaximumBytes { get; set; }
 public bool RejectFormulaErrors { get; set; }
+public int UploadSessionChunkBytes { get; set; }
+public long UploadSessionThresholdBytes { get; set; }
 ```
 
 ### `OfficeAgent.SharePoint.SharePointItemRef`

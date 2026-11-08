@@ -30,7 +30,7 @@ namespace OfficeAgent.Core.DocumentProviders;
 /// host runs out of memory.
 /// </para>
 /// </remarks>
-public sealed class MemoryDocumentProvider : IDocumentProvider, IDocumentCreatingProvider, IConnectionEditingDefaults, IConnectionCalculationDefaults
+public sealed class MemoryDocumentProvider : IDocumentProvider, IDocumentCreatingProvider, IConnectionEditingDefaults, IConnectionGranularityDefaults, IConnectionCalculationDefaults
 {
     /// <summary>The provider name reported on references and errors.</summary>
     public const string ProviderName = "memory";
@@ -57,6 +57,9 @@ public sealed class MemoryDocumentProvider : IDocumentProvider, IDocumentCreatin
 
     /// <inheritdoc />
     public ChangeMode DefaultChangeMode => _options.DefaultChangeMode;
+
+    /// <inheritdoc />
+    public ChangeGranularity DefaultChangeGranularity => _options.DefaultChangeGranularity;
 
     /// <inheritdoc />
     public bool CalculateFormulas => _options.CalculateFormulas;
@@ -393,6 +396,12 @@ public sealed class MemoryDocumentProviderOptions
     /// <see cref="ChangeMode.Tracked"/>, as every other connection does.
     /// </summary>
     public ChangeMode DefaultChangeMode { get; set; } = ChangeMode.Tracked;
+
+    /// <summary>
+    /// Gets or sets the granularity for a <c>changeText</c> that does not state one. Defaults
+    /// to <see cref="ChangeGranularity.Span"/>, as every other connection does.
+    /// </summary>
+    public ChangeGranularity DefaultChangeGranularity { get; set; } = ChangeGranularity.Span;
 
     /// <summary>
     /// Gets or sets whether a workbook previewed or committed through this connection has its

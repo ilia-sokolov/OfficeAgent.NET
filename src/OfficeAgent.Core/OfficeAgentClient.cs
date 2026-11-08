@@ -665,6 +665,15 @@ public sealed partial class OfficeAgentClient
         _providers.DefaultChangeModeFor(connectionId);
 
     /// <summary>
+    /// Returns the granularity a connection applies to a <c>changeText</c> that does not state
+    /// one. Hosts that build plans in code set <see cref="ChangeTextOp.Granularity"/>
+    /// themselves; this is for surfaces that accept a plan from an agent. Unknown connections
+    /// yield <see cref="ChangeGranularity.Span"/>.
+    /// </summary>
+    public ChangeGranularity DefaultChangeGranularityFor(string connectionId) =>
+        _providers.DefaultChangeGranularityFor(connectionId);
+
+    /// <summary>
     /// The in-memory store behind a connection, or <see langword="null"/> when that
     /// connection is backed by real storage.
     /// </summary>

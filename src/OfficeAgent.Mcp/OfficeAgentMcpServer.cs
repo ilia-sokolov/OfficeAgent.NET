@@ -73,12 +73,6 @@ public static class OfficeAgentMcpServer
         bool registrationEnabled,
         bool creationEnabled)
     {
-        var filesystemRegistration = registrationEnabled
-            ? " a register_document source is a path under this connection's root."
-            : string.Empty;
-        var sharePointRegistration = registrationEnabled
-            ? " a register_document source is a SharePoint/OneDrive URL or a \"driveId/itemId\" pair."
-            : string.Empty;
         var session = HasEphemeral(options)
             ? new[]
             {
@@ -90,22 +84,16 @@ public static class OfficeAgentMcpServer
             : Array.Empty<string>();
 
         var lines = session
-            .Concat(options.FileSystemConnections
-            .Select(c => $"- \"{c.ConnectionId}\" (filesystem):" + filesystemRegistration
-                + (creationEnabled && AllowsCreatableExtension(c.AllowedExtensions)
-                    ? " create_document writes new documents into this connection's root; the name's extension picks the format."
-                    : creationEnabled
-                        ? " create_document is not available because this connection allows no creatable extension."
-                        : string.Empty))
-            .Concat(options.SharePointConnections
-                .Select(c => $"- \"{c.ConnectionId}\" (sharepoint):" + sharePointRegistration
-                    + (creationEnabled && HasSharePointCreationTarget(c) && AllowsCreatableExtension(c.AllowedExtensions)
-                        ? " create_document writes new documents into this connection's configured folder; the name's extension picks the format."
-                        : creationEnabled && !HasSharePointCreationTarget(c)
-                            ? " create_document is not configured for this connection."
-                            : creationEnabled
-                                ? " create_document is not available because this connection allows no creatable extension."
-                            : string.Empty))))
+            .Concat(StorageConnections.Describe(options).Select(c =>
+                $"- \"{c.ConnectionId}\" ({c.Kind.Provider}):"
+                + (registrationEnabled ? $" a register_document source is {c.Kind.Source}." : string.Empty)
+                + (creationEnabled && c.HasCreationTarget && AllowsCreatableExtension(c.AllowedExtensions)
+                    ? $" create_document {c.Kind.Creation}; the name's extension picks the format."
+                    : creationEnabled && !c.HasCreationTarget
+                        ? " create_document is not configured for this connection."
+                        : creationEnabled
+                            ? " create_document is not available because this connection allows no creatable extension."
+                            : string.Empty)))
             .ToList();
 
         return lines.Count == 0
@@ -138,9 +126,16 @@ public static class OfficeAgentMcpServer
         // Parsed before anything is registered so a bad value names itself at startup
         // rather than silently leaving the connection on the global default.
         foreach (var connection in options.FileSystemConnections)
+        {
             ParseChangeMode(connection.DefaultChangeMode, connection.ConnectionId);
+            ParseChangeGranularity(connection.DefaultChangeGranularity, connection.ConnectionId);
+        }
         foreach (var connection in options.SharePointConnections)
+        {
             ParseChangeMode(connection.DefaultChangeMode, connection.ConnectionId);
+            ParseChangeGranularity(connection.DefaultChangeGranularity, connection.ConnectionId);
+        }
+        StorageConnections.Validate(options);
 
         if (HasEphemeral(options))
         {
@@ -160,6 +155,7 @@ public static class OfficeAgentMcpServer
                 o.MaximumBytes = connection.MaximumBytes;
                 o.AllowedExtensions = connection.AllowedExtensions.ToArray();
                 o.DefaultChangeMode = ParseChangeMode(connection.DefaultChangeMode, connection.ConnectionId);
+                o.DefaultChangeGranularity = ParseChangeGranularity(connection.DefaultChangeGranularity, connection.ConnectionId);
                 o.CalculateFormulas = connection.CalculateFormulas;
                 o.RejectFormulaErrors = connection.RejectFormulaErrors;
             });
@@ -170,6 +166,8 @@ public static class OfficeAgentMcpServer
             var captured = connection;
             services.AddSingleton<IDocumentProvider>(sp => CreateSharePointProvider(sp, captured));
         }
+
+        StorageConnections.Register(services, options);
 
         services.AddSingleton(sp => new OfficeAgentTools(
             sp.GetRequiredService<OfficeAgentClient>(),
@@ -200,7 +198,10 @@ public static class OfficeAgentMcpServer
                 // document tools could be given, so they are left out rather than offered
                 // and failed on first use.
                 AllowConnectionAddressing = hasConnections,
-                StrictToolSchemas = options.StrictToolSchemas
+                StrictToolSchemas = options.StrictToolSchemas,
+                // Names only the kinds of storage this server has, so an agent is never told
+                // to pass a source no connection accepts.
+                SourceDescription = HasStorage(options) ? StorageConnections.SourceDescription(options) : null
             })
             .Select(function => McpServerTool.Create(function, ToolAnnotations.For(function.Name)))
             .ToList();
@@ -218,9 +219,11 @@ public static class OfficeAgentMcpServer
     /// counts, because an agent addresses documents in it exactly as it would in storage.
     /// </summary>
     private static bool HasConnections(OfficeAgentMcpOptions options) =>
-        options.FileSystemConnections.Count > 0 ||
-        options.SharePointConnections.Count > 0 ||
-        HasEphemeral(options);
+        HasStorage(options) || HasEphemeral(options);
+
+    /// <summary>Whether any connection other than the session one is configured.</summary>
+    private static bool HasStorage(OfficeAgentMcpOptions options) =>
+        StorageConnections.Describe(options).Count > 0;
 
     /// <summary>The session connection minted when the server is started with no configuration.</summary>
     public const string DefaultSessionConnectionId = "session";
@@ -230,8 +233,7 @@ public static class OfficeAgentMcpServer
     /// inline content.
     /// </summary>
     private static bool IsZeroConfigured(OfficeAgentMcpOptions options) =>
-        options.FileSystemConnections.Count == 0 &&
-        options.SharePointConnections.Count == 0 &&
+        !HasStorage(options) &&
         !options.AllowInlineContent &&
         string.IsNullOrWhiteSpace(options.EphemeralConnectionId);
 
@@ -258,15 +260,14 @@ public static class OfficeAgentMcpServer
     /// Whether the registration and source-addressed tools are worth offering.
     /// </summary>
     /// <remarks>
-    /// They take a source - a path under a root, or a SharePoint URL - so they need a
-    /// connection that has one. A session connection does not: its documents arrive through
+    /// They take a source - a path under a root, a SharePoint URL, a file id or link - so
+    /// they need a connection that has one. A session connection does not: its documents arrive through
     /// import_document_content, and there is no external item for register_document to name.
     /// Offering them on a session-only server would hand the agent three tools that can only
     /// fail, which costs it a turn to discover.
     /// </remarks>
     private static bool RegistrationEnabled(OfficeAgentMcpOptions options) =>
-        options.AllowRegistration &&
-        (options.FileSystemConnections.Count > 0 || options.SharePointConnections.Count > 0);
+        options.AllowRegistration && HasStorage(options);
 
     private static bool HasEphemeral(OfficeAgentMcpOptions options) =>
         !string.IsNullOrWhiteSpace(EphemeralId(options));
@@ -307,91 +308,98 @@ public static class OfficeAgentMcpServer
             {
                 Name = "list_connections",
                 Description =
-                    "List the connections you can address documents under. Returns [{connectionId, provider, canCreateDocuments}] " +
-                    "where provider is \"filesystem\" or \"sharepoint\". Use a connectionId as the connectionId " +
+                    "List the connections you can address documents under. Returns [{connectionId, provider, canCreateDocuments, " +
+                    "allowedExtensions, defaultChangeMode, defaultChangeGranularity, calculatesFormulas}] where provider names the storage, " +
+                    "such as \"filesystem\" or \"sharepoint\". Use a connectionId as the connectionId " +
                     $"for {addressedTools}; never ask the user for it."
             });
 
         return McpServerTool.Create(function, ToolAnnotations.For(function.Name));
     }
 
+    /// <summary>
+    /// One <c>list_connections</c> entry before access is checked. Built from configuration
+    /// alone, so it carries ids and capabilities but never a credential, URL, container,
+    /// bucket or prefix.
+    /// </summary>
+    private sealed record ConnectionEntry(
+        string ConnectionId,
+        string Provider,
+        bool Creatable,
+        IReadOnlyList<string> AllowedExtensions,
+        string DefaultChangeMode,
+        string DefaultChangeGranularity,
+        bool CalculatesFormulas);
+
+    private static List<ConnectionEntry> ConnectionEntries(OfficeAgentMcpOptions options)
+    {
+        var creationEnabled = CreationEnabled(options);
+        var entries = new List<ConnectionEntry>();
+        if (HasEphemeral(options))
+            entries.Add(new ConnectionEntry(
+                EphemeralId(options), "session", creationEnabled, CreatableExtensions.Value,
+                nameof(ChangeMode.Tracked), nameof(ChangeGranularity.Span), options.EphemeralCalculateFormulas));
+
+        entries.AddRange(StorageConnections.Describe(options).Select(c => new ConnectionEntry(
+            c.ConnectionId,
+            c.Kind.Provider,
+            creationEnabled && c.HasCreationTarget && AllowsCreatableExtension(c.AllowedExtensions),
+            c.AllowedExtensions
+                .Where(extension => !string.IsNullOrWhiteSpace(extension))
+                .Select(extension => NormalizeExtension(extension))
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .ToList(),
+            ParseChangeMode(c.DefaultChangeMode, c.ConnectionId).ToString(),
+            ParseChangeGranularity(c.DefaultChangeGranularity, c.ConnectionId).ToString(),
+            c.CalculatesFormulas)));
+        return entries;
+    }
+
+    private static string NormalizeExtension(string extension)
+    {
+        var trimmed = extension.Trim().ToLowerInvariant();
+        return trimmed.StartsWith(".", StringComparison.Ordinal) ? trimmed : "." + trimmed;
+    }
+
+    private static object Payload(ConnectionEntry entry, bool canCreate) => new
+    {
+        connectionId = entry.ConnectionId,
+        provider = entry.Provider,
+        canCreateDocuments = canCreate,
+        allowedExtensions = entry.AllowedExtensions,
+        defaultChangeMode = entry.DefaultChangeMode,
+        defaultChangeGranularity = entry.DefaultChangeGranularity,
+        calculatesFormulas = entry.CalculatesFormulas
+    };
+
     internal static async Task<string> ConnectionsPayloadAsync(
         OfficeAgentTools tools,
         OfficeAgentMcpOptions options,
         CancellationToken cancellationToken = default)
     {
-        var descriptors = new List<(string Id, string Provider, bool Creatable)>();
-        if (HasEphemeral(options))
-            descriptors.Add((EphemeralId(options), "session", CreationEnabled(options)));
-        descriptors.AddRange(options.FileSystemConnections.Select(connection =>
-            (connection.ConnectionId, "filesystem", CreationEnabled(options) &&
-                AllowsCreatableExtension(connection.AllowedExtensions))));
-        descriptors.AddRange(options.SharePointConnections.Select(connection =>
-            (connection.ConnectionId, "sharepoint", CreationEnabled(options) &&
-                HasSharePointCreationTarget(connection) &&
-                AllowsCreatableExtension(connection.AllowedExtensions))));
-
         var visible = new List<object>();
-        foreach (var descriptor in descriptors)
+        foreach (var entry in ConnectionEntries(options))
         {
             var read = await tools.CanAccessConnectionAsync(
-                descriptor.Id, ConnectionCapability.Read, cancellationToken).ConfigureAwait(false);
+                entry.ConnectionId, ConnectionCapability.Read, cancellationToken).ConfigureAwait(false);
             var register = await tools.CanAccessConnectionAsync(
-                descriptor.Id, ConnectionCapability.Register, cancellationToken).ConfigureAwait(false);
-            var create = descriptor.Creatable && await tools.CanAccessConnectionAsync(
-                descriptor.Id, ConnectionCapability.Create, cancellationToken).ConfigureAwait(false);
+                entry.ConnectionId, ConnectionCapability.Register, cancellationToken).ConfigureAwait(false);
+            var create = entry.Creatable && await tools.CanAccessConnectionAsync(
+                entry.ConnectionId, ConnectionCapability.Create, cancellationToken).ConfigureAwait(false);
             var edit = await tools.CanAccessConnectionAsync(
-                descriptor.Id, ConnectionCapability.Edit, cancellationToken).ConfigureAwait(false);
+                entry.ConnectionId, ConnectionCapability.Edit, cancellationToken).ConfigureAwait(false);
             var delete = await tools.CanAccessConnectionAsync(
-                descriptor.Id, ConnectionCapability.Delete, cancellationToken).ConfigureAwait(false);
+                entry.ConnectionId, ConnectionCapability.Delete, cancellationToken).ConfigureAwait(false);
             if (!read && !register && !create && !edit && !delete) continue;
 
-            visible.Add(new
-            {
-                connectionId = descriptor.Id,
-                provider = descriptor.Provider,
-                canCreateDocuments = create
-            });
+            visible.Add(Payload(entry, create));
         }
 
         return JsonSerializer.Serialize(visible);
     }
 
-    internal static string ConnectionsPayload(OfficeAgentMcpOptions options)
-    {
-        var creationEnabled = CreationEnabled(options);
-        var ephemeral = HasEphemeral(options)
-            ? new[]
-            {
-                new
-                {
-                    connectionId = EphemeralId(options),
-                    provider = "session",
-                    canCreateDocuments = creationEnabled
-                }
-            }
-            : Array.Empty<object>().Select(_ => new { connectionId = "", provider = "", canCreateDocuments = false });
-
-        var connections = ephemeral
-            .Concat(options.FileSystemConnections
-            .Select(c => new
-            {
-                connectionId = c.ConnectionId,
-                provider = "filesystem",
-                canCreateDocuments = creationEnabled && AllowsCreatableExtension(c.AllowedExtensions)
-            }))
-            .Concat(options.SharePointConnections
-                .Select(c => new
-                {
-                    connectionId = c.ConnectionId,
-                    provider = "sharepoint",
-                    canCreateDocuments = creationEnabled &&
-                        HasSharePointCreationTarget(c) &&
-                        AllowsCreatableExtension(c.AllowedExtensions)
-                }))
-            .ToArray();
-        return JsonSerializer.Serialize(connections);
-    }
+    internal static string ConnectionsPayload(OfficeAgentMcpOptions options) =>
+        JsonSerializer.Serialize(ConnectionEntries(options).Select(entry => Payload(entry, entry.Creatable)).ToArray());
 
     /// <remarks>
     /// <see cref="OfficeAgentMcpOptions.AllowCreation"/> guards authoring agent-named files
@@ -406,13 +414,8 @@ public static class OfficeAgentMcpServer
         IsZeroConfigured(options) ||
         (options.AllowCreation &&
          (HasEphemeral(options) ||
-          options.FileSystemConnections.Any(c => AllowsCreatableExtension(c.AllowedExtensions)) ||
-          options.SharePointConnections.Any(c =>
-              HasSharePointCreationTarget(c) && AllowsCreatableExtension(c.AllowedExtensions))));
-
-    private static bool HasSharePointCreationTarget(SharePointConnectionOptions connection) =>
-        !string.IsNullOrWhiteSpace(connection.CreationDriveId) &&
-        !string.IsNullOrWhiteSpace(connection.CreationFolderItemId);
+          StorageConnections.Describe(options).Any(c =>
+              c.HasCreationTarget && AllowsCreatableExtension(c.AllowedExtensions))));
 
     /// <summary>
     /// The format modules this server speaks. The single place they are named, so the
@@ -495,6 +498,7 @@ public static class OfficeAgentMcpServer
             CreationDriveId = connection.CreationDriveId,
             CreationFolderItemId = connection.CreationFolderItemId,
             DefaultChangeMode = ParseChangeMode(connection.DefaultChangeMode, connection.ConnectionId),
+            DefaultChangeGranularity = ParseChangeGranularity(connection.DefaultChangeGranularity, connection.ConnectionId),
             CalculateFormulas = connection.CalculateFormulas,
             RejectFormulaErrors = connection.RejectFormulaErrors
         }, http, tokens, store);
@@ -507,13 +511,31 @@ public static class OfficeAgentMcpServer
     /// and surface as "no connections configured" - a diagnostic pointing nowhere near the
     /// mistake. Parsing it here names the connection and the accepted values instead.
     /// </summary>
-    private static ChangeMode ParseChangeMode(string value, string connectionId)
+    internal static ChangeMode ParseChangeMode(string value, string connectionId)
     {
         if (string.IsNullOrWhiteSpace(value)) return ChangeMode.Tracked;
         if (Enum.TryParse<ChangeMode>(value.Trim(), ignoreCase: true, out var mode)) return mode;
 
         throw new InvalidOperationException(
             $"Connection '{connectionId}' has DefaultChangeMode '{value}'. Expected Tracked or Direct.");
+    }
+
+    /// <summary>
+    /// Reads a connection's <c>DefaultChangeGranularity</c>, bound as a string for the same
+    /// reason as <see cref="ParseChangeMode"/>. Empty means <c>Span</c>, the 1.x default.
+    /// </summary>
+    internal static ChangeGranularity ParseChangeGranularity(string value, string connectionId)
+    {
+        if (string.IsNullOrWhiteSpace(value)) return ChangeGranularity.Span;
+        var trimmed = value.Trim();
+        // Names only: Enum.TryParse also accepts "0" and "1", which would read as a typo fixed.
+        if (!char.IsDigit(trimmed[0]) && trimmed[0] != '-' &&
+            Enum.TryParse<ChangeGranularity>(trimmed, ignoreCase: true, out var granularity) &&
+            Enum.IsDefined(typeof(ChangeGranularity), granularity))
+            return granularity;
+
+        throw new InvalidOperationException(
+            $"Connection '{connectionId}' has DefaultChangeGranularity '{value}'. Expected Span or Minimal.");
     }
 
     private static IAccessTokenProvider CreateTokenProvider(SharePointConnectionOptions connection, HttpClient http)

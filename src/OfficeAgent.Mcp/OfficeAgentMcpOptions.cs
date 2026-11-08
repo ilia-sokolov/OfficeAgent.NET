@@ -5,7 +5,8 @@ namespace OfficeAgent.Mcp;
 /// section (appsettings, environment variables with the <c>OfficeAgent__</c> prefix,
 /// or command line). Connections and credentials are host configuration. Editing
 /// uses opaque ids; when registration is enabled, source-addressed tools also accept
-/// provider-relative paths, SharePoint URLs, or <c>driveId/itemId</c> pairs.
+/// provider-relative paths, SharePoint URLs, <c>driveId/itemId</c> pairs, iManage, Google
+/// Drive or Box ids and links, or blob names and object keys.
 /// </summary>
 public sealed class OfficeAgentMcpOptions
 {
@@ -33,8 +34,8 @@ public sealed class OfficeAgentMcpOptions
     /// <summary>
     /// Gets or sets whether <c>create_document</c> is exposed when at least one
     /// connection allows a format for which a blank-document factory is registered
-    /// (currently <c>.docx</c>, <c>.pptx</c>, or <c>.xlsx</c>); SharePoint connections additionally
-    /// require an explicit creation destination. Defaults to <see langword="false"/>: letting
+    /// (currently <c>.docx</c>, <c>.pptx</c>, or <c>.xlsx</c>); SharePoint, iManage, Google Drive
+    /// and Box connections additionally require an explicit creation folder. Defaults to <see langword="false"/>: letting
     /// an agent author new files under a connection root is a capability a host should
     /// choose, and an upgrade must not hand it to deployments that never asked for it.
     /// Turning it on adds <c>create_document</c> and, when registration is disabled,
@@ -145,6 +146,26 @@ public sealed class OfficeAgentMcpOptions
     /// <summary>Gets or sets the SharePoint connections to expose.</summary>
     public IList<SharePointConnectionOptions> SharePointConnections { get; set; } =
         new List<SharePointConnectionOptions>();
+
+    /// <summary>Gets or sets the iManage Work connections to expose.</summary>
+    public IList<IManageConnectionOptions> IManageConnections { get; set; } =
+        new List<IManageConnectionOptions>();
+
+    /// <summary>Gets or sets the Google Drive connections to expose.</summary>
+    public IList<GoogleDriveConnectionOptions> GoogleDriveConnections { get; set; } =
+        new List<GoogleDriveConnectionOptions>();
+
+    /// <summary>Gets or sets the Box connections to expose.</summary>
+    public IList<BoxConnectionOptions> BoxConnections { get; set; } =
+        new List<BoxConnectionOptions>();
+
+    /// <summary>Gets or sets the Azure Blob Storage connections to expose.</summary>
+    public IList<AzureBlobConnectionOptions> AzureBlobConnections { get; set; } =
+        new List<AzureBlobConnectionOptions>();
+
+    /// <summary>Gets or sets the Amazon S3 connections to expose.</summary>
+    public IList<AmazonS3ConnectionOptions> AmazonS3Connections { get; set; } =
+        new List<AmazonS3ConnectionOptions>();
 }
 
 /// <summary>One rooted filesystem connection.</summary>
@@ -174,6 +195,13 @@ public sealed class FileSystemConnectionOptions
     public string DefaultChangeMode { get; set; } = "Tracked";
 
     /// <summary>
+    /// Gets or sets how much of the matched text a tracked <c>changeText</c> that does not
+    /// state a granularity marks: <c>Span</c> (the default in 1.x) marks the whole matched
+    /// text, <c>Minimal</c> only the words that differ.
+    /// </summary>
+    public string DefaultChangeGranularity { get; set; } = "Span";
+
+    /// <summary>
     /// Gets or sets whether workbooks previewed or committed through this connection have
     /// their formulas calculated with the bundled engine, so the saved file carries current
     /// values. Only allowlisted functions are calculated; <c>describe_capabilities</c> lists
@@ -189,6 +217,287 @@ public sealed class FileSystemConnectionOptions
     /// <see langword="false"/>.
     /// </summary>
     public bool RejectFormulaErrors { get; set; }
+}
+
+/// <summary>
+/// The settings every storage-provider connection shares: its id, size and extension limits,
+/// editing defaults, formula calculation, and where registrations are kept.
+/// </summary>
+/// <remarks>
+/// The change mode and granularity are bound as strings, as on the filesystem and SharePoint
+/// connections: the configuration binder drops a collection element it cannot bind, so a typo
+/// bound to the enum would remove the whole connection instead of naming the bad value.
+/// </remarks>
+public abstract class StorageConnectionOptions
+{
+    /// <summary>Gets or sets the connection id agents address documents under.</summary>
+    public string ConnectionId { get; set; } = string.Empty;
+
+    /// <summary>
+    /// Gets or sets the path of a JSON registration index. When set, registrations
+    /// survive restarts; when empty, they live in process memory.
+    /// </summary>
+    public string RegistrationIndexPath { get; set; } = string.Empty;
+
+    /// <summary>Gets or sets the maximum accepted document size in bytes.</summary>
+    public long MaximumBytes { get; set; } = 100 * 1024 * 1024;
+
+    /// <summary>Gets or sets the allowed document extensions.</summary>
+    public IList<string> AllowedExtensions { get; set; } = new List<string> { ".docx" };
+
+    /// <summary>
+    /// Gets or sets the change mode used when a plan operation does not state one:
+    /// <c>Tracked</c> (the default) or <c>Direct</c>.
+    /// </summary>
+    public string DefaultChangeMode { get; set; } = "Tracked";
+
+    /// <summary>
+    /// Gets or sets how much of the matched text a tracked <c>changeText</c> that does not
+    /// state a granularity marks: <c>Span</c> (the default in 1.x) or <c>Minimal</c>.
+    /// </summary>
+    public string DefaultChangeGranularity { get; set; } = "Span";
+
+    /// <summary>
+    /// Gets or sets whether workbooks previewed or committed through this connection have
+    /// their formulas calculated, as <see cref="FileSystemConnectionOptions.CalculateFormulas"/>
+    /// does for a folder. Defaults to <see langword="false"/>.
+    /// </summary>
+    public bool CalculateFormulas { get; set; }
+
+    /// <summary>
+    /// Gets or sets whether a plan whose calculation produces a new formula error or a
+    /// circular reference is refused with <c>formula-error</c>. Applies only with
+    /// <see cref="CalculateFormulas"/>. Defaults to <see langword="false"/>.
+    /// </summary>
+    public bool RejectFormulaErrors { get; set; }
+}
+
+/// <summary>
+/// One iManage Work connection. Documents are registered by their iManage id
+/// (<c>LIBRARY!number.version</c>) or an iManage Work link on <see cref="ServerUrl"/>.
+/// </summary>
+/// <remarks>
+/// <see cref="ClientSecret"/>, <see cref="Password"/> and <see cref="RefreshToken"/> are
+/// secrets. Supply them through <c>OfficeAgent__IManageConnections__N__*</c> environment
+/// variables or a secret store, not appsettings. They are sent only to the iManage token
+/// endpoint and never appear in tool results, connection descriptors or error messages.
+/// </remarks>
+public sealed class IManageConnectionOptions : StorageConnectionOptions
+{
+    /// <summary>
+    /// Gets or sets the iManage server URL, an absolute https URL such as
+    /// <c>https://cloudimanage.com</c> or your own Work server. Registration links must be on
+    /// this host, and tokens are requested from it.
+    /// </summary>
+    public string ServerUrl { get; set; } = string.Empty;
+
+    /// <summary>Gets or sets the Work REST API base path on <see cref="ServerUrl"/>.</summary>
+    public string ApiBasePath { get; set; } = "/work/api/v2";
+
+    /// <summary>
+    /// Gets or sets the iManage customer id that every Work API v2 path names. An administrator
+    /// can read it from the server's <c>/api</c> response.
+    /// </summary>
+    public string CustomerId { get; set; } = string.Empty;
+
+    /// <summary>Gets or sets the OAuth2 token endpoint path on <see cref="ServerUrl"/>.</summary>
+    public string TokenPath { get; set; } = "/auth/oauth2/token";
+
+    /// <summary>
+    /// Gets or sets the OAuth2 grant: <c>Password</c> (the default; a dedicated service
+    /// account), <c>RefreshToken</c>, or <c>ClientCredentials</c> (only where your iManage
+    /// environment enables it).
+    /// </summary>
+    public string GrantType { get; set; } = "Password";
+
+    /// <summary>Gets or sets the application's client id from iManage Control Center.</summary>
+    public string ClientId { get; set; } = string.Empty;
+
+    /// <summary>
+    /// Gets or sets the application's client secret. Required for <c>ClientCredentials</c>;
+    /// leave empty for a public client. Supply it through
+    /// <c>OfficeAgent__IManageConnections__N__ClientSecret</c> or a secret store.
+    /// </summary>
+    public string ClientSecret { get; set; } = string.Empty;
+
+    /// <summary>Gets or sets the service account's user id, for the <c>Password</c> grant.</summary>
+    public string Username { get; set; } = string.Empty;
+
+    /// <summary>
+    /// Gets or sets the service account's password, for the <c>Password</c> grant. Supply it
+    /// through <c>OfficeAgent__IManageConnections__N__Password</c> or a secret store.
+    /// </summary>
+    public string Password { get; set; } = string.Empty;
+
+    /// <summary>
+    /// Gets or sets the initial refresh token, for the <c>RefreshToken</c> grant. The rotated
+    /// token is kept in memory only. Supply it through
+    /// <c>OfficeAgent__IManageConnections__N__RefreshToken</c> or a secret store.
+    /// </summary>
+    public string RefreshToken { get; set; } = string.Empty;
+
+    /// <summary>
+    /// Gets or sets the folder or workspace id, <c>LIBRARY!number</c>, that receives new
+    /// documents. Leave empty to disable <c>create_document</c> for this connection.
+    /// </summary>
+    public string CreationFolderId { get; set; } = string.Empty;
+
+    /// <summary>
+    /// Gets or sets the document class given to new documents, for libraries that require one.
+    /// Leave empty to let the library apply its default.
+    /// </summary>
+    public string CreationDocumentClass { get; set; } = string.Empty;
+
+    /// <summary>Gets or sets the comment recorded on each version and document OfficeAgent saves.</summary>
+    public string SaveComment { get; set; } = "Saved by OfficeAgent.";
+
+    /// <summary>
+    /// Gets or sets whether a save locks the document while it checks the latest version and
+    /// uploads. Defaults to <see langword="true"/>. Turn it off only for a server that does not
+    /// accept document locks.
+    /// </summary>
+    public bool LockDuringSave { get; set; } = true;
+}
+
+/// <summary>
+/// One Google Drive connection, authenticated as a Google service account. Documents are
+/// registered by a Drive file id or a Drive or Docs URL.
+/// </summary>
+/// <remarks>
+/// The service account key is a secret. Point <see cref="KeyFilePath"/> at the key file, or
+/// supply its contents through <c>OfficeAgent__GoogleDriveConnections__N__KeyJson</c> from a
+/// secret store; never write the key into appsettings or a manifest.
+/// </remarks>
+public sealed class GoogleDriveConnectionOptions : StorageConnectionOptions
+{
+    /// <summary>Gets or sets the path of the service account key file downloaded from Google Cloud.</summary>
+    public string KeyFilePath { get; set; } = string.Empty;
+
+    /// <summary>
+    /// Gets or sets the service account key file's JSON contents, the alternative to
+    /// <see cref="KeyFilePath"/>. Supply it from the environment or a secret store.
+    /// </summary>
+    public string KeyJson { get; set; } = string.Empty;
+
+    /// <summary>
+    /// Gets or sets the Google Workspace user to act as, through domain-wide delegation. Leave
+    /// empty for the service account to act as itself, which is the narrower setup.
+    /// </summary>
+    public string Subject { get; set; } = string.Empty;
+
+    /// <summary>Gets or sets the requested OAuth scope. Defaults to full Drive access.</summary>
+    public string Scope { get; set; } = "https://www.googleapis.com/auth/drive";
+
+    /// <summary>Gets or sets the Drive API v3 base URL.</summary>
+    public string ApiBaseUrl { get; set; } = "https://www.googleapis.com/drive/v3";
+
+    /// <summary>Gets or sets the Drive API v3 media upload base URL.</summary>
+    public string UploadBaseUrl { get; set; } = "https://www.googleapis.com/upload/drive/v3";
+
+    /// <summary>
+    /// Gets or sets the Drive folder id that receives new documents. Leave empty to disable
+    /// <c>create_document</c> for this connection.
+    /// </summary>
+    public string CreationFolderId { get; set; } = string.Empty;
+}
+
+/// <summary>
+/// One Box connection, authenticated with the client credentials grant. Documents are
+/// registered by a Box file id or a Box file URL.
+/// </summary>
+/// <remarks>
+/// <see cref="ClientSecret"/> is a secret. Supply it through
+/// <c>OfficeAgent__BoxConnections__N__ClientSecret</c> or a secret store, not appsettings.
+/// </remarks>
+public sealed class BoxConnectionOptions : StorageConnectionOptions
+{
+    /// <summary>Initializes the options with the 50 MB direct-upload ceiling Box recommends as the size limit.</summary>
+    public BoxConnectionOptions() => MaximumBytes = 50 * 1024 * 1024;
+
+    /// <summary>Gets or sets the Box app's client id.</summary>
+    public string ClientId { get; set; } = string.Empty;
+
+    /// <summary>Gets or sets the Box app's client secret.</summary>
+    public string ClientSecret { get; set; } = string.Empty;
+
+    /// <summary>
+    /// Gets or sets who the token acts as: <c>Enterprise</c> (the default; the app's service
+    /// account) or <c>User</c> (a managed user or app user).
+    /// </summary>
+    public string SubjectType { get; set; } = "Enterprise";
+
+    /// <summary>Gets or sets the enterprise id, or the user id for <c>User</c>.</summary>
+    public string SubjectId { get; set; } = string.Empty;
+
+    /// <summary>Gets or sets the Box API base URL.</summary>
+    public string ApiBaseUrl { get; set; } = "https://api.box.com/2.0";
+
+    /// <summary>Gets or sets the Box upload API base URL.</summary>
+    public string UploadBaseUrl { get; set; } = "https://upload.box.com/api/2.0";
+
+    /// <summary>
+    /// Gets or sets the numeric Box folder id that receives new documents. Leave empty to
+    /// disable <c>create_document</c> for this connection.
+    /// </summary>
+    public string CreationFolderId { get; set; } = string.Empty;
+}
+
+/// <summary>
+/// One Azure Blob Storage connection over one container and an optional prefix. Documents are
+/// registered by blob names relative to the prefix, and new documents are created under it.
+/// </summary>
+/// <remarks>
+/// With <see cref="ServiceUri"/> the connection authenticates with <c>DefaultAzureCredential</c>,
+/// such as a managed identity. <see cref="ConnectionString"/> carries the account key: supply it
+/// through <c>OfficeAgent__AzureBlobConnections__N__ConnectionString</c> or a secret store.
+/// </remarks>
+public sealed class AzureBlobConnectionOptions : StorageConnectionOptions
+{
+    /// <summary>Gets or sets the Blob service endpoint, such as <c>https://contoso.blob.core.windows.net</c>.</summary>
+    public string ServiceUri { get; set; } = string.Empty;
+
+    /// <summary>Gets or sets a storage connection string, the alternative to <see cref="ServiceUri"/>.</summary>
+    public string ConnectionString { get; set; } = string.Empty;
+
+    /// <summary>Gets or sets the container this connection is confined to.</summary>
+    public string ContainerName { get; set; } = string.Empty;
+
+    /// <summary>Gets or sets an optional blob-name prefix, such as <c>contracts/</c>.</summary>
+    public string Prefix { get; set; } = string.Empty;
+
+    /// <summary>
+    /// Gets or sets the client id of a user-assigned managed identity for
+    /// <c>DefaultAzureCredential</c>. Leave empty for a system-assigned identity.
+    /// </summary>
+    public string ManagedIdentityClientId { get; set; } = string.Empty;
+}
+
+/// <summary>
+/// One Amazon S3 connection over one bucket and an optional key prefix. Credentials come from
+/// the AWS SDK's default chain, such as an instance or task role; none are configured here.
+/// </summary>
+public sealed class AmazonS3ConnectionOptions : StorageConnectionOptions
+{
+    /// <summary>Gets or sets the bucket this connection is confined to.</summary>
+    public string BucketName { get; set; } = string.Empty;
+
+    /// <summary>Gets or sets an optional key prefix, such as <c>contracts/</c>.</summary>
+    public string KeyPrefix { get; set; } = string.Empty;
+
+    /// <summary>
+    /// Gets or sets the AWS region, such as <c>eu-west-1</c>. Empty takes the region from the AWS
+    /// SDK's default chain.
+    /// </summary>
+    public string Region { get; set; } = string.Empty;
+
+    /// <summary>
+    /// Gets or sets an endpoint for an S3-compatible store, such as MinIO. Empty uses Amazon S3.
+    /// The store must support conditional writes.
+    /// </summary>
+    public string ServiceUrl { get; set; } = string.Empty;
+
+    /// <summary>Gets or sets whether requests use path-style addressing, which most S3-compatible stores need.</summary>
+    public bool ForcePathStyle { get; set; }
 }
 
 /// <summary>One SharePoint document-library connection.</summary>
@@ -269,6 +578,13 @@ public sealed class SharePointConnectionOptions
     /// redline vocabulary and refuses Tracked outright.
     /// </summary>
     public string DefaultChangeMode { get; set; } = "Tracked";
+
+    /// <summary>
+    /// Gets or sets how much of the matched text a tracked <c>changeText</c> that does not
+    /// state a granularity marks: <c>Span</c> (the default in 1.x) marks the whole matched
+    /// text, <c>Minimal</c> only the words that differ.
+    /// </summary>
+    public string DefaultChangeGranularity { get; set; } = "Span";
 
     /// <summary>
     /// Gets or sets whether workbooks previewed or committed through this connection have

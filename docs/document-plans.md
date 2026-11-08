@@ -191,6 +191,47 @@ var plan = new DocumentPlan
 Include the leading or trailing space in `expect` when the deleted words sit between other
 words, so the sentence keeps one space. To remove a whole paragraph, use `removeParagraph`.
 
+#### Mark only the words that change
+
+A tracked `changeText` marks the whole of `expect` as deleted and the whole of `with` as
+inserted. With `"granularity": "Minimal"` it marks only the words that differ:
+
+```json
+{ "op": "changeText",
+  "target": { "paraId": "w14:…", "expect": "thirty days" },
+  "with":   "forty-five days",
+  "mode":   "Tracked",
+  "granularity": "Minimal" }
+```
+
+| `expect` | `with` | Marked under `Minimal` |
+| --- | --- | --- |
+| `thirty days` | `forty-five days` | ~~thirty~~ forty-five |
+| `the cap` | `125% of the cap` | insertion of `125% of ` |
+| `thirty days unless extended in writing` | `thirty days in writing` | deletion of `unless extended ` |
+| `thirty days` | `thirty days` | nothing |
+
+- A word is a run of characters without whitespace, so punctuation belongs to its word: `45`
+  against `forty-five` is one word for another, and `days.` differs from `days`.
+- Words compare exactly, so a change of case is a change.
+- The words `expect` and `with` share at the start and at the end are kept, with the
+  whitespace between them. What lies between is the edit. An empty side makes it a pure
+  insertion or a pure deletion; nothing left on either side means there is nothing to mark.
+- An insertion takes the formatting of the word before it, or of the word after it when it
+  opens the span. A replacement takes the formatting of the first word it deletes.
+- When the words to delete carry different character formatting, such as a bold word and a
+  plain one, the operation is written as `Span` would write it and its change carries a
+  `warning` saying so.
+- The change report's `before` and `after` are what is actually marked, so a preview shows
+  `thirty` and `forty-five` rather than the whole span.
+- Only `Tracked` edits written with `with` are narrowed. A `Direct` edit and a `withMarked`
+  rewrite ignore `granularity`.
+
+`granularity` is `Span` or `Minimal` (any case). `Span` is the default in 1.x; an operation
+that omits it arriving through a connection takes that connection's `DefaultChangeGranularity`,
+see [document providers](document-providers.md#default-change-granularity). `Minimal` becomes
+the default in 2.0. With `"match": "all"` each match is narrowed on its own.
+
 #### Rewrite a paragraph and keep its formatting
 
 `with` takes the formatting of the first run it replaces, so rewriting a whole paragraph with

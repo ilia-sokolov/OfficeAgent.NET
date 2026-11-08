@@ -99,6 +99,9 @@ public sealed class NativeCorpusTests
                 case "revisionAuthors":
                     Assert.Equal((string[])value, Revisions(c.Output).Distinct().Order(StringComparer.Ordinal).ToArray());
                     break;
+                case "revisionTexts":
+                    Assert.Equal((string[])value, RevisionTexts(c.Output));
+                    break;
                 case "tables":
                     Assert.Equal((int)value, Count(c.Format, c.Output, "tbl"));
                     break;
@@ -523,6 +526,16 @@ public sealed class NativeCorpusTests
                 (RevisionMarks.Contains(e.LocalName) && e.Parent?.LocalName != "rPr" || e.LocalName is "rPrChange" or "pPrChange"))
             .Select(e => e.GetAttribute("author", WordNamespace).Value ?? "")
             .ToList();
+    }
+
+    /// <summary>The text of every run-level insertion and deletion in the body, in document order.</summary>
+    private static string[] RevisionTexts(byte[] bytes)
+    {
+        using var document = WordprocessingDocument.Open(new MemoryStream(bytes, writable: false), false);
+        return document.MainDocumentPart!.Document!.Body!.Descendants()
+            .Where(e => e is W.InsertedRun or W.DeletedRun)
+            .Select(e => e.InnerText)
+            .ToArray();
     }
 
     // w:ins and w:del wrap runs or mark paragraph marks and rows; rPrChange and pPrChange are

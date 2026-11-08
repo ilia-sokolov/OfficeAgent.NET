@@ -1,0 +1,42 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- A SharpFuzz target for the document ingestion path. See README.md for how to instrument
+       and run it; building it alone does not fuzz anything. -->
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <!-- .NET 10 is what the container image and current hosts run, and it consumes the libraries'
+         net8.0 assets unchanged. System.IO.Compression comes from the runtime, so the runtime
+         chosen here is part of what is fuzzed. -->
+    <TargetFramework>net10.0</TargetFramework>
+    <IsPackable>false</IsPackable>
+    <GenerateDocumentationFile>false</GenerateDocumentationFile>
+    <RootNamespace>OfficeAgent.Fuzz</RootNamespace>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <!-- To point SharpFuzz's coverage pointer at a scratch buffer outside libFuzzer. -->
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <!-- One fuzzing worker should not spread its collections across every core. -->
+    <ServerGarbageCollector>false</ServerGarbageCollector>
+    <ConcurrentGarbageCollection>false</ConcurrentGarbageCollection>
+    <!-- The live-memory bound: an input that needs more managed heap than this fails with
+         OutOfMemoryException, which the target reports as a finding. -->
+    <OfficeAgentFuzzHeapHardLimit>2147483648</OfficeAgentFuzzHeapHardLimit>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <RuntimeHostConfigurationOption Include="System.GC.HeapHardLimit" Value="$(OfficeAgentFuzzHeapHardLimit)" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="SharpFuzz" Version="2.3.0" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\OfficeAgent.Core\OfficeAgent.Core.csproj" />
+    <ProjectReference Include="..\..\src\OfficeAgent.Word\OfficeAgent.Word.csproj" />
+    <ProjectReference Include="..\..\src\OfficeAgent.PowerPoint\OfficeAgent.PowerPoint.csproj" />
+    <ProjectReference Include="..\..\src\OfficeAgent.Excel\OfficeAgent.Excel.csproj" />
+  </ItemGroup>
+
+</Project>

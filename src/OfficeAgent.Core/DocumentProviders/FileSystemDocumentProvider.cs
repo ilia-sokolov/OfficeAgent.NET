@@ -39,6 +39,14 @@ public sealed class FileSystemDocumentProviderOptions
     public ChangeMode DefaultChangeMode { get; set; } = ChangeMode.Tracked;
 
     /// <summary>
+    /// Gets or sets how much of the matched text a tracked <c>changeText</c> that does not
+    /// state a granularity marks. The default, <see cref="ChangeGranularity.Span"/>, marks the
+    /// whole matched text; <see cref="ChangeGranularity.Minimal"/> marks only the words that
+    /// differ.
+    /// </summary>
+    public ChangeGranularity DefaultChangeGranularity { get; set; } = ChangeGranularity.Span;
+
+    /// <summary>
     /// Gets or sets whether a workbook previewed or committed through this connection has its
     /// formulas calculated, so the saved file carries current values instead of none or stale
     /// ones. Takes effect only when a formula evaluator is registered
@@ -66,7 +74,7 @@ public sealed class FileSystemDocumentProviderOptions
 /// <see cref="CreateAsync"/> are the one case
 /// where the provider owns the bytes it writes: they land directly under the root.
 /// </summary>
-public sealed class FileSystemDocumentProvider : IDocumentProvider, IDocumentCreatingProvider, IConnectionEditingDefaults, IConnectionCalculationDefaults
+public sealed class FileSystemDocumentProvider : IDocumentProvider, IDocumentCreatingProvider, IConnectionEditingDefaults, IConnectionGranularityDefaults, IConnectionCalculationDefaults
 {
     /// <summary>Gets the provider discriminator used in document references.</summary>
     public const string ProviderName = "filesystem";
@@ -98,6 +106,7 @@ public sealed class FileSystemDocumentProvider : IDocumentProvider, IDocumentCre
 
         ConnectionId = options.ConnectionId;
         DefaultChangeMode = options.DefaultChangeMode;
+        DefaultChangeGranularity = options.DefaultChangeGranularity;
         CalculateFormulas = options.CalculateFormulas;
         RejectFormulaErrors = options.RejectFormulaErrors;
         _root = Path.GetFullPath(options.RootPath);
@@ -122,6 +131,9 @@ public sealed class FileSystemDocumentProvider : IDocumentProvider, IDocumentCre
 
     /// <inheritdoc />
     public ChangeMode DefaultChangeMode { get; }
+
+    /// <inheritdoc />
+    public ChangeGranularity DefaultChangeGranularity { get; }
 
     /// <inheritdoc />
     public bool CalculateFormulas { get; }

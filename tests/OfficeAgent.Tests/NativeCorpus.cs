@@ -73,6 +73,34 @@ internal static class NativeCorpus
             new() { ["revisionsAtLeast"] = 2, ["acceptContains"] = new[] { "Globex Inc." }, ["rejectContains"] = new[] { "Acme Corp" },
                     ["rejectExcludes"] = new[] { "Globex" } }, visual: true);
 
+        // Granularity Minimal: only the words that differ are marked, and Word must accept and
+        // reject each narrowed redline back to exactly the two texts.
+        var terms = Terms();
+        ChangeTextOp Minimal(string expect, string with) => new()
+        {
+            Target = Find(client, terms, expect), With = with, Mode = ChangeMode.Tracked, Granularity = ChangeGranularity.Minimal
+        };
+        yield return W("w-changetext-minimal-word", "changeText", "Tracked replacement marking only the changed word", terms,
+            new PlanOperation[] { Minimal("thirty days of invoice", "forty-five days of invoice") },
+            new() { ["revisions"] = 2, ["revisionTexts"] = new[] { "thirty", "forty-five" },
+                    ["acceptContains"] = new[] { "due within forty-five days of invoice." }, ["acceptExcludes"] = new[] { "thirty days of invoice" },
+                    ["rejectContains"] = new[] { "due within thirty days of invoice." }, ["rejectExcludes"] = new[] { "forty-five" } }, visual: true);
+        yield return W("w-changetext-minimal-insertion", "changeText", "Tracked pure insertion inside a sentence", terms,
+            new PlanOperation[] { Minimal("the cap in clause 9", "125% of the cap in clause 9") },
+            new() { ["revisions"] = 1, ["revisionTexts"] = new[] { "125% of " },
+                    ["acceptContains"] = new[] { "limited to 125% of the cap in clause 9." },
+                    ["rejectContains"] = new[] { "limited to the cap in clause 9." }, ["rejectExcludes"] = new[] { "125%" } });
+        yield return W("w-changetext-minimal-deletion", "changeText", "Tracked pure deletion inside a sentence", terms,
+            new PlanOperation[] { Minimal("thirty days unless extended in writing", "thirty days in writing") },
+            new() { ["revisions"] = 1, ["revisionTexts"] = new[] { "unless extended " },
+                    ["acceptContains"] = new[] { "Notice is due within thirty days in writing." }, ["acceptExcludes"] = new[] { "unless extended" },
+                    ["rejectContains"] = new[] { "Notice is due within thirty days unless extended in writing." } });
+        yield return W("w-changetext-minimal-fallback", "changeText", "Changed words in two formats fall back to a whole-span redline", terms,
+            new PlanOperation[] { Minimal("within thirty days of receipt", "within forty-five weeks of receipt") },
+            new() { ["revisionsAtLeast"] = 2,
+                    ["acceptContains"] = new[] { "raised within forty-five weeks of receipt." }, ["acceptExcludes"] = new[] { "within thirty days of receipt" },
+                    ["rejectContains"] = new[] { "raised within thirty days of receipt." }, ["rejectExcludes"] = new[] { "forty-five" } });
+
         var firstRound = Commit(client, contract, "input.docx", new PlanOperation[]
         {
             new ChangeTextOp { Target = hit, With = "Globex Inc.", Mode = ChangeMode.Tracked }
@@ -742,6 +770,31 @@ internal static class NativeCorpus
         if (value is not null) cell["value"] = value;
         if (formula is not null) cell["formula"] = formula;
         return cell;
+    }
+
+    /// <summary>
+    /// Contract terms for the narrowed changeText cases: three plain clauses, and one whose
+    /// "thirty" is bold so that a deletion of "thirty days" crosses two formats.
+    /// </summary>
+    private static byte[] Terms()
+    {
+        static W.Run Plain(string text) => new(new W.Text(text) { Space = DocumentFormat.OpenXml.SpaceProcessingModeValues.Preserve });
+        static W.Paragraph Para(string paraId, params W.Run[] runs)
+        {
+            var paragraph = new W.Paragraph { ParagraphId = paraId };
+            paragraph.Append(runs);
+            return paragraph;
+        }
+        using var stream = new MemoryStream();
+        using (var document = WordprocessingDocument.Create(stream, DocumentFormat.OpenXml.WordprocessingDocumentType.Document))
+            document.AddMainDocumentPart().Document = new W.Document(new W.Body(
+                Para("00000011", Plain("Payment is due within thirty days of invoice.")),
+                Para("00000012", Plain("Liability is limited to the cap in clause 9.")),
+                Para("00000013", Plain("Notice is due within thirty days unless extended in writing.")),
+                Para("00000014", Plain("Disputes are raised within "),
+                    new W.Run(new W.RunProperties(new W.Bold()), new W.Text("thirty")),
+                    Plain(" days of receipt."))));
+        return stream.ToArray();
     }
 
     /// <summary>A quote template: a CustomerName slot and a table with a {{placeholder}} row.</summary>

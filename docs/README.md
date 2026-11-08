@@ -47,11 +47,14 @@ corpora and evaluations remain evidence for that release, not instructions for a
 | Compare two Word documents and create a redline | [Document comparison](document-workflows.md#compare-two-word-documents) | [DocumentComparison sample](../samples/DocumentComparison/) |
 | Assemble a proposal and appendices | [Word document assembly](document-assembly.md) | [DocumentAssembly sample](../samples/DocumentAssembly/) |
 | Add document tools to an agent | [Agent integration](agent-integration.md) | [Document providers](document-providers.md) |
-| Connect an MCP client locally | [MCP server](mcp-server.md#local-hosting-stdio) | [Deployment](deployment.md#option-a---local-stdio-for-claude-code-and-codex) |
-| Host OfficeAgent for a team | [Deployment](deployment.md#option-b---hosted-http-for-all-four-clients) | [Operations](operations.md), [troubleshooting](troubleshooting.md) |
+| Connect an MCP client locally | [MCP server](mcp-server.md#local-hosting-stdio) | [Deployment](deployment.md#option-a---local-stdio-for-claude-code-codex-and-google-adk) |
+| Host OfficeAgent for a team | [Deployment](deployment.md#option-b---hosted-http-for-every-client) | [Operations](operations.md), [troubleshooting](troubleshooting.md) |
 | Enforce per-user connection access | [Hosted gateway reference](../samples/HostedGateway/) | [Deployment](deployment.md#authentication--identity) |
 | Render pages for visual verification | [Visual rendering](rendering.md) | [Operations](operations.md) |
 | Read or write SharePoint files | [SharePoint provider](document-providers.md#the-sharepoint-provider) | [Authentication and identity](deployment.md#authentication--identity) |
+| Read or version iManage Work documents | [iManage Work provider](document-providers.md#the-imanage-work-provider) | [Storage outcomes and recovery](recovery.md) |
+| Read or write Office files in Google Drive or Box | [Google Drive provider](document-providers.md#the-google-drive-provider), [Box provider](document-providers.md#the-box-provider) | [Google Drive authentication](document-providers.md#google-drive-authentication), [Box authentication](document-providers.md#box-authentication) |
+| Keep documents in Azure Blob Storage or Amazon S3 | [Azure Blob provider](document-providers.md#the-azure-blob-storage-provider), [Amazon S3 provider](document-providers.md#the-amazon-s3-provider) | [Storage outcomes and recovery](recovery.md) |
 | Look up an operation's JSON | [Document plans](document-plans.md) | [Validation errors](document-plans.md#validation-errors) |
 | Run a tracked Word review | [Sample review workflows](../samples/documents/README.md#reproducible-review-workflows) | [Optional review skill](skill-installation.md) |
 | Edit a document that already has tracked changes | [Pending revisions](pending-revisions.md) | [Document plans](document-plans.md#validation-errors) |
@@ -72,6 +75,11 @@ corpora and evaluations remain evidence for that release, not instructions for a
 | `OfficeAgent.Excel.Calculation` | Optional formula calculation for a verified set of Excel functions | `netstandard2.0`, `net8.0` |
 | `OfficeAgent.AgentFramework` | `Microsoft.Extensions.AI` / Microsoft Agent Framework tools | `netstandard2.0`, `net8.0` |
 | `OfficeAgent.SharePoint` | Microsoft Graph document provider | `netstandard2.0`, `net8.0` |
+| `OfficeAgent.IManage` | iManage Work document provider | `netstandard2.0`, `net8.0` |
+| `OfficeAgent.GoogleDrive` | Google Drive document provider for Office files | `netstandard2.0`, `net8.0` |
+| `OfficeAgent.Box` | Box document provider | `netstandard2.0`, `net8.0` |
+| `OfficeAgent.AzureBlob` | Azure Blob Storage document provider | `netstandard2.0`, `net8.0` |
+| `OfficeAgent.AmazonS3` | Amazon S3 (and S3-compatible) document provider | `netstandard2.0`, `net8.0` |
 | `OfficeAgent.Mcp` | Standalone MCP server and .NET global tool | `net8.0` |
 | `OfficeAgent.Rendering` | Optional bounded LibreOffice and Poppler page-image rendering | `net8.0` |
 
@@ -115,7 +123,7 @@ and optimistic-concurrency conflicts instead of guessing.
 ### How-to guides
 
 - [Agent integration](agent-integration.md) — expose bounded tools and deliver output.
-- [Document providers](document-providers.md) — filesystem and SharePoint storage.
+- [Document providers](document-providers.md) — filesystem, SharePoint, iManage Work, Google Drive, Box, Azure Blob Storage and Amazon S3 storage.
 - [Open XML SDK interoperability](sdk-interoperability.md) - the tested copy, edit, reinspect workflow, per-stage guarantees, and the two distinct staleness guards.
 - [Operations](operations.md) — concurrency, memory, telemetry, and production operation.
 - [Ingestion limits](ingestion-limits.md) - host ceilings for package size, expansion, parts, and XML, plus what is refused and how.

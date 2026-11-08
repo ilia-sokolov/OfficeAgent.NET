@@ -1,0 +1,22 @@
+{
+  "$schema": "https://developer.microsoft.com/json-schemas/copilot/plugin/v2.4/schema.json",
+  "schema_version": "v2.4",
+  "name_for_human": "OfficeAgent",
+  "description_for_human": "Edit Word documents in SharePoint with tracked changes and comments.",
+  "description_for_model": "Reads and edits Word documents in SharePoint and OneDrive through OfficeAgent. Use it to open a contract by its URL, find clauses, preview a plan of tracked changes and comments, and apply it.",
+  "namespace": "officeagent",
+  "functions": [],
+  "runtimes": [
+    {
+      "type": "RemoteMCPServer",
+      "spec": {
+        "url": "${{OFFICEAGENT_MCP_URL}}"
+      },
+      "run_for_functions": ["*"],
+      "auth": {
+        "type": "OAuthPluginVault",
+        "reference_id": "${{MCP_DA_AUTH_ID_OFFICEAGENT}}"
+      }
+    }
+  ]
+}

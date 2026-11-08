@@ -46,6 +46,17 @@ corresponding GitHub release.
   occurrence, in headers, footers and notes too, and skips it where there is none, plus
   `"caseSensitive": true` and `"wholeWord": true`. A plan whose every `"match": "all"` target
   matched nothing is refused with `anchor-not-found` and saves nothing.
+- **Redlines that mark only the changed words.** A tracked `changeText` takes
+  `"granularity": "Minimal"`, which keeps the words `expect` and `with` share at the start and
+  end and marks only the rest. "thirty days" to "forty-five days" marks ~~thirty~~ forty-five,
+  and "the cap" to "125% of the cap" is a pure insertion. Words are separated by whitespace and
+  compared exactly. When the words to delete carry different formatting, the edit marks the
+  whole span as before and its change carries a new `warning`. The preview's `before` and
+  `after` show what is marked. `Span`, today's behaviour, stays the default in 1.x and `Minimal`
+  becomes it in 2.0. `DefaultChangeGranularity` sets it per connection, beside
+  `DefaultChangeMode`, in .NET and in the MCP server's settings. See
+  [mark only the words that change](docs/document-plans.md#mark-only-the-words-that-change)
+  ([#28](https://github.com/ilia-sokolov/OfficeAgent.NET/issues/28)).
 
 - **Every MCP tool says what it does to your files.** Each tool now carries MCP annotations: a
   title clients display, and explicit read-only, destructive, idempotent and open-world hints.
@@ -111,10 +122,93 @@ corresponding GitHub release.
   index, and the settings Copilot Studio needs. `deploy/copilot-studio` holds connector
   definitions for OAuth and API-key setups, with import steps. See
   [Azure](deploy/azure/README.md) and [the connector](deploy/copilot-studio/README.md).
+- **Client recipes for Google ADK, Microsoft Foundry and ChatGPT.** Deployment and client setup
+  now covers an ADK agent over stdio or HTTP, a Foundry agent's MCP tool in the portal and the
+  Python SDK, and a ChatGPT custom MCP server, with the authentication each one supports. See
+  [deployment and client setup](docs/deployment.md#b3-connect-each-client-to-the-hosted-url).
+- **Samples for Python, Semantic Kernel and Microsoft 365 Copilot.**
+  [python-openai-agents](samples/python-openai-agents/) and
+  [python-langgraph](samples/python-langgraph/) edit the sample contract through the MCP server
+  over stdio and leave a tracked change. They pass the server's own instructions to the model
+  and print each tool call and the change report.
+  [SemanticKernelWordEdit](samples/SemanticKernelWordEdit/) adds the tools to a kernel as a
+  plugin and is built in CI. [M365ContractReviewer](samples/M365ContractReviewer/) is a Microsoft
+  365 Copilot declarative agent whose action is a hosted server; it proposes redlines as tracked
+  changes and comments on clauses that need a human decision.
 - **Formula calculation in the session connection.** `EphemeralCalculateFormulas` and
   `EphemeralRejectFormulaErrors` turn calculation on for the MCP server's in-memory session
   connection, including the one it starts with when nothing is configured, as the folder and
   SharePoint connection settings already do. Both default to off.
+- **Large files save to SharePoint.** A save of 4 MiB or more now goes through a Graph upload
+  session in chunks, so SharePoint no longer stops at the 250 MB limit of a single request;
+  `MaximumBytes` is the limit. A failed chunk is retried from where Graph says to resume. A save
+  that fails before its last chunk stored nothing and is `write-rejected`; a failure on the last
+  chunk is `outcome-unknown`. `Replace` still sends `If-Match`, and new names still use
+  `conflictBehavior=fail`. `UploadSessionThresholdBytes` and `UploadSessionChunkBytes` set the
+  threshold and the chunk size. See [document providers](docs/document-providers.md#the-sharepoint-provider).
+- **An iManage Work provider.** The new `OfficeAgent.IManage` package reads and saves Word,
+  PowerPoint and Excel files in iManage Work, over the Work REST API v2 with no iManage SDK. A
+  document is registered by its id, such as `ACTIVE!12345.1`, or by an iManage Work link, and a
+  registration follows the document's latest version. No save overwrites: `Replace` and
+  `NewVersion` add an iManage version, and `NewDocument` and creation file a new document in a
+  configured folder. Every save checks the version that was opened and locks the document while
+  it uploads. A document someone has checked out is refused with what to do. Tokens come from
+  `IManageOAuthTokenProvider` or your own `IIManageAccessTokenProvider`. The MCP server configures
+  it with `OfficeAgent__IManageConnections__N__*`. [PRIVACY.md](PRIVACY.md) now names the iManage
+  server as the one other service a host can configure. See
+  [the iManage Work provider](docs/document-providers.md#the-imanage-work-provider).
+- **Google Drive provider.** The new `OfficeAgent.GoogleDrive` package opens and saves Word,
+  PowerPoint and Excel files in My Drive and shared drives through the Drive API, with no Google
+  library. Register a file by its id or its Drive URL. Native Google Docs, Sheets and Slides are
+  refused, never converted, because converting loses comments and suggested edits. Drive has no
+  server-side check on a content update, so `Replace` compares the head revision just before it
+  uploads; a write in between is kept in the file's version history. A service account
+  authenticates with its key file, as itself or through domain-wide delegation. The MCP server
+  configures it with `OfficeAgent__GoogleDriveConnections__N__*`. See
+  [the Google Drive provider](docs/document-providers.md#the-google-drive-provider).
+  ([#53](https://github.com/ilia-sokolov/OfficeAgent.NET/issues/53))
+- **Box provider.** The new `OfficeAgent.Box` package opens and saves Office files in Box, with
+  no Box SDK. Register a file by its id or its Box URL. `Replace` uploads a new version with
+  `If-Match` on the opened ETag, so Box refuses it if the file changed and keeps the old version
+  in its history. New documents never take an existing name. A locked file and a Box Shield
+  block each say what happened. The app authenticates with the client credentials grant, as its
+  service account or as a user. The MCP server configures it with
+  `OfficeAgent__BoxConnections__N__*`. See [the Box provider](docs/document-providers.md#the-box-provider).
+  ([#56](https://github.com/ilia-sokolov/OfficeAgent.NET/issues/56))
+- **Azure Blob Storage provider.** The new `OfficeAgent.AzureBlob` package keeps documents in
+  one blob container, under an optional prefix. Register a blob by its name relative to the
+  prefix; a name that leaves it is refused with `AccessDenied`. `Replace` sends `If-Match` with
+  the blob's ETag, and a new version, a renamed copy or a created document is written with
+  `If-None-Match: *`, so nothing is overwritten. It signs in with `DefaultAzureCredential`, or a
+  connection string from a secret store. The MCP server configures it with
+  `OfficeAgent__AzureBlobConnections__N__*`. See
+  [document providers](docs/document-providers.md#the-azure-blob-storage-provider).
+- **Amazon S3 provider.** The new `OfficeAgent.AmazonS3` package does the same for one S3
+  bucket and an optional key prefix, with S3 conditional writes: `If-Match` on `Replace`,
+  `If-None-Match: *` on everything new. With bucket versioning on, a reference's version is the
+  S3 version id. Credentials come from the AWS SDK's default chain. MinIO and Cloudflare R2
+  support the same conditional writes. See
+  [document providers](docs/document-providers.md#the-amazon-s3-provider). The MCP server
+  configures it with `OfficeAgent__AmazonS3Connections__N__*`.
+- **Every storage provider in the MCP server.** iManage, Google Drive, Box, Azure Blob and Amazon
+  S3 connections are configured like SharePoint ones, with the same size, extension, change mode,
+  granularity, calculation and registration-index settings. `list_connections` now also reports
+  each connection's allowed extensions, default change mode and granularity, and whether it
+  calculates formulas. `register_document` and `open_document` describe only the sources of the
+  providers that are configured. `create_document` is offered for iManage, Drive and Box only
+  where `CreationFolderId` is set. A missing or malformed setting stops the server at startup and
+  names the environment variable to set; no message, tool result or descriptor carries a secret.
+  See [MCP server settings](docs/mcp-server.md#settings).
+- **Default change granularity on every provider.** The iManage, Google Drive, Box, Azure Blob and
+  Amazon S3 providers take `DefaultChangeGranularity`, as the filesystem and SharePoint providers
+  do, through `IConnectionGranularityDefaults`. See
+  [default change granularity](docs/document-providers.md#default-change-granularity).
+- **A fuzz target for document ingestion.** `tests/OfficeAgent.Fuzz` feeds arbitrary bytes to
+  inspection with SharpFuzz and libFuzzer, starting from the repository's own fixtures. An input
+  must produce a result or a documented refusal; any other exception, a hang or runaway memory is
+  a finding. It runs locally from its README. See
+  [ingestion limits](docs/ingestion-limits.md#how-the-limits-are-tested)
+  ([#41](https://github.com/ilia-sokolov/OfficeAgent.NET/issues/41)).
 
 ### Changed
 
@@ -146,6 +240,16 @@ corresponding GitHub release.
   agent can tell a header from the body before choosing `match`.
 - **A `find` target's `match` must be an index or `"all"`.** Any other string is refused with
   `invalid-argument` instead of being ignored.
+- **The contract baselines grow by addition for change granularity.** The regenerated
+  [C# API reference](docs/csharp-api.md) and [wire contract](docs/wire-contract.md) add the
+  `ChangeGranularity` enum, `ChangeTextOp.Granularity`, `ProposedChange.Warning`,
+  `IConnectionGranularityDefaults`, `DefaultChangeGranularity` on the filesystem, SharePoint and
+  session-memory options and providers and on both MCP connection settings,
+  `DefaultChangeGranularityFor` on `OfficeAgentClient` and `DocumentProviderRegistry`, a `warning`
+  in every tool result's changes, and new text in `SystemPromptGuidance` and `PlanOperations`.
+  Every default keeps the 1.2 behaviour, as decided in
+  [#28](https://github.com/ilia-sokolov/OfficeAgent.NET/issues/28) and
+  [discussion #38](https://github.com/ilia-sokolov/OfficeAgent.NET/discussions/38).
 
 ## 1.2.0 — 2026-10-14
 

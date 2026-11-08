@@ -79,7 +79,9 @@ The same boundary rules apply, over Microsoft Graph:
 - **Tokens stay out of references and tool results.** Authentication is an `IAccessTokenProvider` - two are included (see below). Content downloads use Graph's pre-authenticated URL, so the bearer token never travels to the storage endpoint.
 - **Registrations are pluggable.** `InMemoryRegistrationStore` is the default; `JsonFileRegistrationStore` survives restarts; implement `ISharePointRegistrationStore` over shared storage for multi-instance hosts.
 - **Creation has one explicit destination.** Set both `CreationDriveId` and `CreationFolderItemId` to allow new documents in that folder. Existing-document registration remains cross-drive. Uploads use `conflictBehavior=fail`, so creation never overwrites an existing SharePoint item.
-- **Simple uploads are limited to 250 MB.** The provider does not implement Graph upload sessions, so keep `MaximumBytes` at or below that limit.
+- **Large files are uploaded in chunks.** A save of `UploadSessionThresholdBytes` or more (default 4 MiB) goes through a Graph upload session in chunks of `UploadSessionChunkBytes` (default 10 MiB, a multiple of 320 KiB and less than 60 MiB); a smaller one is a single request, as before. A session keeps the same conditions: `Replace` sends `If-Match`, and new names use `conflictBehavior=fail`. A chunk that fails for a dropped connection, a 5xx or a 429 is retried up to three times from the position Graph reports, honouring `Retry-After`. The bearer token is never sent to the session's pre-authenticated upload URL.
+- **What a failed chunked save means.** Graph stores the file only when it accepts the last chunk. A failure before that, including an expired session, is `WriteRejected`: nothing was stored, and the provider cancels the session. A failure on the last chunk, or a lost reply to it, is `OutcomeUnknown`, as for a single-request upload; a name conflict or a failed `If-Match` on the last chunk is a refusal and reported as such.
+- **The size limit is `MaximumBytes`.** Graph accepts files up to 250 GB in SharePoint and OneDrive, so the connection's own `MaximumBytes` is the limit that applies. Content that is not seekable is read into memory before it is uploaded, and the engine holds a document in memory while it edits it, so size `MaximumBytes` to the host's memory.
 
 ### Choosing an authentication mode
 
@@ -109,6 +111,395 @@ On a stdio host there is no inbound user token, so On-Behalf-Of is a hosted-HTTP
 create an application permission assignment on every intended site and grant
 the required role. For sovereign clouds, configure the Graph base URL, login
 authority, OBO scope, and app-only scope as one consistent set.
+
+## The iManage Work provider
+
+```bash
+dotnet add package OfficeAgent.Core
+dotnet add package OfficeAgent.IManage
+dotnet add package Microsoft.Extensions.DependencyInjection
+```
+
+`OfficeAgent.IManage` ships an `IDocumentProvider` over the iManage Work REST API v2, with no
+iManage SDK. It suits a law firm or legal department whose contracts live in iManage:
+
+```csharp
+using OfficeAgent.IManage;
+
+services.AddIManageOAuthAuthentication(o =>
+{
+    o.ServerUrl = "https://cloudimanage.com";
+    o.ClientId = configuration["IManage:ClientId"]!;
+    o.ClientSecret = configuration["IManage:ClientSecret"]!; // secret store / env, not source
+    o.Username = configuration["IManage:Username"]!;         // a dedicated service account
+    o.Password = configuration["IManage:Password"]!;
+});
+services.AddIManageDocumentProvider("matters", o =>
+{
+    o.ServerUrl = "https://cloudimanage.com";
+    o.CustomerId = configuration["IManage:CustomerId"]!;
+    o.AllowedExtensions = new[] { ".docx" };
+    o.CreationFolderId = "ACTIVE!773"; // optional: where new documents are filed
+});
+```
+
+The same boundary rules apply, over iManage:
+
+- **A document is registered by its id or its link.** A source is an iManage document id,
+  `LIBRARY!number.version` such as `ACTIVE!12345.1`, or an iManage Work link on the configured
+  server that carries one. A registration addresses the document, not one version: opens and
+  saves always use its latest version. A source naming an older version is refused, so nobody
+  edits a version they did not mean to.
+- **Limits come from the profile.** The size and extension in the document's iManage profile
+  are checked before any content is downloaded.
+- **No save overwrites.** iManage keeps every version. `Replace` adds a new version to the same
+  document and keeps the id. `NewVersion` adds a new version too and mints another id.
+  `NewDocument` files a new document, named `contract.v2.docx` or `NewName`, in the creation
+  folder. A version keeps its document's name, so `NewName` works only with `NewDocument`.
+- **Every save checks the version that was opened.** The version is the latest version number,
+  its last edit time and its size. A save first compares them, then locks the document, reads
+  the latest version again under the lock, uploads, and releases the lock. A new version from
+  someone else, or an edit of the latest version in place, raises
+  `DocumentVersionConflictException`. Set `LockDuringSave = false` only for a server that does
+  not accept document locks; the version is still compared before the upload.
+- **A checked-out document is refused, not written.** If someone has the document checked out
+  or locked, the save fails with `WriteRejected` and says to have it checked in or to save as a
+  new document instead. A refused upload is `WriteRejected`. A server error during an upload is
+  `OutcomeUnknown`, because iManage may have stored it.
+- **Creation has one explicit destination.** Set `CreationFolderId` to a folder or workspace id
+  such as `ACTIVE!773`. iManage gives every new document its own number, so creation can never
+  overwrite. A name already in that folder is refused with `AlreadyExists`. Set
+  `CreationDocumentClass` if the library requires a class on new documents.
+- **Tokens stay out of references and tool results.** Authentication is an
+  `IIManageAccessTokenProvider`. iManage sends the token in an `X-Auth-Token` header, which
+  `HttpClient` does not strip on a redirect, so the provider uses its own `HttpClient` that does
+  not follow redirects. If you construct the provider yourself, pass
+  `IManageDocumentProvider.CreateHttpClient()`. A download redirected to another host is
+  fetched without the token.
+- **Registrations are pluggable.** `InMemoryIManageRegistrationStore` is the default;
+  `JsonFileIManageRegistrationStore` survives restarts; implement `IIManageRegistrationStore`
+  over shared storage for multi-instance hosts.
+
+In the MCP server, configure an iManage connection with `OfficeAgent__IManageConnections__N__*`:
+
+```bash
+export OfficeAgent__IManageConnections__0__ConnectionId=matters
+export OfficeAgent__IManageConnections__0__ServerUrl=https://cloudimanage.com
+export OfficeAgent__IManageConnections__0__CustomerId=<customer id>
+export OfficeAgent__IManageConnections__0__ClientId=<client id>
+export OfficeAgent__IManageConnections__0__ClientSecret=<from your secret store>
+export OfficeAgent__IManageConnections__0__Username=svc-officeagent
+export OfficeAgent__IManageConnections__0__Password=<from your secret store>
+export OfficeAgent__IManageConnections__0__CreationFolderId=ACTIVE!773   # optional
+```
+
+`GrantType` picks `Password` (the default), `RefreshToken` or `ClientCredentials`. A missing
+server URL, customer id, client id, or the credentials the grant needs stops the server at
+startup and names the setting. Secrets are read from configuration only and never appear in a
+tool result. [MCP server settings](mcp-server.md#settings) lists every key.
+
+### Registering the application in iManage
+
+An iManage administrator registers OfficeAgent as an application in **Control Center** >
+**Applications**, with a client id and, for a confidential client, a client secret. On
+multi-tenant iManage Cloud, iManage registers the application. Then:
+
+1. Create a dedicated service account for OfficeAgent. Give it access only to the libraries,
+   workspaces and folders it should edit, with read and write rights, and import or create
+   rights on the creation folder if you set one. It needs no administrator role.
+2. Grant the application to that account under **Access**.
+3. Read the customer id from the server's `/api` response, or ask the administrator.
+4. Configure `IManageOAuthTokenProvider` with the server URL, client id, secret, and the
+   account's user id and password.
+
+| Grant | When |
+| --- | --- |
+| `Password` (default) | Unattended hosts. The token acts as the service account. |
+| `RefreshToken` | A refresh token obtained once by signing in through the authorization-code flow. The application must have **Allow Refresh Token** set to **Yes**. |
+| `ClientCredentials` | Only where your iManage environment enables this grant for the application. |
+
+The provider requests the `user` scope, which acts with the account's own document
+permissions. Never request `admin` for document editing. To use another credential flow,
+implement `IIManageAccessTokenProvider` and register it directly.
+
+iManage throttling and transient failures are not retried automatically. If a save times out,
+reopen the document and compare its latest version with the intended output before retrying.
+## The Google Drive provider
+
+```bash
+dotnet add package OfficeAgent.Core
+dotnet add package OfficeAgent.GoogleDrive
+dotnet add package Microsoft.Extensions.DependencyInjection
+```
+
+`OfficeAgent.GoogleDrive` ships an `IDocumentProvider` over the Drive API v3 REST endpoints, with
+no Google client library:
+
+```csharp
+using OfficeAgent.GoogleDrive;
+
+services.AddSingleton(new HttpClient());
+services.AddGoogleDriveServiceAccountAuthentication(o =>
+{
+    o.KeyJson = File.ReadAllText(configuration["Drive:KeyFile"]!); // secret store / mounted file, not source
+});
+services.AddGoogleDriveDocumentProvider(
+    connectionId: "drive",
+    o =>
+    {
+        o.AllowedExtensions = new[] { ".docx", ".pptx", ".xlsx" };
+        o.CreationFolderId = configuration["Drive:CreationFolderId"]!;
+    });
+```
+
+- **Office files only.** The provider edits `.docx`, `.pptx` and `.xlsx` files stored in Drive.
+  Native Google Docs, Sheets and Slides are refused by MIME type with `extension-not-allowed`
+  and a message that says why. They are never converted: converting a Google Doc to Word and
+  back loses comments and suggested edits. Folders, shortcuts and files in the trash are refused
+  too.
+- **A document is registered by a file id or a URL.** A source is a Drive file id, a Drive URL
+  (`https://drive.google.com/file/d/{id}/view`, `https://drive.google.com/open?id={id}`), or the
+  Docs editor URL Drive opens an Office file in (`https://docs.google.com/document/d/{id}/edit`).
+  Any file the configured identity can reach is registrable. Shared drives work: every request
+  sends `supportsAllDrives=true`.
+- **Versions are head revision ids.** A reference's version is the file's `headRevisionId`,
+  which changes with every content upload and not with a rename or a sharing change.
+- **`Replace` is checked, not locked.** Drive API v3 has no server-side precondition on a
+  content update: v3 files carry no ETag. `Replace` therefore reads the head revision
+  immediately before uploading and raises `DocumentVersionConflictException` on a mismatch. A
+  write that lands in the moment between that check and the upload is overwritten. Drive keeps
+  it as an earlier revision in the file's version history, where it can be restored. A file
+  locked with a read-only content restriction is refused with `write-rejected` before upload.
+- **Creation never overwrites, and checks the name.** Drive allows two files with the same
+  name in a folder, and an upload always makes a new file, so nothing is ever overwritten.
+  `NewVersion`, `NewDocument` and creation look for the name in the destination folder first
+  and refuse a taken name with `AlreadyExists`. Two writers that create the same name at the
+  same moment can still both succeed, leaving two files with that name.
+- **Creation has one destination.** Set `CreationFolderId` to allow new documents in that folder.
+  `NewVersion` and `NewDocument` write beside the source file.
+- **Uploads are single requests.** The provider does not implement resumable uploads, which
+  Google recommends for files over 5 MB. A failed single request is not retried, so keep
+  `MaximumBytes` (100 MB by default) as low as your documents allow.
+- **Registrations are pluggable.** `InMemoryGoogleDriveRegistrationStore` is the default;
+  `JsonFileGoogleDriveRegistrationStore` survives restarts; implement
+  `IGoogleDriveRegistrationStore` for shared storage.
+
+### Google Drive authentication
+
+`GoogleServiceAccountAccessTokenProvider` signs a JWT with the service account's RSA key and
+exchanges it at `https://oauth2.googleapis.com/token` (the JWT bearer grant). Pass the key file's
+JSON as `KeyJson`, or `ClientEmail` and `PrivateKey` from a secret store. The key file's own
+`token_uri` is ignored, so the signed assertion only ever goes to `TokenUri`. To use another
+credential flow, implement `IGoogleDriveAccessTokenProvider`.
+
+There are two ways to give a service account access:
+
+- **Share with the service account (narrowest).** Leave `Subject` empty. The account acts as
+  itself and reaches only the files, folders and shared drives shared with its email address.
+  Share the folders it should edit with it as an editor, or add it to a shared drive as a
+  content manager. No administrator setup is needed beyond enabling the Drive API.
+- **Domain-wide delegation.** Set `Subject` to a Workspace user's email address and the account
+  acts as that user. A Workspace super administrator must authorize the service account's client
+  id for the exact scope under Security > API controls > Domain-wide delegation. This reaches
+  everything the user can reach, so prefer sharing where it is enough.
+
+The scope is `GoogleDriveScopes.Drive` (`https://www.googleapis.com/auth/drive`) by default. It is
+the narrowest scope that can open and save files the app did not create. `drive.file` covers
+only files the app created or a user opened with it through a picker, so it suits a connection
+that only edits documents it created itself, and cannot register existing files.
+
+## The Box provider
+
+```bash
+dotnet add package OfficeAgent.Core
+dotnet add package OfficeAgent.Box
+dotnet add package Microsoft.Extensions.DependencyInjection
+```
+
+`OfficeAgent.Box` ships an `IDocumentProvider` over the Box REST API, with no Box SDK:
+
+```csharp
+using OfficeAgent.Box;
+
+services.AddSingleton(new HttpClient());
+services.AddBoxClientCredentialsAuthentication(o =>
+{
+    o.ClientId     = configuration["Box:ClientId"]!;
+    o.ClientSecret = configuration["Box:ClientSecret"]!;   // secret store / env, not source
+    o.SubjectType  = BoxSubjectType.Enterprise;
+    o.SubjectId    = configuration["Box:EnterpriseId"]!;
+});
+services.AddBoxDocumentProvider(
+    connectionId: "box",
+    o =>
+    {
+        o.AllowedExtensions = new[] { ".docx", ".pptx", ".xlsx" };
+        o.CreationFolderId = configuration["Box:CreationFolderId"]!;
+    });
+```
+
+- **A document is registered by a file id or a URL.** A source is a numeric Box file id or a
+  Box file URL (`https://app.box.com/file/{id}`, or your enterprise's `*.app.box.com` host).
+  Shared links (`/s/…`) are refused; register the file itself.
+- **Versions are ETags, and Box enforces them.** `Replace` uploads a new file version with
+  `If-Match` on the opened ETag. Box refuses the upload with 412 when the file changed, which
+  raises `DocumentVersionConflictException`, so a write between the provider's check and its
+  upload is never overwritten. Box keeps the previous version in the file's history.
+- **Creation never overwrites.** `NewVersion`, `NewDocument` and creation upload a new file. Box
+  refuses a name already used in the folder with 409, which is `AlreadyExists`. `NewVersion`
+  picks the next free `.v{n}` name with Box's upload preflight check, which uploads nothing.
+- **Creation has one destination.** Set `CreationFolderId` to allow new documents in that folder.
+  `NewVersion` and `NewDocument` write beside the source file.
+- **A locked file says so.** A file locked by someone else is refused with `write-rejected` and
+  a message that asks them to unlock it or suggests saving as a new document. A Box Shield
+  access policy that blocks a download or upload is `access-denied`, and the message names the
+  policy as the cause.
+- **Downloads keep the token at Box.** Box answers a content request with a redirect to a
+  short-lived download URL. The provider follows it without the bearer token when the
+  `HttpClient` does not follow redirects itself; .NET drops the `Authorization` header on
+  redirects it follows.
+- **Uploads are single requests.** The provider does not implement Box chunked uploads, which
+  Box recommends above 50 MB. `MaximumBytes` defaults to 50 MB.
+- **Registrations are pluggable.** `InMemoryBoxRegistrationStore` is the default;
+  `JsonFileBoxRegistrationStore` survives restarts; implement `IBoxRegistrationStore` for shared
+  storage.
+
+### Box authentication
+
+`BoxClientCredentialsAccessTokenProvider` uses Box's server authentication with the client
+credentials grant, against `https://api.box.com/oauth2/token`. Create a Custom App with
+"Server Authentication (Client Credentials Grant)" in the Box Developer Console, and have a Box
+administrator authorize it in the Admin Console. Changing the app's settings needs the app
+authorized again.
+
+| Subject | `SubjectType` / `SubjectId` | App configuration |
+| --- | --- | --- |
+| The app's service account (narrowest) | `Enterprise` / the enterprise id | App Access Only. Collaborate the service account on each folder it should edit, as Editor. |
+| An app user | `User` / the app user's id | Enable "Generate user access tokens". |
+| A managed user | `User` / the user's id | App + Enterprise Access, and "Generate user access tokens". |
+
+Under application scopes, enable "Read all files and folders stored in Box" and "Write all files
+and folders stored in Box". The provider needs both and no others. Tokens last about an hour; the
+provider asks for a new one when the old one is about to expire. To use another credential flow,
+implement `IBoxAccessTokenProvider`.
+
+In the MCP server, configure Google Drive with `OfficeAgent__GoogleDriveConnections__N__*` and Box
+with `OfficeAgent__BoxConnections__N__*`. A Drive connection reads its service account key from
+`KeyFilePath`, or from `KeyJson` supplied through the environment, and acts as itself unless
+`Subject` names a Workspace user. A Box connection takes `ClientId`, `ClientSecret`, `SubjectType`
+and `SubjectId`. Both create documents only when `CreationFolderId` is set. A missing or unreadable
+key, or a missing Box credential, stops the server at startup. See
+[MCP server settings](mcp-server.md#settings).
+
+## The Azure Blob Storage provider
+
+```bash
+dotnet add package OfficeAgent.AzureBlob
+```
+
+`OfficeAgent.AzureBlob` keeps documents in Azure Blob Storage. One connection is one container
+and an optional prefix:
+
+```csharp
+using OfficeAgent.AzureBlob;
+
+services.AddAzureBlobDocumentProvider("contracts", o =>
+{
+    o.ServiceUri    = "https://contoso.blob.core.windows.net";
+    o.ContainerName = "legal";
+    o.Prefix        = "contracts/";
+    o.AllowedExtensions = new[] { ".docx" };
+    o.RegistrationIndexPath = "/data/contracts-index.json"; // optional
+});
+```
+
+- **Authentication.** With `ServiceUri`, the provider signs in with `DefaultAzureCredential`:
+  the managed identity of an App Service, Container App or VM in Azure, and your developer
+  sign-in locally. Set `ManagedIdentityClientId` for a user-assigned identity. Give the identity
+  the *Storage Blob Data Contributor* role on the container, not the account. The alternative
+  is `ConnectionString`, read from a secret store or the environment; do not put an account key
+  in a configuration file. For any other credential, a SAS, or the Azurite emulator, pass your
+  own client: `AddAzureBlobDocumentProvider("contracts", sp => new BlobContainerClient(...), o => ...)`.
+- **Names stay inside the prefix.** A document is registered by its blob name relative to the
+  prefix (`2026/acme.docx`), or by its URL in the same container. A leading `/`, a backslash, a
+  `.` or `..` segment, a URL for another container, or a name outside the prefix is refused
+  with `AccessDenied`. Stored names are checked again on every open and save.
+- **Versions are ETags.** `Replace` uploads with `If-Match`, so a change since the document was
+  opened raises `DocumentVersionConflictException`. The blob's content type and metadata are kept.
+- **New blobs never overwrite.** `NewVersion` writes `contract.v2.docx` beside the source,
+  `NewDocument` writes the `NewName` you give, and `CreateAsync` writes under the prefix. Each
+  uses `If-None-Match: *`, and a taken name returns `AlreadyExists`.
+- **Failed writes say what happened.** A refusal such as a lease, a 4xx status, or a missing
+  container stores nothing and is reported as such. A server error, a timeout or a lost
+  response is `OutcomeUnknown`. Each upload carries an `officeagent_write_id` metadata value,
+  so when the SDK retries a request whose first attempt landed, the provider recognises its own
+  write instead of reporting a conflict.
+- **Limits come first.** The extension is checked before the service is called, and the size
+  is read from the blob's properties before any download. The download is pinned to the ETag
+  just checked.
+- **Registrations** stay in memory unless you set `RegistrationIndexPath`. For several host
+  instances, implement `IAzureBlobRegistrationStore` over shared storage and pass it to the
+  `AzureBlobDocumentProvider` constructor. Removing a registration never deletes the blob.
+
+## The Amazon S3 provider
+
+```bash
+dotnet add package OfficeAgent.AmazonS3
+```
+
+`OfficeAgent.AmazonS3` keeps documents in Amazon S3. One connection is one bucket and an
+optional key prefix:
+
+```csharp
+using OfficeAgent.AmazonS3;
+
+services.AddAmazonS3DocumentProvider("contracts", o =>
+{
+    o.BucketName = "contoso-legal";
+    o.KeyPrefix  = "contracts/";
+    o.Region     = "eu-west-1";
+    o.AllowedExtensions = new[] { ".docx" };
+});
+```
+
+- **Authentication.** The provider uses the AWS SDK's default credential chain: the task role
+  on ECS, the pod identity on EKS, or the instance role on EC2, and your profile locally. Do not
+  put access keys in configuration. The role needs `s3:GetObject` and `s3:PutObject` on the
+  prefix; conditional writes need both. For custom credentials, endpoint or retry settings,
+  pass your own client: `AddAmazonS3DocumentProvider("contracts", sp => new AmazonS3Client(...), o => ...)`.
+- **Keys stay inside the prefix.** A document is registered by its key relative to the prefix,
+  or as `s3://bucket/key` for the same bucket. The same escapes as for Azure Blob are refused
+  with `AccessDenied`.
+- **Conditional writes.** `Replace` sends `If-Match` with the ETag that was checked, and every
+  new object is written with `If-None-Match: *`. S3 answers a failed condition with
+  `412 PreconditionFailed`, which is a version conflict on `Replace` and `AlreadyExists` for a
+  new object. A `409 ConditionalRequestConflict`, from a concurrent request on the same key,
+  stores nothing: it is a version conflict on `Replace` and `WriteRejected` for a new object.
+  A 5xx answer, including `503 SlowDown`, is `OutcomeUnknown`. Writes carry an
+  `officeagent-write-id` metadata value for the same retry check as Azure Blob.
+- **Versioning.** On a bucket with versioning enabled, a reference's `Version` is the S3 version
+  id, and an open downloads exactly that version. Otherwise `Version` is the ETag.
+- **Limits, registrations and removal** work as for Azure Blob. Implement
+  `IAmazonS3RegistrationStore` for shared registrations. A single PUT holds at most 5 GB, so
+  keep `MaximumBytes` below that.
+
+**S3-compatible stores.** Set `ServiceUrl` (and usually `ForcePathStyle = true`). The store must
+honour both conditional headers, or `Replace` and creation lose their protection.
+[Cloudflare R2](https://developers.cloudflare.com/r2/api/s3/api/) supports `If-Match` and
+`If-None-Match` on `PutObject`, evaluated atomically with the write; it has no bucket
+versioning, so versions are ETags. MinIO supports both headers on `PutObject`; use a release
+that includes the fix for conditional writes without read quorum, merged in October 2025
+([minio/minio#21653](https://github.com/minio/minio/pull/21653)). Check any other store before
+relying on it.
+
+In the MCP server, configure Azure Blob Storage with `OfficeAgent__AzureBlobConnections__N__*`
+(`ContainerName` and `Prefix`, with `ServiceUri` for `DefaultAzureCredential` or a
+`ConnectionString` from the environment) and Amazon S3 with `OfficeAgent__AmazonS3Connections__N__*`
+(`BucketName`, `KeyPrefix`, `Region`, and `ServiceUrl` with `ForcePathStyle` for an S3-compatible
+store). S3 credentials come from the AWS default chain, never from OfficeAgent settings. See
+[MCP server settings](mcp-server.md#settings).
+
+## Other providers
 
 Other cloud or document-management integrations implement `IDocumentProvider` and register one singleton per connection. Credentials live in host configuration, managed identity, delegated identity, or a secret store - **never** on `DocumentReference`.
 
@@ -170,17 +561,20 @@ the document looked nothing like what was asked for. The optional plan is applie
 in memory before storage is touched. Providers use their native create-if-absent operation, so an existing
 name returns `AlreadyExists` and is never overwritten.
 
-Storage creation and registration are separate steps. If filesystem or SharePoint
-storage succeeds but registration fails, the provider leaves the new document
+Storage creation and registration are separate steps. If storage succeeds but
+registration fails, the provider leaves the new document
 intact and reports the possibly unregistered filename instead of deleting remote
 content or retrying an ambiguous write.
 
 The filesystem provider implements creation and writes new documents directly
 under the connection root. A SharePoint connection implements creation when its
-`CreationDriveId` and `CreationFolderItemId` identify the destination folder.
+`CreationDriveId` and `CreationFolderItemId` identify the destination folder. An iManage,
+Google Drive or Box connection implements creation when its `CreationFolderId` names the
+destination folder. An Azure Blob Storage or Amazon S3 connection creates documents under its
+prefix, and never over an existing name.
 
-Graph throttling and transient failures are not retried automatically. If a
-write times out or receives a throttling response, reconcile storage state before
+Apart from the chunk retries above, Graph throttling and transient failures are not
+retried automatically. If a write times out or receives a throttling response, reconcile storage state before
 retrying: Graph may have accepted the bytes even when the response was lost.
 Microsoft Graph does not support replacing a sensitivity-labeled file with
 application permissions. An app-only connection cannot use `Replace` for that
@@ -239,6 +633,32 @@ This matters most for decks: PresentationML has no redline vocabulary, so under 
 
 The setting fills a gap; it never overrides an operation that names its own `mode`. It applies to plans arriving through `OfficeAgentTools` - `preview_plan`, `apply_plan`, `edit_document`, `edit_documents`, `create_document` - where an absent `mode` is genuinely absent. A host building a `DocumentPlan` in code sets `ChangeTextOp.Mode` itself, and `OfficeAgentClient.DefaultChangeModeFor(connectionId)` reports the connection's policy if it wants to follow it. A custom `IDocumentProvider` that does not implement `IConnectionEditingDefaults` takes the global default.
 
+### Default change granularity
+
+Beside it, `DefaultChangeGranularity` sets how much a tracked `changeText` that does not state a
+`granularity` marks. `Span`, the default, marks the whole matched text as deleted and the whole
+replacement as inserted. `Minimal` marks only the words that differ, so a host can have every
+agent's redlines read like a reviewer's without changing any prompt:
+
+```csharp
+services.AddFileSystemDocumentProvider("contracts", "/srv/officeagent/contracts", o =>
+{
+    o.DefaultChangeGranularity = ChangeGranularity.Minimal;
+});
+```
+
+It works like `DefaultChangeMode`: an operation that names its own `granularity` keeps it, it
+applies to plans arriving through `OfficeAgentTools`, and a host building a `DocumentPlan` in code
+sets `ChangeTextOp.Granularity` itself, with `OfficeAgentClient.DefaultChangeGranularityFor(connectionId)`
+reporting the connection's setting. The SharePoint, iManage, Google Drive, Box, Azure Blob,
+Amazon S3 and session-memory providers have the same setting; the MCP server reads it as
+`DefaultChangeGranularity` on each connection. A custom provider
+opts in by implementing `IConnectionGranularityDefaults`. See
+[`changeText`](document-plans.md#mark-only-the-words-that-change) for what `Minimal` marks.
+
+`Span` stays the default throughout 1.x, because the [compatibility policy](compatibility.md)
+promises that a plan keeps producing the same document. `Minimal` becomes the default in 2.0.
+
 ## Formula calculation
 
 A connection over workbooks can have every preview and commit through it calculate formulas,
@@ -255,7 +675,8 @@ services.AddFileSystemDocumentProvider("finance", "/srv/officeagent/finance", o 
 });
 ```
 
-The same two settings exist on the SharePoint and session-memory providers. A custom
+The same two settings exist on the SharePoint, iManage, Google Drive, Box, Azure Blob, Amazon S3
+and session-memory providers. A custom
 `IDocumentProvider` opts in by implementing `IConnectionCalculationDefaults`; one that does
 not leaves calculation off. See [formula calculation](excel.md#formula-calculation) for what
 is calculated and what is written.

@@ -1,0 +1,26 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFrameworks>netstandard2.0;net8.0</TargetFrameworks>
+    <Description>Azure Blob Storage document provider for OfficeAgent.NET, a translation layer between AI agents and OOXML: creates, registers, opens, and saves documents in one blob container through the Azure.Storage.Blobs SDK, with ETag concurrency and create-only writes. Agents address documents by an opaque (connectionId, documentId); the provider never exposes account URLs, container names, or credentials to the model.</Description>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- Naming rules and registration indexes shared with OfficeAgent.AmazonS3. -->
+    <Compile Include="..\Shared\ObjectStorage\*.cs" Link="Shared\%(Filename)%(Extension)" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\OfficeAgent.Abstractions\OfficeAgent.Abstractions.csproj" />
+    <ProjectReference Include="..\OfficeAgent.Core\OfficeAgent.Core.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Azure.Identity" Version="1.21.0" />
+    <PackageReference Include="Azure.Storage.Blobs" Version="12.30.1" />
+    <!-- Azure.Core 1.60 already brings the 10.0 Microsoft.Extensions abstractions and
+         System.Text.Json, so the direct reference matches them instead of downgrading. -->
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" Version="10.0.9" />
+  </ItemGroup>
+
+</Project>

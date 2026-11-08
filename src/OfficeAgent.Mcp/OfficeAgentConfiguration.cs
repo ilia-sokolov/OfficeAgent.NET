@@ -108,7 +108,25 @@ public static class OfficeAgentConfiguration
                 ? options.SharePointConnections[index].AllowedExtensions
                 : null);
 
+        BindStorage(section, nameof(OfficeAgentMcpOptions.IManageConnections), options.IManageConnections);
+        BindStorage(section, nameof(OfficeAgentMcpOptions.GoogleDriveConnections), options.GoogleDriveConnections);
+        BindStorage(section, nameof(OfficeAgentMcpOptions.BoxConnections), options.BoxConnections);
+        BindStorage(section, nameof(OfficeAgentMcpOptions.AzureBlobConnections), options.AzureBlobConnections);
+        BindStorage(section, nameof(OfficeAgentMcpOptions.AmazonS3Connections), options.AmazonS3Connections);
+
         return options;
+    }
+
+    /// <summary>
+    /// Applies the same two checks to a list of storage connections: every declared entry was
+    /// read, and a declared extension list replaces the default.
+    /// </summary>
+    private static void BindStorage<T>(IConfigurationSection section, string name, IList<T> bound)
+        where T : StorageConnectionOptions
+    {
+        var connections = section.GetSection(name);
+        RequireEveryElementRead<T>(connections, bound.Count);
+        ReplaceDeclaredExtensions(connections, index => index < bound.Count ? bound[index].AllowedExtensions : null);
     }
 
     /// <summary>

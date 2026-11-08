@@ -9,7 +9,7 @@
     <PackAsTool>true</PackAsTool>
     <PackageType>McpServer</PackageType>
     <ToolCommandName>officeagent-mcp</ToolCommandName>
-    <Description>Model Context Protocol (MCP) server for OfficeAgent.NET: inspect and edit Word documents, PowerPoint decks, and Excel workbooks through structured plans over stdio or HTTP, with filesystem, SharePoint, session, and inline-content workflows.</Description>
+    <Description>Model Context Protocol (MCP) server for OfficeAgent.NET: inspect and edit Word documents, PowerPoint decks, and Excel workbooks through structured plans over stdio or HTTP, with filesystem, SharePoint, iManage Work, Google Drive, Box, Azure Blob Storage, Amazon S3, session, and inline-content workflows.</Description>
   </PropertyGroup>
 
   <ItemGroup>
@@ -22,6 +22,11 @@
     <ProjectReference Include="..\OfficeAgent.Word\OfficeAgent.Word.csproj" />
     <ProjectReference Include="..\OfficeAgent.AgentFramework\OfficeAgent.AgentFramework.csproj" />
     <ProjectReference Include="..\OfficeAgent.SharePoint\OfficeAgent.SharePoint.csproj" />
+    <ProjectReference Include="..\OfficeAgent.IManage\OfficeAgent.IManage.csproj" />
+    <ProjectReference Include="..\OfficeAgent.GoogleDrive\OfficeAgent.GoogleDrive.csproj" />
+    <ProjectReference Include="..\OfficeAgent.Box\OfficeAgent.Box.csproj" />
+    <ProjectReference Include="..\OfficeAgent.AzureBlob\OfficeAgent.AzureBlob.csproj" />
+    <ProjectReference Include="..\OfficeAgent.AmazonS3\OfficeAgent.AmazonS3.csproj" />
     <ProjectReference Include="..\OfficeAgent.PowerPoint\OfficeAgent.PowerPoint.csproj" />
     <ProjectReference Include="..\OfficeAgent.Excel\OfficeAgent.Excel.csproj" />
     <ProjectReference Include="..\OfficeAgent.Excel.Calculation\OfficeAgent.Excel.Calculation.csproj" />

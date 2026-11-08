@@ -5,7 +5,7 @@
 [![NuGet](https://img.shields.io/nuget/v/OfficeAgent.Core.svg)](https://www.nuget.org/packages/OfficeAgent.Core)
 [![.NET 8 | 10](https://img.shields.io/badge/.NET-8%20%7C%2010-512BD4)](https://github.com/ilia-sokolov/OfficeAgent.NET/blob/main/docs/compatibility.md)
 [![API: SemVer 1.x stable](https://img.shields.io/badge/API-SemVer%201.x%20stable-2ea44f)](https://github.com/ilia-sokolov/OfficeAgent.NET/blob/main/docs/compatibility.md)
-[![native Office: 84/84 cases verified](https://img.shields.io/badge/native%20Office-84%2F84%20cases%20verified-2ea44f)](https://github.com/ilia-sokolov/OfficeAgent.NET/blob/main/docs/native-compatibility.md)
+[![native Office: 88/88 cases verified](https://img.shields.io/badge/native%20Office-88%2F88%20cases%20verified-2ea44f)](https://github.com/ilia-sokolov/OfficeAgent.NET/blob/main/docs/native-compatibility.md)
 [![OpenSSF Best Practices](https://img.shields.io/cii/level/15172?label=openssf%20best%20practices)](https://www.bestpractices.dev/projects/15172)
 [![OpenSSF Scorecard](https://img.shields.io/ossf-scorecard/github.com/ilia-sokolov/OfficeAgent.NET?label=openssf%20scorecard)](https://securityscorecards.dev/viewer/?uri=github.com/ilia-sokolov/OfficeAgent.NET)
 [![good first issues](https://img.shields.io/github/issues/ilia-sokolov/OfficeAgent.NET/good%20first%20issue?label=good%20first%20issues)](https://github.com/ilia-sokolov/OfficeAgent.NET/labels/good%20first%20issue)
@@ -54,7 +54,7 @@ it for a workflow that depends on Office's layout or calculation engine.
 | Template generation | Bind unique Word content-control tags or PowerPoint shape names, expand repeating Word table rows, and create bounded batches with one receipt per output |
 | Word comparison | Compare supported free-body paragraph text read-only and produce a snapshot-bound native redline plan only when all other package content is unchanged |
 | Agent and application integration | Use MCP over stdio or HTTP, Microsoft Agent Framework tools, or the direct .NET API, with SHA-256 apply receipts and host-supplied audit actors |
-| Document access | Work with bounded filesystem roots, SharePoint, in-memory sessions, or self-contained inline content |
+| Document access | Work with bounded filesystem roots, SharePoint, iManage Work, in-memory sessions, or self-contained inline content |
 
 ## Choose a starting point
 
@@ -69,6 +69,9 @@ it for a workflow that depends on Office's layout or calculation engine.
 | Connect Codex, Claude Code, Copilot Studio, or Microsoft 365 Copilot | [Deployment and client setup](docs/deployment.md) |
 | Use OfficeAgent from C# | [Getting started](docs/getting-started.md) |
 | Add tools to a Microsoft Agent Framework agent | [Agent integration](docs/agent-integration.md) |
+| Add tools to a Semantic Kernel agent | [SemanticKernelWordEdit sample](samples/SemanticKernelWordEdit/) |
+| Use OfficeAgent from Python with the OpenAI Agents SDK or LangGraph | [python-openai-agents](samples/python-openai-agents/) and [python-langgraph](samples/python-langgraph/) samples |
+| Give Microsoft 365 Copilot a contract redline reviewer | [M365ContractReviewer sample](samples/M365ContractReviewer/) |
 | Host the MCP server or use SharePoint | [MCP server](docs/mcp-server.md) and [document providers](docs/document-providers.md) |
 | Add per-user hosted connection authorization | [Hosted gateway reference](samples/HostedGateway/) |
 | Add optional PDF/page-image rendering | [Visual rendering](docs/rendering.md) |
@@ -373,7 +376,7 @@ the provider to create and register it without overwriting an existing name.
 | [Concepts](docs/concepts.md) | Anchors, snapshots, plans, providers, transactions, and capabilities |
 | [C# API reference](docs/csharp-api.md) | Generated public types and members for every library package |
 | [Document plans](docs/document-plans.md) | JSON shapes and validation rules for every operation |
-| [Document providers](docs/document-providers.md) | Filesystem, SharePoint, save modes, and custom providers |
+| [Document providers](docs/document-providers.md) | Filesystem, SharePoint, iManage Work, save modes, and custom providers |
 | [PowerPoint support](docs/powerpoint.md) | Slide addressing, the verbs the deck module implements, and what it preserves |
 | [Template population and comparison](docs/document-workflows.md) | Batch binding, repeating Word rows, comparison limits, and redline generation |
 | [Agent integration](docs/agent-integration.md) | Microsoft Agent Framework and `Microsoft.Extensions.AI` tools |
@@ -459,8 +462,9 @@ the library's license, compatibility promise or [community support policy](SUPPO
 
 OfficeAgent.NET runs on your machine or your own server and collects nothing: no telemetry, no
 analytics, no calls home. It reads and writes only the documents in the folders, SharePoint
-libraries, or session connections it is given, and contacts no third party except Microsoft
-Graph for a SharePoint connection a host configures. Tool results go to the AI assistant using
+libraries, other document stores, or session connections it is given, and contacts no third
+party except the storage service of a connection a host configures: SharePoint, iManage Work,
+Google Drive, Box, Azure Blob Storage or Amazon S3. Tool results go to the AI assistant using
 it, under that assistant's own policy. The full policy, including what is stored and for how
 long, is in [PRIVACY.md](PRIVACY.md).
 

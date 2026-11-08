@@ -1,0 +1,27 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFrameworks>netstandard2.0;net8.0</TargetFrameworks>
+    <Description>Amazon S3 document provider for OfficeAgent.NET, a translation layer between AI agents and OOXML: creates, registers, opens, and saves documents in one S3 bucket through the AWS SDK, with conditional writes (If-Match and If-None-Match) so no save overwrites newer content. Works with S3-compatible stores that support conditional writes. Agents address documents by an opaque (connectionId, documentId); the provider never exposes bucket names or credentials to the model.</Description>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- Naming rules and registration indexes shared with OfficeAgent.AzureBlob. -->
+    <Compile Include="..\Shared\ObjectStorage\*.cs" Link="Shared\%(Filename)%(Extension)" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\OfficeAgent.Abstractions\OfficeAgent.Abstractions.csproj" />
+    <ProjectReference Include="..\OfficeAgent.Core\OfficeAgent.Core.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="AWSSDK.S3" Version="4.0.104.4" />
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" Version="8.0.2" />
+  </ItemGroup>
+
+  <ItemGroup Condition="'$(TargetFramework)' == 'netstandard2.0'">
+    <PackageReference Include="System.Text.Json" Version="8.0.6" />
+  </ItemGroup>
+
+</Project>

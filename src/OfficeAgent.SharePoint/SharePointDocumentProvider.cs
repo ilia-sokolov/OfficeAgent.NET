@@ -1,5 +1,6 @@
 using System.Net;
 using System.Net.Http.Headers;
+using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 using OfficeAgent.Abstractions;
@@ -19,6 +20,20 @@ public sealed class SharePointDocumentProviderOptions
     /// <summary>Gets or sets the maximum accepted document size in bytes.</summary>
     public long MaximumBytes { get; set; } = 100 * 1024 * 1024;
 
+    /// <summary>
+    /// Gets or sets the size in bytes from which a save is uploaded in chunks through a Graph
+    /// upload session instead of in one request. Defaults to 4 MiB, Microsoft's recommendation.
+    /// It must be positive and at most 250 MB, the limit of a single-request upload.
+    /// </summary>
+    public long UploadSessionThresholdBytes { get; set; } = 4 * 1024 * 1024;
+
+    /// <summary>
+    /// Gets or sets the size in bytes of each chunk of an upload session. It must be a multiple of
+    /// 320 KiB (327,680 bytes) and less than 60 MiB, as Graph requires. Defaults to 10 MiB,
+    /// Microsoft's recommendation for a stable connection; a slow one may do better with less.
+    /// </summary>
+    public int UploadSessionChunkBytes { get; set; } = 10 * 1024 * 1024;
+
     /// <summary>Gets or sets the allowed document extensions.</summary>
     public IReadOnlyCollection<string> AllowedExtensions { get; set; } = new[] { ".docx" };
 
@@ -35,6 +50,14 @@ public sealed class SharePointDocumentProviderOptions
     /// machine-owned files, or one serving decks - PresentationML refuses Tracked.
     /// </summary>
     public ChangeMode DefaultChangeMode { get; set; } = ChangeMode.Tracked;
+
+    /// <summary>
+    /// Gets or sets how much of the matched text a tracked <c>changeText</c> that does not
+    /// state a granularity marks. The default, <see cref="ChangeGranularity.Span"/>, marks the
+    /// whole matched text; <see cref="ChangeGranularity.Minimal"/> marks only the words that
+    /// differ.
+    /// </summary>
+    public ChangeGranularity DefaultChangeGranularity { get; set; } = ChangeGranularity.Span;
 
     /// <summary>
     /// Gets or sets whether a workbook previewed or committed through this connection has its
@@ -66,12 +89,25 @@ public sealed class SharePointDocumentProviderOptions
 /// without changing the cross-drive registration boundary.
 /// The agent only sees opaque ids - never site URLs, drive ids, or tokens. Saves use
 /// the drive item's ETag for optimistic concurrency, and removing a registration
-/// never deletes SharePoint content.
+/// never deletes SharePoint content. A save at or above
+/// <see cref="SharePointDocumentProviderOptions.UploadSessionThresholdBytes"/> is uploaded in
+/// chunks through a Graph upload session, under the same preconditions.
 /// </summary>
-public sealed class SharePointDocumentProvider : IDocumentProvider, IDocumentCreatingProvider, IConnectionEditingDefaults, IConnectionCalculationDefaults
+public sealed class SharePointDocumentProvider : IDocumentProvider, IDocumentCreatingProvider, IConnectionEditingDefaults, IConnectionGranularityDefaults, IConnectionCalculationDefaults
 {
     /// <summary>Gets the provider discriminator used in document references.</summary>
     public const string ProviderName = "sharepoint";
+
+    // Graph's rules for upload sessions: every chunk but the last is a multiple of 320 KiB, and
+    // no request carries 60 MiB or more. A single-request upload takes at most 250 MB.
+    private const int ChunkUnitBytes = 320 * 1024;
+    private const int MaximumChunkBytes = 60 * 1024 * 1024 - ChunkUnitBytes;
+    private const long MaximumSimpleUploadBytes = 250L * 1000 * 1000;
+
+    // A chunk that fails for a transient reason is retried this many times before the save is rejected.
+    private const int MaximumChunkRetries = 3;
+    private static readonly TimeSpan MaximumRetryDelay = TimeSpan.FromSeconds(30);
+    private static readonly TimeSpan SessionCancelTimeout = TimeSpan.FromSeconds(30);
 
     private readonly SharePointDocumentProviderOptions _options;
     private readonly HttpClient _http;
@@ -100,6 +136,15 @@ public sealed class SharePointDocumentProvider : IDocumentProvider, IDocumentCre
             throw new ArgumentException("A Graph base URL is required.", nameof(options));
         if (options.MaximumBytes <= 0)
             throw new ArgumentOutOfRangeException(nameof(options), "MaximumBytes must be positive.");
+        if (options.UploadSessionThresholdBytes <= 0 ||
+            options.UploadSessionThresholdBytes > MaximumSimpleUploadBytes)
+            throw new ArgumentOutOfRangeException(nameof(options),
+                "UploadSessionThresholdBytes must be positive and at most 250 MB, the limit of a single-request upload.");
+        if (options.UploadSessionChunkBytes <= 0 ||
+            options.UploadSessionChunkBytes % ChunkUnitBytes != 0 ||
+            options.UploadSessionChunkBytes > MaximumChunkBytes)
+            throw new ArgumentOutOfRangeException(nameof(options),
+                "UploadSessionChunkBytes must be a multiple of 320 KiB (327,680 bytes) and less than 60 MiB.");
         if (options.AllowedExtensions is null || options.AllowedExtensions.Count == 0)
             throw new ArgumentException("At least one allowed document extension is required.", nameof(options));
         if (string.IsNullOrWhiteSpace(options.CreationDriveId) !=
@@ -128,6 +173,9 @@ public sealed class SharePointDocumentProvider : IDocumentProvider, IDocumentCre
 
     /// <inheritdoc />
     public ChangeMode DefaultChangeMode => _options.DefaultChangeMode;
+
+    /// <inheritdoc />
+    public ChangeGranularity DefaultChangeGranularity => _options.DefaultChangeGranularity;
 
     /// <inheritdoc />
     public bool CalculateFormulas => _options.CalculateFormulas;
@@ -168,15 +216,16 @@ public sealed class SharePointDocumentProvider : IDocumentProvider, IDocumentCre
                 "CreationDriveId and CreationFolderItemId, or register an existing document instead.");
 
         var fileName = ValidateCreateName(name);
-        var bytes = await ReadStreamAsync(content, itemId: null, cancellationToken).ConfigureAwait(false);
-        var uploadUrl =
-            $"{ItemUrl(_creationDriveId, _creationFolderItemId)}:/{Uri.EscapeDataString(fileName)}:/content?@microsoft.graph.conflictBehavior=fail";
-        GraphItem created;
+        var payload = await PrepareContentAsync(content, itemId: null, cancellationToken).ConfigureAwait(false);
+        var destination = $"{ItemUrl(_creationDriveId, _creationFolderItemId)}:/{Uri.EscapeDataString(fileName)}:";
+        UploadResult upload;
         try
         {
-            created = await UploadAsync(
-                uploadUrl,
-                bytes,
+            upload = await UploadContentAsync(
+                simpleUrl: $"{destination}/content?@microsoft.graph.conflictBehavior=fail",
+                sessionUrl: $"{destination}/createUploadSession",
+                newName: fileName,
+                payload,
                 ifMatch: null,
                 itemId: null,
                 cancellationToken,
@@ -203,6 +252,7 @@ public sealed class SharePointDocumentProvider : IDocumentProvider, IDocumentCre
                 ex);
         }
 
+        var created = upload.Item;
         var driveId = string.IsNullOrEmpty(created.DriveId) ? _creationDriveId : created.DriveId;
         string registrationId;
         try
@@ -218,7 +268,7 @@ public sealed class SharePointDocumentProvider : IDocumentProvider, IDocumentCre
                 $"Document '{fileName}' was created in SharePoint, but its registration " +
                 "could not be persisted. The file is stored but unregistered. Do not retry creation; " +
                 "register it by name, or report it to the host/operator for recovery.",
-                itemId: null, fileName, bytes, ex);
+                itemId: null, fileName, upload.Sha256, ex);
         }
 
         return CreateReference(registrationId, created);
@@ -343,23 +393,36 @@ public sealed class SharePointDocumentProvider : IDocumentProvider, IDocumentCre
             !string.Equals(expectedVersion, item.ETag, StringComparison.Ordinal))
             throw new DocumentVersionConflictException(expectedVersion!, item.ETag, ProviderName, ConnectionId, source.ItemId);
 
-        var bytes = await ReadStreamAsync(content, source.ItemId, cancellationToken).ConfigureAwait(false);
+        var payload = await PrepareContentAsync(content, source.ItemId, cancellationToken).ConfigureAwait(false);
 
         if (options.Mode == SaveMode.Replace)
         {
-            var replaced = await UploadAsync(
-                $"{ItemUrl(driveId, registered.ItemId)}/content",
-                bytes, ifMatch: item.ETag, itemId: source.ItemId, cancellationToken).ConfigureAwait(false);
-            return CreateReference(source.ItemId, replaced);
+            var itemUrl = ItemUrl(driveId, registered.ItemId);
+            var replaced = await UploadContentAsync(
+                simpleUrl: $"{itemUrl}/content",
+                sessionUrl: $"{itemUrl}/createUploadSession",
+                newName: null,
+                payload,
+                ifMatch: item.ETag,
+                itemId: source.ItemId,
+                cancellationToken).ConfigureAwait(false);
+            return CreateReference(source.ItemId, replaced.Item);
         }
 
         var destinationName = string.IsNullOrWhiteSpace(options.NewName)
             ? await NextVersionedNameAsync(driveId, item, cancellationToken).ConfigureAwait(false)
             : ValidateName(options.NewName!);
-        var uploadUrl =
-            $"{ItemUrl(driveId, item.ParentId)}:/{Uri.EscapeDataString(destinationName)}:/content?@microsoft.graph.conflictBehavior=fail";
-        var saved = await UploadAsync(uploadUrl, bytes, ifMatch: null, itemId: source.ItemId, cancellationToken,
+        var destination = $"{ItemUrl(driveId, item.ParentId)}:/{Uri.EscapeDataString(destinationName)}:";
+        var upload = await UploadContentAsync(
+            simpleUrl: $"{destination}/content?@microsoft.graph.conflictBehavior=fail",
+            sessionUrl: $"{destination}/createUploadSession",
+            newName: destinationName,
+            payload,
+            ifMatch: null,
+            itemId: source.ItemId,
+            cancellationToken,
             conflictCode: ProviderErrorCode.AlreadyExists).ConfigureAwait(false);
+        var saved = upload.Item;
 
         var savedDriveId = string.IsNullOrEmpty(saved.DriveId) ? driveId : saved.DriveId;
         string newId;
@@ -374,7 +437,7 @@ public sealed class SharePointDocumentProvider : IDocumentProvider, IDocumentCre
             throw RegistrationFailed(
                 $"Document '{destinationName}' was saved to SharePoint, but its registration could not be " +
                 "persisted. Do not save it again; register the saved file to recover it.",
-                source.ItemId, destinationName, bytes, ex);
+                source.ItemId, destinationName, upload.Sha256, ex);
         }
         return CreateReference(newId, saved);
     }
@@ -414,14 +477,460 @@ public sealed class SharePointDocumentProvider : IDocumentProvider, IDocumentCre
         body.Headers.ContentType = new MediaTypeHeaderValue("application/octet-stream");
         using var response = await SendAsync(HttpMethod.Put, url, body, ifMatch, cancellationToken).ConfigureAwait(false);
         if (response.StatusCode == HttpStatusCode.Conflict)
-            throw Error(
-                conflictCode,
-                conflictCode == ProviderErrorCode.AlreadyExists
-                    ? "A document with that name already exists in the configured SharePoint folder; choose another name."
-                    : "A file already exists at the destination path; refusing to overwrite without Replace mode.",
-                itemId);
+            throw ConflictError(conflictCode, itemId);
         await ThrowOnFailureAsync(response, itemId, write: true).ConfigureAwait(false);
         return ParseItem(await response.Content.ReadAsStringAsync().ConfigureAwait(false), itemId);
+    }
+
+    private DocumentProviderException ConflictError(ProviderErrorCode conflictCode, string? itemId) => Error(
+        conflictCode,
+        conflictCode == ProviderErrorCode.AlreadyExists
+            ? "A document with that name already exists in the configured SharePoint folder; choose another name."
+            : "A file already exists at the destination path; refusing to overwrite without Replace mode.",
+        itemId);
+
+    // ── Upload sessions ───────────────────────────────────────────────────────
+
+    /// <summary>
+    /// Reads the content to save. Seekable content at or above the upload-session threshold is
+    /// left in place and read chunk by chunk as it is uploaded; anything else is read into memory
+    /// once. Either way content over <see cref="SharePointDocumentProviderOptions.MaximumBytes"/>
+    /// is refused before anything is sent.
+    /// </summary>
+    private async Task<UploadPayload> PrepareContentAsync(Stream content, string? itemId, CancellationToken cancellationToken)
+    {
+        if (content.CanSeek)
+        {
+            content.Position = 0;
+            var length = content.Length;
+            if (length > _options.MaximumBytes)
+                throw Error(ProviderErrorCode.ContentTooLarge,
+                    $"Document exceeds the configured maximum of {_options.MaximumBytes} bytes.", itemId);
+            if (length >= _options.UploadSessionThresholdBytes)
+                return new UploadPayload(content, length, bytes: null);
+        }
+
+        var bytes = await ReadStreamAsync(content, itemId, cancellationToken).ConfigureAwait(false);
+        return new UploadPayload(new MemoryStream(bytes, writable: false), bytes.Length, bytes);
+    }
+
+    /// <summary>
+    /// Saves content in one request below the upload-session threshold, and through a Graph
+    /// upload session from it. Both keep the same preconditions: <c>If-Match</c> for a replace,
+    /// <c>conflictBehavior=fail</c> for a new name.
+    /// </summary>
+    private async Task<UploadResult> UploadContentAsync(
+        string simpleUrl,
+        string sessionUrl,
+        string? newName,
+        UploadPayload payload,
+        string? ifMatch,
+        string? itemId,
+        CancellationToken cancellationToken,
+        ProviderErrorCode conflictCode = ProviderErrorCode.IO)
+    {
+        if (payload.Bytes is { } bytes && bytes.LongLength < _options.UploadSessionThresholdBytes)
+        {
+            var item = await UploadAsync(simpleUrl, bytes, ifMatch, itemId, cancellationToken, conflictCode).ConfigureAwait(false);
+            return new UploadResult(item, Sha256Hex(bytes));
+        }
+
+        return await UploadInSessionAsync(
+            sessionUrl, newName, payload, ifMatch, itemId, cancellationToken, conflictCode).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// Uploads content through a Graph upload session, in chunks that are multiples of 320 KiB.
+    /// Graph stores the file only when it accepts the last chunk, which decides how a failure
+    /// is reported: before that point nothing was stored, so the session is cancelled and the
+    /// save is <see cref="ProviderErrorCode.WriteRejected"/>; once the last chunk is sent, a
+    /// failure other than a refusal Graph states is <see cref="ProviderErrorCode.OutcomeUnknown"/>.
+    /// </summary>
+    private async Task<UploadResult> UploadInSessionAsync(
+        string sessionUrl,
+        string? newName,
+        UploadPayload payload,
+        string? ifMatch,
+        string? itemId,
+        CancellationToken cancellationToken,
+        ProviderErrorCode conflictCode)
+    {
+        var uploadUrl = await CreateUploadSessionAsync(
+            sessionUrl, newName, ifMatch, itemId, cancellationToken, conflictCode).ConfigureAwait(false);
+
+        var length = payload.Length;
+        var chunkBytes = _options.UploadSessionChunkBytes;
+        var buffer = new byte[(int)Math.Min(chunkBytes, length)];
+        using var hash = IncrementalHash.CreateHash(HashAlgorithmName.SHA256);
+        long hashed = 0;  // the content is hashed once, in order, as it is first read
+        long offset = 0;  // the first byte the session expects next
+        long sent = 0;    // the end of the furthest range sent
+        var failures = 0;
+        var lastChunkSent = false;
+        try
+        {
+            while (true)
+            {
+                var count = (int)Math.Min(chunkBytes, length - offset);
+                var last = offset + count == length;
+                await ReadRangeAsync(payload.Stream, offset, buffer, count, itemId, cancellationToken).ConfigureAwait(false);
+                if (offset + count > hashed)
+                {
+                    var skip = (int)(hashed - offset);
+                    hash.AppendData(buffer, skip, count - skip);
+                    hashed = offset + count;
+                }
+                if (last)
+                    await EnsureEndOfContentAsync(payload.Stream, itemId, cancellationToken).ConfigureAwait(false);
+
+                sent = Math.Max(sent, offset + count);
+                // From here a lost response can hide a stored file.
+                lastChunkSent = last;
+                HttpResponseMessage response;
+                try
+                {
+                    response = await SendChunkAsync(uploadUrl, buffer, count, offset, length, cancellationToken).ConfigureAwait(false);
+                }
+                catch (Exception ex) when (!last && IsTransient(ex, cancellationToken))
+                {
+                    // The connection dropped mid-chunk: Graph ignores a partial chunk, so ask the
+                    // session where to resume.
+                    if (++failures > MaximumChunkRetries)
+                        throw Error(ProviderErrorCode.WriteRejected,
+                            $"The upload failed {failures} times before its last chunk; nothing was stored.", itemId, ex);
+                    offset = await ResumeOffsetAsync(uploadUrl, offset, sent, length, itemId, cancellationToken).ConfigureAwait(false);
+                    continue;
+                }
+                catch (Exception ex) when (last && !(ex is OperationCanceledException && cancellationToken.IsCancellationRequested))
+                {
+                    throw Error(ProviderErrorCode.OutcomeUnknown,
+                        "The upload failed while its last chunk was being sent; SharePoint may have stored the document.",
+                        itemId, ex);
+                }
+
+                using (response)
+                {
+                    var status = (int)response.StatusCode;
+                    if (status == 202 || (!last && response.IsSuccessStatusCode))
+                    {
+                        // Accepted, with more expected. After the last chunk that means Graph is
+                        // still missing an earlier range, so nothing was stored yet.
+                        lastChunkSent = false;
+                        if (last && ++failures > MaximumChunkRetries)
+                            throw Error(ProviderErrorCode.WriteRejected,
+                                "Graph kept asking for content it had already been sent; nothing was stored.", itemId);
+                        if (!last) failures = 0;
+                        var next = await ReadNextExpectedAsync(response).ConfigureAwait(false);
+                        if (next is not null)
+                            offset = CheckResumeOffset(next.Value, sent, length, itemId);
+                        else if (!last)
+                            offset += count;
+                        else
+                            offset = await ResumeOffsetAsync(uploadUrl, offset, sent, length, itemId, cancellationToken).ConfigureAwait(false);
+                        continue;
+                    }
+
+                    if (last && response.IsSuccessStatusCode)
+                    {
+                        GraphItem item;
+                        try
+                        {
+                            item = ParseItem(await response.Content.ReadAsStringAsync().ConfigureAwait(false), itemId);
+                        }
+                        catch (DocumentProviderException ex)
+                        {
+                            throw Error(ProviderErrorCode.OutcomeUnknown,
+                                "Graph accepted the last chunk but its reply could not be read; SharePoint may have stored the document.",
+                                itemId, ex);
+                        }
+                        return new UploadResult(item, ToHex(hash.GetHashAndReset()));
+                    }
+
+                    if (last)
+                    {
+                        // A name conflict or a failed precondition is a refusal to store the file.
+                        // Graph keeps such a session open for a corrected commit, so cancel it.
+                        if (response.StatusCode == HttpStatusCode.Conflict)
+                        {
+                            await CancelSessionAsync(uploadUrl).ConfigureAwait(false);
+                            throw ConflictError(conflictCode, itemId);
+                        }
+                        if (response.StatusCode == HttpStatusCode.PreconditionFailed)
+                        {
+                            await CancelSessionAsync(uploadUrl).ConfigureAwait(false);
+                            throw await FailureAsync(response, itemId, write: true).ConfigureAwait(false);
+                        }
+                        var graphCode = await ReadGraphErrorCodeAsync(response).ConfigureAwait(false);
+                        throw Error(ProviderErrorCode.OutcomeUnknown,
+                            $"Graph failed the last chunk of the upload with status {status}; SharePoint may have stored the document.{GraphCodeSuffix(graphCode)}",
+                            itemId);
+                    }
+
+                    if (response.StatusCode == HttpStatusCode.NotFound)
+                    {
+                        var graphCode = await ReadGraphErrorCodeAsync(response).ConfigureAwait(false);
+                        throw Error(ProviderErrorCode.WriteRejected,
+                            "The upload session expired before the last chunk was uploaded; nothing was stored. Save again." +
+                            GraphCodeSuffix(graphCode), itemId);
+                    }
+
+                    if (status is 416 or 429 or >= 500)
+                    {
+                        // 416: Graph already holds part of this range. 429 and 5xx: try again later.
+                        if (++failures > MaximumChunkRetries)
+                            throw Error(ProviderErrorCode.WriteRejected,
+                                $"Graph failed a chunk of the upload with status {status} {failures} times; nothing was stored.",
+                                itemId);
+                        if (status != 416)
+                            await Task.Delay(RetryDelay(response, failures), cancellationToken).ConfigureAwait(false);
+                        offset = await ResumeOffsetAsync(uploadUrl, offset, sent, length, itemId, cancellationToken).ConfigureAwait(false);
+                        continue;
+                    }
+
+                    throw response.StatusCode == HttpStatusCode.Conflict
+                        ? ConflictError(conflictCode, itemId)
+                        : await FailureAsync(response, itemId, write: true).ConfigureAwait(false);
+                }
+            }
+        }
+        catch (Exception ex) when (!lastChunkSent)
+        {
+            // Nothing is stored until Graph accepts the last chunk, so this save is refused.
+            // Cancelling the session discards what it holds.
+            await CancelSessionAsync(uploadUrl).ConfigureAwait(false);
+            if (ex is DocumentProviderException { Code: not ProviderErrorCode.OutcomeUnknown and not ProviderErrorCode.IO })
+                throw;
+            throw Error(ProviderErrorCode.WriteRejected,
+                ex is OperationCanceledException && cancellationToken.IsCancellationRequested
+                    ? "The save was cancelled before its last chunk was uploaded; nothing was stored."
+                    : "The upload failed before its last chunk; nothing was stored.",
+                itemId, ex);
+        }
+    }
+
+    /// <summary>Opens an upload session and returns its pre-authenticated upload URL.</summary>
+    private async Task<Uri> CreateUploadSessionAsync(
+        string url,
+        string? newName,
+        string? ifMatch,
+        string? itemId,
+        CancellationToken cancellationToken,
+        ProviderErrorCode conflictCode)
+    {
+        using var body = new StringContent(UploadSessionBody(newName), Encoding.UTF8, "application/json");
+        HttpResponseMessage response;
+        try
+        {
+            response = await SendAsync(HttpMethod.Post, url, body, ifMatch, cancellationToken).ConfigureAwait(false);
+        }
+        catch (Exception ex) when (ex is not DocumentProviderException)
+        {
+            // No content has been sent, so nothing can have been stored.
+            throw Error(ProviderErrorCode.WriteRejected,
+                "Graph could not open an upload session; nothing was stored.", itemId, ex);
+        }
+
+        using (response)
+        {
+            if (response.StatusCode == HttpStatusCode.Conflict)
+                throw ConflictError(conflictCode, itemId);
+            if (!response.IsSuccessStatusCode)
+            {
+                var failure = await FailureAsync(response, itemId, write: true).ConfigureAwait(false);
+                throw failure.Code == ProviderErrorCode.OutcomeUnknown
+                    ? Error(ProviderErrorCode.WriteRejected,
+                        $"Graph failed to open an upload session with status {(int)response.StatusCode}; nothing was stored.",
+                        itemId)
+                    : failure;
+            }
+
+            string? uploadUrl = null;
+            try
+            {
+                using var json = JsonDocument.Parse(await response.Content.ReadAsStringAsync().ConfigureAwait(false));
+                if (json.RootElement.ValueKind == JsonValueKind.Object &&
+                    json.RootElement.TryGetProperty("uploadUrl", out var value) &&
+                    value.ValueKind == JsonValueKind.String)
+                    uploadUrl = value.GetString();
+            }
+            catch (JsonException)
+            {
+            }
+
+            if (!Uri.TryCreate(uploadUrl, UriKind.Absolute, out var uri) || uri.Scheme != Uri.UriSchemeHttps)
+                throw Error(ProviderErrorCode.WriteRejected,
+                    "Graph did not return a usable upload session URL; nothing was stored.", itemId);
+            return uri;
+        }
+    }
+
+    /// <summary>
+    /// The session request body. A replace keeps the item it addresses, guarded by
+    /// <c>If-Match</c>; a new name keeps <c>conflictBehavior=fail</c>, so it never overwrites.
+    /// </summary>
+    private static string UploadSessionBody(string? newName)
+    {
+        using var buffer = new MemoryStream();
+        using (var writer = new Utf8JsonWriter(buffer))
+        {
+            writer.WriteStartObject();
+            writer.WriteStartObject("item");
+            writer.WriteString("@microsoft.graph.conflictBehavior", newName is null ? "replace" : "fail");
+            if (newName is not null)
+                writer.WriteString("name", newName);
+            writer.WriteEndObject();
+            writer.WriteEndObject();
+        }
+        return Encoding.UTF8.GetString(buffer.ToArray());
+    }
+
+    /// <summary>
+    /// Sends one chunk. The upload URL is pre-authenticated, so the bearer token is never sent
+    /// to it; Graph can refuse a chunk that carries one.
+    /// </summary>
+    private async Task<HttpResponseMessage> SendChunkAsync(
+        Uri uploadUrl, byte[] buffer, int count, long offset, long length, CancellationToken cancellationToken)
+    {
+        using var request = new HttpRequestMessage(HttpMethod.Put, uploadUrl);
+        var content = new ByteArrayContent(buffer, 0, count);
+        content.Headers.ContentRange = new ContentRangeHeaderValue(offset, offset + count - 1, length);
+        request.Content = content;
+        return await _http.SendAsync(request, HttpCompletionOption.ResponseContentRead, cancellationToken).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// Asks the session which byte it expects next. When the session cannot say, the upload
+    /// resumes where it was; Graph answers 416 if it already holds that range.
+    /// </summary>
+    private async Task<long> ResumeOffsetAsync(
+        Uri uploadUrl, long current, long sent, long length, string? itemId, CancellationToken cancellationToken)
+    {
+        HttpResponseMessage response;
+        try
+        {
+            using var request = new HttpRequestMessage(HttpMethod.Get, uploadUrl);
+            response = await _http.SendAsync(request, HttpCompletionOption.ResponseContentRead, cancellationToken).ConfigureAwait(false);
+        }
+        catch (Exception ex) when (IsTransient(ex, cancellationToken))
+        {
+            return current;
+        }
+
+        using (response)
+        {
+            if (response.StatusCode == HttpStatusCode.NotFound)
+                throw Error(ProviderErrorCode.WriteRejected,
+                    "The upload session expired before the last chunk was uploaded; nothing was stored. Save again.",
+                    itemId);
+            if (!response.IsSuccessStatusCode)
+                return current;
+            var next = await ReadNextExpectedAsync(response).ConfigureAwait(false);
+            return next is null ? current : CheckResumeOffset(next.Value, sent, length, itemId);
+        }
+    }
+
+    /// <summary>
+    /// Checks a position the session reported: it must be within what was sent and short of the
+    /// end, since the session completes when the last byte arrives.
+    /// </summary>
+    private long CheckResumeOffset(long next, long sent, long length, string? itemId)
+    {
+        if (next < 0 || next > sent || next >= length)
+            throw Error(ProviderErrorCode.WriteRejected,
+                "The upload session reported a position the upload never reached; nothing was stored.", itemId);
+        return next;
+    }
+
+    /// <summary>The start of the earliest range in a session's <c>nextExpectedRanges</c>, if it names one.</summary>
+    private static async Task<long?> ReadNextExpectedAsync(HttpResponseMessage response)
+    {
+        try
+        {
+            var payload = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
+            if (string.IsNullOrWhiteSpace(payload)) return null;
+            using var json = JsonDocument.Parse(payload);
+            if (json.RootElement.ValueKind != JsonValueKind.Object ||
+                !json.RootElement.TryGetProperty("nextExpectedRanges", out var ranges) ||
+                ranges.ValueKind != JsonValueKind.Array)
+                return null;
+
+            long? earliest = null;
+            foreach (var range in ranges.EnumerateArray())
+            {
+                var text = range.ValueKind == JsonValueKind.String ? range.GetString() : null;
+                if (string.IsNullOrEmpty(text)) continue;
+                var dash = text!.IndexOf('-');
+                var start = dash < 0 ? text : text.Substring(0, dash);
+                if (long.TryParse(start, System.Globalization.NumberStyles.None,
+                        System.Globalization.CultureInfo.InvariantCulture, out var value) &&
+                    (earliest is null || value < earliest))
+                    earliest = value;
+            }
+            return earliest;
+        }
+        catch (JsonException)
+        {
+            return null;
+        }
+    }
+
+    /// <summary>Cancels a session so Graph discards what it holds. Best effort: an abandoned session expires.</summary>
+    private async Task CancelSessionAsync(Uri uploadUrl)
+    {
+        try
+        {
+            using var timeout = new CancellationTokenSource(SessionCancelTimeout);
+            using var request = new HttpRequestMessage(HttpMethod.Delete, uploadUrl);
+            using var response = await _http.SendAsync(request, timeout.Token).ConfigureAwait(false);
+        }
+        catch (Exception)
+        {
+            // The session expires on its own, and it never stores a file without its last chunk.
+        }
+    }
+
+    /// <summary>Reads one range of the content into the chunk buffer.</summary>
+    private async Task ReadRangeAsync(
+        Stream stream, long offset, byte[] buffer, int count, string? itemId, CancellationToken cancellationToken)
+    {
+        if (stream.Position != offset)
+            stream.Position = offset;
+        var read = 0;
+        while (read < count)
+        {
+            var n = await stream.ReadAsync(buffer, read, count - read, cancellationToken).ConfigureAwait(false);
+            if (n == 0)
+                throw Error(ProviderErrorCode.WriteRejected,
+                    "The document content ended before its stated length while it was being uploaded; nothing was stored.",
+                    itemId);
+            read += n;
+        }
+    }
+
+    /// <summary>Refuses content that grew past its stated length while it was being uploaded.</summary>
+    private async Task EnsureEndOfContentAsync(Stream stream, string? itemId, CancellationToken cancellationToken)
+    {
+        var probe = new byte[1];
+        if (await stream.ReadAsync(probe, 0, 1, cancellationToken).ConfigureAwait(false) != 0)
+            throw Error(ProviderErrorCode.WriteRejected,
+                "The document content grew past its stated length while it was being uploaded; nothing was stored.",
+                itemId);
+    }
+
+    /// <summary>A dropped connection or a timeout the caller did not ask for.</summary>
+    private static bool IsTransient(Exception ex, CancellationToken cancellationToken) =>
+        ex is HttpRequestException or IOException ||
+        (ex is OperationCanceledException && !cancellationToken.IsCancellationRequested);
+
+    /// <summary>Graph's <c>Retry-After</c> when it sends one, else an exponential back-off.</summary>
+    private static TimeSpan RetryDelay(HttpResponseMessage response, int failures)
+    {
+        var retryAfter = response.Headers.RetryAfter;
+        var delay = retryAfter?.Delta
+            ?? (retryAfter?.Date is { } date ? date - DateTimeOffset.UtcNow : (TimeSpan?)null)
+            ?? TimeSpan.FromSeconds(Math.Pow(2, failures - 1));
+        if (delay < TimeSpan.Zero) return TimeSpan.Zero;
+        return delay > MaximumRetryDelay ? MaximumRetryDelay : delay;
     }
 
     private async Task<HttpResponseMessage> SendAsync(
@@ -459,10 +968,15 @@ public sealed class SharePointDocumentProvider : IDocumentProvider, IDocumentCre
     private async Task ThrowOnFailureAsync(HttpResponseMessage response, string? itemId, bool write = false)
     {
         if (response.IsSuccessStatusCode) return;
+        throw await FailureAsync(response, itemId, write).ConfigureAwait(false);
+    }
 
+    /// <summary>The provider error a failed Graph response stands for.</summary>
+    private async Task<DocumentProviderException> FailureAsync(HttpResponseMessage response, string? itemId, bool write)
+    {
         var graphCode = await ReadGraphErrorCodeAsync(response).ConfigureAwait(false);
-        var suffix = string.IsNullOrEmpty(graphCode) ? string.Empty : $" Graph code: {graphCode}.";
-        throw response.StatusCode switch
+        var suffix = GraphCodeSuffix(graphCode);
+        return response.StatusCode switch
         {
             // Retrying cannot help a locked file, so the message says what can.
             _ when write && IsLocked(response.StatusCode, graphCode) => Error(ProviderErrorCode.WriteRejected,
@@ -488,6 +1002,9 @@ public sealed class SharePointDocumentProvider : IDocumentProvider, IDocumentCre
                 $"Graph request failed with status {(int)response.StatusCode}.{suffix}", itemId)
         };
     }
+
+    private static string GraphCodeSuffix(string graphCode) =>
+        string.IsNullOrEmpty(graphCode) ? string.Empty : $" Graph code: {graphCode}.";
 
     private static bool IsLocked(HttpStatusCode status, string graphCode) =>
         (int)status == 423 || string.Equals(graphCode, "resourceLocked", StringComparison.OrdinalIgnoreCase);
@@ -691,12 +1208,16 @@ public sealed class SharePointDocumentProvider : IDocumentProvider, IDocumentCre
     /// content hash so it can be found and registered, never its drive or item id.
     /// </summary>
     private DocumentRegistrationFailedException RegistrationFailed(
-        string message, string? itemId, string outputName, byte[] bytes, Exception innerException)
+        string message, string? itemId, string outputName, string outputSha256, Exception innerException) =>
+        new(message, ProviderName, ConnectionId, itemId, outputName, outputSha256, innerException);
+
+    private static string Sha256Hex(byte[] bytes)
     {
-        using var sha = System.Security.Cryptography.SHA256.Create();
-        return new(message, ProviderName, ConnectionId, itemId, outputName,
-            string.Concat(sha.ComputeHash(bytes).Select(b => b.ToString("x2"))), innerException);
+        using var sha = SHA256.Create();
+        return ToHex(sha.ComputeHash(bytes));
     }
+
+    private static string ToHex(byte[] hash) => string.Concat(hash.Select(b => b.ToString("x2")));
 
     private DocumentProviderException Error(
         ProviderErrorCode code,
@@ -715,5 +1236,36 @@ public sealed class SharePointDocumentProvider : IDocumentProvider, IDocumentCre
         public string DriveId { get; init; } = string.Empty;
         public string? MimeType { get; init; }
         public string? DownloadUrl { get; init; }
+    }
+
+    /// <summary>
+    /// Content ready to upload: a seekable stream of known length, and the bytes themselves when
+    /// they were read into memory.
+    /// </summary>
+    private sealed class UploadPayload
+    {
+        public UploadPayload(Stream stream, long length, byte[]? bytes)
+        {
+            Stream = stream;
+            Length = length;
+            Bytes = bytes;
+        }
+
+        public Stream Stream { get; }
+        public long Length { get; }
+        public byte[]? Bytes { get; }
+    }
+
+    /// <summary>The stored item, and the SHA-256 of the bytes uploaded to it.</summary>
+    private sealed class UploadResult
+    {
+        public UploadResult(GraphItem item, string sha256)
+        {
+            Item = item;
+            Sha256 = sha256;
+        }
+
+        public GraphItem Item { get; }
+        public string Sha256 { get; }
     }
 }

@@ -1,0 +1,27 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFrameworks>netstandard2.0;net8.0</TargetFrameworks>
+    <Description>Google Drive document provider for OfficeAgent.NET, a translation layer between AI agents and OOXML: creates, registers, opens, and saves Word, PowerPoint, and Excel files stored in Google Drive and shared drives through the Drive API v3 REST endpoints. Native Google Docs, Sheets, and Slides are refused, never converted. Agents address documents by an opaque (connectionId, documentId); the provider never exposes Drive file ids, folder ids, or credentials to the model.</Description>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\OfficeAgent.Abstractions\OfficeAgent.Abstractions.csproj" />
+    <ProjectReference Include="..\OfficeAgent.Core\OfficeAgent.Core.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" Version="8.0.2" />
+  </ItemGroup>
+
+  <ItemGroup Condition="'$(TargetFramework)' == 'netstandard2.0'">
+    <PackageReference Include="System.Text.Json" Version="8.0.6" />
+    <PackageReference Include="System.Net.Http" Version="4.3.4" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- The netstandard2.0 private-key reader is tested directly against the platform importer. -->
+    <InternalsVisibleTo Include="OfficeAgent.Tests" />
+  </ItemGroup>
+
+</Project>

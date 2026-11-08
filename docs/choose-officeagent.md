@@ -65,7 +65,9 @@ and [Support and compatibility](../SUPPORT.md) before production use.
 
 Add a storage provider only when the hosting model needs it. `OfficeAgent.Core`
 includes the filesystem and in-memory provider surfaces. `OfficeAgent.SharePoint`
-adds Microsoft Graph storage. A caller that already owns the bytes can use a
+adds Microsoft Graph storage, and `OfficeAgent.IManage`, `OfficeAgent.GoogleDrive`,
+`OfficeAgent.Box`, `OfficeAgent.AzureBlob` and `OfficeAgent.AmazonS3` add iManage Work, Google
+Drive, Box and object storage. A caller that already owns the bytes can use a
 `StreamHandle` without registering storage.
 
 ## OfficeAgent.NET or the Open XML SDK directly

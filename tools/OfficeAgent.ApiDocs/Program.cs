@@ -3,9 +3,12 @@ using System.Reflection;
 using System.Text;
 using OfficeAgent.Abstractions;
 using OfficeAgent.AgentFramework;
+using OfficeAgent.AmazonS3;
+using OfficeAgent.AzureBlob;
 using OfficeAgent.Core;
 using OfficeAgent.Excel;
 using OfficeAgent.Excel.Calculation;
+using OfficeAgent.IManage;
 using OfficeAgent.PowerPoint;
 using OfficeAgent.Rendering;
 using OfficeAgent.SharePoint;
@@ -87,12 +90,17 @@ internal static class ApiSurface
     {
         typeof(DocumentPlan).Assembly,
         typeof(OfficeAgentTools).Assembly,
+        typeof(AmazonS3DocumentProvider).Assembly,
+        typeof(AzureBlobDocumentProvider).Assembly,
         typeof(OfficeAgentClient).Assembly,
         typeof(ExcelModule).Assembly,
         typeof(ClosedXmlFormulaEvaluator).Assembly,
+        typeof(IManageDocumentProvider).Assembly,
         typeof(PowerPointModule).Assembly,
         typeof(LibreOfficeDocumentRenderer).Assembly,
         typeof(SharePointDocumentProvider).Assembly,
+        typeof(OfficeAgent.GoogleDrive.GoogleDriveDocumentProvider).Assembly,
+        typeof(OfficeAgent.Box.BoxDocumentProvider).Assembly,
         typeof(WordModule).Assembly,
     }.Distinct().OrderBy(assembly => assembly.GetName().Name, StringComparer.Ordinal).ToArray();
 

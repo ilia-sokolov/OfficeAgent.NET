@@ -42,6 +42,7 @@ public sealed class ErrorCodeCatalogTests
         "d-mmm-yy",             // Excel's built-in date number formats
         "d-mmm",
         "mmm-yy",
+        "officeagent-write-id", // the S3 metadata entry a write carries to recognise a retry
     };
 
     private static IEnumerable<(string Catalogue, string Name, string Value)> Codes() =>

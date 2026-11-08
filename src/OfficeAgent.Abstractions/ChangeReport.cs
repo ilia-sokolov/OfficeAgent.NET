@@ -74,6 +74,19 @@ public sealed class ProposedChange
     /// Gets the engine capability required to complete the change.
     /// </summary>
     public Capability Capability { get; init; } = Capability.Deterministic;
+
+    /// <summary>
+    /// Gets a note on how the change was carried out when that differs from what the
+    /// operation asked for, or <see langword="null"/> when it does not. A warning does not
+    /// stop the plan: the change is still valid and is applied as <see cref="Before"/> and
+    /// <see cref="After"/> describe.
+    /// </summary>
+    /// <remarks>
+    /// A tracked <see cref="ChangeTextOp"/> with <see cref="ChangeGranularity.Minimal"/> whose
+    /// words to delete carry different character formatting is written as a whole-span
+    /// replacement, and says so here.
+    /// </remarks>
+    public string? Warning { get; init; }
 }
 
 /// <summary>

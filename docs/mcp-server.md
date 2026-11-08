@@ -2,7 +2,7 @@
 
 `OfficeAgent.Mcp` exposes the OfficeAgent workflow as [Model Context Protocol](https://modelcontextprotocol.io) tools, so any MCP-capable agent can inspect and edit Word documents, PowerPoint decks, and Excel workbooks without taking a .NET dependency. It is the same engine and tool contract as `OfficeAgent.AgentFramework`: typed plans, preview-before-apply, tracked changes by default in Word, and all-or-nothing commits.
 
-> This page is the configuration reference. For step-by-step wiring of specific clients - Claude Code, Codex, Copilot Studio, Microsoft 365 Copilot - and the identity checklist, see [Deployment & client setup](deployment.md).
+> This page is the configuration reference. For step-by-step wiring of specific clients - Claude Code, Codex, Google ADK, Copilot Studio, Microsoft 365 Copilot, Microsoft Foundry, ChatGPT - and the identity checklist, see [Deployment & client setup](deployment.md).
 
 One binary, two transports:
 
@@ -32,10 +32,15 @@ With no configuration at all the server starts on an in-memory session connectio
 says so on stderr - useful for a first look, but its documents last only while the process
 runs. To edit documents on disk, create the root directory first and use an absolute path.
 
-Or from source:
+Or from source. Build once, then start the built server. `dotnet run` is no use to an MCP
+client, because it writes build output to the stream the client reads:
 
 ```bash
-dotnet run --project src/OfficeAgent.Mcp -- --stdio
+dotnet build src/OfficeAgent.Mcp -c Release -f net10.0
+```
+
+```bash
+dotnet src/OfficeAgent.Mcp/bin/Release/net10.0/OfficeAgent.Mcp.dll --stdio
 ```
 
 No .NET installed? Use a [standalone download](#standalone-downloads), or install from PyPI:
@@ -226,8 +231,8 @@ officeagent-mcp
 Notes for production:
 
 - **Put authentication in front.** The open-source server ships no auth layer; run it behind your reverse proxy, API gateway, or service mesh and authenticate there.
-- **Registrations need durability across restarts.** Filesystem connections persist registrations in `{root}/.officeagent/index.json` automatically. SharePoint connections default to in-memory; set `RegistrationIndexPath` (single instance) or implement `ISharePointRegistrationStore` over shared storage (multiple instances).
-- **Secrets stay out of appsettings.** Supply `ClientSecret` via environment variable or your secret store.
+- **Registrations need durability across restarts.** Filesystem connections persist registrations in `{root}/.officeagent/index.json` automatically. SharePoint, iManage, Google Drive, Box, Azure Blob and Amazon S3 connections default to in-memory; set `RegistrationIndexPath` (single instance) or implement the provider's registration store over shared storage (multiple instances).
+- **Secrets stay out of appsettings.** Supply `ClientSecret`, `Password`, `RefreshToken`, `KeyJson` and `ConnectionString` via environment variable or your secret store. They never appear in a tool result, `list_connections`, or a startup error.
 
 ## Configuration reference
 
@@ -280,7 +285,7 @@ A connection whose value cannot be read - a `MaximumBytes` that is not a number,
 | --- | --- | --- |
 | `Transport` | `http` | `http` or `stdio` (the `--stdio` flag also forces stdio). |
 | `AllowRegistration` | `true` | Expose `register_document` / `remove_document` / `open_document` / `edit_document` / `edit_documents` / `refresh_document` / `list_connections` - every tool that takes a connection-relative source. Unlike the in-process tools (opt-in), the MCP server defaults to on: an MCP client has no other channel to stage document ids. Set to `false` to pin agents to ids the host distributes itself. |
-| `AllowCreation` | `false` | Expose `create_document` when at least one connection allows a creatable extension (`.docx`, `.pptx`, or `.xlsx`); SharePoint must also have a configured creation destination. Independent of `AllowRegistration`, so a host can permit creation without permitting arbitrary registration/removal. The zero-configuration fallback enables it for its session connection. |
+| `AllowCreation` | `false` | Expose `create_document` when at least one connection allows a creatable extension (`.docx`, `.pptx`, or `.xlsx`); SharePoint, iManage, Google Drive and Box connections must also have a configured creation folder. Independent of `AllowRegistration`, so a host can permit creation without permitting arbitrary registration/removal. The zero-configuration fallback enables it for its session connection. |
 | `AllowInlineContent` | `false` | Expose `create_document_content` / `inspect_document_content` / `edit_document_content`, which carry the document as base64 in both directions. Needs no connection. Best for a single self-contained call; see [Documents with no storage](#documents-with-no-storage) before using it for multi-step editing. |
 | `EphemeralConnectionId` | empty | Id of a session connection whose documents the server holds in memory for the life of the process - `"session"` by convention. Adds `import_document_content` / `export_document_content` and makes the ordinary connection-addressed tools usable with no storage. With no configuration of any kind, the effective value is `session`. |
 | `EphemeralMaximumTotalBytes` | 100 MB | Total the session connection may hold at once. The store is process memory, so this bound is what keeps a long session from growing without limit. |
@@ -293,6 +298,7 @@ A connection whose value cannot be read - a `MaximumBytes` that is not a number,
 | `FileSystemConnections[n]:MaximumBytes` | 100 MB | Size cap per document. |
 | `FileSystemConnections[n]:AllowedExtensions` | `[".docx"]` | Extension allow-list. |
 | `FileSystemConnections[n]:DefaultChangeMode` | `Tracked` | Change mode for a plan operation that does not state one. Set `Direct` for generated or machine-owned documents, or for a connection serving `.pptx` - a deck refuses `Tracked`. |
+| `FileSystemConnections[n]:DefaultChangeGranularity` | `Span` | How much a tracked `changeText` that does not state a `granularity` marks: `Span` the whole matched text, `Minimal` only the words that differ. `Span` stays the server's default in 1.x and `Minimal` becomes it in 2.0. See [mark only the words that change](document-plans.md#mark-only-the-words-that-change). |
 | `FileSystemConnections[n]:CalculateFormulas` | `false` | Calculate the formulas of a workbook previewed or committed through this connection, so the saved file carries current values. Only allowlisted functions are calculated; the tool result's `calculation` section names every formula left uncalculated and why. See [formula calculation](excel.md#formula-calculation). |
 | `FileSystemConnections[n]:RejectFormulaErrors` | `false` | With `CalculateFormulas`, refuse a plan that introduces a formula error or a circular reference with `formula-error` instead of saving it with the errors reported. |
 | `SharePointConnections[n]:ConnectionId` | - | Connection id agents address documents under. Documents are registered by URL or `driveId/itemId`, so the connection is not tied to one drive. |
@@ -305,7 +311,40 @@ A connection whose value cannot be read - a `MaximumBytes` that is not a number,
 | `SharePointConnections[n]:GraphBaseUrl` / `LoginAuthority` | Graph v1.0 / public Entra | Override for sovereign clouds. |
 | `SharePointConnections[n]:MaximumBytes` / `AllowedExtensions` | 100 MB / `[".docx"]` | Same caps as filesystem connections. |
 | `SharePointConnections[n]:DefaultChangeMode` | `Tracked` | As above, per library. |
+| `SharePointConnections[n]:DefaultChangeGranularity` | `Span` | As above, per library. |
 | `SharePointConnections[n]:CalculateFormulas` / `RejectFormulaErrors` | `false` / `false` | As above, per library. |
+| `IManageConnections[n]:ConnectionId` | - | Connection id for an iManage Work connection. Documents are registered by id (`ACTIVE!12345.1`) or an iManage Work link on `ServerUrl`. |
+| `IManageConnections[n]:ServerUrl` / `CustomerId` | - | The https iManage server, such as `https://cloudimanage.com`, and the customer id from its `/api` response. Both required. |
+| `IManageConnections[n]:ClientId` / `ClientSecret` | - | The application registered in Control Center. `ClientSecret` is a secret: supply it through the environment. |
+| `IManageConnections[n]:GrantType` | `Password` | `Password` (needs `Username` and `Password`), `RefreshToken` (needs `RefreshToken`) or `ClientCredentials` (needs `ClientSecret`). `Password` and `RefreshToken` are secrets. |
+| `IManageConnections[n]:CreationFolderId` / `CreationDocumentClass` | empty | Folder or workspace id (`ACTIVE!773`) that receives new documents, and an optional document class. Without a folder, the connection cannot create documents. |
+| `IManageConnections[n]:SaveComment` / `LockDuringSave` | `Saved by OfficeAgent.` / `true` | Comment on each saved version; lock the document while a save checks and uploads. |
+| `IManageConnections[n]:ApiBasePath` / `TokenPath` | `/work/api/v2` / `/auth/oauth2/token` | Paths on `ServerUrl`, for a server that moves them. |
+| `GoogleDriveConnections[n]:ConnectionId` | - | Connection id for a Google Drive connection. Documents are registered by file id or Drive URL. |
+| `GoogleDriveConnections[n]:KeyFilePath` / `KeyJson` | - | The service account key: a path to the key file, or its JSON from the environment. Set exactly one. Never put the key in a manifest. |
+| `GoogleDriveConnections[n]:Subject` / `Scope` | empty / Drive | A Workspace user to act as through domain-wide delegation, and the OAuth scope. |
+| `GoogleDriveConnections[n]:CreationFolderId` | empty | Drive folder that receives new documents. |
+| `GoogleDriveConnections[n]:ApiBaseUrl` / `UploadBaseUrl` | Drive API v3 | Override only for a proxy. |
+| `BoxConnections[n]:ConnectionId` | - | Connection id for a Box connection. Documents are registered by file id or Box file URL. |
+| `BoxConnections[n]:ClientId` / `ClientSecret` | - | The Box app's client credentials. `ClientSecret` is a secret. |
+| `BoxConnections[n]:SubjectType` / `SubjectId` | `Enterprise` / - | Act as the app's service account (`Enterprise`, with the enterprise id) or a user (`User`, with the user id). |
+| `BoxConnections[n]:CreationFolderId` | empty | Numeric Box folder id that receives new documents. |
+| `BoxConnections[n]:MaximumBytes` | 50 MB | Box's ceiling for single-request uploads. |
+| `BoxConnections[n]:ApiBaseUrl` / `UploadBaseUrl` | Box API 2.0 | Override only for a proxy. |
+| `AzureBlobConnections[n]:ConnectionId` / `ContainerName` / `Prefix` | - / - / empty | One container and an optional prefix. Documents are registered by blob name relative to the prefix and created under it. |
+| `AzureBlobConnections[n]:ServiceUri` / `ConnectionString` | - | Set exactly one: `ServiceUri` signs in with `DefaultAzureCredential` (managed identity in Azure); `ConnectionString` carries the account key and comes from the environment. |
+| `AzureBlobConnections[n]:ManagedIdentityClientId` | empty | Client id of a user-assigned managed identity. |
+| `AmazonS3Connections[n]:ConnectionId` / `BucketName` / `KeyPrefix` | - / - / empty | One bucket and an optional key prefix. Documents are registered by key relative to the prefix and created under it. Credentials come from the AWS default chain. |
+| `AmazonS3Connections[n]:Region` | AWS default chain | Such as `eu-west-1`. |
+| `AmazonS3Connections[n]:ServiceUrl` / `ForcePathStyle` | empty / `false` | An S3-compatible store that supports conditional writes, such as MinIO or Cloudflare R2. |
+| `RegistrationIndexPath` | in-memory | On every iManage, Google Drive, Box, Azure Blob and Amazon S3 connection: a JSON file that makes registrations survive restarts. |
+| `MaximumBytes` / `AllowedExtensions` | 100 MB / `[".docx"]` | On every iManage, Google Drive, Box, Azure Blob and Amazon S3 connection, as for filesystem connections. |
+| `DefaultChangeMode` / `DefaultChangeGranularity` | `Tracked` / `Span` | On every iManage, Google Drive, Box, Azure Blob and Amazon S3 connection, as above. |
+| `CalculateFormulas` / `RejectFormulaErrors` | `false` / `false` | On every iManage, Google Drive, Box, Azure Blob and Amazon S3 connection, as above. |
+
+A missing or malformed setting on any of these connections stops the server at startup with a
+message that names the connection and the environment variable to set, such as
+`OfficeAgent__IManageConnections__0__ServerUrl`. A message never quotes a secret.
 
 ### Acting as the signed-in user (On-Behalf-Of)
 
@@ -333,6 +372,30 @@ A SharePoint connection in `appsettings.json`:
 
 with `OfficeAgent__SharePointConnections__0__ClientSecret` supplied from the environment.
 
+An iManage connection is configured the same way, with its secrets from the environment:
+
+```json
+{
+  "OfficeAgent": {
+    "AllowCreation": true,
+    "IManageConnections": [
+      {
+        "ConnectionId": "matters",
+        "ServerUrl": "https://cloudimanage.com",
+        "CustomerId": "1",
+        "ClientId": "officeagent",
+        "Username": "svc-officeagent",
+        "CreationFolderId": "ACTIVE!773",
+        "DefaultChangeGranularity": "Minimal"
+      }
+    ]
+  }
+}
+```
+
+with `OfficeAgent__IManageConnections__0__ClientSecret` and `OfficeAgent__IManageConnections__0__Password`
+supplied from the environment.
+
 
 Structural validation is not native Office acceptance and neither is visual parity. See
 [what "it worked" means](getting-started.md#what-it-worked-means-here) before reporting a
@@ -350,7 +413,7 @@ and open-world hints. The read-only tools change nothing outside the call. `appl
 tools only add documents or registrations. The [wire contract](wire-contract.md#tools) lists
 every tool's annotations.
 
-The MCP toolset is the projection of [the agent-integration surface](agent-integration.md): `describe_capabilities`, `inspect_document`, `find_in_document`, `preview_plan`, `apply_plan`, `compare_documents`, and `preview_document_merge`; `AllowRegistration` independently adds `register_document` / `remove_document` plus the composites `open_document` / `edit_document` / `edit_documents` / `refresh_document`, while `AllowCreation` adds `create_document`, the template trio `discover_template` / `preview_template_batch` / `populate_template_batch`, and `merge_documents` when at least one connection allows a creatable extension - `.docx`, `.pptx`, or `.xlsx` (SharePoint also requires its creation destination). Either opt-in adds `list_connections`, which returns `{connectionId, provider, canCreateDocuments}` entries. That boolean means the connection is configured for at least one creatable format; it is not a format list, a permission check, or a readiness probe. The higher-level workflow contracts and their limits are documented in [template population and comparison](document-workflows.md) and [Word document assembly](document-assembly.md).
+The MCP toolset is the projection of [the agent-integration surface](agent-integration.md): `describe_capabilities`, `inspect_document`, `find_in_document`, `preview_plan`, `apply_plan`, `compare_documents`, and `preview_document_merge`; `AllowRegistration` independently adds `register_document` / `remove_document` plus the composites `open_document` / `edit_document` / `edit_documents` / `refresh_document`, while `AllowCreation` adds `create_document`, the template trio `discover_template` / `preview_template_batch` / `populate_template_batch`, and `merge_documents` when at least one connection allows a creatable extension - `.docx`, `.pptx`, or `.xlsx` (SharePoint, iManage, Google Drive and Box also require their creation folder). Either opt-in adds `list_connections`, which returns `{connectionId, provider, canCreateDocuments, allowedExtensions, defaultChangeMode, defaultChangeGranularity, calculatesFormulas}` entries. `provider` is `filesystem`, `sharepoint`, `imanage`, `googledrive`, `box`, `azureblob`, `amazons3` or `session`. `canCreateDocuments` means the connection is configured for at least one creatable format; it is not a permission check or a readiness probe. `register_document` and `open_document` describe only the sources of the providers that are configured. The higher-level workflow contracts and their limits are documented in [template population and comparison](document-workflows.md) and [Word document assembly](document-assembly.md).
 
 Discovery and batch preflight write nothing and demand read access only, but they arrive
 with `AllowCreation` rather than separately: a preflight exists to precede a commit, so
@@ -392,12 +455,14 @@ and operation-specific validation still apply.
 
 The security model carries over: edit tools use opaque ids and never expose
 credentials. If registration or source-addressed composite tools are enabled,
-the caller can supply a path, SharePoint URL, or `driveId/itemId`, and that
-source may appear in client/model context. A filesystem source cannot escape
-its connection root, and a SharePoint source resolves only to documents the
-connection identity can reach (the intersection of delegated app scopes and
-user access under On-Behalf-Of). `create_document` writes only under the
-filesystem root or configured SharePoint folder and never overwrites a name;
+the caller can supply a path, SharePoint URL, `driveId/itemId`, iManage, Drive
+or Box id or link, or blob name or object key, and that source may appear in
+client/model context. A filesystem source cannot escape its connection root, a
+blob name or key cannot leave its prefix, and a SharePoint, iManage, Drive or
+Box source resolves only to documents the connection identity can reach (for
+SharePoint, the intersection of delegated app scopes and user access under
+On-Behalf-Of). `create_document` writes only under the filesystem root, the
+configured folder, or the container or bucket prefix, and never overwrites a name;
 `remove_document` drops a registration without deleting content.
 
 ## Documents with no storage
@@ -562,7 +627,7 @@ PresentationML has no revision markup to honour `Tracked` with. An explicit
 ## A complete loop, from any MCP client
 
 1. `list_connections({})` → `[{ connectionId: "documents", provider: "filesystem", canCreateDocuments: true }, …]`
-2. `register_document({ "connectionId": "documents", "source": "contract.docx" })` → `{ documentId: "…" }` *(SharePoint accepts a document URL or `driveId/itemId`.)*
+2. `register_document({ "connectionId": "documents", "source": "contract.docx" })` → `{ documentId: "…" }` *(SharePoint accepts a document URL or `driveId/itemId`; iManage a document id or link; Drive and Box a file id or URL; Azure Blob and S3 a name relative to the prefix.)*
 3. `find_in_document({ "connectionId": "documents", "documentId": "…", "pattern": "Acme Corp", "regex": false, "wholeWord": false, "caseSensitive": false })` → content-verified anchors
 4. `preview_plan({ "connectionId": "documents", "documentId": "…", "planJson": "[...]" })` → before/after report, no write
 5. `apply_plan({ "connectionId": "documents", "documentId": "…", "planJson": "[...]", "saveMode": "Replace", "newName": "" })` → `{ committed: true, outputDocumentId: "…", outputName: "contract.docx", … }`
@@ -588,13 +653,17 @@ To start from nothing instead, replace step 2 with `create_document({ "connectio
 
 ## SharePoint operational limits
 
-The provider uses Microsoft Graph's single-request content upload API, whose
-limit is 250 MB; `MaximumBytes` must not exceed that value for SharePoint.
-Uploads do not currently perform automatic `Retry-After` handling. On throttling
-or a timeout, first reconcile by reopening the registered item (or checking the
+A save under 4 MiB is a single Graph request; a larger one goes through a Graph
+upload session in 10 MiB chunks, so `MaximumBytes` is the only size limit that
+applies (Graph itself accepts files up to 250 GB). A failed chunk is retried up
+to three times, honouring `Retry-After`; a single-request upload is not retried.
+A save that fails before its last chunk stored nothing and reports
+`write-rejected`. On `outcome-unknown`, from throttling, a timeout or a failure on
+the last chunk, first reconcile by reopening the registered item (or checking the
 requested new name) before retrying, because Graph may have accepted a write
 whose response was lost. Reuse the same plan only after refreshing its snapshot
-and version.
+and version. See [document providers](document-providers.md#the-sharepoint-provider) for the
+details.
 
 Microsoft Graph does not support replacing the content of a sensitivity-labeled
 file with application permissions. An `appOnly` connection therefore cannot use
