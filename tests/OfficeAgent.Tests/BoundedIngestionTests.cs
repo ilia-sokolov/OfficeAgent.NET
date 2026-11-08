@@ -2,6 +2,7 @@ using System.IO.Compression;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
+using System.Text.RegularExpressions;
 using OfficeAgent.Abstractions;
 using OfficeAgent.AgentFramework;
 using OfficeAgent.Core;
@@ -599,6 +600,179 @@ public sealed class BoundedIngestionTests
                 $"{entry} produced {thrown?.GetType().Name ?? "no exception"}: {thrown?.Message}");
             Assert.True(thrown!.Message.Length < 600, $"{entry} diagnostic was {thrown.Message.Length} characters");
         }
+    }
+
+    /// <summary>
+    /// The damage the ingestion fuzz target found reaching a caller as a raw SDK exception.
+    /// Each case is one small edit to a valid fixture. An inspect must refuse it as a
+    /// malformed package, and no entry point may let the SDK's exception through.
+    /// </summary>
+    /// <remarks>
+    /// The inner exception is pinned so each case keeps exercising the shape it was written
+    /// for: without it, a case would also pass if some earlier check happened to refuse the
+    /// package first, and the translation it covers could regress unnoticed.
+    /// </remarks>
+    [Theory]
+    [InlineData("sheet-relationship-id-with-no-target", typeof(ArgumentOutOfRangeException))]
+    [InlineData("slide-relationship-id-with-no-target", typeof(ArgumentOutOfRangeException))]
+    [InlineData("master-relationship-id-with-no-target", typeof(ArgumentOutOfRangeException))]
+    [InlineData("relationship-target-ends-in-a-slash", typeof(ArgumentException))]
+    [InlineData("relationship-targets-a-relationship-part", typeof(ArgumentException))]
+    [InlineData("media-relationship-to-a-missing-part", typeof(InvalidOperationException))]
+    [InlineData("unknown-core-property", typeof(ArgumentOutOfRangeException))]
+    [InlineData("sheet-id-not-a-number", typeof(FormatException))]
+    [InlineData("custom-style-flag-not-a-boolean", typeof(FormatException))]
+    [InlineData("shape-id-not-a-number", typeof(FormatException))]
+    [InlineData("slide-id-not-a-number", typeof(FormatException))]
+    [InlineData("placeholder-type-not-in-the-enumeration", typeof(FormatException))]
+    public void Damage_found_by_fuzzing_is_refused_and_bounded_on_every_entry_point(string shape, Type cause)
+    {
+        var (damaged, client) = FuzzShape(shape);
+        var plan = new DocumentPlan
+        {
+            Operations = new PlanOperation[]
+            {
+                new ChangeTextOp { Target = new TextSpanAnchor { ParaId = "p1", Expect = "Acme Corp" }, With = "Globex" }
+            }
+        };
+
+        // Inspect reads every part these shapes damage, so it must refuse, for the pinned cause.
+        var thrown = Record.Exception(() => client.Inspect(damaged));
+        Assert.True(thrown is OpenXmlPackageRejectedException,
+            $"{shape} inspect produced {thrown?.GetType().Name ?? "no exception"}: {thrown?.Message}");
+        Assert.True(thrown!.Message.Length < 600, $"{shape} inspect diagnostic was {thrown.Message.Length} characters");
+        Assert.IsType(cause, thrown.InnerException);
+
+        // A find reads less, and may succeed on a part it never touches; it must not leak.
+        AssertBounded(shape, "find", () => client.Find(Handle(damaged), new FindQuery("Acme Corp")));
+        AssertBounded(shape, "preview", () => client.Preview(Handle(damaged), plan));
+        AssertBounded(shape, "commit", () => client.Commit(Handle(damaged), plan));
+    }
+
+    /// <summary>
+    /// An empty workbook part, which the SDK reads as a part with no root, is refused when the
+    /// package opens, naming what is missing, rather than failing once a module reads it.
+    /// </summary>
+    [Fact]
+    public void A_main_part_with_no_root_element_is_refused_at_open()
+    {
+        var damaged = WithEditedParts(XlsxFactory.WorkbookWithTable(), "^xl/workbook.xml$", _ => string.Empty);
+
+        var error = Assert.Throws<OpenXmlPackageRejectedException>(
+            () => new OfficeAgentClient(new ExcelModule()).Inspect(damaged));
+        Assert.Contains("the workbook part has no workbook element", error.Message, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// A raw exception the SDK raises for a reason that is not damage stays an engine defect:
+    /// only argument, format and invalid-operation errors from the package readers are
+    /// relabelled, and never a null argument or a disposed object.
+    /// </summary>
+    [Fact]
+    public void Only_faults_raised_while_reading_the_package_are_relabelled()
+    {
+        var disposed = Record.Exception(() =>
+        {
+            var package = DocumentFormat.OpenXml.Packaging.WordprocessingDocument.Open(
+                new MemoryStream(DocxFactory.Contract()), isEditable: false);
+            package.Dispose();
+            _ = package.MainDocumentPart;
+        });
+        Assert.IsAssignableFrom<ObjectDisposedException>(disposed);
+        Assert.False(OpenXmlPackageService.IsPackageFault(disposed!));
+
+        var nullArgument = Record.Exception(() =>
+            DocumentFormat.OpenXml.Packaging.WordprocessingDocument.Open((Stream)null!, isEditable: false));
+        Assert.IsType<ArgumentNullException>(nullArgument);
+        Assert.False(OpenXmlPackageService.IsPackageFault(nullArgument!));
+
+        var ours = Record.Exception(new Action(() => throw new InvalidOperationException("engine defect")));
+        Assert.False(OpenXmlPackageService.IsPackageFault(ours!));
+    }
+
+    private static (byte[] Damaged, OfficeAgentClient Client) FuzzShape(string shape)
+    {
+        var word = new OfficeAgentClient(new WordModule());
+        var excel = new OfficeAgentClient(new ExcelModule());
+        var powerPoint = new OfficeAgentClient(new PowerPointModule());
+        const string AnyRels = @"\.rels$";
+
+        return shape switch
+        {
+            "sheet-relationship-id-with-no-target" => (WithEditedParts(XlsxFactory.WorkbookWithTable(), "^xl/workbook.xml$",
+                xml => Replace(xml, "(<x:sheet [^>]*r:id=\")[^\"]+", "${1}rIdMissing")), excel),
+            "slide-relationship-id-with-no-target" => (WithEditedParts(PptxFactory.Deck(), "^ppt/presentation.xml$",
+                xml => Replace(xml, "(<p:sldId [^>]*r:id=\")[^\"]+", "${1}rIdMissing")), powerPoint),
+            "master-relationship-id-with-no-target" => (WithEditedParts(PptxFactory.Deck(), "^ppt/presentation.xml$",
+                xml => Replace(xml, "(<p:sldMasterId [^>]*r:id=\")[^\"]+", "${1}rIdMissing")), powerPoint),
+            "relationship-target-ends-in-a-slash" => (WithEditedParts(DocxFactory.Contract(), "^word/_rels/document.xml.rels$",
+                xml => Replace(xml, "(Target=\"[^\"]*styles[^\"]*\\.xml)\"", "$1/\"")), word),
+            "relationship-targets-a-relationship-part" => (WithEditedParts(DocxFactory.Contract(), "^word/_rels/document.xml.rels$",
+                xml => Replace(xml, "Target=\"[^\"]*styles[^\"]*\\.xml\"", "Target=\"/_rels/.rels\"")), word),
+            "media-relationship-to-a-missing-part" => (WithEditedParts(PptxFactory.Deck(), "^ppt/slides/_rels/.*" + AnyRels,
+                xml => Replace(xml, "</Relationships>",
+                    "<Relationship Id=\"rIdMedia\" Type=\"http://schemas.microsoft.com/office/2007/relationships/media\" " +
+                    "Target=\"/media/missing.mp4\"/></Relationships>")), powerPoint),
+            "unknown-core-property" => (WithCoreProperties(DocxFactory.Contract(),
+                "<cp:coreProperties xmlns:cp=\"http://schemas.openxmlformats.org/package/2006/metadata/core-properties\" " +
+                "xmlns:dc=\"http://purl.org/dc/elements/1.1/\"><dc:titel>Contract</dc:titel></cp:coreProperties>"), word),
+            "sheet-id-not-a-number" => (WithEditedParts(XlsxFactory.WorkbookWithTable(), "^xl/workbook.xml$",
+                xml => Replace(xml, "sheetId=\"7\"", "sheetId=\"A\"")), excel),
+            "custom-style-flag-not-a-boolean" => (WithEditedParts(DocxFactory.Contract(), "^word/styles.xml$",
+                xml => Replace(xml, "w:customStyle=\"[^\"]*\"", "w:customStyle=\"maybe\"")), word),
+            "shape-id-not-a-number" => (WithEditedParts(PptxFactory.Deck(), "^ppt/slides/[^/]+\\.xml$",
+                xml => Replace(xml, "(<p:cNvPr [^>]*id=\")\\d+", "${1}x")), powerPoint),
+            "slide-id-not-a-number" => (WithEditedParts(PptxFactory.Deck(), "^ppt/presentation.xml$",
+                xml => Replace(xml, "(<p:sldId [^>]*id=\")\\d+", "${1}x")), powerPoint),
+            "placeholder-type-not-in-the-enumeration" => (WithEditedParts(PptxFactory.Deck(), "^ppt/slides/[^/]+\\.xml$",
+                xml => Replace(xml, "<p:ph type=\"title\"", "<p:ph type=\"titie\"")), powerPoint),
+            _ => throw new ArgumentOutOfRangeException(nameof(shape))
+        };
+    }
+
+    /// <summary>Applies a regex replacement that must match, so a fixture change cannot quietly void a case.</summary>
+    private static string Replace(string xml, string pattern, string replacement)
+    {
+        Assert.Matches(pattern, xml);
+        return Regex.Replace(xml, pattern, replacement);
+    }
+
+    /// <summary>Rewrites the text of every entry whose name matches, keeping the rest of the archive.</summary>
+    private static byte[] WithEditedParts(byte[] original, string namePattern, Func<string, string> edit)
+    {
+        var copy = new MemoryStream();
+        copy.Write(original, 0, original.Length);
+        copy.Position = 0;
+        using (var archive = new ZipArchive(copy, ZipArchiveMode.Update, leaveOpen: true))
+        {
+            var matching = archive.Entries.Where(e => Regex.IsMatch(e.FullName, namePattern)).ToList();
+            Assert.NotEmpty(matching);
+            foreach (var entry in matching)
+            {
+                string text;
+                using (var reader = new StreamReader(entry.Open(), Encoding.UTF8))
+                    text = reader.ReadToEnd();
+                var name = entry.FullName;
+                entry.Delete();
+                using var writer = new StreamWriter(archive.CreateEntry(name).Open(), new UTF8Encoding(false));
+                writer.Write(edit(text));
+            }
+        }
+
+        return copy.ToArray();
+    }
+
+    /// <summary>Adds a core properties part, its package relationship and its content type.</summary>
+    private static byte[] WithCoreProperties(byte[] original, string core)
+    {
+        var withPart = WithReplacedPart(original, "docProps/core.xml", core);
+        var withType = WithEditedParts(withPart, @"^\[Content_Types\]\.xml$", xml => Replace(xml, "</Types>",
+            "<Override PartName=\"/docProps/core.xml\" " +
+            "ContentType=\"application/vnd.openxmlformats-package.core-properties+xml\"/></Types>"));
+        return WithEditedParts(withType, "^_rels/.rels$", xml => Replace(xml, "</Relationships>",
+            "<Relationship Id=\"rIdCore\" " +
+            "Type=\"http://schemas.openxmlformats.org/package/2006/relationships/metadata/core-properties\" " +
+            "Target=\"/docProps/core.xml\"/></Relationships>"));
     }
 
     private static string Override(string partName, string contentType) =>

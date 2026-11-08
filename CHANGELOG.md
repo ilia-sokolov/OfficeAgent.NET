@@ -251,6 +251,16 @@ corresponding GitHub release.
   [#28](https://github.com/ilia-sokolov/OfficeAgent.NET/issues/28) and
   [discussion #38](https://github.com/ilia-sokolov/OfficeAgent.NET/discussions/38).
 
+### Fixed
+
+- **Damaged packages the fuzz target found are refused as `malformed-package`.** A relationship
+  id with no target, a relationship target that is not a valid part name, a part reached under
+  two spellings, an unreadable core properties part, an attribute that does not parse as its
+  type (such as a `sheetId` of `A`), and an empty main or slide part reached the caller as a raw
+  `ArgumentException`, `FormatException` or `InvalidOperationException`. They now get the same
+  refusal as any other damaged package, from every entry point. None could read or write outside
+  the document.
+
 ## 1.2.0 — 2026-10-14
 
 ### Added

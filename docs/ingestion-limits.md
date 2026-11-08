@@ -80,6 +80,7 @@ a document must satisfy both.
 | Traversing (`../`) or absolute entry name | `malformed-package` |
 | Document type definition or external entity in the manifest | `malformed-package`; DTDs are prohibited and no entity is resolved |
 | Missing `[Content_Types].xml` | `malformed-package` |
+| Relationship with no target or an invalid target, part with no root element, or attribute that does not parse as its type | `malformed-package`, whether found at open or when the part is first read |
 | XML deeper than the depth ceiling | `input-too-large` |
 
 Directly, these surface as `OpenXmlIngestionLimitException`,

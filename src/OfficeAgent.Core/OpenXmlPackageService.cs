@@ -156,7 +156,8 @@ internal sealed class OpenXmlPackageService
            or FileFormatException
            or System.Xml.XmlException
            or OpenXmlPackageException
-        || IsMissingPartFault(ex);
+        || IsMissingPartFault(ex)
+        || IsPackageReaderFault(ex);
 
     /// <summary>
     /// A relationship whose target part is absent from the archive, which the SDK reports
@@ -169,6 +170,47 @@ internal sealed class OpenXmlPackageService
     /// </remarks>
     private static bool IsMissingPartFault(Exception ex) =>
         ex is InvalidOperationException && ex.TargetSite?.DeclaringType == typeof(OpenXmlPart);
+
+    /// <summary>
+    /// The assemblies that read a package's bytes: the SDK's packaging and value types, its
+    /// generated schema classes, and <c>System.IO.Packaging</c> beneath them.
+    /// </summary>
+    private static readonly System.Reflection.Assembly[] PackageReaders =
+    {
+        typeof(OpenXmlPackage).Assembly,
+        typeof(DocumentFormat.OpenXml.Wordprocessing.Body).Assembly,
+        typeof(System.IO.Packaging.Package).Assembly
+    };
+
+    /// <summary>
+    /// An argument, format or invalid-operation error raised while the SDK or
+    /// <c>System.IO.Packaging</c> reads damaged content: a relationship id with no target
+    /// (<c>GetPartById</c>), a relationship target that is not a valid part name, two
+    /// relationships resolving to one part, an unknown element in the core properties, or an
+    /// attribute that does not parse as its schema type, such as a <c>sheetId</c> of <c>"A"</c>.
+    /// </summary>
+    /// <remarks>
+    /// Matched by where it is raised, as <see cref="IsMissingPartFault"/> is: the first frame
+    /// outside the core library must belong to one of <see cref="PackageReaders"/>. The same
+    /// exception types raised by OfficeAgent's own code remain engine defects. A null argument
+    /// or a disposed object is never damage, so neither is relabelled wherever it comes from.
+    /// Each shape was found by the ingestion fuzz target, and one changed byte produces it.
+    /// </remarks>
+    private static bool IsPackageReaderFault(Exception ex)
+    {
+        if (ex is ArgumentNullException or ObjectDisposedException) return false;
+        if (ex is not (ArgumentException or FormatException or InvalidOperationException)) return false;
+
+        var coreLibrary = typeof(object).Assembly;
+        foreach (var frame in new System.Diagnostics.StackTrace(ex, fNeedFileInfo: false).GetFrames())
+        {
+            var assembly = frame.GetMethod()?.DeclaringType?.Assembly;
+            if (assembly is null || assembly == coreLibrary) continue;
+            return Array.IndexOf(PackageReaders, assembly) >= 0;
+        }
+
+        return false;
+    }
 
     /// <summary>
     /// Runs work that touches package parts, translating a damaged-package fault into the
@@ -191,7 +233,7 @@ internal sealed class OpenXmlPackageService
 
     /// <summary>
     /// Forces the format's main part to parse, so lazy faults are not deferred, and refuses
-    /// a package that has no main part at all.
+    /// a package that has no main part at all, or whose main part has the wrong root element.
     /// </summary>
     /// <remarks>
     /// A package whose content types announce a Word document but which carries no main
@@ -207,15 +249,15 @@ internal sealed class OpenXmlPackageService
         {
             case DocFormat.Word:
                 _ = RequireMainPart(((WordprocessingDocument)package).MainDocumentPart, "main document")
-                    .Document?.Body;
+                    .DocumentRoot().Body;
                 break;
             case DocFormat.Excel:
                 _ = RequireMainPart(((SpreadsheetDocument)package).WorkbookPart, "workbook")
-                    .Workbook?.Sheets;
+                    .WorkbookRoot().Sheets;
                 break;
             case DocFormat.PowerPoint:
                 _ = RequireMainPart(((PresentationDocument)package).PresentationPart, "presentation")
-                    .Presentation?.SlideIdList;
+                    .PresentationRoot().SlideIdList;
                 break;
         }
     }
