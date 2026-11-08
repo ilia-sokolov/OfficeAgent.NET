@@ -1,8 +1,8 @@
 {
   "mcpServers": {
     "officeagent": {
-      "command": "uvx",
-      "args": ["officeagent-mcp==1.2.0", "--stdio"],
+      "command": "uv",
+      "args": ["run", "--project", "${CLAUDE_PLUGIN_ROOT}", "--locked", "--isolated", "officeagent-mcp", "--stdio"],
       "env": {
         "OfficeAgent__FileSystemConnections__0__ConnectionId": "documents",
         "OfficeAgent__FileSystemConnections__0__RootPath": ".",

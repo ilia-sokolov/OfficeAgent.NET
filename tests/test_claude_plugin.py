@@ -61,13 +61,32 @@ class PluginDirectoryRuleTests(unittest.TestCase):
             path.read_text(encoding="utf-8")  # text only: any other binary is held for review
         self.assertFalse((PLUGIN / "bin").exists(), "a top-level bin/ stops claude.ai and Cowork installing it")
 
-    def test_the_server_is_a_launcher_pinned_to_the_manifest_version(self) -> None:
+    def test_the_server_runs_from_a_lock_pinned_to_the_manifest_version(self) -> None:
+        # The directory holds a bare uvx or npx launcher for review; it wants a lock file beside
+        # the manifest that declares the server, with exact versions, sources and hashes.
         entry = server()
-        self.assertEqual("uvx", entry["command"])
-        self.assertEqual(f"officeagent-mcp=={manifest()['version']}", entry["args"][0])
-        self.assertEqual("--stdio", entry["args"][1])
+        self.assertEqual("uv", entry["command"])
+        self.assertEqual(plugin_sync.LAUNCHER, entry["args"])
+        self.assertEqual(manifest()["version"], plugin_sync.pinned_version())
+        self.assertEqual(manifest()["version"], plugin_sync.locked_version())
         self.assertFalse(any(name in {".npmrc", "uv.toml", "pip.conf"} for name in
                              (path.name for path in PLUGIN.rglob("*"))), "no custom package source")
+
+    def test_the_lock_takes_every_wheel_from_pypi_by_hash(self) -> None:
+        lock = (PLUGIN / "uv.lock").read_text(encoding="utf-8")
+        self.assertNotIn("[[tool.uv.index]]", (PLUGIN / "pyproject.toml").read_text(encoding="utf-8"))
+        sources = re.findall(r'source = \{ registry = "([^"]+)" \}', lock)
+        self.assertEqual(["https://pypi.org/simple"], sources)
+        wheels = re.findall(r'\{ url = "([^"]+)", hash = "sha256:([0-9a-f]{64})"', lock)
+        version = plugin_sync.pinned_version()
+        # One wheel for each platform the README promises.
+        self.assertEqual(
+            {"macosx_15_0_arm64", "macosx_15_0_x86_64", "manylinux_2_27_aarch64", "manylinux_2_27_x86_64",
+             "win_amd64", "win_arm64"},
+            {url.rsplit("/", 1)[-1].removeprefix(f"officeagent_mcp-{version}-py3-none-").removesuffix(".whl")
+             for url, _ in wheels})
+        for url, _ in wheels:
+            self.assertTrue(url.startswith("https://files.pythonhosted.org/"), url)
 
     def test_every_option_the_server_reads_is_declared_with_a_default(self) -> None:
         options = manifest().get("userConfig", {})

@@ -3,8 +3,9 @@
 
 The plugin folder is what Anthropic's directory installs, so it carries its own copies of the
 agent skills, the licence and the icon. This script copies them from their sources, which stay
-the single place to edit them, and checks that the server version the plugin pins matches its
-manifest. Run it after changing a skill:
+the single place to edit them, and checks that the server version the plugin pins in
+pyproject.toml, the version uv.lock resolved and the manifest's version all agree. Run it after
+changing a skill:
 
     python scripts/sync_claude_plugin.py          # copy, then check
     python scripts/sync_claude_plugin.py --check  # check only; exit 1 on any drift
@@ -34,13 +35,25 @@ def skill_files() -> list[tuple[Path, Path]]:
     return pairs
 
 
+# .mcp.json starts the server from the locked launcher project beside it, never from a bare
+# package name: the directory holds a launcher with no lock file for review.
+LAUNCHER = ["run", "--project", "${CLAUDE_PLUGIN_ROOT}", "--locked", "--isolated", "officeagent-mcp", "--stdio"]
+
+
 def pinned_version() -> str:
-    servers = json.loads((PLUGIN / ".mcp.json").read_text(encoding="utf-8"))["mcpServers"]
-    args = servers["officeagent"]["args"]
-    match = re.fullmatch(r"officeagent-mcp==(\S+)", args[0])
+    """The exact officeagent-mcp version pyproject.toml depends on."""
+    pyproject = (PLUGIN / "pyproject.toml").read_text(encoding="utf-8")
+    match = re.search(r'"officeagent-mcp==([^"\s]+)"', pyproject)
     if not match:
-        raise SystemExit(f"the plugin must pin officeagent-mcp to an exact version, not {args[0]!r}")
+        raise SystemExit("plugins/officeagent/pyproject.toml must pin officeagent-mcp to an exact version")
     return match.group(1)
+
+
+def locked_version() -> str | None:
+    """The officeagent-mcp version uv.lock resolved, or None when it has none."""
+    lock = (PLUGIN / "uv.lock").read_text(encoding="utf-8")
+    match = re.search(r'\[\[package\]\]\r?\nname = "officeagent-mcp"\r?\nversion = "([^"]+)"', lock)
+    return match.group(1) if match else None
 
 
 def problems() -> list[str]:
@@ -55,6 +68,12 @@ def problems() -> list[str]:
     manifest = json.loads((PLUGIN / ".claude-plugin" / "plugin.json").read_text(encoding="utf-8"))
     if manifest["version"] != pinned_version():
         found.append(f"plugin.json version {manifest['version']} != pinned officeagent-mcp {pinned_version()}")
+    if locked_version() != pinned_version():
+        found.append(f"uv.lock has officeagent-mcp {locked_version()}, not {pinned_version()}; "
+                     "run uv lock in plugins/officeagent")
+    server = json.loads((PLUGIN / ".mcp.json").read_text(encoding="utf-8"))["mcpServers"]["officeagent"]
+    if server["command"] != "uv" or server["args"] != LAUNCHER:
+        found.append(f".mcp.json must start the server with uv {' '.join(LAUNCHER)}")
     return found
 
 

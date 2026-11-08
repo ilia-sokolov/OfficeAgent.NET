@@ -1,0 +1,12 @@
+# Starts the plugin's MCP server. .mcp.json runs `uv run --locked` against this project, so the
+# server comes from uv.lock beside it: officeagent-mcp at one exact version, with the SHA-256 of
+# every platform's wheel. Keep the version equal to .claude-plugin/plugin.json, then run `uv lock`.
+[project]
+name = "officeagent-claude-plugin"
+version = "1.2.0"
+description = "Launcher for the OfficeAgent Claude plugin's MCP server."
+requires-python = ">=3.9"
+dependencies = ["officeagent-mcp==1.2.0"]
+
+[tool.uv]
+package = false

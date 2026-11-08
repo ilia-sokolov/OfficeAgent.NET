@@ -1,0 +1,27 @@
+version = 1
+revision = 5
+requires-python = ">=3.9"
+
+[[package]]
+name = "officeagent-claude-plugin"
+version = "1.2.0"
+source = { virtual = "." }
+dependencies = [
+    { name = "officeagent-mcp" },
+]
+
+[package.metadata]
+requires-dist = [{ name = "officeagent-mcp", specifier = "==1.2.0" }]
+
+[[package]]
+name = "officeagent-mcp"
+version = "1.2.0"
+source = { registry = "https://pypi.org/simple" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/2e/7c/5774c246ec372466f05d9e2f320fd9d3f9340ebe80f2eb065c4f785eecc7/officeagent_mcp-1.2.0-py3-none-macosx_15_0_arm64.whl", hash = "sha256:7bae7134cb4a66aee4a43cea046d5ccca946bb98fccc4567c8697f0f2e7ea3a5", size = 46862705, upload-time = "2026-10-14T20:13:26.644Z" },
+    { url = "https://files.pythonhosted.org/packages/fe/2b/cdff177f497a6144e0394e793d451cdbba2f1e491956e29e4552c06147fc/officeagent_mcp-1.2.0-py3-none-macosx_15_0_x86_64.whl", hash = "sha256:7496864e4c24cfc7d0e206a3babbe554bf61c5a783a535dbc4f934d77dcd1933", size = 49116503, upload-time = "2026-10-14T20:13:30.606Z" },
+    { url = "https://files.pythonhosted.org/packages/33/9f/29fd15edd1e271de77e13b215f1b85ab25978b705362999a27ca7c16dbb7/officeagent_mcp-1.2.0-py3-none-manylinux_2_27_aarch64.whl", hash = "sha256:110ae5b17617b664665e05a81cf8dc47d2aa82e5e5c6c2e0c3a1f3307b306ef3", size = 46439679, upload-time = "2026-10-14T20:13:34.082Z" },
+    { url = "https://files.pythonhosted.org/packages/35/83/511225ca3993e7a318606e197ba0920c9fd38a2dcd2c940af76529d62326/officeagent_mcp-1.2.0-py3-none-manylinux_2_27_x86_64.whl", hash = "sha256:9a2af78ac4b6bc680e6e7557600d3a5b3a06b43411b1caca9ce3e0471aebf51b", size = 48664869, upload-time = "2026-10-14T20:13:37.091Z" },
+    { url = "https://files.pythonhosted.org/packages/f1/3b/698ffd024e17e3d11308a5a1763ecefb00a384d9b8df97dc9e6cb3ec0be1/officeagent_mcp-1.2.0-py3-none-win_amd64.whl", hash = "sha256:3639ca552107f20349a19fea234bea46a8ac9338445772d2ee5a8c63a46757b0", size = 48929994, upload-time = "2026-10-14T20:13:40.235Z" },
+    { url = "https://files.pythonhosted.org/packages/ce/0f/51f1976b275e90fdd43cab36e57c4beec8824198a983ece20604f1e0f33f/officeagent_mcp-1.2.0-py3-none-win_arm64.whl", hash = "sha256:c6c90e81d378a1de9439a37edd06117e7ec7381ddc39e5b327d32b58f9ca62ed", size = 47235416, upload-time = "2026-10-14T20:13:43.65Z" },
+]
