@@ -257,6 +257,13 @@ corresponding GitHub release.
 
 ### Changed
 
+- **Agents start from the organization's template.** The creation guidance tells an agent to call
+  `find_templates` before creating a document and to create from the best match, preferring
+  organization, then workgroup, then personal templates. For a deck it reuses the template's own
+  slides: it duplicates the example that fits and changes its text, tables, charts and pictures in
+  place, then removes the examples it did not use. The registration guidance adds `list_documents`
+  for a document the user describes rather than names.
+
 - **Rows `insertTableRows` adds keep the template row's text formatting.** A new row copies
   the last row and now writes each value with that cell's first run formatting, instead of an
   unformatted run. Bookmarks, comment ranges and comment references are no longer copied

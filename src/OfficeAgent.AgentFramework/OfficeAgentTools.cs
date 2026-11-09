@@ -395,6 +395,7 @@ public sealed class OfficeAgentTools
         - { "find": "Acme Corp", "match": "all" } means every match, including those in headers, footers and notes: the operation is repeated for each one. find ignores case and matches inside words unless the target adds "caseSensitive": true or "wholeWord": true.
         - refresh_document(connectionId, source, workbookSource) updates a report or deck from a workbook through the bindings it carries (nodes and content controls named "xl:<range>"). The first time, link each number, table and chart with bindData in an edit_document or apply_plan call - inspect the workbook first and use its sheet names, defined names (definedNames) or table names. After that, each month is one refresh_document call: preview=true, show the user the bindings, then run it again without preview, with saveMode "NewVersion" if they want last month's copy kept.
         - edit_documents(connectionId, sources, planJson) applies one plan to up to 100 documents: list the folder, preview=true first, show the user the summary, then run it again without preview. Each document saves on its own, so a failure in one leaves the rest done; report the failed and unchanged ones by name.
+        - When the user describes a document instead of naming its file ("last quarter's board deck"), find it with list_documents(connectionId, nameContains, recursive) rather than guessing a path, and pass the source it returns to open_document or edit_document. Ask when several match.
         - Reach for the single-purpose tools when the composites do not fit: an id you already hold, a plan you want to preview before applying, or targets that need regex search (find_in_document, then paraId targets).
         """;
 
@@ -409,6 +410,17 @@ public sealed class OfficeAgentTools
         - Pass "" for an empty document. An initial plan is applied in memory before storage. The empty starting anchor differs by format: a Word document has one empty paragraph at { "paraId": "auto-0000", "expect": "" }; a deck has one empty title placeholder at { "paraId": "slide256/shape2/p0", "expect": "" }. When unsure, create with planJson "" and then inspect_document.
         - planJson accepts a bare operations array [ … ] as well as { "operations": [ … ] }.
         - Plan-validation errors mean nothing was written. A provider or cancellation error can occur after storage accepted the file, so do not retry the same name; report the possibly unregistered file name to the host/operator for recovery.
+
+        Start from the organization's template
+        - Before creating any document - an invoice, a letter, a proposal, a deck - call find_templates with the format and a word from the request ("invoice"), and again without nameContains if nothing matches. When one fits, pass its connectionId and source to create_document as templateConnectionId and templateSource; the new document starts as a copy of the template and the template itself is never changed. Prefer an organization template, then workgroup, then personal, then one in a connection's templates folder. When several fit equally, ask the user which one; when none fits, say so before creating a blank document.
+        - A Word or Excel template already carries the layout, styles and boilerplate. Inspect the new document and fill what is there - content controls and named shapes with fill, existing tables with fillTable, existing text with changeText - and use the template's own style names (styleId) for anything you add, instead of formatting text by hand.
+
+        Building a deck from a template
+        - Reuse the template's own slides rather than drawing new ones. Inspect the deck first: each example slide shows a layout and what sits on it - a chart, a table, a picture, a bullet list.
+        - For every slide you need, duplicateSlide the example that already looks right, then change what is on the copy: text with changeText or fill, tables with fillTable, charts with setChartData (it keeps the chart's type, colours and layout), pictures with replaceImage (it keeps the frame's position, size and crop). Insert a new chart, table or picture only when the template has nothing similar, and insertSlide with one of the deck's own layout names when no example slide fits.
+        - A slide duplicated in one plan cannot be edited in that same plan. Duplicate, move and remove slides in a first plan, apply it, inspect again, then change the copies in a second plan.
+        - Remove the template's example slides you did not use, so the finished deck holds only your slides.
+        - Some content cannot be changed in place: fillTable refuses a table with merged cells, setChartData refuses scatter and bubble charts, and SmartArt and other diagrams cannot be edited. Tell the user which slide needs a manual touch rather than rebuilding it from scratch.
         """;
 
     /// <summary>
