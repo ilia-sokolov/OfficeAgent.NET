@@ -674,6 +674,36 @@ public sealed partial class OfficeAgentClient
         _providers.DefaultChangeGranularityFor(connectionId);
 
     /// <summary>
+    /// Lists documents in a connection without registering them. Each entry's
+    /// <see cref="DocumentListEntry.Source"/> is what <see cref="RegisterAsync"/> accepts for
+    /// that connection.
+    /// </summary>
+    /// <exception cref="DocumentProviderException">
+    /// The connection is unknown, or its provider does not implement
+    /// <see cref="IDocumentListingProvider"/> (<see cref="ProviderErrorCode.ConfigurationError"/>),
+    /// or the provider refused the query.
+    /// </exception>
+    public async Task<DocumentListPage> ListAsync(
+        string connectionId,
+        DocumentListQuery query,
+        CancellationToken cancellationToken = default)
+    {
+        if (query is null) throw new ArgumentNullException(nameof(query));
+        var provider = _providers.ResolveListing(connectionId);
+        var page = await provider.ListAsync(query, cancellationToken).ConfigureAwait(false);
+        _logger.LogInformation(
+            "Provider list {Provider}:{ConnectionId} → {Count} entries",
+            provider.Provider, provider.ConnectionId, page.Items.Count);
+        return page;
+    }
+
+    /// <summary>
+    /// Describes, for every configured connection, whether it can be listed and where its
+    /// templates are. Like <see cref="DescribeCapabilities"/>, it applies no access policy.
+    /// </summary>
+    public IReadOnlyList<ConnectionListing> DescribeListings() => _providers.DescribeListings();
+
+    /// <summary>
     /// The in-memory store behind a connection, or <see langword="null"/> when that
     /// connection is backed by real storage.
     /// </summary>

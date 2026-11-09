@@ -43,6 +43,8 @@ public sealed class ErrorCodeCatalogTests
         "d-mmm",
         "mmm-yy",
         "officeagent-write-id", // the S3 metadata entry a write carries to recognise a retry
+        "office-personal-templates",  // connection ids of the Office template folders
+        "office-workgroup-templates",
     };
 
     private static IEnumerable<(string Catalogue, string Name, string Value)> Codes() =>

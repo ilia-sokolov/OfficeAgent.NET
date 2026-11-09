@@ -85,8 +85,21 @@ public static class OfficeAgentConfiguration
     /// surfaces later as "no connections configured" - a diagnostic pointing nowhere near
     /// the mistake. Comparing what was declared against what was bound catches that, and
     /// re-reading the offending element on its own names the value responsible.
+    /// <para>
+    /// With <c>OfficeTemplates:Enabled</c>, the Office template folders found on this machine are
+    /// added after the configured filesystem connections as read-only ones; a folder that does
+    /// not exist is skipped with a line on stderr.
+    /// </para>
     /// </remarks>
-    public static OfficeAgentMcpOptions Bind(IConfiguration configuration)
+    public static OfficeAgentMcpOptions Bind(IConfiguration configuration) =>
+        Bind(configuration, SystemOfficeTemplateEnvironment.Instance, message => Console.Error.WriteLine(message));
+
+    /// <summary>
+    /// <see cref="Bind(IConfiguration)"/> over a supplied machine, so template discovery can be
+    /// tested without the registry and folders of the machine running the tests.
+    /// </summary>
+    internal static OfficeAgentMcpOptions Bind(
+        IConfiguration configuration, IOfficeTemplateEnvironment environment, Action<string> log)
     {
         if (configuration is null) throw new ArgumentNullException(nameof(configuration));
 
@@ -113,6 +126,11 @@ public static class OfficeAgentConfiguration
         BindStorage(section, nameof(OfficeAgentMcpOptions.BoxConnections), options.BoxConnections);
         BindStorage(section, nameof(OfficeAgentMcpOptions.AzureBlobConnections), options.AzureBlobConnections);
         BindStorage(section, nameof(OfficeAgentMcpOptions.AmazonS3Connections), options.AmazonS3Connections);
+
+        // After every check on what was declared, so the connections added here are never
+        // mistaken for entries the binder dropped.
+        if (options.OfficeTemplates.Enabled)
+            OfficeTemplateLocations.AddTo(options, environment, log);
 
         return options;
     }

@@ -56,6 +56,17 @@ internal static class ResponseStates
         services.AddSingleton<IDocumentProvider>(memory);
         services.AddSingleton<IDocumentProvider>(faulty);
         services.AddFileSystemDocumentProvider("workspace", folder, options => options.AllowedExtensions = new[] { ".docx", ".xlsx" });
+        // A shared templates folder and an organization library that cannot be reached, for find_templates.
+        var shared = Path.Combine(folder, "shared-templates");
+        Directory.CreateDirectory(shared);
+        File.WriteAllBytes(Path.Combine(shared, "Quote.dotx"), QuoteTemplate());
+        services.AddFileSystemDocumentProvider("shared-templates", shared, options =>
+        {
+            options.AllowedExtensions = new[] { ".docx", ".dotx" };
+            options.ReadOnly = true;
+            options.TemplateLocation = TemplateLocationKind.Workgroup;
+        });
+        services.AddSingleton<IDocumentProvider>(new UnreachableLibrary("library"));
         services.AddSingleton<IAuditActorProvider>(actor);
         services.AddOfficeAgent();
         using var provider = services.BuildServiceProvider();
@@ -374,6 +385,20 @@ internal static class ResponseStates
         await Record("merge_documents", "source changed since preview", tools.MergeDocuments(mergePlan, "memory", "stale.docx"),
             n => !Bool(n, "committed"), "a refused commit");
 
+        // list_documents and find_templates
+        await Record("list_documents", "documents listed", tools.ListDocuments("workspace"),
+            n => Arr(n, "items").Count > 0 && n["continuation"] is null, "items and no continuation");
+        await Record("list_documents", "more pages", tools.ListDocuments("workspace", maximumResults: 1),
+            n => Arr(n, "items").Count == 1 && n["continuation"] is not null, "one item and a continuation");
+        await Record("list_documents", "connection cannot list", tools.ListDocuments("faulty"),
+            n => HasCode(n, ToolErrorCodes.ConfigurationError), "configuration-error");
+        await Record("list_documents", "folder outside the root", tools.ListDocuments("workspace", folder: "../outside"),
+            n => HasCode(n, ToolErrorCodes.AccessDenied), "access-denied");
+        await Record("find_templates", "templates found, one connection failed", tools.FindTemplates(),
+            n => Arr(n, "templates").Count > 0 && Arr(n, "connectionsFailed").Count == 1, "templates beside one failed connection");
+        await Record("find_templates", "no connection visible to the caller", denied.FindTemplates(),
+            n => Arr(n, "templates").Count == 0 && Int(n, "connectionsSearched") == 0, "nothing searched");
+
         return states;
     }
 
@@ -459,6 +484,36 @@ internal static class ResponseStates
     }
 
     private enum Fault { None, VersionConflict, RefuseWrite, UnclassifiedFailure, AfterAccept, CancelAfterAccept, RegistrationFailed }
+
+    /// <summary>An organization template library whose listing is refused, as an unreachable tenant's would be.</summary>
+    private sealed class UnreachableLibrary : IDocumentListingProvider, IConnectionTemplateSource
+    {
+        public UnreachableLibrary(string connectionId) => ConnectionId = connectionId;
+
+        public string Provider => "library";
+
+        public string ConnectionId { get; }
+
+        public string? TemplatesFolder => "Templates";
+
+        public TemplateLocationKind TemplateLocation => TemplateLocationKind.Organization;
+
+        public Task<DocumentListPage> ListAsync(DocumentListQuery query, CancellationToken cancellationToken = default) =>
+            throw new DocumentProviderException(ProviderErrorCode.AccessDenied, "The library refused access.", Provider, ConnectionId, null);
+
+        public Task<DocumentReference> RegisterAsync(string source, CancellationToken cancellationToken = default) =>
+            throw new DocumentProviderException(ProviderErrorCode.AccessDenied, "The library refused access.", Provider, ConnectionId, null);
+
+        public Task<DocumentContent> OpenReadAsync(DocumentReference reference, CancellationToken cancellationToken = default) =>
+            throw new DocumentProviderException(ProviderErrorCode.AccessDenied, "The library refused access.", Provider, ConnectionId, reference.ItemId);
+
+        public Task<DocumentReference> SaveAsync(DocumentReference source, Stream content, SaveDocumentOptions options,
+            CancellationToken cancellationToken = default) =>
+            throw new DocumentProviderException(ProviderErrorCode.AccessDenied, "The library refused access.", Provider, ConnectionId, source.ItemId);
+
+        public Task RemoveAsync(DocumentReference reference, CancellationToken cancellationToken = default) =>
+            throw new DocumentProviderException(ProviderErrorCode.AccessDenied, "The library refused access.", Provider, ConnectionId, reference.ItemId);
+    }
 
     /// <summary>
     /// A memory store whose next write fails at a chosen boundary. References carry a name and

@@ -76,7 +76,17 @@ internal sealed record StorageConnection(
     bool HasCreationTarget,
     string DefaultChangeMode,
     string DefaultChangeGranularity,
-    bool CalculatesFormulas);
+    bool CalculatesFormulas)
+{
+    /// <summary>Whether the connection refuses every write, when its configuration says; <see langword="null"/> when it cannot.</summary>
+    public bool? ReadOnly { get; init; }
+
+    /// <summary>The configured templates folder, or <see langword="null"/>.</summary>
+    public string? TemplatesFolder { get; init; }
+
+    /// <summary>The configured template location, as written in configuration.</summary>
+    public string? TemplateLocation { get; init; }
+}
 
 /// <summary>
 /// Supplies the transports the provider connections would otherwise build themselves, so tests
@@ -110,13 +120,23 @@ internal static class StorageConnections
     public static IReadOnlyList<StorageConnection> Describe(OfficeAgentMcpOptions options)
     {
         var connections = new List<StorageConnection>();
+        // A read-only folder has nowhere create_document could write.
         connections.AddRange(options.FileSystemConnections.Select(c => new StorageConnection(
-            StorageKind.FileSystem, c.ConnectionId, c.AllowedExtensions.ToArray(), HasCreationTarget: true,
-            c.DefaultChangeMode, c.DefaultChangeGranularity, c.CalculateFormulas)));
+            StorageKind.FileSystem, c.ConnectionId, c.AllowedExtensions.ToArray(), HasCreationTarget: !c.ReadOnly,
+            c.DefaultChangeMode, c.DefaultChangeGranularity, c.CalculateFormulas)
+        {
+            ReadOnly = c.ReadOnly,
+            TemplatesFolder = Blank(c.TemplatesFolder),
+            TemplateLocation = Blank(c.TemplateLocation)
+        }));
         connections.AddRange(options.SharePointConnections.Select(c => new StorageConnection(
             StorageKind.SharePoint, c.ConnectionId, c.AllowedExtensions.ToArray(),
             !string.IsNullOrWhiteSpace(c.CreationDriveId) && !string.IsNullOrWhiteSpace(c.CreationFolderItemId),
-            c.DefaultChangeMode, c.DefaultChangeGranularity, c.CalculateFormulas)));
+            c.DefaultChangeMode, c.DefaultChangeGranularity, c.CalculateFormulas)
+        {
+            TemplatesFolder = Blank(c.TemplatesFolder),
+            TemplateLocation = Blank(c.TemplateLocation)
+        }));
         connections.AddRange(options.IManageConnections.Select(c => Of(StorageKind.IManage, c, HasFolder(c.CreationFolderId))));
         connections.AddRange(options.GoogleDriveConnections.Select(c => Of(StorageKind.GoogleDrive, c, HasFolder(c.CreationFolderId))));
         connections.AddRange(options.BoxConnections.Select(c => Of(StorageKind.Box, c, HasFolder(c.CreationFolderId))));
@@ -146,6 +166,8 @@ internal static class StorageConnections
             c.DefaultChangeMode, c.DefaultChangeGranularity, c.CalculateFormulas);
 
     private static bool HasFolder(string? folder) => !string.IsNullOrWhiteSpace(folder);
+
+    private static string? Blank(string? value) => string.IsNullOrWhiteSpace(value) ? null : value!.Trim();
 
     // ── Startup checks ────────────────────────────────────────────────────────
 

@@ -285,7 +285,7 @@ A connection whose value cannot be read - a `MaximumBytes` that is not a number,
 | Key | Default | Meaning |
 | --- | --- | --- |
 | `Transport` | `http` | `http` or `stdio` (the `--stdio` flag also forces stdio). |
-| `AllowRegistration` | `true` | Expose `register_document` / `remove_document` / `open_document` / `edit_document` / `edit_documents` / `refresh_document` / `list_connections` - every tool that takes a connection-relative source. Unlike the in-process tools (opt-in), the MCP server defaults to on: an MCP client has no other channel to stage document ids. Set to `false` to pin agents to ids the host distributes itself. |
+| `AllowRegistration` | `true` | Expose `register_document` / `remove_document` / `open_document` / `edit_document` / `edit_documents` / `refresh_document` / `list_connections`, every tool that takes a connection-relative source, and `list_documents` / `find_templates`, which find one. Unlike the in-process tools (opt-in), the MCP server defaults to on: an MCP client has no other channel to stage document ids. Set to `false` to pin agents to ids the host distributes itself. |
 | `AllowCreation` | `false` | Expose `create_document` when at least one connection allows a creatable extension (`.docx`, `.pptx`, or `.xlsx`); SharePoint, iManage, Google Drive and Box connections must also have a configured creation folder. Independent of `AllowRegistration`, so a host can permit creation without permitting arbitrary registration/removal. The zero-configuration fallback enables it for its session connection. |
 | `AllowInlineContent` | `false` | Expose `create_document_content` / `inspect_document_content` / `edit_document_content`, which carry the document as base64 in both directions. Needs no connection. Best for a single self-contained call; see [Documents with no storage](#documents-with-no-storage) before using it for multi-step editing. |
 | `EphemeralConnectionId` | empty | Id of a session connection whose documents the server holds in memory for the life of the process - `"session"` by convention. Adds `import_document_content` / `export_document_content` and makes the ordinary connection-addressed tools usable with no storage. With no configuration of any kind, the effective value is `session`. |
@@ -302,6 +302,9 @@ A connection whose value cannot be read - a `MaximumBytes` that is not a number,
 | `FileSystemConnections[n]:DefaultChangeGranularity` | `Span` | How much a tracked `changeText` that does not state a `granularity` marks: `Span` the whole matched text, `Minimal` only the words that differ. `Span` stays the server's default in 1.x and `Minimal` becomes it in 2.0. See [mark only the words that change](document-plans.md#mark-only-the-words-that-change). |
 | `FileSystemConnections[n]:CalculateFormulas` | `false` | Calculate the formulas of a workbook previewed or committed through this connection, so the saved file carries current values. Only allowlisted functions are calculated; the tool result's `calculation` section names every formula left uncalculated and why. See [formula calculation](excel.md#formula-calculation). |
 | `FileSystemConnections[n]:RejectFormulaErrors` | `false` | With `CalculateFormulas`, refuse a plan that introduces a formula error or a circular reference with `formula-error` instead of saving it with the errors reported. |
+| `FileSystemConnections[n]:TemplatesFolder` | empty | A folder below the root that holds templates, such as `Templates`. `list_documents` with `templates: true` lists it and `find_templates` searches it. It must stay inside the root. |
+| `FileSystemConnections[n]:TemplateLocation` | empty | `Connection` (the default once `TemplatesFolder` is set), `Personal`, `Workgroup` or `Organization`. Without a `TemplatesFolder`, any of these makes the whole root a template location. |
+| `FileSystemConnections[n]:ReadOnly` | `false` | Refuse every save, creation and registration removal with `access-denied`, and write no `.officeagent` index under the root. Use it for a templates folder people share. A read-only connection is never offered to `create_document`. |
 | `SharePointConnections[n]:ConnectionId` | - | Connection id agents address documents under. Documents are registered by URL or `driveId/itemId`, so the connection is not tied to one drive. |
 | `SharePointConnections[n]:AuthMode` | `appOnly` | `onBehalfOf` (act as the signed-in user; hosted HTTP only) or `appOnly` (shared app identity). |
 | `SharePointConnections[n]:TenantId` / `ClientId` / `ClientSecret` | - | Entra app registration. For `onBehalfOf` this is the middle-tier API app. |
@@ -314,6 +317,8 @@ A connection whose value cannot be read - a `MaximumBytes` that is not a number,
 | `SharePointConnections[n]:DefaultChangeMode` | `Tracked` | As above, per library. |
 | `SharePointConnections[n]:DefaultChangeGranularity` | `Span` | As above, per library. |
 | `SharePointConnections[n]:CalculateFormulas` / `RejectFormulaErrors` | `false` / `false` | As above, per library. |
+| `SharePointConnections[n]:TemplatesFolder` / `TemplateLocation` | empty / empty | A templates folder, as a folder URL or `driveId/itemId` pair, and its kind, as for filesystem connections. Set `Organization` for an organization assets library; it is not found automatically. |
+| `OfficeTemplates:Enabled` | `false` | Add the Office template folders found on this machine as read-only filesystem connections `office-personal-templates` and `office-workgroup-templates`. See [Office template locations](#office-template-locations). |
 | `IManageConnections[n]:ConnectionId` | - | Connection id for an iManage Work connection. Documents are registered by id (`ACTIVE!12345.1`) or an iManage Work link on `ServerUrl`. |
 | `IManageConnections[n]:ServerUrl` / `CustomerId` | - | The https iManage server, such as `https://cloudimanage.com`, and the customer id from its `/api` response. Both required. |
 | `IManageConnections[n]:ClientId` / `ClientSecret` | - | The application registered in Control Center. `ClientSecret` is a secret: supply it through the environment. |
@@ -345,7 +350,33 @@ A connection whose value cannot be read - a `MaximumBytes` that is not a number,
 
 A missing or malformed setting on any of these connections stops the server at startup with a
 message that names the connection and the environment variable to set, such as
-`OfficeAgent__IManageConnections__0__ServerUrl`. A message never quotes a secret.
+`OfficeAgent__IManageConnections__0__ServerUrl`. A message never quotes a secret. A
+`TemplateLocation` that is not one of the four names, a filesystem `TemplatesFolder` that is not
+a folder below the root, and a SharePoint `TemplatesFolder` that is neither a URL nor a pair stop
+it the same way.
+
+### Office template locations
+
+With `OfficeAgent__OfficeTemplates__Enabled=true`, the server adds the template folders Word,
+PowerPoint and Excel show under File > New > Personal and Shared, as read-only filesystem
+connections that `find_templates` searches:
+
+| Connection | Where it comes from | `templateLocation` |
+| --- | --- | --- |
+| `office-personal-templates` | On Windows, the `PersonalTemplates` value under `HKCU\Software\Microsoft\Office\16.0\<App>\Options` for Word, PowerPoint and Excel; when none is set, `Documents\Custom Office Templates`. On macOS, `~/Library/Group Containers/UBF8T346G9.Office/User Content/Templates`. | `personal` |
+| `office-workgroup-templates` | On Windows, the `SharedTemplates` value under `HKCU\Software\Policies\Microsoft\Office\16.0\Common\General`, then under `HKCU\Software\Microsoft\Office\16.0\Common\General`. | `workgroup` |
+
+When the applications name different personal folders, each becomes its own connection,
+numbered `office-personal-templates-1`, `-2` and so on. A folder that does not exist is skipped
+with a line on stderr, and a connection id already configured is left as configured. These
+connections allow `.docx`, `.dotx`, `.pptx`, `.potx`, `.xlsx` and `.xltx`, never a macro-enabled
+file, and refuse every write: an agent can list, open and start from a template there, but
+never change it or write the registration index beside it.
+
+Not covered: Microsoft's online templates (the featured gallery in File > New), templates
+managed by third-party tools that keep their own store, and the SharePoint organization assets
+library, which is not discovered and must be configured as a SharePoint connection with
+`TemplatesFolder` and `TemplateLocation: Organization`.
 
 ### Acting as the signed-in user (On-Behalf-Of)
 
@@ -414,7 +445,21 @@ and open-world hints. The read-only tools change nothing outside the call. `appl
 tools only add documents or registrations. The [wire contract](wire-contract.md#tools) lists
 every tool's annotations.
 
-The MCP toolset is the projection of [the agent-integration surface](agent-integration.md): `describe_capabilities`, `inspect_document`, `find_in_document`, `preview_plan`, `apply_plan`, `compare_documents`, and `preview_document_merge`; `AllowRegistration` independently adds `register_document` / `remove_document` plus the composites `open_document` / `edit_document` / `edit_documents` / `refresh_document`, while `AllowCreation` adds `create_document`, the template trio `discover_template` / `preview_template_batch` / `populate_template_batch`, and `merge_documents` when at least one connection allows a creatable extension - `.docx`, `.pptx`, or `.xlsx` (SharePoint, iManage, Google Drive and Box also require their creation folder). Either opt-in adds `list_connections`, which returns `{connectionId, provider, canCreateDocuments, allowedExtensions, defaultChangeMode, defaultChangeGranularity, calculatesFormulas}` entries. `provider` is `filesystem`, `sharepoint`, `imanage`, `googledrive`, `box`, `azureblob`, `amazons3` or `session`. `canCreateDocuments` means the connection is configured for at least one creatable format; it is not a permission check or a readiness probe. `register_document` and `open_document` describe only the sources of the providers that are configured. The higher-level workflow contracts and their limits are documented in [template population and comparison](document-workflows.md) and [Word document assembly](document-assembly.md).
+The MCP toolset is the projection of [the agent-integration surface](agent-integration.md): `describe_capabilities`, `inspect_document`, `find_in_document`, `preview_plan`, `apply_plan`, `compare_documents`, and `preview_document_merge`; `AllowRegistration` independently adds `register_document` / `remove_document`, the composites `open_document` / `edit_document` / `edit_documents` / `refresh_document`, and the read-only `list_documents` / `find_templates`, while `AllowCreation` adds `create_document`, the template trio `discover_template` / `preview_template_batch` / `populate_template_batch`, and `merge_documents` when at least one connection allows a creatable extension - `.docx`, `.pptx`, or `.xlsx` (SharePoint, iManage, Google Drive and Box also require their creation folder). Either opt-in adds `list_connections`, which returns `{connectionId, provider, canCreateDocuments, allowedExtensions, defaultChangeMode, defaultChangeGranularity, calculatesFormulas, listable, templatesFolder, templateLocation, readOnly}` entries. `listable` says `list_documents` works on the connection; `templateLocation` is `organization`, `workgroup`, `personal`, `connection` or null; `readOnly` is null where configuration does not say. `provider` is `filesystem`, `sharepoint`, `imanage`, `googledrive`, `box`, `azureblob`, `amazons3` or `session`. `canCreateDocuments` means the connection is configured for at least one creatable format; it is not a permission check or a readiness probe. `register_document` and `open_document` describe only the sources of the providers that are configured. The higher-level workflow contracts and their limits are documented in [template population and comparison](document-workflows.md) and [Word document assembly](document-assembly.md).
+
+`list_documents(connectionId, folder, nameContains, extensions, recursive, templates, maximumResults, continuation)`
+lists a connection without registering anything and returns
+`{connectionId, items: [{source, name, folder, contentType, length, lastModified, isTemplate}], continuation}`.
+`extensions` is a comma list such as `.docx,.dotx`; `templates: true` lists the connection's
+templates folder; a non-empty `continuation` fetches the next page of the same query. Each
+`source` is what `open_document`, `edit_document` and `register_document` accept. A connection
+whose provider cannot list returns `configuration-error`. `find_templates(format, nameContains, maximumResults)`
+searches every connection with a template location the caller can read and returns
+`{templates: [{connectionId, source, name, folder, format, location}], connectionsSearched, connectionsFailed: [{connectionId, code, message}]}`,
+ranked by how well the name matches, then organization, workgroup, personal and connection
+locations, then name. One connection that fails is reported in `connectionsFailed` and does not
+fail the call. Both demand read access and are read-only. Listing bounds per provider are in
+[document providers](document-providers.md#list-documents-and-templates).
 
 Discovery and batch preflight write nothing and demand read access only, but they arrive
 with `AllowCreation` rather than separately: a preflight exists to precede a commit, so

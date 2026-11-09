@@ -62,6 +62,32 @@ public sealed class FileSystemDocumentProviderOptions
     /// <see cref="CalculateFormulas"/>. Defaults to <see langword="false"/>.
     /// </summary>
     public bool RejectFormulaErrors { get; set; }
+
+    /// <summary>
+    /// Gets or sets the folder, relative to <see cref="RootPath"/>, that holds this connection's
+    /// templates, such as <c>Templates</c>. It must stay inside the root. Listing with
+    /// <see cref="DocumentListQuery.Templates"/> lists it, and every document in it is reported as
+    /// a template. Empty for none.
+    /// </summary>
+    public string? TemplatesFolder { get; set; }
+
+    /// <summary>
+    /// Gets or sets what kind of template location the connection is. Left at
+    /// <see cref="TemplateLocationKind.None"/>, it becomes <see cref="TemplateLocationKind.Connection"/>
+    /// when <see cref="TemplatesFolder"/> is set. Any other value without a
+    /// <see cref="TemplatesFolder"/> makes the whole root the templates folder, as for Office's
+    /// personal and workgroup template folders.
+    /// </summary>
+    public TemplateLocationKind TemplateLocation { get; set; }
+
+    /// <summary>
+    /// Gets or sets whether the connection refuses every write: saving, creating and removing a
+    /// registration fail with <see cref="ProviderErrorCode.AccessDenied"/> before anything is
+    /// changed. A read-only connection also creates no directory and keeps its registrations in
+    /// memory instead of writing <c>.officeagent/index.json</c> under the root, so a templates
+    /// folder people share is never written to. Defaults to <see langword="false"/>.
+    /// </summary>
+    public bool ReadOnly { get; set; }
 }
 
 /// <summary>
@@ -74,15 +100,37 @@ public sealed class FileSystemDocumentProviderOptions
 /// <see cref="CreateAsync"/> are the one case
 /// where the provider owns the bytes it writes: they land directly under the root.
 /// </summary>
-public sealed class FileSystemDocumentProvider : IDocumentProvider, IDocumentCreatingProvider, IConnectionEditingDefaults, IConnectionGranularityDefaults, IConnectionCalculationDefaults
+/// <remarks>
+/// <see cref="ListAsync"/> lists documents under the root without registering them. It never
+/// leaves the root: links, junctions and other reparse points are skipped rather than followed,
+/// and hidden or system entries, dot-prefixed names (the index directory and staging files) and
+/// Office lock files (<c>~$*</c>) are not listed. A recursive listing descends at most
+/// <see cref="MaximumListingDepth"/> folders below the one listed, examines at most
+/// <see cref="MaximumEntriesPerListing"/> entries per call (a page cut short by that bound carries
+/// a continuation token), and reads at most <see cref="MaximumEntriesPerFolder"/> entries of any
+/// one folder, in name order.
+/// </remarks>
+public sealed class FileSystemDocumentProvider : IDocumentProvider, IDocumentCreatingProvider, IDocumentListingProvider, IConnectionTemplateSource, IConnectionEditingDefaults, IConnectionGranularityDefaults, IConnectionCalculationDefaults
 {
     /// <summary>Gets the provider discriminator used in document references.</summary>
     public const string ProviderName = "filesystem";
 
+    /// <summary>How many folders below the listed one a recursive listing descends.</summary>
+    public const int MaximumListingDepth = 8;
+
+    /// <summary>How many files and folders one listing call examines before it returns a page.</summary>
+    public const int MaximumEntriesPerListing = 5000;
+
+    /// <summary>How many entries of one folder a listing reads; the rest of a larger folder is not listed.</summary>
+    public const int MaximumEntriesPerFolder = 10000;
+
     private const string IndexDirectoryName = ".officeagent";
     private const string IndexFileName = "index.json";
+    private const string TokenVersion = "fs1";
 
     private readonly string _root;
+    private readonly string _rootWithSeparator;
+    private readonly string? _templatesDirectory;
     private readonly string _indexPath;
     private readonly long _maximumBytes;
     private readonly HashSet<string> _allowedExtensions;
@@ -109,10 +157,24 @@ public sealed class FileSystemDocumentProvider : IDocumentProvider, IDocumentCre
         DefaultChangeGranularity = options.DefaultChangeGranularity;
         CalculateFormulas = options.CalculateFormulas;
         RejectFormulaErrors = options.RejectFormulaErrors;
+        ReadOnly = options.ReadOnly;
         _root = Path.GetFullPath(options.RootPath);
-        Directory.CreateDirectory(_root);
-        Directory.CreateDirectory(Path.Combine(_root, IndexDirectoryName));
+        var separator = Path.DirectorySeparatorChar.ToString();
+        _rootWithSeparator = _root.EndsWith(separator, StringComparison.Ordinal) ? _root : _root + separator;
+        if (!ReadOnly)
+        {
+            Directory.CreateDirectory(_root);
+            Directory.CreateDirectory(Path.Combine(_root, IndexDirectoryName));
+        }
         _indexPath = Path.Combine(_root, IndexDirectoryName, IndexFileName);
+
+        (TemplatesFolder, _templatesDirectory) = ResolveTemplatesFolder(options.TemplatesFolder);
+        TemplateLocation = options.TemplateLocation == TemplateLocationKind.None && TemplatesFolder is not null
+            ? TemplateLocationKind.Connection
+            : options.TemplateLocation;
+        // A template location with no folder named is a template location as a whole.
+        if (_templatesDirectory is null && TemplateLocation != TemplateLocationKind.None)
+            _templatesDirectory = _root;
         _maximumBytes = options.MaximumBytes;
         if (options.AllowedExtensions is null || options.AllowedExtensions.Count == 0)
             throw new ArgumentException("At least one allowed document extension is required.", nameof(options));
@@ -141,6 +203,19 @@ public sealed class FileSystemDocumentProvider : IDocumentProvider, IDocumentCre
     /// <inheritdoc />
     public bool RejectFormulaErrors { get; }
 
+    /// <summary>
+    /// Gets whether the connection refuses every write; see
+    /// <see cref="FileSystemDocumentProviderOptions.ReadOnly"/>.
+    /// </summary>
+    public bool ReadOnly { get; }
+
+    /// <inheritdoc />
+    /// <remarks>The folder relative to the root, with <c>/</c> separators, or <see langword="null"/>.</remarks>
+    public string? TemplatesFolder { get; }
+
+    /// <inheritdoc />
+    public TemplateLocationKind TemplateLocation { get; }
+
     /// <inheritdoc />
     public async Task<DocumentReference> RegisterAsync(
         string source,
@@ -168,6 +243,7 @@ public sealed class FileSystemDocumentProvider : IDocumentProvider, IDocumentCre
         CancellationToken cancellationToken = default)
     {
         if (content is null) throw new ArgumentNullException(nameof(content));
+        RefuseWhenReadOnly(itemId: null);
 
         var fileName = ValidateCreateName(name);
         var destinationPath = Path.Combine(_root, fileName);
@@ -280,6 +356,7 @@ public sealed class FileSystemDocumentProvider : IDocumentProvider, IDocumentCre
         CancellationToken cancellationToken = default)
     {
         ValidateReference(source);
+        RefuseWhenReadOnly(source.ItemId);
 
         // The optimistic check reads the file and the publish writes it. Without holding
         // the item's gate across both, two callers that read the same version both pass
@@ -407,6 +484,7 @@ public sealed class FileSystemDocumentProvider : IDocumentProvider, IDocumentCre
         CancellationToken cancellationToken = default)
     {
         ValidateReference(reference);
+        RefuseWhenReadOnly(reference.ItemId);
         await _indexLock.WaitAsync(cancellationToken).ConfigureAwait(false);
         try
         {
@@ -420,6 +498,333 @@ public sealed class FileSystemDocumentProvider : IDocumentProvider, IDocumentCre
         }
     }
 
+    // ── Listing ───────────────────────────────────────────────────────────────
+
+    /// <inheritdoc />
+    /// <remarks>
+    /// Entries are returned in name order, folder by folder, and each <see cref="DocumentListEntry.Source"/>
+    /// is the path relative to the root with <c>/</c> separators. A file the connection would not
+    /// register is not listed: one whose extension it does not allow, a macro-enabled one, or one
+    /// over its size limit. The continuation token names the last entry examined, relative to the
+    /// listed folder; it is only ever compared with names found under that folder, never opened,
+    /// so a forged one cannot reach outside the root.
+    /// </remarks>
+    public Task<DocumentListPage> ListAsync(DocumentListQuery query, CancellationToken cancellationToken = default)
+    {
+        if (query is null) throw new ArgumentNullException(nameof(query));
+        try
+        {
+            return Task.FromResult(List(query, cancellationToken));
+        }
+        catch (Exception ex)
+        {
+            return Task.FromException<DocumentListPage>(ex);
+        }
+    }
+
+    private DocumentListPage List(DocumentListQuery query, CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+
+        string listingRoot;
+        if (query.Templates)
+        {
+            if (_templatesDirectory is null) return new DocumentListPage();
+            listingRoot = _templatesDirectory;
+        }
+        else
+        {
+            listingRoot = _root;
+        }
+
+        var fingerprint = DocumentListingRules.Fingerprint(query, ProviderName);
+        var resume = ParseListingToken(query.ContinuationToken, fingerprint);
+        var folder = ResolveListingFolder(listingRoot, query.Folder);
+        // Every component below the root, the templates folder included, is checked before the
+        // folder is opened: enumerating through a link would list whatever it points at.
+        if (folder.StartsWith(_rootWithSeparator, StringComparison.Ordinal))
+            EnsureNoReparsePoints(folder, _rootWithSeparator);
+        // A folder that is not there lists nothing rather than failing: a templates folder the
+        // host named may simply not have been created yet.
+        if (!Directory.Exists(folder)) return new DocumentListPage();
+
+        var walk = new ListingWalk(this, query, listingRoot, cancellationToken);
+        walk.Visit(new DirectoryInfo(folder), new List<string>(), depth: 0, resume, isListedFolder: true);
+
+        string? token = null;
+        if (walk.More)
+        {
+            var position = walk.LastVisited ?? (resume is null ? null : string.Join("/", resume));
+            if (position is not null)
+                token = DocumentListingRules.EncodeToken($"{TokenVersion}\n{fingerprint}\n{position}");
+        }
+
+        return new DocumentListPage { Items = walk.Items, ContinuationToken = token };
+    }
+
+    /// <summary>The path segments a token resumes after, or <see langword="null"/> for the first page.</summary>
+    private string[]? ParseListingToken(string? token, string fingerprint)
+    {
+        if (string.IsNullOrWhiteSpace(token)) return null;
+
+        var parts = DocumentListingRules.DecodeToken(token!)?.Split(new[] { '\n' }, 3);
+        if (parts is not { Length: 3 } || parts[0] != TokenVersion || parts[2].Length == 0)
+            throw Error(ProviderErrorCode.InvalidArgument,
+                "The continuation token is not one this connection issued. Start the listing again without it.");
+        if (!string.Equals(parts[1], fingerprint, StringComparison.Ordinal))
+            throw Error(ProviderErrorCode.InvalidArgument,
+                "The continuation token belongs to a listing with a different folder or filter. Repeat that query, or start again without the token.");
+
+        return parts[2].Split('/');
+    }
+
+    /// <summary>
+    /// Resolves the folder to list under <paramref name="listingRoot"/>, with the same boundary
+    /// checks registration applies to a source: it must stay under the listing root, outside the
+    /// index directory, and reach it through no link.
+    /// </summary>
+    private string ResolveListingFolder(string listingRoot, string? folder)
+    {
+        if (string.IsNullOrWhiteSpace(folder)) return listingRoot;
+
+        var trimmed = folder!.Trim().Replace('/', Path.DirectorySeparatorChar).Replace('\\', Path.DirectorySeparatorChar);
+        var fullPath = Path.GetFullPath(Path.IsPathRooted(trimmed) ? trimmed : Path.Combine(listingRoot, trimmed))
+            .TrimEnd(Path.DirectorySeparatorChar);
+        var listingRootWithSeparator = listingRoot.EndsWith(Path.DirectorySeparatorChar.ToString(), StringComparison.Ordinal)
+            ? listingRoot
+            : listingRoot + Path.DirectorySeparatorChar;
+
+        if (!string.Equals(fullPath, listingRoot.TrimEnd(Path.DirectorySeparatorChar), StringComparison.Ordinal) &&
+            !fullPath.StartsWith(listingRootWithSeparator, StringComparison.Ordinal))
+            throw Error(ProviderErrorCode.AccessDenied,
+                "The folder must lie under the connection's root" + (listingRoot == _root ? "." : " templates folder."));
+
+        var indexDirectory = Path.Combine(_root, IndexDirectoryName);
+        if (string.Equals(fullPath, indexDirectory, StringComparison.Ordinal) ||
+            fullPath.StartsWith(indexDirectory + Path.DirectorySeparatorChar, StringComparison.Ordinal))
+            throw Error(ProviderErrorCode.AccessDenied, "The provider's own index directory cannot be listed.");
+
+        if (File.Exists(fullPath))
+            throw Error(ProviderErrorCode.InvalidArgument, "The folder names a file, not a folder.");
+        return fullPath;
+    }
+
+    /// <summary>The entry's path relative to the root, with <c>/</c> separators: what registration accepts.</summary>
+    private string RelativeToRoot(string fullPath) =>
+        fullPath.Substring(_rootWithSeparator.Length).Replace(Path.DirectorySeparatorChar, '/');
+
+    /// <summary>
+    /// One listing call: a depth-first walk in name order that stops when the page is full or
+    /// the work bound is reached, remembering the last entry it examined.
+    /// </summary>
+    private sealed class ListingWalk
+    {
+        private readonly FileSystemDocumentProvider _provider;
+        private readonly DocumentListQuery _query;
+        private readonly string _listingRoot;
+        private readonly HashSet<string> _extensions;
+        private readonly int _pageSize;
+        private readonly CancellationToken _cancellationToken;
+        private int _budget = MaximumEntriesPerListing;
+
+        public ListingWalk(FileSystemDocumentProvider provider, DocumentListQuery query, string listingRoot, CancellationToken cancellationToken)
+        {
+            _provider = provider;
+            _query = query;
+            _listingRoot = listingRoot;
+            _extensions = DocumentListingRules.Extensions(query, provider._allowedExtensions);
+            _pageSize = DocumentListingRules.PageSize(query);
+            _cancellationToken = cancellationToken;
+        }
+
+        public List<DocumentListEntry> Items { get; } = new();
+
+        /// <summary>The last entry examined, relative to the listed folder.</summary>
+        public string? LastVisited { get; private set; }
+
+        /// <summary>Whether the walk stopped before it ran out of entries.</summary>
+        public bool More { get; private set; }
+
+        /// <summary>
+        /// Visits one folder's entries in name order. Returns <see langword="false"/> once the
+        /// walk has stopped. <paramref name="resume"/>, when set, skips everything up to and
+        /// including the entry it names, so the walk continues exactly where a token left it.
+        /// </summary>
+        public bool Visit(DirectoryInfo directory, List<string> prefix, int depth, string[]? resume, bool isListedFolder)
+        {
+            _cancellationToken.ThrowIfCancellationRequested();
+            var entries = Entries(directory, isListedFolder);
+            var level = prefix.Count;
+
+            foreach (var entry in entries)
+            {
+                var isFolder = entry is DirectoryInfo;
+                var descend = isFolder && _query.Recursive && depth < MaximumListingDepth;
+                if (isFolder && !_query.Recursive) continue;
+
+                if (resume is not null && level < resume.Length)
+                {
+                    var order = CompareNames(entry.Name, resume[level]);
+                    if (order < 0) continue;
+                    if (order == 0)
+                    {
+                        // The token names this entry or something beneath it. A file it names was
+                        // already examined; a folder it names was entered, so continue inside it.
+                        if (descend &&
+                            !Visit((DirectoryInfo)entry, Append(prefix, entry.Name), depth + 1,
+                                level < resume.Length - 1 ? resume : null, isListedFolder: false))
+                            return false;
+                        continue;
+                    }
+                }
+
+                if (_budget == 0)
+                {
+                    More = true;
+                    return false;
+                }
+
+                var path = string.Join("/", Append(prefix, entry.Name));
+                if (entry is FileInfo file && Lists(file))
+                {
+                    if (Items.Count == _pageSize)
+                    {
+                        // Another match exists, so the page is not the last one. The token points
+                        // just before it, so the next page starts here.
+                        More = true;
+                        return false;
+                    }
+                    Items.Add(_provider.EntryFor(file, _listingRoot));
+                }
+
+                _budget--;
+                LastVisited = path;
+                if (descend && !Visit((DirectoryInfo)entry, Append(prefix, entry.Name), depth + 1, null, isListedFolder: false))
+                    return false;
+            }
+
+            return true;
+        }
+
+        private bool Lists(FileInfo file) =>
+            DocumentListingRules.Matches(file.Name, _extensions, _query) &&
+            file.Length <= _provider._maximumBytes;
+
+        /// <summary>
+        /// A folder's listable entries in name order. A subfolder that cannot be read is
+        /// skipped rather than failing the whole listing; the listed folder itself reports why.
+        /// </summary>
+        private List<FileSystemInfo> Entries(DirectoryInfo directory, bool isListedFolder)
+        {
+            var entries = new List<FileSystemInfo>();
+            try
+            {
+                foreach (var entry in directory.EnumerateFileSystemInfos())
+                {
+                    if (!Listable(entry)) continue;
+                    entries.Add(entry);
+                    if (entries.Count == MaximumEntriesPerFolder) break;
+                }
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or System.Security.SecurityException)
+            {
+                if (!isListedFolder) return new List<FileSystemInfo>();
+                // The framework message names the absolute path, so it stays on the inner exception.
+                throw _provider.Error(ProviderErrorCode.IO, "The folder could not be listed.", itemId: null, ex);
+            }
+
+            entries.Sort((left, right) => CompareNames(left.Name, right.Name));
+            return entries;
+        }
+
+        /// <summary>
+        /// Whether an entry may appear at all. Links and junctions are never followed, so a
+        /// listing cannot leave the root; hidden, system and dot-prefixed entries are the host's
+        /// and the provider's own; <c>~$</c> files are Office's lock files for open documents.
+        /// </summary>
+        private static bool Listable(FileSystemInfo entry)
+        {
+            var attributes = entry.Attributes;
+            if ((attributes & (FileAttributes.ReparsePoint | FileAttributes.Hidden | FileAttributes.System)) != 0)
+                return false;
+            return !entry.Name.StartsWith(".", StringComparison.Ordinal) &&
+                   !entry.Name.StartsWith("~$", StringComparison.Ordinal);
+        }
+
+        private static List<string> Append(List<string> prefix, string name) => new(prefix) { name };
+
+        /// <summary>Name order: case-insensitive, with an ordinal tie-break so the order is total.</summary>
+        private static int CompareNames(string left, string right)
+        {
+            var order = StringComparer.OrdinalIgnoreCase.Compare(left, right);
+            return order != 0 ? order : StringComparer.Ordinal.Compare(left, right);
+        }
+    }
+
+    private DocumentListEntry EntryFor(FileInfo file, string listingRoot)
+    {
+        var directory = file.DirectoryName ?? listingRoot;
+        var trimmedRoot = listingRoot.TrimEnd(Path.DirectorySeparatorChar);
+        string? folder = string.Equals(directory, trimmedRoot, StringComparison.Ordinal)
+            ? null
+            : directory.Substring(trimmedRoot.Length + 1).Replace(Path.DirectorySeparatorChar, '/');
+
+        return new DocumentListEntry
+        {
+            Source = RelativeToRoot(file.FullName),
+            Name = file.Name,
+            Folder = folder,
+            ContentType = ContentTypeFor(file.Name),
+            Length = file.Length,
+            LastModified = new DateTimeOffset(file.LastWriteTimeUtc, TimeSpan.Zero),
+            IsTemplate = DocumentListingRules.IsTemplateName(file.Name) || IsInTemplatesDirectory(file.FullName)
+        };
+    }
+
+    private bool IsInTemplatesDirectory(string fullPath) =>
+        _templatesDirectory is not null &&
+        (string.Equals(_templatesDirectory, _root, StringComparison.Ordinal) ||
+         fullPath.StartsWith(_templatesDirectory + Path.DirectorySeparatorChar, StringComparison.Ordinal));
+
+    /// <summary>
+    /// Validates the configured templates folder: relative, inside the root and outside the
+    /// index directory. It need not exist yet; listing a missing one lists nothing.
+    /// </summary>
+    private (string? Display, string? FullPath) ResolveTemplatesFolder(string? configured)
+    {
+        if (string.IsNullOrWhiteSpace(configured)) return (null, null);
+
+        var trimmed = configured!.Trim().Replace('\\', '/').Trim('/');
+        if (Path.IsPathRooted(configured.Trim()))
+            throw new ArgumentException(
+                "TemplatesFolder must be a folder relative to the connection root, not an absolute path.", "options");
+
+        var fullPath = Path.GetFullPath(Path.Combine(_root, trimmed.Replace('/', Path.DirectorySeparatorChar)))
+            .TrimEnd(Path.DirectorySeparatorChar);
+        if (string.Equals(fullPath, _root.TrimEnd(Path.DirectorySeparatorChar), StringComparison.Ordinal))
+            throw new ArgumentException(
+                "TemplatesFolder must name a folder below the connection root. To make the whole connection " +
+                "a template location, leave TemplatesFolder empty and set TemplateLocation instead.", "options");
+        if (!fullPath.StartsWith(_rootWithSeparator, StringComparison.Ordinal))
+            throw new ArgumentException("TemplatesFolder must stay inside the connection root.", "options");
+        var indexDirectory = Path.Combine(_root, IndexDirectoryName);
+        if (string.Equals(fullPath, indexDirectory, StringComparison.Ordinal) ||
+            fullPath.StartsWith(indexDirectory + Path.DirectorySeparatorChar, StringComparison.Ordinal))
+            throw new ArgumentException("TemplatesFolder cannot be the provider's own index directory.", "options");
+
+        return (RelativeToRoot(fullPath), fullPath);
+    }
+
+    /// <summary>The refusal every write on a read-only connection meets before anything is touched.</summary>
+    private void RefuseWhenReadOnly(string? itemId)
+    {
+        if (ReadOnly)
+            throw Error(ProviderErrorCode.AccessDenied,
+                "This connection is read-only: documents in it can be listed, opened and used as templates, " +
+                "but not saved, created or removed. Nothing was changed.",
+                itemId);
+    }
+
     // ── Registry plumbing ─────────────────────────────────────────────────────
 
     private async Task<string> MintAndPersistAsync(string fullPath, CancellationToken cancellationToken)
@@ -429,6 +834,9 @@ public sealed class FileSystemDocumentProvider : IDocumentProvider, IDocumentCre
         {
             var id = NewItemId();
             _index[id] = fullPath;
+            // A read-only connection keeps its registrations in memory: writing the index would
+            // be a write under a root the host said must not be written.
+            if (ReadOnly) return id;
             try
             {
                 await PersistIndexAsync(cancellationToken).ConfigureAwait(false);

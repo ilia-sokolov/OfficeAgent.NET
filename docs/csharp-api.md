@@ -2393,6 +2393,7 @@ Working with an Excel workbook
 public bool RequirePlanSnapshot { get; init; }
 public AIFunction[] AsAIFunctions();
 public AIFunction[] AsAIFunctions(OfficeAgentToolsOptions options);
+public IReadOnlyList<ConnectionListing> DescribeListings();
 public Task<EngineCapabilities> DescribeCapabilitiesAsync(CancellationToken cancellationToken = default);
 public Task<string> ApplyPlan(string connectionId, string documentId, string planJson, string saveMode = "Replace", string newName = "", CancellationToken cancellationToken = default);
 public Task<string> CompareDocuments(string originalConnectionId, string originalDocumentId, string revisedConnectionId, string revisedDocumentId, string revisionAuthor = "OfficeAgent Compare", CancellationToken cancellationToken = default);
@@ -2405,9 +2406,11 @@ public Task<string> EditDocumentContent(string contentBase64, string planJson, b
 public Task<string> EditDocuments(string connectionId, string[] sources, string planJson, bool preview = false, string saveMode = "Replace", CancellationToken cancellationToken = default);
 public Task<string> ExportDocumentContent(string connectionId, string documentId, CancellationToken cancellationToken = default);
 public Task<string> FindInDocument(string connectionId, string documentId, string pattern, bool regex = false, bool wholeWord = false, bool caseSensitive = false, string spreadsheetValueView = "both", CancellationToken cancellationToken = default);
+public Task<string> FindTemplates(string format = "", string nameContains = "", int maximumResults = 50, CancellationToken cancellationToken = default);
 public Task<string> ImportDocumentContent(string connectionId, string name, string contentBase64, CancellationToken cancellationToken = default);
 public Task<string> InspectDocument(string connectionId, string documentId, string fidelity = "content", int paragraphOffset = 0, int paragraphLimit = 200, uint sheetId = 0, string range = "", int maximumCells = 1000, CancellationToken cancellationToken = default);
 public Task<string> InspectDocumentContent(string contentBase64, string fidelity = "content", int paragraphOffset = 0, int paragraphLimit = 200, uint sheetId = 0, string range = "", int maximumCells = 1000, CancellationToken cancellationToken = default);
+public Task<string> ListDocuments(string connectionId, string folder = "", string nameContains = "", string extensions = "", bool recursive = false, bool templates = false, int maximumResults = 100, string continuation = "", CancellationToken cancellationToken = default);
 public Task<string> MergeDocuments(string planJson, string destinationConnectionId, string outputName, CancellationToken cancellationToken = default);
 public Task<string> OpenDocument(string connectionId, string source, string fidelity = "content", int paragraphOffset = 0, int paragraphLimit = 200, uint sheetId = 0, string range = "", int maximumCells = 1000, CancellationToken cancellationToken = default);
 public Task<string> PopulateTemplateBatch(string connectionId, string documentId, string requestJson, string expectedTokenJson = "", CancellationToken cancellationToken = default);
@@ -2712,6 +2715,19 @@ public IReadOnlyList<WorkflowDiagnostic> Diagnostics { get; init; }
 public IReadOnlyList<DocumentMergeSourceReport> Sources { get; init; }
 ```
 
+### `OfficeAgent.Core.DocumentProviders.ConnectionListing`
+
+```csharp
+public sealed class ConnectionListing
+public ConnectionListing();
+public string ConnectionId { get; init; }
+public bool HasTemplates { get; }
+public bool Listable { get; init; }
+public string Provider { get; init; }
+public TemplateLocationKind TemplateLocation { get; init; }
+public string? TemplatesFolder { get; init; }
+```
+
 ### `OfficeAgent.Core.DocumentProviders.DocumentContent`
 
 ```csharp
@@ -2720,6 +2736,43 @@ public DocumentContent(DocumentReference reference, Stream stream);
 public DocumentReference Reference { get; }
 public Stream Stream { get; }
 public void Dispose();
+```
+
+### `OfficeAgent.Core.DocumentProviders.DocumentListEntry`
+
+```csharp
+public sealed class DocumentListEntry
+public DocumentListEntry();
+public string ContentType { get; init; }
+public string? Folder { get; init; }
+public bool IsTemplate { get; init; }
+public DateTimeOffset? LastModified { get; init; }
+public long? Length { get; init; }
+public string Name { get; init; }
+public string Source { get; init; }
+```
+
+### `OfficeAgent.Core.DocumentProviders.DocumentListPage`
+
+```csharp
+public sealed class DocumentListPage
+public DocumentListPage();
+public string? ContinuationToken { get; init; }
+public IReadOnlyList<DocumentListEntry> Items { get; init; }
+```
+
+### `OfficeAgent.Core.DocumentProviders.DocumentListQuery`
+
+```csharp
+public sealed class DocumentListQuery
+public DocumentListQuery();
+public string? ContinuationToken { get; init; }
+public IReadOnlyList<string>? Extensions { get; init; }
+public string? Folder { get; init; }
+public int MaximumResults { get; init; }
+public string? NameContains { get; init; }
+public bool Recursive { get; init; }
+public bool Templates { get; init; }
 ```
 
 ### `OfficeAgent.Core.DocumentProviders.DocumentProviderException`
@@ -2742,8 +2795,10 @@ public IReadOnlyList<IDocumentProvider> All { get; }
 public IReadOnlyList<ValueTuple<string, string>> Connections { get; }
 public ChangeGranularity DefaultChangeGranularityFor(string connectionId);
 public ChangeMode DefaultChangeModeFor(string connectionId);
+public IDocumentListingProvider ResolveListing(string connectionId);
 public IDocumentProvider Resolve(DocumentReference reference);
 public IDocumentProvider ResolveConnection(string connectionId);
+public IReadOnlyList<ConnectionListing> DescribeListings();
 public bool Contains(string provider, string connectionId);
 ```
 
@@ -2782,17 +2837,24 @@ public string OutputSha256 { get; }
 ### `OfficeAgent.Core.DocumentProviders.FileSystemDocumentProvider`
 
 ```csharp
-public sealed class FileSystemDocumentProvider : OfficeAgent.Core.DocumentProviders.IConnectionCalculationDefaults, OfficeAgent.Core.DocumentProviders.IConnectionEditingDefaults, OfficeAgent.Core.DocumentProviders.IConnectionGranularityDefaults, OfficeAgent.Core.DocumentProviders.IDocumentCreatingProvider, OfficeAgent.Core.DocumentProviders.IDocumentProvider
+public sealed class FileSystemDocumentProvider : OfficeAgent.Core.DocumentProviders.IConnectionCalculationDefaults, OfficeAgent.Core.DocumentProviders.IConnectionEditingDefaults, OfficeAgent.Core.DocumentProviders.IConnectionGranularityDefaults, OfficeAgent.Core.DocumentProviders.IConnectionTemplateSource, OfficeAgent.Core.DocumentProviders.IDocumentCreatingProvider, OfficeAgent.Core.DocumentProviders.IDocumentListingProvider, OfficeAgent.Core.DocumentProviders.IDocumentProvider
 public FileSystemDocumentProvider(FileSystemDocumentProviderOptions options);
+public const int MaximumEntriesPerFolder = 10000;
+public const int MaximumEntriesPerListing = 5000;
+public const int MaximumListingDepth = 8;
 public const string ProviderName = "filesystem";
 public bool CalculateFormulas { get; }
 public string ConnectionId { get; }
 public ChangeGranularity DefaultChangeGranularity { get; }
 public ChangeMode DefaultChangeMode { get; }
 public string Provider { get; }
+public bool ReadOnly { get; }
 public bool RejectFormulaErrors { get; }
+public TemplateLocationKind TemplateLocation { get; }
+public string? TemplatesFolder { get; }
 public Task RemoveAsync(DocumentReference reference, CancellationToken cancellationToken = default);
 public Task<DocumentContent> OpenReadAsync(DocumentReference reference, CancellationToken cancellationToken = default);
+public Task<DocumentListPage> ListAsync(DocumentListQuery query, CancellationToken cancellationToken = default);
 public Task<DocumentReference> CreateAsync(string name, Stream content, CancellationToken cancellationToken = default);
 public Task<DocumentReference> RegisterAsync(string source, CancellationToken cancellationToken = default);
 public Task<DocumentReference> SaveAsync(DocumentReference source, Stream content, SaveDocumentOptions options, CancellationToken cancellationToken = default);
@@ -2809,8 +2871,11 @@ public string ConnectionId { get; set; }
 public ChangeGranularity DefaultChangeGranularity { get; set; }
 public ChangeMode DefaultChangeMode { get; set; }
 public long MaximumBytes { get; set; }
+public bool ReadOnly { get; set; }
 public bool RejectFormulaErrors { get; set; }
 public string RootPath { get; set; }
+public TemplateLocationKind TemplateLocation { get; set; }
+public string? TemplatesFolder { get; set; }
 ```
 
 ### `OfficeAgent.Core.DocumentProviders.IConnectionCalculationDefaults`
@@ -2835,11 +2900,26 @@ public interface IConnectionGranularityDefaults
 public ChangeGranularity DefaultChangeGranularity { get; }
 ```
 
+### `OfficeAgent.Core.DocumentProviders.IConnectionTemplateSource`
+
+```csharp
+public interface IConnectionTemplateSource
+public TemplateLocationKind TemplateLocation { get; }
+public string? TemplatesFolder { get; }
+```
+
 ### `OfficeAgent.Core.DocumentProviders.IDocumentCreatingProvider`
 
 ```csharp
 public interface IDocumentCreatingProvider : OfficeAgent.Core.DocumentProviders.IDocumentProvider
 public Task<DocumentReference> CreateAsync(string name, Stream content, CancellationToken cancellationToken = default);
+```
+
+### `OfficeAgent.Core.DocumentProviders.IDocumentListingProvider`
+
+```csharp
+public interface IDocumentListingProvider : OfficeAgent.Core.DocumentProviders.IDocumentProvider
+public Task<DocumentListPage> ListAsync(DocumentListQuery query, CancellationToken cancellationToken = default);
 ```
 
 ### `OfficeAgent.Core.DocumentProviders.IDocumentProvider`
@@ -2857,7 +2937,7 @@ public Task<DocumentReference> SaveAsync(DocumentReference source, Stream conten
 ### `OfficeAgent.Core.DocumentProviders.MemoryDocumentProvider`
 
 ```csharp
-public sealed class MemoryDocumentProvider : OfficeAgent.Core.DocumentProviders.IConnectionCalculationDefaults, OfficeAgent.Core.DocumentProviders.IConnectionEditingDefaults, OfficeAgent.Core.DocumentProviders.IConnectionGranularityDefaults, OfficeAgent.Core.DocumentProviders.IDocumentCreatingProvider, OfficeAgent.Core.DocumentProviders.IDocumentProvider
+public sealed class MemoryDocumentProvider : OfficeAgent.Core.DocumentProviders.IConnectionCalculationDefaults, OfficeAgent.Core.DocumentProviders.IConnectionEditingDefaults, OfficeAgent.Core.DocumentProviders.IConnectionGranularityDefaults, OfficeAgent.Core.DocumentProviders.IDocumentCreatingProvider, OfficeAgent.Core.DocumentProviders.IDocumentListingProvider, OfficeAgent.Core.DocumentProviders.IDocumentProvider
 public MemoryDocumentProvider(string connectionId, MemoryDocumentProviderOptions? options = null);
 public const string ProviderName = "memory";
 public bool CalculateFormulas { get; }
@@ -2873,6 +2953,7 @@ public DocumentReference Describe(string itemId);
 public IReadOnlyList<DocumentReference> List();
 public Task RemoveAsync(DocumentReference reference, CancellationToken cancellationToken = default);
 public Task<DocumentContent> OpenReadAsync(DocumentReference reference, CancellationToken cancellationToken = default);
+public Task<DocumentListPage> ListAsync(DocumentListQuery query, CancellationToken cancellationToken = default);
 public Task<DocumentReference> CreateAsync(string name, Stream content, CancellationToken cancellationToken = default);
 public Task<DocumentReference> RegisterAsync(string source, CancellationToken cancellationToken = default);
 public Task<DocumentReference> SaveAsync(DocumentReference source, Stream content, SaveDocumentOptions options, CancellationToken cancellationToken = default);
@@ -2929,6 +3010,17 @@ RegistrationFailed = 12
 public static class ServiceCollectionExtensions
 public static IServiceCollection AddFileSystemDocumentProvider(IServiceCollection services, string connectionId, string rootPath, Action<FileSystemDocumentProviderOptions>? configure = null);
 public static IServiceCollection AddMemoryDocumentProvider(IServiceCollection services, string connectionId, Action<MemoryDocumentProviderOptions>? configure = null);
+```
+
+### `OfficeAgent.Core.DocumentProviders.TemplateLocationKind`
+
+```csharp
+public enum TemplateLocationKind : System.IComparable, System.IConvertible, System.IFormattable, System.ISpanFormattable
+None = 0
+Connection = 1
+Personal = 2
+Workgroup = 3
+Organization = 4
 ```
 
 ### `OfficeAgent.Core.IApplyTimeProvider`
@@ -3084,6 +3176,7 @@ public DocumentComparisonResult CompareDocuments(byte[] original, byte[] revised
 public DocumentMergePreview PreviewMerge(IReadOnlyList<byte[]> sources, DocumentMergeOptions? options = null, CancellationToken cancellationToken = default);
 public DocumentMergeResult CommitMerge(DocumentMergePlan plan, IReadOnlyList<byte[]> sources, CancellationToken cancellationToken = default);
 public EngineCapabilities DescribeCapabilities();
+public IReadOnlyList<ConnectionListing> DescribeListings();
 public IReadOnlyList<FindHit> Find(DocumentHandle handle, FindQuery query);
 public InspectResult Inspect(DocumentHandle handle, InspectOptions? options = null);
 public InspectResult Inspect(byte[] document, InspectOptions? options = null);
@@ -3103,6 +3196,7 @@ public Task<DocumentComparisonResult> CompareDocumentsAsync(DocumentReference or
 public Task<DocumentComparisonResult> CompareDocumentsAsync(string originalConnectionId, string originalDocumentId, string revisedConnectionId, string revisedDocumentId, DocumentComparisonOptions? options = null, CancellationToken cancellationToken = default);
 public Task<DocumentContent> OpenReadAsync(DocumentReference reference, CancellationToken cancellationToken = default);
 public Task<DocumentContent> OpenReadAsync(string connectionId, string documentId, CancellationToken cancellationToken = default);
+public Task<DocumentListPage> ListAsync(string connectionId, DocumentListQuery query, CancellationToken cancellationToken = default);
 public Task<DocumentMergePreview> PreviewMergeAsync(DocumentMergeRequest request, CancellationToken cancellationToken = default);
 public Task<DocumentMergeResult> CommitMergeAsync(DocumentMergePlan plan, string destinationConnectionId, string outputName, CancellationToken cancellationToken = default);
 public Task<DocumentReference> RegisterAsync(string connectionId, string source, CancellationToken cancellationToken = default);
@@ -3691,8 +3785,11 @@ public static IServiceCollection AddSharePointOnBehalfOfAuthentication(IServiceC
 ### `OfficeAgent.SharePoint.SharePointDocumentProvider`
 
 ```csharp
-public sealed class SharePointDocumentProvider : OfficeAgent.Core.DocumentProviders.IConnectionCalculationDefaults, OfficeAgent.Core.DocumentProviders.IConnectionEditingDefaults, OfficeAgent.Core.DocumentProviders.IConnectionGranularityDefaults, OfficeAgent.Core.DocumentProviders.IDocumentCreatingProvider, OfficeAgent.Core.DocumentProviders.IDocumentProvider
+public sealed class SharePointDocumentProvider : OfficeAgent.Core.DocumentProviders.IConnectionCalculationDefaults, OfficeAgent.Core.DocumentProviders.IConnectionEditingDefaults, OfficeAgent.Core.DocumentProviders.IConnectionGranularityDefaults, OfficeAgent.Core.DocumentProviders.IConnectionTemplateSource, OfficeAgent.Core.DocumentProviders.IDocumentCreatingProvider, OfficeAgent.Core.DocumentProviders.IDocumentListingProvider, OfficeAgent.Core.DocumentProviders.IDocumentProvider
 public SharePointDocumentProvider(SharePointDocumentProviderOptions options, HttpClient httpClient, IAccessTokenProvider tokenProvider, ISharePointRegistrationStore? registrationStore = null);
+public const int MaximumListingDepth = 5;
+public const int MaximumListingFolders = 100;
+public const int MaximumListingRequests = 10;
 public const string ProviderName = "sharepoint";
 public bool CalculateFormulas { get; }
 public string ConnectionId { get; }
@@ -3700,8 +3797,11 @@ public ChangeGranularity DefaultChangeGranularity { get; }
 public ChangeMode DefaultChangeMode { get; }
 public string Provider { get; }
 public bool RejectFormulaErrors { get; }
+public TemplateLocationKind TemplateLocation { get; }
+public string? TemplatesFolder { get; }
 public Task RemoveAsync(DocumentReference reference, CancellationToken cancellationToken = default);
 public Task<DocumentContent> OpenReadAsync(DocumentReference reference, CancellationToken cancellationToken = default);
+public Task<DocumentListPage> ListAsync(DocumentListQuery query, CancellationToken cancellationToken = default);
 public Task<DocumentReference> CreateAsync(string name, Stream content, CancellationToken cancellationToken = default);
 public Task<DocumentReference> RegisterAsync(string source, CancellationToken cancellationToken = default);
 public Task<DocumentReference> SaveAsync(DocumentReference source, Stream content, SaveDocumentOptions options, CancellationToken cancellationToken = default);
@@ -3722,6 +3822,8 @@ public ChangeMode DefaultChangeMode { get; set; }
 public string GraphBaseUrl { get; set; }
 public long MaximumBytes { get; set; }
 public bool RejectFormulaErrors { get; set; }
+public TemplateLocationKind TemplateLocation { get; set; }
+public string? TemplatesFolder { get; set; }
 public int UploadSessionChunkBytes { get; set; }
 public long UploadSessionThresholdBytes { get; set; }
 ```

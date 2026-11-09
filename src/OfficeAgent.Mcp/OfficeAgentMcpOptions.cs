@@ -139,6 +139,12 @@ public sealed class OfficeAgentMcpOptions
     /// </remarks>
     public bool RequirePlanSnapshot { get; set; }
 
+    /// <summary>
+    /// Gets or sets the Office template locations: the personal and workgroup template folders
+    /// Word, PowerPoint and Excel show under File > New. Off by default.
+    /// </summary>
+    public OfficeTemplateOptions OfficeTemplates { get; set; } = new();
+
     /// <summary>Gets or sets the filesystem connections to expose.</summary>
     public IList<FileSystemConnectionOptions> FileSystemConnections { get; set; } =
         new List<FileSystemConnectionOptions>();
@@ -217,6 +223,50 @@ public sealed class FileSystemConnectionOptions
     /// <see langword="false"/>.
     /// </summary>
     public bool RejectFormulaErrors { get; set; }
+
+    /// <summary>
+    /// Gets or sets the folder, relative to <see cref="RootPath"/>, that holds this connection's
+    /// templates, such as <c>Templates</c>. <c>list_documents</c> with templates=true lists it and
+    /// <c>find_templates</c> searches it. Empty for none.
+    /// </summary>
+    public string TemplatesFolder { get; set; } = string.Empty;
+
+    /// <summary>
+    /// Gets or sets what kind of template location the connection is: <c>Connection</c> (the
+    /// default when <see cref="TemplatesFolder"/> is set), <c>Personal</c>, <c>Workgroup</c> or
+    /// <c>Organization</c>. Without a <see cref="TemplatesFolder"/>, any of these makes the whole
+    /// root a template location. Bound as a string so a typo names itself at startup.
+    /// </summary>
+    public string TemplateLocation { get; set; } = string.Empty;
+
+    /// <summary>
+    /// Gets or sets whether the connection refuses every save, creation and registration
+    /// removal, and writes no registration index under the root. Use it for a templates folder
+    /// people share. Defaults to <see langword="false"/>.
+    /// </summary>
+    public bool ReadOnly { get; set; }
+}
+
+/// <summary>
+/// The Office template locations the server can add as read-only filesystem connections.
+/// </summary>
+/// <remarks>
+/// On Windows the personal folder is the <c>PersonalTemplates</c> value Word, PowerPoint and
+/// Excel keep under <c>HKCU\Software\Microsoft\Office\16.0\&lt;App&gt;\Options</c>, falling back to
+/// <c>Documents\Custom Office Templates</c>; the workgroup folder is the <c>SharedTemplates</c>
+/// value under <c>HKCU\Software\Policies\Microsoft\Office\16.0\Common\General</c>, then
+/// <c>HKCU\Software\Microsoft\Office\16.0\Common\General</c>. On macOS the personal folder is
+/// <c>~/Library/Group Containers/UBF8T346G9.Office/User Content/Templates</c>. A folder that does
+/// not exist is skipped with a line on stderr. Microsoft's online templates, third-party template
+/// managers and the SharePoint organization assets library are not discovered.
+/// </remarks>
+public sealed class OfficeTemplateOptions
+{
+    /// <summary>
+    /// Gets or sets whether the server adds the <c>office-personal-templates</c> and
+    /// <c>office-workgroup-templates</c> connections. Defaults to <see langword="false"/>.
+    /// </summary>
+    public bool Enabled { get; set; }
 }
 
 /// <summary>
@@ -602,4 +652,19 @@ public sealed class SharePointConnectionOptions
     /// <see langword="false"/>.
     /// </summary>
     public bool RejectFormulaErrors { get; set; }
+
+    /// <summary>
+    /// Gets or sets the folder that holds this connection's templates: a SharePoint/OneDrive
+    /// folder URL or a <c>driveId/itemId</c> pair. An organization assets library is not found
+    /// automatically; name its folder here and set <see cref="TemplateLocation"/> to
+    /// <c>Organization</c>. Empty for none.
+    /// </summary>
+    public string TemplatesFolder { get; set; } = string.Empty;
+
+    /// <summary>
+    /// Gets or sets what kind of template location <see cref="TemplatesFolder"/> is:
+    /// <c>Connection</c> (the default when it is set), <c>Personal</c>, <c>Workgroup</c> or
+    /// <c>Organization</c>.
+    /// </summary>
+    public string TemplateLocation { get; set; } = string.Empty;
 }

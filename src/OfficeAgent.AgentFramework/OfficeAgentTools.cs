@@ -18,7 +18,8 @@ public sealed class OfficeAgentToolsOptions
     /// <summary>
     /// Gets whether the agent may register documents with provider connections and
     /// remove registrations (<c>register_document</c>, <c>remove_document</c>,
-    /// <c>open_document</c>, and <c>edit_document</c>). The
+    /// <c>open_document</c>, and <c>edit_document</c>), and find the sources to register
+    /// (<c>list_documents</c> and <c>find_templates</c>). The
     /// default is <see langword="false"/>: the host pre-registers documents and the
     /// agent only ever sees opaque ids. Enabling this lets the agent hand
     /// provider-relative sources (a path under a filesystem root, or a SharePoint URL
@@ -235,6 +236,13 @@ public sealed class OfficeAgentTools
             _principalAccessor.Principal, connectionId, capability, cancellationToken);
 
     /// <summary>
+    /// Describes which connections can be listed and where their templates are, for a host
+    /// building its own connection discovery. Like <see cref="OfficeAgentClient.DescribeListings"/>
+    /// it applies no access policy; filter with <see cref="CanAccessConnectionAsync"/>.
+    /// </summary>
+    public IReadOnlyList<ConnectionListing> DescribeListings() => _client.DescribeListings();
+
+    /// <summary>
     /// Describes what this caller can actually do: the engine's formats, verbs, wire
     /// versions and ceilings, plus only the connections this principal may use and only
     /// the capabilities they hold on each.
@@ -441,7 +449,8 @@ public sealed class OfficeAgentTools
     /// Returns the AIFunctions selected by <paramref name="options"/>: the seven default
     /// discovery/inspect/find/preview/apply/comparison/merge-preview tools, plus the source-addressed tools
     /// (<c>register_document</c>, <c>remove_document</c>, <c>open_document</c>,
-    /// <c>edit_document</c>) when registration is allowed, and independently
+    /// <c>edit_document</c>) and the listing tools that find a source (<c>list_documents</c>,
+    /// <c>find_templates</c>) when registration is allowed, and independently
     /// <c>create_document</c> when creation is allowed. The composites are gated with
     /// registration because they take the same connection-relative source it does.
     /// </summary>
@@ -462,6 +471,22 @@ public sealed class OfficeAgentTools
                     ? registerSource.TrimEnd() + " "
                     : "source is connection-specific: for a filesystem connection, a path under its root; for a SharePoint connection, the document's SharePoint/OneDrive URL (e.g. 'https://contoso.sharepoint.com/:w:/s/…') or a 'driveId/itemId' pair (e.g. 'b!9a3f…/01ABCDEF'). ") +
                 "Never pass credentials. Returns {connectionId, documentId, name, contentType, version}.")));
+            functions.Add(AIFunctionFactory.Create(ListDocuments, Opts(schema,
+                "list_documents",
+                "List the documents in a connection without opening them, to find a file the user named. " +
+                "folder is a folder in the connection, \"\" for its root; nameContains keeps names containing it, ignoring case; " +
+                "extensions is a comma list such as '.docx,.dotx', \"\" for every extension the connection allows; recursive includes subfolders; " +
+                "templates=true lists the connection's templates folder instead. " +
+                "Returns {connectionId, items: [{source, name, folder, contentType, length, lastModified, isTemplate}], continuation}. " +
+                "Pass an item's source to open_document or edit_document, or as create_document's template source. " +
+                "When continuation is not empty, call again with it and the same arguments for the next page.")));
+            functions.Add(AIFunctionFactory.Create(FindTemplates, Opts(schema,
+                "find_templates",
+                "Find templates in every connection that has a template location: an organization library, a workgroup or personal Office templates folder, or a templates folder in a connection. " +
+                "format is word, powerpoint, excel, or \"\" for all; nameContains keeps names containing it, ignoring case. " +
+                "Returns {templates: [{connectionId, source, name, folder, format, location}], connectionsSearched, connectionsFailed: [{connectionId, code, message}]}, best match first; " +
+                "location is organization, workgroup, personal or connection. " +
+                "Pass connectionId and source to open_document, or as create_document's template source.")));
             functions.Add(AIFunctionFactory.Create(RemoveDocument, Opts(schema,
                 "remove_document",
                 "Remove a document registration from a provider connection by (connectionId, documentId). " +
@@ -1684,6 +1709,220 @@ public sealed class OfficeAgentTools
             await _client.RemoveAsync(connectionId, documentId, cancellationToken).ConfigureAwait(false);
             return JsonSerializer.Serialize(new { removed = true, connectionId, documentId }, Json);
         });
+
+    /// <summary>
+    /// Lists documents in a connection without registering them, so the agent can find the
+    /// source of a document the user named.
+    /// </summary>
+    public Task<string> ListDocuments(
+        string connectionId,
+        string folder = "",
+        string nameContains = "",
+        string extensions = "",
+        bool recursive = false,
+        bool templates = false,
+        int maximumResults = 100,
+        string continuation = "",
+        CancellationToken cancellationToken = default)
+        => SafeAsync("connectionId, folder, or continuation", async () =>
+        {
+            await DemandAccessAsync(connectionId, ConnectionCapability.Read, cancellationToken).ConfigureAwait(false);
+            if (_client.DescribeListings().FirstOrDefault(c => string.Equals(c.ConnectionId, connectionId, StringComparison.Ordinal))
+                is { Listable: false })
+                return SerializeError(ToolErrorCodes.ConfigurationError,
+                    $"Connection '{connectionId}' cannot list its documents. Register a document by its source instead.",
+                    connectionId: connectionId);
+
+            var page = await _client.ListAsync(connectionId, new DocumentListQuery
+            {
+                Folder = Blank(folder),
+                NameContains = Blank(nameContains),
+                Extensions = SplitExtensions(extensions),
+                Recursive = recursive,
+                Templates = templates,
+                MaximumResults = maximumResults,
+                ContinuationToken = Blank(continuation)
+            }, cancellationToken).ConfigureAwait(false);
+
+            return JsonSerializer.Serialize(new
+            {
+                connectionId,
+                items = page.Items.Select(item => new
+                {
+                    source = item.Source,
+                    name = item.Name,
+                    folder = item.Folder,
+                    contentType = item.ContentType,
+                    length = item.Length,
+                    lastModified = item.LastModified,
+                    isTemplate = item.IsTemplate
+                }),
+                continuation = page.ContinuationToken
+            }, Json);
+        });
+
+    /// <summary>
+    /// Searches every connection that has a template location and returns the templates found,
+    /// best match first. A connection that fails is reported beside the results rather than
+    /// failing the call.
+    /// </summary>
+    public Task<string> FindTemplates(
+        string format = "",
+        string nameContains = "",
+        int maximumResults = 50,
+        CancellationToken cancellationToken = default)
+        => SafeAsync(async () =>
+        {
+            var formatExtensions = TemplateFormatExtensions(format);
+            var wanted = Blank(nameContains);
+            var limit = Math.Max(1, Math.Min(DocumentListingMaximum, maximumResults));
+            var found = new List<(int Quality, int Location, string ConnectionId, DocumentListEntry Entry, TemplateLocationKind Kind)>();
+            var failed = new List<object>();
+            var searched = 0;
+
+            foreach (var connection in _client.DescribeListings().Where(c => c.HasTemplates))
+            {
+                // A connection the caller cannot read is passed over without a word, as
+                // describe_capabilities drops it: naming it would disclose that it exists.
+                if (!await CanAccessConnectionAsync(connection.ConnectionId, ConnectionCapability.Read, cancellationToken)
+                        .ConfigureAwait(false))
+                    continue;
+
+                searched++;
+                try
+                {
+                    var page = await _client.ListAsync(connection.ConnectionId, new DocumentListQuery
+                    {
+                        Templates = true,
+                        Recursive = true,
+                        NameContains = wanted,
+                        Extensions = formatExtensions,
+                        MaximumResults = DocumentListingMaximum
+                    }, cancellationToken).ConfigureAwait(false);
+
+                    foreach (var entry in page.Items)
+                    {
+                        if (TemplateFormat(entry.Name) is null) continue;
+                        found.Add((MatchQuality(entry.Name, wanted), LocationRank(connection.TemplateLocation),
+                            connection.ConnectionId, entry, connection.TemplateLocation));
+                    }
+                }
+                catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+                {
+                    throw;
+                }
+                catch (DocumentProviderException ex)
+                {
+                    failed.Add(new
+                    {
+                        connectionId = connection.ConnectionId,
+                        code = ProviderCodeToWire(ex.Code),
+                        message = ProviderMessage(ex.Code, storageArguments: null)
+                    });
+                }
+                catch (Exception ex) when (ex is not OperationCanceledException)
+                {
+                    failed.Add(new
+                    {
+                        connectionId = connection.ConnectionId,
+                        code = ToolErrorCodes.InternalError,
+                        message = "The connection could not be searched."
+                    });
+                }
+            }
+
+            return JsonSerializer.Serialize(new
+            {
+                templates = found
+                    .OrderBy(t => t.Quality)
+                    .ThenBy(t => t.Location)
+                    .ThenBy(t => t.Entry.Name, StringComparer.OrdinalIgnoreCase)
+                    .ThenBy(t => t.ConnectionId, StringComparer.Ordinal)
+                    .Take(limit)
+                    .Select(t => new
+                    {
+                        connectionId = t.ConnectionId,
+                        source = t.Entry.Source,
+                        name = t.Entry.Name,
+                        folder = t.Entry.Folder,
+                        format = TemplateFormat(t.Entry.Name),
+                        location = LocationName(t.Kind)
+                    }),
+                connectionsSearched = searched,
+                connectionsFailed = failed
+            }, Json);
+        });
+
+    /// <summary>The largest page a listing returns, which is also how many templates one connection contributes.</summary>
+    private const int DocumentListingMaximum = 500;
+
+    private static string? Blank(string? value) => string.IsNullOrWhiteSpace(value) ? null : value!.Trim();
+
+    /// <summary>A comma list of extensions, each with its leading dot, or <see langword="null"/> for none.</summary>
+    private static IReadOnlyList<string>? SplitExtensions(string? extensions)
+    {
+        if (string.IsNullOrWhiteSpace(extensions)) return null;
+        var list = extensions!
+            .Split(new[] { ',', ';', ' ' }, StringSplitOptions.RemoveEmptyEntries)
+            .Select(extension => extension.Trim())
+            .Where(extension => extension.Length > 0)
+            .Select(extension => extension.StartsWith(".", StringComparison.Ordinal) ? extension : "." + extension)
+            .ToList();
+        return list.Count == 0 ? null : list;
+    }
+
+    /// <summary>The template and document extensions a format covers; a templates folder may hold either.</summary>
+    private static IReadOnlyList<string>? TemplateFormatExtensions(string format) =>
+        format?.Trim().ToLowerInvariant() switch
+        {
+            null or "" => null,
+            "word" => new[] { ".dotx", ".docx" },
+            "powerpoint" => new[] { ".potx", ".pptx" },
+            "excel" => new[] { ".xltx", ".xlsx" },
+            _ => throw new ArgumentException(
+                $"Unknown format '{format}'. Expected word, powerpoint, excel, or \"\" for all.", nameof(format))
+        };
+
+    private static string? TemplateFormat(string name) =>
+        Path.GetExtension(name).ToLowerInvariant() switch
+        {
+            ".dotx" or ".docx" => "word",
+            ".potx" or ".pptx" or ".ppsx" => "powerpoint",
+            ".xltx" or ".xlsx" => "excel",
+            _ => null
+        };
+
+    /// <summary>
+    /// How well a name answers the search: the whole name, then its start, then the start of a
+    /// word in it, then anywhere. Without a search every name ranks the same.
+    /// </summary>
+    private static int MatchQuality(string name, string? wanted)
+    {
+        if (wanted is null) return 0;
+        var stem = Path.GetFileNameWithoutExtension(name);
+        if (string.Equals(stem, wanted, StringComparison.OrdinalIgnoreCase)) return 0;
+        if (stem.StartsWith(wanted, StringComparison.OrdinalIgnoreCase)) return 1;
+        var index = stem.IndexOf(wanted, StringComparison.OrdinalIgnoreCase);
+        if (index > 0 && !char.IsLetterOrDigit(stem[index - 1])) return 2;
+        return 3;
+    }
+
+    /// <summary>Organization templates first, then a team's, then the user's own, then any connection's.</summary>
+    private static int LocationRank(TemplateLocationKind kind) => kind switch
+    {
+        TemplateLocationKind.Organization => 0,
+        TemplateLocationKind.Workgroup => 1,
+        TemplateLocationKind.Personal => 2,
+        _ => 3
+    };
+
+    private static string LocationName(TemplateLocationKind kind) => kind switch
+    {
+        TemplateLocationKind.Organization => "organization",
+        TemplateLocationKind.Workgroup => "workgroup",
+        TemplateLocationKind.Personal => "personal",
+        _ => "connection"
+    };
 
     private static Task<string> SafeAsync(Func<Task<string>> work) => SafeAsync(null, work);
 

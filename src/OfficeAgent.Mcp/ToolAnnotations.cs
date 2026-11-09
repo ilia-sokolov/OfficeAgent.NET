@@ -40,6 +40,8 @@ internal static class ToolAnnotations
     {
         ["describe_capabilities"] = Reads("Describe capabilities"),
         ["list_connections"] = Reads("List connections"),
+        ["list_documents"] = Reads("List documents in a connection"),
+        ["find_templates"] = Reads("Find templates"),
         ["inspect_document"] = Reads("Inspect a document"),
         ["find_in_document"] = Reads("Find in a document"),
         ["preview_plan"] = Reads("Preview an edit plan"),

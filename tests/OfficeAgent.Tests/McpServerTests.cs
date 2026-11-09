@@ -37,8 +37,10 @@ public class McpServerTests
         var tools = OfficeAgentMcpServer.BuildToolset(options);
 
         var names = tools.Select(t => t.ProtocolTool.Name).ToArray();
-        Assert.Equal(14, names.Length);
+        Assert.Equal(16, names.Length);
         Assert.Contains("open_document", names);
+        Assert.Contains("list_documents", names);
+        Assert.Contains("find_templates", names);
         Assert.Contains("edit_document", names);
         Assert.Contains("edit_documents", names);
         Assert.Contains("inspect_document", names);
@@ -66,7 +68,7 @@ public class McpServerTests
 
         options.AllowCreation = true;
         var names = OfficeAgentMcpServer.BuildToolset(options).Select(t => t.ProtocolTool.Name).ToArray();
-        Assert.Equal(19, names.Length);
+        Assert.Equal(21, names.Length);
         Assert.Contains("create_document", names);
         Assert.Contains("populate_template_batch", names);
 
@@ -87,6 +89,8 @@ public class McpServerTests
         var names = OfficeAgentMcpServer.BuildToolset(options).Select(t => t.ProtocolTool.Name).ToArray();
 
         Assert.Equal(7, names.Length);
+        Assert.DoesNotContain("list_documents", names);
+        Assert.DoesNotContain("find_templates", names);
         Assert.DoesNotContain("populate_template_batch", names);
         Assert.DoesNotContain("discover_template", names);
         Assert.DoesNotContain("preview_template_batch", names);

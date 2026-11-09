@@ -596,6 +596,87 @@ decide.
 A file a label or password has encrypted is refused with `encrypted-document` when it is
 opened, before any plan runs. OfficeAgent does not decrypt, and decryption is not planned.
 
+## List documents and templates
+
+A provider that implements `IDocumentListingProvider` can list what a connection holds, so an
+agent can find a document or a template instead of being told its source. Listing registers
+nothing. Every entry's `Source` is exactly what `RegisterAsync` accepts on the same connection,
+so it can be registered, opened or edited as listed:
+
+```csharp
+var page = await client.ListAsync("contracts", new DocumentListQuery
+{
+    Folder = "2026",              // empty for the connection root
+    NameContains = "acme",        // case-insensitive
+    Extensions = new[] { ".docx" },
+    Recursive = true,
+    MaximumResults = 100          // clamped to 1..500
+});
+
+foreach (var entry in page.Items)
+    Console.WriteLine($"{entry.Folder}/{entry.Name} -> {entry.Source}");
+
+// page.ContinuationToken fetches the next page with the same query.
+var doc = await client.RegisterAsync("contracts", page.Items[0].Source);
+```
+
+`Extensions` narrows the connection's `AllowedExtensions` and never widens it. Macro-enabled
+files (`.docm`, `.dotm`, `.pptm`, `.potm`, `.xlsm`, `.xltm` and the rest) are never listed,
+even when a connection allows them, and neither is a file over the connection's size limit.
+A continuation token is opaque and belongs to the query that produced it: reusing it with
+another folder or filter is refused with `InvalidArgument`. `client.DescribeListings()` reports,
+for every connection, whether it can be listed and where its templates are. A connection whose
+provider does not list fails with `ConfigurationError`.
+
+The built-in providers list as follows:
+
+| Provider | Source | Folder | Bounds |
+| --- | --- | --- | --- |
+| Filesystem | The path relative to the root, with `/` separators, such as `2026/acme.docx` | A folder below the root | At most 8 folders deep, 5,000 entries examined per call, 10,000 entries read per folder |
+| Session (memory) | The document's id | None; the connection has no folders | One page of the documents held |
+| SharePoint | The `driveId/itemId` pair | A folder URL, a `driveId/itemId` pair, or a path such as `Contracts/2026` under the creation folder | At most 5 folders deep, 100 folders per walk, 10 Graph requests per call |
+
+The filesystem provider never leaves its root. Links, junctions and other reparse points are
+skipped rather than followed, a folder reached through one is refused with `AccessDenied`, and
+an entry's folder is shown relative to the listing root, never as an absolute path. Hidden and
+system files, names that start with a dot (the `.officeagent` index and staging files) and
+Office lock files (`~$name.docx`) are not listed. The continuation token names the last entry
+examined; it is only compared with the names found under the listed folder, so a forged token
+cannot reach anything outside it.
+
+The SharePoint provider walks a folder's children through Graph and filters names on its own
+side. It does not use Graph search, whose index lags behind new files and spans the whole drive
+rather than one folder. Graph's own `@odata.nextLink` travels inside the continuation token and
+is followed only when it points at the configured `GraphBaseUrl`, so the bearer token never goes
+anywhere else. A connection with no creation folder lists only a folder named by URL or pair.
+OneDrive drive ids that do not start with `b!` must be written as `drives/{driveId}/items/{itemId}`
+in `Folder`, because a bare pair without that prefix is read as a path.
+
+### Templates folders
+
+A connection can name a templates folder: `TemplatesFolder` on the filesystem options is a
+folder relative to the root, such as `Templates`, and on the SharePoint options a folder URL or
+a `driveId/itemId` pair. `DocumentListQuery.Templates` lists it instead of `Folder` (and
+`Folder` is then a path inside it), and every document listed from it has `IsTemplate` set.
+A `.dotx`, `.potx` or `.xltx` file is reported as a template wherever it is, but only a
+connection whose `AllowedExtensions` include those extensions lists or registers them; the
+default stays `.docx`.
+
+`TemplateLocation` says what kind of location it is: `Connection` (the default once a templates
+folder is set), `Personal`, `Workgroup` or `Organization`. A filesystem connection with a
+location and no templates folder is a template location as a whole, which is how the MCP
+server adds Office's own template folders. Set `Organization` on a SharePoint connection whose
+templates folder is an organization assets library; OfficeAgent does not find that library on
+its own. Both providers implement `IConnectionTemplateSource`, which reports the two values.
+
+### Read-only connections
+
+`FileSystemDocumentProviderOptions.ReadOnly` makes a connection refuse every save, creation and
+registration removal with `AccessDenied` before anything is changed, so a tool reports
+`writeOutcome: notWritten`. Listing, registration and opening still work. A read-only connection
+creates no directory and keeps its registrations in memory instead of writing
+`.officeagent/index.json`, so a templates folder people share is never written to.
+
 ## Remove (unregister) a document
 
 `OfficeAgentClient.RemoveAsync` unregisters a document, by canonical reference or by `(connectionId, documentId)`:

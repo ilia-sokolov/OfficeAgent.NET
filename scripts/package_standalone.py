@@ -59,6 +59,8 @@ BUNDLE_TOOLS = [
     ("refresh_document", "Update a Word report or PowerPoint deck from an Excel workbook."),
     ("compare_documents", "Compare two Word documents and return their paragraph differences."),
     ("preview_document_merge", "Preview assembling Word documents into one, without saving."),
+    ("list_documents", "List the documents in a folder without opening them."),
+    ("find_templates", "Find Word, PowerPoint, and Excel templates in the folders you can address."),
     ("register_document", "Register an existing document and return its id."),
     ("remove_document", "Remove a document registration."),
 ]

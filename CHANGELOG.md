@@ -24,6 +24,26 @@ corresponding GitHub release.
   an author gave them: a PowerPoint shape's Selection Pane name or a Word table's alt-text
   title. Number formats are read with the MIT-licensed ExcelNumberFormat package, which
   `OfficeAgent.Excel` now depends on.
+- **Find documents and templates.** `list_documents` lists a connection's documents, by folder,
+  name, extension and page, without registering anything, and each entry's `source` is what
+  `open_document` and `edit_document` accept. `find_templates` searches every connection with a
+  template location and ranks the matches by name, then organization, workgroup, personal and
+  connection templates; a connection that fails is reported beside the results. Both arrive with
+  `AllowRegistration`. The filesystem, session and SharePoint providers list through the new
+  `IDocumentListingProvider`; a filesystem listing never follows a link out of its root, and a
+  SharePoint listing walks folders through Graph within documented bounds. `list_connections`
+  now reports `listable`, `templatesFolder`, `templateLocation` and `readOnly`. See
+  [list documents and templates](docs/document-providers.md#list-documents-and-templates).
+- **Templates folders and read-only connections.** Filesystem and SharePoint connections take a
+  `TemplatesFolder` and a `TemplateLocation` (`Connection`, `Personal`, `Workgroup` or
+  `Organization`), and a filesystem connection can be `ReadOnly`: it refuses every write and
+  keeps its registrations in memory, so a shared templates folder is never written to.
+- **Office's own template folders.** With `OfficeTemplates:Enabled`, the MCP server adds the
+  personal and workgroup template folders Word, PowerPoint and Excel use, read from the Office
+  registry values on Windows or the Office group container on macOS, as read-only connections.
+  Missing folders are skipped. Microsoft's online templates and the SharePoint organization
+  assets library are not discovered. See
+  [Office template locations](docs/mcp-server.md#office-template-locations).
 
 - **Translate a paragraph and keep its formatting.** Inspection now gives each Word or
   PowerPoint paragraph whose words differ in formatting a `markedText`, such as

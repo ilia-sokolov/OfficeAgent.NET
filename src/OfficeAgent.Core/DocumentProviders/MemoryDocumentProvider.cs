@@ -30,7 +30,7 @@ namespace OfficeAgent.Core.DocumentProviders;
 /// host runs out of memory.
 /// </para>
 /// </remarks>
-public sealed class MemoryDocumentProvider : IDocumentProvider, IDocumentCreatingProvider, IConnectionEditingDefaults, IConnectionGranularityDefaults, IConnectionCalculationDefaults
+public sealed class MemoryDocumentProvider : IDocumentProvider, IDocumentCreatingProvider, IDocumentListingProvider, IConnectionEditingDefaults, IConnectionGranularityDefaults, IConnectionCalculationDefaults
 {
     /// <summary>The provider name reported on references and errors.</summary>
     public const string ProviderName = "memory";
@@ -113,13 +113,84 @@ public sealed class MemoryDocumentProvider : IDocumentProvider, IDocumentCreatin
     /// An ephemeral connection has nothing to register <em>against</em>: there is no path
     /// or URL that names a document the host already has. Content arrives through
     /// <see cref="Add"/> or <see cref="CreateAsync"/> instead, and saying so plainly is
-    /// better than accepting a source and inventing a meaning for it.
+    /// better than accepting a source and inventing a meaning for it. The one source accepted
+    /// is the id of a document the connection already holds, which is what <see cref="ListAsync"/>
+    /// reports as its source: it returns that document's current reference and registers nothing
+    /// new, so removing the result removes the document itself.
     /// </remarks>
-    public Task<DocumentReference> RegisterAsync(string source, CancellationToken cancellationToken = default) =>
+    public Task<DocumentReference> RegisterAsync(string source, CancellationToken cancellationToken = default)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        var id = source?.Trim();
+        if (!string.IsNullOrEmpty(id) && _documents.TryGetValue(id!, out var held))
+            return Task.FromResult(Reference(id!, held));
+
         throw Error(ProviderErrorCode.InvalidArgument,
             $"The '{ConnectionId}' connection keeps documents in memory and has no external source to register. " +
             "Create a document in it, or supply the content directly, instead of naming a path or URL.",
             itemId: null);
+    }
+
+    /// <inheritdoc />
+    /// <remarks>
+    /// Lists the documents the connection holds, in name order. Each entry's source is the
+    /// document's id. The connection has no folders and no templates folder, so a query for
+    /// templates returns an empty page and a folder other than the root is refused.
+    /// </remarks>
+    public Task<DocumentListPage> ListAsync(DocumentListQuery query, CancellationToken cancellationToken = default)
+    {
+        if (query is null) throw new ArgumentNullException(nameof(query));
+        cancellationToken.ThrowIfCancellationRequested();
+        if (query.Templates) return Task.FromResult(new DocumentListPage());
+        if (!string.IsNullOrWhiteSpace(query.Folder) && query.Folder!.Trim() is not ("/" or "." or "\\"))
+            throw Error(ProviderErrorCode.NotFound,
+                $"The '{ConnectionId}' connection has no folders; list it without one.", itemId: null);
+
+        var fingerprint = DocumentListingRules.Fingerprint(query, ProviderName);
+        string? after = null;
+        if (!string.IsNullOrWhiteSpace(query.ContinuationToken))
+        {
+            var parts = DocumentListingRules.DecodeToken(query.ContinuationToken!)?.Split(new[] { '\n' }, 3);
+            if (parts is not { Length: 3 } || parts[0] != "m1" || parts[1] != fingerprint)
+                throw Error(ProviderErrorCode.InvalidArgument,
+                    "The continuation token does not belong to this listing. Start again without it.", itemId: null);
+            after = parts[2];
+        }
+
+        var extensions = DocumentListingRules.Extensions(
+            query, _options.AllowedExtensions.Count == 0 ? DefaultListedExtensions : _options.AllowedExtensions);
+        var pageSize = DocumentListingRules.PageSize(query);
+        // Ordered by name, then id, so the key a token carries is a total position: a document
+        // added or removed between pages moves nothing it has not reached.
+        var matches = _documents
+            .Where(pair => DocumentListingRules.Matches(pair.Value.Name, extensions, query))
+            .Select(pair => (Key: pair.Value.Name.ToLowerInvariant() + "\n" + pair.Key, Id: pair.Key, Entry: pair.Value))
+            .Where(item => after is null || string.CompareOrdinal(item.Key, after) > 0)
+            .OrderBy(item => item.Key, StringComparer.Ordinal)
+            .Take(pageSize + 1)
+            .ToList();
+
+        var page = matches.Take(pageSize).ToList();
+        return Task.FromResult(new DocumentListPage
+        {
+            Items = page.Select(item => new DocumentListEntry
+            {
+                Source = item.Id,
+                Name = item.Entry.Name,
+                ContentType = OfficeContentTypes.ForName(item.Entry.Name),
+                Length = item.Entry.Bytes.LongLength,
+                LastModified = item.Entry.Modified,
+                IsTemplate = DocumentListingRules.IsTemplateName(item.Entry.Name)
+            }).ToList(),
+            ContinuationToken = matches.Count > pageSize
+                ? DocumentListingRules.EncodeToken($"m1\n{fingerprint}\n{page[page.Count - 1].Key}")
+                : null
+        });
+    }
+
+    /// <summary>What an empty allow-list (any extension) lists: the formats the engine edits.</summary>
+    private static readonly string[] DefaultListedExtensions =
+        { ".docx", ".pptx", ".xlsx", ".dotx", ".potx", ".xltx" };
 
     /// <inheritdoc />
     public Task<DocumentContent> OpenReadAsync(
@@ -179,7 +250,7 @@ public sealed class MemoryDocumentProvider : IDocumentProvider, IDocumentCreatin
             if (options.Mode == SaveMode.Replace)
             {
                 RequireRoomUnsafe(bytes.LongLength, replacing: current.Bytes.LongLength);
-                var replaced = new Entry(current.Name, bytes, Version(bytes));
+                var replaced = new Entry(current.Name, bytes, Version(bytes), DateTimeOffset.UtcNow);
                 _documents[source.ItemId] = replaced;
                 return Reference(source.ItemId, replaced);
             }
@@ -239,7 +310,7 @@ public sealed class MemoryDocumentProvider : IDocumentProvider, IDocumentCreatin
 
     // ── Internals ────────────────────────────────────────────────────────
 
-    private sealed record Entry(string Name, byte[] Bytes, string Version);
+    private sealed record Entry(string Name, byte[] Bytes, string Version, DateTimeOffset Modified);
 
     private Entry Locate(string itemId) =>
         _documents.TryGetValue(itemId, out var entry)
@@ -342,7 +413,7 @@ public sealed class MemoryDocumentProvider : IDocumentProvider, IDocumentCreatin
         if (!roomAlreadyChecked) RequireRoomUnsafe(ownedContent.LongLength, replacing: 0);
 
         var itemId = Guid.NewGuid().ToString("N");
-        var entry = new Entry(name, ownedContent, Version(ownedContent));
+        var entry = new Entry(name, ownedContent, Version(ownedContent), DateTimeOffset.UtcNow);
         _documents[itemId] = entry;
         return Reference(itemId, entry);
     }

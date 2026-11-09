@@ -94,7 +94,7 @@ than omitting a property.
 
 | Option | Added tools | Boundary |
 | --- | --- | --- |
-| `AllowRegistration` | `register_document`, `remove_document`, `open_document`, `edit_document`, `edit_documents`, `refresh_document` | Lets the agent name a provider-relative source. The underlying file is never deleted by `remove_document`. |
+| `AllowRegistration` | `register_document`, `remove_document`, `open_document`, `edit_document`, `edit_documents`, `refresh_document`, `list_documents`, `find_templates` | Lets the agent find and name a provider-relative source. The underlying file is never deleted by `remove_document`. |
 | `AllowCreation` | `create_document`, `discover_template`, `preview_template_batch`, `populate_template_batch`, `merge_documents` | Lets the agent create new stored outputs. A preflight is available only when its corresponding commit can also be enabled. |
 | `AllowInlineContent` | `create_document_content`, `inspect_document_content`, `edit_document_content` | Carries the complete document as base64 with no storage. Use for bounded, self-contained calls. |
 | `AllowEphemeralDocuments` | `import_document_content`, `export_document_content` | Transfers bytes into and out of a session connection; ordinary default tools handle the edits between those calls. |
@@ -162,6 +162,8 @@ offers separate least-privilege switches for existing documents and new ones:
 | --- | --- | --- |
 | `register_document(connectionId, source)` | `AllowRegistration` | Registers an existing document with a configured connection and returns its opaque `documentId`. `source` is connection-specific: a path under the filesystem connection's root, or - for a SharePoint connection - the document's SharePoint/OneDrive URL or a `driveId/itemId` pair. Filesystem traversal, disallowed extensions, and oversized files are rejected by the provider. |
 | `remove_document(connectionId, documentId)` | `AllowRegistration` | Removes the registration only - the underlying file is never deleted. |
+| `list_documents(connectionId, folder, nameContains, extensions, recursive, templates, maximumResults, continuation)` | `AllowRegistration` | Lists a connection's documents without registering them; each item's `source` is what `register_document` and `open_document` accept. `extensions` is a comma list; `templates: true` lists the templates folder. See [list documents and templates](document-providers.md#list-documents-and-templates). |
+| `find_templates(format, nameContains, maximumResults)` | `AllowRegistration` | Searches every connection with a template location and ranks the templates found; a connection that fails is reported in `connectionsFailed`. |
 | `open_document(connectionId, source, fidelity, paragraphOffset, paragraphLimit, sheetId, range, maximumCells)` | `AllowRegistration` | `register_document` + `inspect_document` in one call. Send the same explicit inspection defaults as `inspect_document`. |
 | `edit_document(connectionId, source, planJson, saveMode, newName)` | `AllowRegistration` | `register_document` + anchor resolution + `apply_plan` in one call. Send `"Replace"` and `""` for the defaults. Targets may name text directly instead of a paragraph id. |
 | `edit_documents(connectionId, sources, planJson, preview, saveMode)` | `AllowRegistration` | `edit_document` for up to 100 sources with one plan. Each document is edited and saved on its own; returns a summary and one `edit_document` result per source. The plan cannot carry a snapshot. |

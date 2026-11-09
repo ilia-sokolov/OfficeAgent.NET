@@ -125,15 +125,21 @@ public static class OfficeAgentMcpServer
 
         // Parsed before anything is registered so a bad value names itself at startup
         // rather than silently leaving the connection on the global default.
-        foreach (var connection in options.FileSystemConnections)
+        for (var index = 0; index < options.FileSystemConnections.Count; index++)
         {
+            var connection = options.FileSystemConnections[index];
             ParseChangeMode(connection.DefaultChangeMode, connection.ConnectionId);
             ParseChangeGranularity(connection.DefaultChangeGranularity, connection.ConnectionId);
+            ParseTemplateLocation(connection.TemplateLocation, connection.ConnectionId);
+            ValidateFileSystemTemplatesFolder(connection, index);
         }
-        foreach (var connection in options.SharePointConnections)
+        for (var index = 0; index < options.SharePointConnections.Count; index++)
         {
+            var connection = options.SharePointConnections[index];
             ParseChangeMode(connection.DefaultChangeMode, connection.ConnectionId);
             ParseChangeGranularity(connection.DefaultChangeGranularity, connection.ConnectionId);
+            ParseTemplateLocation(connection.TemplateLocation, connection.ConnectionId);
+            ValidateSharePointTemplatesFolder(connection, index);
         }
         StorageConnections.Validate(options);
 
@@ -158,6 +164,9 @@ public static class OfficeAgentMcpServer
                 o.DefaultChangeGranularity = ParseChangeGranularity(connection.DefaultChangeGranularity, connection.ConnectionId);
                 o.CalculateFormulas = connection.CalculateFormulas;
                 o.RejectFormulaErrors = connection.RejectFormulaErrors;
+                o.TemplatesFolder = string.IsNullOrWhiteSpace(connection.TemplatesFolder) ? null : connection.TemplatesFolder.Trim();
+                o.TemplateLocation = ParseTemplateLocation(connection.TemplateLocation, connection.ConnectionId);
+                o.ReadOnly = connection.ReadOnly;
             });
         }
 
@@ -309,8 +318,10 @@ public static class OfficeAgentMcpServer
                 Name = "list_connections",
                 Description =
                     "List the connections you can address documents under. Returns [{connectionId, provider, canCreateDocuments, " +
-                    "allowedExtensions, defaultChangeMode, defaultChangeGranularity, calculatesFormulas}] where provider names the storage, " +
-                    "such as \"filesystem\" or \"sharepoint\". Use a connectionId as the connectionId " +
+                    "allowedExtensions, defaultChangeMode, defaultChangeGranularity, calculatesFormulas, listable, templatesFolder, " +
+                    "templateLocation, readOnly}] where provider names the storage, such as \"filesystem\" or \"sharepoint\"; " +
+                    "listable says list_documents works on it, templateLocation (organization, workgroup, personal, connection, or null) " +
+                    "says it holds templates, and readOnly true means it is never written to. Use a connectionId as the connectionId " +
                     $"for {addressedTools}; never ask the user for it."
             });
 
@@ -329,7 +340,18 @@ public static class OfficeAgentMcpServer
         IReadOnlyList<string> AllowedExtensions,
         string DefaultChangeMode,
         string DefaultChangeGranularity,
-        bool CalculatesFormulas);
+        bool CalculatesFormulas)
+    {
+        /// <summary>Whether list_documents works on the connection.</summary>
+        public bool Listable { get; init; }
+
+        public string? TemplatesFolder { get; init; }
+
+        public TemplateLocationKind TemplateLocation { get; init; }
+
+        /// <summary>Whether the connection refuses every write, where configuration says; otherwise null.</summary>
+        public bool? ReadOnly { get; init; }
+    }
 
     private static List<ConnectionEntry> ConnectionEntries(OfficeAgentMcpOptions options)
     {
@@ -338,21 +360,56 @@ public static class OfficeAgentMcpServer
         if (HasEphemeral(options))
             entries.Add(new ConnectionEntry(
                 EphemeralId(options), "session", creationEnabled, CreatableExtensions.Value,
-                nameof(ChangeMode.Tracked), nameof(ChangeGranularity.Span), options.EphemeralCalculateFormulas));
+                nameof(ChangeMode.Tracked), nameof(ChangeGranularity.Span), options.EphemeralCalculateFormulas)
+            {
+                Listable = true,
+                ReadOnly = false
+            });
 
-        entries.AddRange(StorageConnections.Describe(options).Select(c => new ConnectionEntry(
-            c.ConnectionId,
-            c.Kind.Provider,
-            creationEnabled && c.HasCreationTarget && AllowsCreatableExtension(c.AllowedExtensions),
-            c.AllowedExtensions
-                .Where(extension => !string.IsNullOrWhiteSpace(extension))
-                .Select(extension => NormalizeExtension(extension))
-                .Distinct(StringComparer.OrdinalIgnoreCase)
-                .ToList(),
-            ParseChangeMode(c.DefaultChangeMode, c.ConnectionId).ToString(),
-            ParseChangeGranularity(c.DefaultChangeGranularity, c.ConnectionId).ToString(),
-            c.CalculatesFormulas)));
+        entries.AddRange(StorageConnections.Describe(options).Select(c =>
+        {
+            var location = ParseTemplateLocation(c.TemplateLocation ?? string.Empty, c.ConnectionId);
+            return new ConnectionEntry(
+                c.ConnectionId,
+                c.Kind.Provider,
+                creationEnabled && c.HasCreationTarget && AllowsCreatableExtension(c.AllowedExtensions),
+                c.AllowedExtensions
+                    .Where(extension => !string.IsNullOrWhiteSpace(extension))
+                    .Select(extension => NormalizeExtension(extension))
+                    .Distinct(StringComparer.OrdinalIgnoreCase)
+                    .ToList(),
+                ParseChangeMode(c.DefaultChangeMode, c.ConnectionId).ToString(),
+                ParseChangeGranularity(c.DefaultChangeGranularity, c.ConnectionId).ToString(),
+                c.CalculatesFormulas)
+            {
+                // From configuration alone, only the providers this server knows to list are
+                // listable; the tool itself asks the live providers instead.
+                Listable = c.Kind == StorageKind.FileSystem || c.Kind == StorageKind.SharePoint,
+                TemplatesFolder = c.TemplatesFolder,
+                TemplateLocation = location == TemplateLocationKind.None && c.TemplatesFolder is not null
+                    ? TemplateLocationKind.Connection
+                    : location,
+                ReadOnly = c.ReadOnly
+            };
+        }));
         return entries;
+    }
+
+    /// <summary>
+    /// Replaces what configuration says about listing and templates with what the connection's
+    /// provider reports, which also covers providers this server cannot judge from configuration.
+    /// </summary>
+    private static ConnectionEntry WithListing(ConnectionEntry entry, IReadOnlyList<ConnectionListing> listings)
+    {
+        var listing = listings.FirstOrDefault(l => string.Equals(l.ConnectionId, entry.ConnectionId, StringComparison.Ordinal));
+        return listing is null
+            ? entry
+            : entry with
+            {
+                Listable = listing.Listable,
+                TemplatesFolder = listing.TemplatesFolder,
+                TemplateLocation = listing.TemplateLocation
+            };
     }
 
     private static string NormalizeExtension(string extension)
@@ -369,7 +426,13 @@ public static class OfficeAgentMcpServer
         allowedExtensions = entry.AllowedExtensions,
         defaultChangeMode = entry.DefaultChangeMode,
         defaultChangeGranularity = entry.DefaultChangeGranularity,
-        calculatesFormulas = entry.CalculatesFormulas
+        calculatesFormulas = entry.CalculatesFormulas,
+        listable = entry.Listable,
+        templatesFolder = entry.TemplatesFolder,
+        templateLocation = entry.TemplateLocation == TemplateLocationKind.None
+            ? null
+            : entry.TemplateLocation.ToString().ToLowerInvariant(),
+        readOnly = entry.ReadOnly
     };
 
     internal static async Task<string> ConnectionsPayloadAsync(
@@ -378,8 +441,10 @@ public static class OfficeAgentMcpServer
         CancellationToken cancellationToken = default)
     {
         var visible = new List<object>();
-        foreach (var entry in ConnectionEntries(options))
+        var listings = tools.DescribeListings();
+        foreach (var configured in ConnectionEntries(options))
         {
+            var entry = WithListing(configured, listings);
             var read = await tools.CanAccessConnectionAsync(
                 entry.ConnectionId, ConnectionCapability.Read, cancellationToken).ConfigureAwait(false);
             var register = await tools.CanAccessConnectionAsync(
@@ -500,8 +565,61 @@ public static class OfficeAgentMcpServer
             DefaultChangeMode = ParseChangeMode(connection.DefaultChangeMode, connection.ConnectionId),
             DefaultChangeGranularity = ParseChangeGranularity(connection.DefaultChangeGranularity, connection.ConnectionId),
             CalculateFormulas = connection.CalculateFormulas,
-            RejectFormulaErrors = connection.RejectFormulaErrors
+            RejectFormulaErrors = connection.RejectFormulaErrors,
+            TemplatesFolder = string.IsNullOrWhiteSpace(connection.TemplatesFolder) ? null : connection.TemplatesFolder.Trim(),
+            TemplateLocation = ParseTemplateLocation(connection.TemplateLocation, connection.ConnectionId)
         }, http, tokens, store);
+    }
+
+    /// <summary>
+    /// Reads a connection's <c>TemplateLocation</c>, bound as a string for the same reason as
+    /// <see cref="ParseChangeMode"/>. Empty means none, or <c>Connection</c> once a templates
+    /// folder is set.
+    /// </summary>
+    internal static TemplateLocationKind ParseTemplateLocation(string value, string connectionId)
+    {
+        if (string.IsNullOrWhiteSpace(value)) return TemplateLocationKind.None;
+        var trimmed = value.Trim();
+        if (!char.IsDigit(trimmed[0]) && trimmed[0] != '-' &&
+            Enum.TryParse<TemplateLocationKind>(trimmed, ignoreCase: true, out var location) &&
+            Enum.IsDefined(typeof(TemplateLocationKind), location))
+            return location;
+
+        throw new InvalidOperationException(
+            $"Connection '{connectionId}' has TemplateLocation '{value}'. Expected Connection, Personal, Workgroup or Organization.");
+    }
+
+    /// <summary>
+    /// A filesystem templates folder is a folder below the root. Checked here so the mistake
+    /// names the connection and its setting rather than surfacing as the provider's own refusal.
+    /// </summary>
+    private static void ValidateFileSystemTemplatesFolder(FileSystemConnectionOptions connection, int index)
+    {
+        if (string.IsNullOrWhiteSpace(connection.TemplatesFolder)) return;
+        var folder = connection.TemplatesFolder.Trim();
+        var segments = folder.Split(new[] { '/', '\\' }, StringSplitOptions.RemoveEmptyEntries);
+        if (Path.IsPathRooted(folder) || segments.Length == 0 || segments.Any(s => s.Trim() is "." or ".."))
+            throw new InvalidOperationException(
+                $"Connection '{connection.ConnectionId}' has a TemplatesFolder that is not a folder below its root. " +
+                $"Set OfficeAgent__FileSystemConnections__{index}__TemplatesFolder to a relative folder such as Templates.");
+    }
+
+    /// <summary>A SharePoint templates folder is named the way a folder is registered: by URL or by id pair.</summary>
+    private static void ValidateSharePointTemplatesFolder(SharePointConnectionOptions connection, int index)
+    {
+        if (string.IsNullOrWhiteSpace(connection.TemplatesFolder)) return;
+        var folder = connection.TemplatesFolder.Trim();
+        var isUrl = Uri.TryCreate(folder, UriKind.Absolute, out var uri) &&
+                    (uri.Scheme == Uri.UriSchemeHttps || uri.Scheme == Uri.UriSchemeHttp);
+        var trimmed = folder.Trim('/');
+        var slash = trimmed.IndexOf('/');
+        var isPair = (trimmed.StartsWith("drives/", StringComparison.OrdinalIgnoreCase) &&
+                      trimmed.IndexOf("/items/", StringComparison.OrdinalIgnoreCase) > 0) ||
+                     (slash > 0 && slash == trimmed.LastIndexOf('/') && slash < trimmed.Length - 1);
+        if (!isUrl && !isPair)
+            throw new InvalidOperationException(
+                $"SharePoint connection '{connection.ConnectionId}' has a TemplatesFolder that is neither a folder URL nor a " +
+                $"'driveId/itemId' pair. Set OfficeAgent__SharePointConnections__{index}__TemplatesFolder to one of them.");
     }
 
     /// <summary>

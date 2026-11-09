@@ -995,6 +995,36 @@ MCP annotations: title "Find in a document"; readOnly true, destructive false, i
 }
 ```
 
+### `find_templates`
+
+MCP annotations: title "Find templates"; readOnly true, destructive false, idempotent true, openWorld false.
+
+```json
+{
+  "additionalProperties": false,
+  "properties": {
+    "format": {
+      "default": "",
+      "type": "string"
+    },
+    "maximumResults": {
+      "default": 50,
+      "type": "integer"
+    },
+    "nameContains": {
+      "default": "",
+      "type": "string"
+    }
+  },
+  "required": [
+    "format",
+    "nameContains",
+    "maximumResults"
+  ],
+  "type": "object"
+}
+```
+
 ### `import_document_content`
 
 MCP annotations: title "Import document content"; readOnly false, destructive false, idempotent false, openWorld false.
@@ -1119,6 +1149,60 @@ MCP annotations: title "Inspect document content"; readOnly true, destructive fa
     "sheetId",
     "range",
     "maximumCells"
+  ],
+  "type": "object"
+}
+```
+
+### `list_documents`
+
+MCP annotations: title "List documents in a connection"; readOnly true, destructive false, idempotent true, openWorld false.
+
+```json
+{
+  "additionalProperties": false,
+  "properties": {
+    "connectionId": {
+      "type": "string"
+    },
+    "continuation": {
+      "default": "",
+      "type": "string"
+    },
+    "extensions": {
+      "default": "",
+      "type": "string"
+    },
+    "folder": {
+      "default": "",
+      "type": "string"
+    },
+    "maximumResults": {
+      "default": 100,
+      "type": "integer"
+    },
+    "nameContains": {
+      "default": "",
+      "type": "string"
+    },
+    "recursive": {
+      "default": false,
+      "type": "boolean"
+    },
+    "templates": {
+      "default": false,
+      "type": "boolean"
+    }
+  },
+  "required": [
+    "connectionId",
+    "folder",
+    "nameContains",
+    "extensions",
+    "recursive",
+    "templates",
+    "maximumResults",
+    "continuation"
   ],
   "type": "object"
 }
@@ -4262,6 +4346,37 @@ $.sourceDocumentId: null
 $.writeOutcome: string
 ```
 
+#### `find_templates`
+
+State: templates found, one connection failed
+
+```text
+$: object
+$.connectionsFailed: array
+$.connectionsFailed[]: object
+$.connectionsFailed[].code: string
+$.connectionsFailed[].connectionId: string
+$.connectionsFailed[].message: string
+$.connectionsSearched: number
+$.templates: array
+$.templates[]: object
+$.templates[].connectionId: string
+$.templates[].folder: null
+$.templates[].format: string
+$.templates[].location: string
+$.templates[].name: string
+$.templates[].source: string
+```
+
+State: no connection visible to the caller
+
+```text
+$: object
+$.connectionsFailed: array
+$.connectionsSearched: number
+$.templates: array
+```
+
 #### `import_document_content`
 
 State: imported
@@ -4596,13 +4711,107 @@ $[].canCreateDocuments: boolean
 $[].connectionId: string
 $[].defaultChangeGranularity: string
 $[].defaultChangeMode: string
+$[].listable: boolean
 $[].provider: string
+$[].readOnly: boolean
+$[].templateLocation: null
+$[].templatesFolder: null
 ```
 
 State: no connection visible to the caller
 
 ```text
 $: array
+```
+
+#### `list_documents`
+
+State: documents listed
+
+```text
+$: object
+$.connectionId: string
+$.continuation: null
+$.items: array
+$.items[]: object
+$.items[].contentType: string
+$.items[].folder: null
+$.items[].isTemplate: boolean
+$.items[].lastModified: string
+$.items[].length: number
+$.items[].name: string
+$.items[].source: string
+```
+
+State: more pages
+
+```text
+$: object
+$.connectionId: string
+$.continuation: string
+$.items: array
+$.items[]: object
+$.items[].contentType: string
+$.items[].folder: null
+$.items[].isTemplate: boolean
+$.items[].lastModified: string
+$.items[].length: number
+$.items[].name: string
+$.items[].source: string
+```
+
+State: connection cannot list
+
+```text
+$: object
+$.calculation: null
+$.changes: array
+$.committed: boolean
+$.errors: array
+$.errors[]: object
+$.errors[].code: string
+$.errors[].connectionId: string
+$.errors[].itemId: null
+$.errors[].message: string
+$.errors[].provider: null
+$.errors[].target: null
+$.isValid: boolean
+$.outputConnectionId: null
+$.outputContentType: null
+$.outputDocumentId: null
+$.outputName: null
+$.outputVersion: null
+$.possibleOutput: null
+$.receipt: null
+$.sourceDocumentId: null
+$.writeOutcome: string
+```
+
+State: folder outside the root
+
+```text
+$: object
+$.calculation: null
+$.changes: array
+$.committed: boolean
+$.errors: array
+$.errors[]: object
+$.errors[].code: string
+$.errors[].connectionId: string
+$.errors[].itemId: null
+$.errors[].message: string
+$.errors[].provider: string
+$.errors[].target: null
+$.isValid: boolean
+$.outputConnectionId: null
+$.outputContentType: null
+$.outputDocumentId: null
+$.outputName: null
+$.outputVersion: null
+$.possibleOutput: null
+$.receipt: null
+$.sourceDocumentId: null
+$.writeOutcome: string
 ```
 
 #### `merge_documents`
@@ -5564,8 +5773,11 @@ OfficeAgent:FileSystemConnections[]:ConnectionId: String = ""
 OfficeAgent:FileSystemConnections[]:DefaultChangeGranularity: String = "Span"
 OfficeAgent:FileSystemConnections[]:DefaultChangeMode: String = "Tracked"
 OfficeAgent:FileSystemConnections[]:MaximumBytes: Int64 = 104857600
+OfficeAgent:FileSystemConnections[]:ReadOnly: Boolean = false
 OfficeAgent:FileSystemConnections[]:RejectFormulaErrors: Boolean = false
 OfficeAgent:FileSystemConnections[]:RootPath: String = ""
+OfficeAgent:FileSystemConnections[]:TemplateLocation: String = ""
+OfficeAgent:FileSystemConnections[]:TemplatesFolder: String = ""
 OfficeAgent:GoogleDriveConnections[]:AllowedExtensions: IList<String> = [".docx"]
 OfficeAgent:GoogleDriveConnections[]:ApiBaseUrl: String = "https://www.googleapis.com/drive/v3"
 OfficeAgent:GoogleDriveConnections[]:CalculateFormulas: Boolean = false
@@ -5603,6 +5815,7 @@ OfficeAgent:IManageConnections[]:SaveComment: String = "Saved by OfficeAgent."
 OfficeAgent:IManageConnections[]:ServerUrl: String = ""
 OfficeAgent:IManageConnections[]:TokenPath: String = "/auth/oauth2/token"
 OfficeAgent:IManageConnections[]:Username: String = ""
+OfficeAgent:OfficeTemplates: OfficeTemplateOptions = {"Enabled":false}
 OfficeAgent:RequirePlanSnapshot: Boolean = false
 OfficeAgent:RevisionAuthorFromActor: Boolean = false
 OfficeAgent:SharePointConnections[]:AllowedExtensions: IList<String> = [".docx"]
@@ -5622,6 +5835,8 @@ OfficeAgent:SharePointConnections[]:MaximumBytes: Int64 = 104857600
 OfficeAgent:SharePointConnections[]:OnBehalfOfScope: String = "https://graph.microsoft.com/.default"
 OfficeAgent:SharePointConnections[]:RegistrationIndexPath: String = ""
 OfficeAgent:SharePointConnections[]:RejectFormulaErrors: Boolean = false
+OfficeAgent:SharePointConnections[]:TemplateLocation: String = ""
+OfficeAgent:SharePointConnections[]:TemplatesFolder: String = ""
 OfficeAgent:SharePointConnections[]:TenantId: String = ""
 OfficeAgent:StrictToolSchemas: Boolean = true
 OfficeAgent:Transport: String = "http"
@@ -6620,6 +6835,34 @@ MaximumBytes = 52428800
 UploadBaseUrl = "https://upload.box.com/api/2.0"
 ```
 
+### `OfficeAgent.Core.DocumentProviders.ConnectionListing`
+
+```text
+ConnectionId = ""
+Provider = ""
+TemplateLocation = None
+```
+
+### `OfficeAgent.Core.DocumentProviders.DocumentListEntry`
+
+```text
+ContentType = ""
+Name = ""
+Source = ""
+```
+
+### `OfficeAgent.Core.DocumentProviders.DocumentListPage`
+
+```text
+Items = []
+```
+
+### `OfficeAgent.Core.DocumentProviders.DocumentListQuery`
+
+```text
+MaximumResults = 100
+```
+
 ### `OfficeAgent.Core.DocumentProviders.FileSystemDocumentProviderOptions`
 
 ```text
@@ -6629,6 +6872,7 @@ DefaultChangeGranularity = Span
 DefaultChangeMode = Tracked
 MaximumBytes = 104857600
 RootPath = ""
+TemplateLocation = None
 ```
 
 ### `OfficeAgent.Core.DocumentProviders.MemoryDocumentProviderOptions`
@@ -6744,6 +6988,7 @@ DefaultChangeGranularity = Span
 DefaultChangeMode = Tracked
 GraphBaseUrl = "https://graph.microsoft.com/v1.0"
 MaximumBytes = 104857600
+TemplateLocation = None
 UploadSessionChunkBytes = 10485760
 UploadSessionThresholdBytes = 4194304
 ```

@@ -75,6 +75,23 @@ public sealed class SharePointDocumentProviderOptions
     /// <see cref="CalculateFormulas"/>. Defaults to <see langword="false"/>.
     /// </summary>
     public bool RejectFormulaErrors { get; set; }
+
+    /// <summary>
+    /// Gets or sets the folder that holds this connection's templates: a SharePoint/OneDrive
+    /// folder URL or a <c>driveId/itemId</c> pair naming the folder. Listing with
+    /// <see cref="DocumentListQuery.Templates"/> lists it, and every document in it is reported as
+    /// a template. Empty for none. An organization template library (the SharePoint organization
+    /// assets library) is not discovered automatically; name its folder here.
+    /// </summary>
+    public string? TemplatesFolder { get; set; }
+
+    /// <summary>
+    /// Gets or sets what kind of template location <see cref="TemplatesFolder"/> is. Left at
+    /// <see cref="TemplateLocationKind.None"/>, it becomes <see cref="TemplateLocationKind.Connection"/>
+    /// when a templates folder is set. Set <see cref="TemplateLocationKind.Organization"/> for an
+    /// organization template library.
+    /// </summary>
+    public TemplateLocationKind TemplateLocation { get; set; }
 }
 
 /// <summary>
@@ -93,10 +110,29 @@ public sealed class SharePointDocumentProviderOptions
 /// <see cref="SharePointDocumentProviderOptions.UploadSessionThresholdBytes"/> is uploaded in
 /// chunks through a Graph upload session, under the same preconditions.
 /// </summary>
-public sealed class SharePointDocumentProvider : IDocumentProvider, IDocumentCreatingProvider, IConnectionEditingDefaults, IConnectionGranularityDefaults, IConnectionCalculationDefaults
+/// <remarks>
+/// <see cref="ListAsync"/> walks a folder's children through Graph and filters names on this
+/// side; it does not use Graph search, whose index lags behind new files. A recursive listing
+/// descends at most <see cref="MaximumListingDepth"/> folders, queues at most
+/// <see cref="MaximumListingFolders"/> folders in one walk, and sends at most
+/// <see cref="MaximumListingRequests"/> Graph requests per call; a page cut short by the request
+/// bound carries a continuation token.
+/// </remarks>
+public sealed class SharePointDocumentProvider : IDocumentProvider, IDocumentCreatingProvider, IDocumentListingProvider, IConnectionTemplateSource, IConnectionEditingDefaults, IConnectionGranularityDefaults, IConnectionCalculationDefaults
 {
     /// <summary>Gets the provider discriminator used in document references.</summary>
     public const string ProviderName = "sharepoint";
+
+    /// <summary>How many folders below the listed one a recursive listing descends.</summary>
+    public const int MaximumListingDepth = 5;
+
+    /// <summary>How many subfolders one recursive walk visits in total; deeper folders past it are not listed.</summary>
+    public const int MaximumListingFolders = 100;
+
+    /// <summary>How many Graph requests one listing call sends before it returns a page.</summary>
+    public const int MaximumListingRequests = 10;
+
+    private const int ListingPageSize = 200;
 
     // Graph's rules for upload sessions: every chunk but the last is a multiple of 320 KiB, and
     // no request carries 60 MiB or more. A single-request upload takes at most 250 MB.
@@ -163,6 +199,15 @@ public sealed class SharePointDocumentProvider : IDocumentProvider, IDocumentCre
         _creationFolderItemId = string.IsNullOrWhiteSpace(options.CreationFolderItemId)
             ? null
             : options.CreationFolderItemId.Trim();
+
+        TemplatesFolder = string.IsNullOrWhiteSpace(options.TemplatesFolder) ? null : options.TemplatesFolder!.Trim();
+        if (TemplatesFolder is not null && !IsUrl(TemplatesFolder) && !IsAnyDriveItemPair(TemplatesFolder))
+            throw new ArgumentException(
+                "TemplatesFolder must be a SharePoint/OneDrive folder URL or a 'driveId/itemId' pair naming the folder.",
+                nameof(options));
+        TemplateLocation = options.TemplateLocation == TemplateLocationKind.None && TemplatesFolder is not null
+            ? TemplateLocationKind.Connection
+            : options.TemplateLocation;
     }
 
     /// <inheritdoc />
@@ -182,6 +227,13 @@ public sealed class SharePointDocumentProvider : IDocumentProvider, IDocumentCre
 
     /// <inheritdoc />
     public bool RejectFormulaErrors => _options.RejectFormulaErrors;
+
+    /// <inheritdoc />
+    /// <remarks>The folder URL or <c>driveId/itemId</c> pair the host configured, or <see langword="null"/>.</remarks>
+    public string? TemplatesFolder { get; }
+
+    /// <inheritdoc />
+    public TemplateLocationKind TemplateLocation { get; }
 
     /// <inheritdoc />
     public async Task<DocumentReference> RegisterAsync(
@@ -451,6 +503,401 @@ public sealed class SharePointDocumentProvider : IDocumentProvider, IDocumentCre
         if (!await _store.RemoveAsync(reference.ItemId, cancellationToken).ConfigureAwait(false))
             throw Error(ProviderErrorCode.NotFound,
                 $"The provider document '{reference.ItemId}' is not registered.", reference.ItemId);
+    }
+
+    // ── Listing ───────────────────────────────────────────────────────────────
+
+    /// <inheritdoc />
+    /// <remarks>
+    /// <see cref="DocumentListQuery.Folder"/> is a folder URL, a <c>driveId/itemId</c> pair
+    /// (<c>b!…/01…</c> or <c>drives/{driveId}/items/{itemId}</c>), or a path such as
+    /// <c>Contracts/2026</c> relative to the connection's creation folder, or to its templates
+    /// folder when listing templates. With no folder, the creation folder is listed; a connection
+    /// with none needs a folder. Each entry's source is the document's <c>driveId/itemId</c>
+    /// pair. The continuation token carries the walk's position, including Graph's own next-page
+    /// link, which is only followed when it points at the configured Graph endpoint.
+    /// </remarks>
+    public async Task<DocumentListPage> ListAsync(DocumentListQuery query, CancellationToken cancellationToken = default)
+    {
+        if (query is null) throw new ArgumentNullException(nameof(query));
+        if (query.Templates && TemplatesFolder is null) return new DocumentListPage();
+
+        var fingerprint = DocumentListingRules.Fingerprint(query, ProviderName);
+        var state = string.IsNullOrWhiteSpace(query.ContinuationToken)
+            ? await StartListingAsync(query, fingerprint, cancellationToken).ConfigureAwait(false)
+            : ListingState.Parse(query.ContinuationToken!, fingerprint, _graphBaseUrl)
+              ?? throw Error(ProviderErrorCode.InvalidArgument,
+                  "The continuation token is not one this listing issued. Repeat the same query, or start again without the token.");
+
+        var extensions = DocumentListingRules.Extensions(query, _allowedExtensions);
+        var pageSize = DocumentListingRules.PageSize(query);
+        var items = new List<DocumentListEntry>();
+        var requests = 0;
+
+        while (true)
+        {
+            if (state.Current is null)
+            {
+                if (state.Queue.Count == 0) return new DocumentListPage { Items = items };
+                state.Current = state.Queue[0];
+                state.Queue.RemoveAt(0);
+                state.PageUrl = ChildrenUrl(state.Current);
+                state.Skip = 0;
+            }
+
+            if (requests == MaximumListingRequests)
+                return new DocumentListPage { Items = items, ContinuationToken = state.Encode() };
+            requests++;
+
+            var (children, nextLink) = await ChildrenPageAsync(state.PageUrl!, cancellationToken).ConfigureAwait(false);
+            for (var index = state.Skip; index < children.Count; index++)
+            {
+                var child = children[index];
+                if (child.IsFolder)
+                {
+                    if (query.Recursive && state.Current.Depth < MaximumListingDepth && state.FoldersQueued < MaximumListingFolders)
+                    {
+                        state.FoldersQueued++;
+                        state.Queue.Add(new ListingFolder(
+                            string.IsNullOrEmpty(child.DriveId) ? state.Current.DriveId : child.DriveId,
+                            child.Id,
+                            Combine(state.Current.Display, child.Name),
+                            state.Current.Depth + 1));
+                    }
+                    continue;
+                }
+
+                if (!child.IsFile || child.Size > _options.MaximumBytes ||
+                    !DocumentListingRules.Matches(child.Name, extensions, query))
+                    continue;
+
+                if (items.Count == pageSize)
+                {
+                    // Another match exists: resume at it, on the same Graph page.
+                    state.Skip = index;
+                    return new DocumentListPage { Items = items, ContinuationToken = state.Encode() };
+                }
+
+                items.Add(new DocumentListEntry
+                {
+                    Source = $"{(string.IsNullOrEmpty(child.DriveId) ? state.Current.DriveId : child.DriveId)}/{child.Id}",
+                    Name = child.Name,
+                    Folder = state.Current.Display,
+                    ContentType = child.MimeType ?? ContentTypeFor(child.Name),
+                    Length = child.Size,
+                    LastModified = child.LastModified,
+                    IsTemplate = query.Templates || DocumentListingRules.IsTemplateName(child.Name)
+                });
+            }
+
+            if (nextLink is not null)
+            {
+                state.PageUrl = nextLink;
+                state.Skip = 0;
+            }
+            else
+            {
+                state.Current = null;
+            }
+        }
+    }
+
+    /// <summary>Resolves the folder a first page lists and starts the walk there.</summary>
+    private async Task<ListingState> StartListingAsync(DocumentListQuery query, string fingerprint, CancellationToken cancellationToken)
+    {
+        var folder = query.Folder?.Trim();
+        var addressed = !string.IsNullOrEmpty(folder) && (IsUrl(folder!) || IsDriveItemPair(folder!));
+        if (query.Templates && addressed)
+            throw Error(ProviderErrorCode.InvalidArgument,
+                "When listing templates, folder is a path inside the templates folder, not a URL or 'driveId/itemId' pair.");
+
+        ListingFolder? root = query.Templates
+            ? await ResolveFolderAsync(TemplatesFolder!, cancellationToken).ConfigureAwait(false)
+            : _creationDriveId is not null && _creationFolderItemId is not null
+                ? new ListingFolder(_creationDriveId, _creationFolderItemId, null, 0)
+                : null;
+
+        ListingFolder start;
+        if (addressed)
+            start = await ResolveFolderAsync(folder!, cancellationToken).ConfigureAwait(false);
+        else if (root is null)
+            throw Error(ProviderErrorCode.InvalidArgument,
+                "This SharePoint connection has no default folder to list. Pass the folder's URL or its 'driveId/itemId' pair.");
+        else if (string.IsNullOrEmpty(folder))
+            start = root;
+        else
+            start = await ResolveRelativeFolderAsync(root, folder!, cancellationToken).ConfigureAwait(false);
+
+        return new ListingState(fingerprint) { Queue = { start } };
+    }
+
+    /// <summary>Resolves a folder URL or <c>driveId/itemId</c> pair to the folder it names.</summary>
+    private async Task<ListingFolder> ResolveFolderAsync(string folder, CancellationToken cancellationToken)
+    {
+        const string select = "?$select=id,name,folder,file,parentReference";
+        string url;
+        string? pairDriveId = null;
+        if (IsUrl(folder))
+        {
+            url = $"{_graphBaseUrl}/shares/{EncodeShareUrl(folder)}/driveItem{select}";
+        }
+        else
+        {
+            var (driveId, itemId) = ParseDriveAndItemId(folder);
+            pairDriveId = driveId;
+            url = ItemUrl(driveId, itemId) + select;
+        }
+
+        var item = await GetListingItemAsync(url, cancellationToken).ConfigureAwait(false);
+        if (!item.IsFolder)
+            throw Error(ProviderErrorCode.InvalidArgument, "The folder to list names a file, not a folder.");
+        var drive = string.IsNullOrEmpty(item.DriveId) ? pairDriveId : item.DriveId;
+        if (string.IsNullOrEmpty(drive))
+            throw Error(ProviderErrorCode.IO, "Graph did not report which drive the folder belongs to; it cannot be listed.");
+        return new ListingFolder(drive!, item.Id, null, 0);
+    }
+
+    /// <summary>Resolves a path such as <c>Contracts/2026</c> beneath a folder, segment by segment escaped.</summary>
+    private async Task<ListingFolder> ResolveRelativeFolderAsync(ListingFolder parent, string path, CancellationToken cancellationToken)
+    {
+        var segments = path.Replace('\\', '/').Split(new[] { '/' }, StringSplitOptions.RemoveEmptyEntries);
+        if (segments.Length == 0) return parent;
+        if (segments.Any(segment => segment.Trim() is "." or ".."))
+            throw Error(ProviderErrorCode.AccessDenied, "A folder path cannot step outside the folder it is relative to.");
+
+        var escaped = string.Join("/", segments.Select(Uri.EscapeDataString));
+        var item = await GetListingItemAsync(
+            $"{ItemUrl(parent.DriveId, parent.ItemId)}:/{escaped}:?$select=id,name,folder,file,parentReference",
+            cancellationToken).ConfigureAwait(false);
+        if (!item.IsFolder)
+            throw Error(ProviderErrorCode.InvalidArgument, "The folder to list names a file, not a folder.");
+        return new ListingFolder(
+            string.IsNullOrEmpty(item.DriveId) ? parent.DriveId : item.DriveId,
+            item.Id,
+            Combine(parent.Display, string.Join("/", segments)),
+            0);
+    }
+
+    private string ChildrenUrl(ListingFolder folder) =>
+        $"{ItemUrl(folder.DriveId, folder.ItemId)}/children" +
+        $"?$select=id,name,size,file,folder,lastModifiedDateTime,parentReference&$top={ListingPageSize}";
+
+    private async Task<ListingItem> GetListingItemAsync(string url, CancellationToken cancellationToken)
+    {
+        using var response = await SendAsync(HttpMethod.Get, url, content: null, ifMatch: null, cancellationToken).ConfigureAwait(false);
+        await ThrowOnFailureAsync(response, itemId: null).ConfigureAwait(false);
+        try
+        {
+            using var json = JsonDocument.Parse(await response.Content.ReadAsStringAsync().ConfigureAwait(false));
+            return ListingItem.Parse(json.RootElement);
+        }
+        catch (Exception ex) when (ex is JsonException or KeyNotFoundException or InvalidOperationException or FormatException)
+        {
+            throw Error(ProviderErrorCode.IO, "Graph returned an unreadable drive item.", itemId: null, ex);
+        }
+    }
+
+    private async Task<(List<ListingItem> Children, string? NextLink)> ChildrenPageAsync(string url, CancellationToken cancellationToken)
+    {
+        using var response = await SendAsync(HttpMethod.Get, url, content: null, ifMatch: null, cancellationToken).ConfigureAwait(false);
+        await ThrowOnFailureAsync(response, itemId: null).ConfigureAwait(false);
+        try
+        {
+            using var json = JsonDocument.Parse(await response.Content.ReadAsStringAsync().ConfigureAwait(false));
+            var children = new List<ListingItem>();
+            if (json.RootElement.TryGetProperty("value", out var value) && value.ValueKind == JsonValueKind.Array)
+                children.AddRange(value.EnumerateArray().Select(ListingItem.Parse));
+            var nextLink = json.RootElement.TryGetProperty("@odata.nextLink", out var next) && next.ValueKind == JsonValueKind.String
+                ? next.GetString()
+                : null;
+            // The next-page link is followed with the bearer token, so it must point where every
+            // other request goes. A link anywhere else ends the folder rather than leaking the token.
+            if (nextLink is not null && !nextLink.StartsWith(_graphBaseUrl + "/", StringComparison.OrdinalIgnoreCase))
+                nextLink = null;
+            return (children, nextLink);
+        }
+        catch (Exception ex) when (ex is JsonException or KeyNotFoundException or InvalidOperationException or FormatException)
+        {
+            throw Error(ProviderErrorCode.IO, "Graph returned an unreadable folder listing.", itemId: null, ex);
+        }
+    }
+
+    private static string? Combine(string? parent, string child) =>
+        string.IsNullOrEmpty(parent) ? child : parent + "/" + child;
+
+    private static bool IsUrl(string value) =>
+        value.StartsWith("https://", StringComparison.OrdinalIgnoreCase) ||
+        value.StartsWith("http://", StringComparison.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// Whether a folder is written as a <c>driveId/itemId</c> pair rather than as a path. A
+    /// SharePoint or OneDrive for Business drive id starts with <c>b!</c>; the Graph resource form
+    /// <c>drives/{driveId}/items/{itemId}</c> is unambiguous. Anything else is read as a path.
+    /// </summary>
+    private static bool IsDriveItemPair(string value)
+    {
+        var trimmed = value.Trim().Trim('/');
+        if (trimmed.StartsWith("drives/", StringComparison.OrdinalIgnoreCase) &&
+            trimmed.IndexOf("/items/", StringComparison.OrdinalIgnoreCase) > 0)
+            return true;
+        var slash = trimmed.IndexOf('/');
+        return trimmed.StartsWith("b!", StringComparison.Ordinal) &&
+               slash > 2 && slash == trimmed.LastIndexOf('/') && slash < trimmed.Length - 1;
+    }
+
+    /// <summary>
+    /// Whether a configured folder is a <c>driveId/itemId</c> pair of any drive. A configured
+    /// templates folder is never a path, so any single <c>/</c> between two ids is a pair here.
+    /// </summary>
+    private static bool IsAnyDriveItemPair(string value)
+    {
+        if (IsDriveItemPair(value)) return true;
+        var trimmed = value.Trim().Trim('/');
+        var slash = trimmed.IndexOf('/');
+        return slash > 0 && slash == trimmed.LastIndexOf('/') && slash < trimmed.Length - 1;
+    }
+
+    /// <summary>One folder in a listing walk: where it is, how it is shown, and how deep it lies.</summary>
+    private sealed record ListingFolder(string DriveId, string ItemId, string? Display, int Depth);
+
+    /// <summary>The fields of a drive item a listing reads.</summary>
+    private sealed class ListingItem
+    {
+        public string Id { get; private init; } = string.Empty;
+        public string Name { get; private init; } = string.Empty;
+        public string DriveId { get; private init; } = string.Empty;
+        public bool IsFolder { get; private init; }
+        public bool IsFile { get; private init; }
+        public long Size { get; private init; }
+        public string? MimeType { get; private init; }
+        public DateTimeOffset? LastModified { get; private init; }
+
+        public static ListingItem Parse(JsonElement item) => new()
+        {
+            Id = item.GetProperty("id").GetString() ?? string.Empty,
+            Name = item.TryGetProperty("name", out var name) ? name.GetString() ?? string.Empty : string.Empty,
+            DriveId = item.TryGetProperty("parentReference", out var parent) &&
+                      parent.TryGetProperty("driveId", out var drive) &&
+                      drive.ValueKind == JsonValueKind.String
+                ? drive.GetString() ?? string.Empty
+                : string.Empty,
+            IsFolder = item.TryGetProperty("folder", out _),
+            IsFile = item.TryGetProperty("file", out _),
+            Size = item.TryGetProperty("size", out var size) && size.ValueKind == JsonValueKind.Number ? size.GetInt64() : 0,
+            MimeType = item.TryGetProperty("file", out var file) &&
+                       file.TryGetProperty("mimeType", out var mime) &&
+                       mime.ValueKind == JsonValueKind.String
+                ? mime.GetString()
+                : null,
+            LastModified = item.TryGetProperty("lastModifiedDateTime", out var modified) &&
+                           modified.ValueKind == JsonValueKind.String &&
+                           DateTimeOffset.TryParse(modified.GetString(), System.Globalization.CultureInfo.InvariantCulture,
+                               System.Globalization.DateTimeStyles.AssumeUniversal, out var parsed)
+                ? parsed
+                : null
+        };
+    }
+
+    /// <summary>
+    /// A listing walk's position: the folder being read, the Graph page it is on and how many of
+    /// that page's children were already handled, and the folders still to read. It travels to
+    /// the caller as the continuation token.
+    /// </summary>
+    private sealed class ListingState
+    {
+        private const string Version = "sp1";
+        private readonly string _fingerprint;
+
+        public ListingState(string fingerprint) => _fingerprint = fingerprint;
+
+        public List<ListingFolder> Queue { get; } = new();
+        public ListingFolder? Current { get; set; }
+        public string? PageUrl { get; set; }
+        public int Skip { get; set; }
+        public int FoldersQueued { get; set; }
+
+        public string Encode()
+        {
+            using var buffer = new MemoryStream();
+            using (var writer = new Utf8JsonWriter(buffer))
+            {
+                writer.WriteStartObject();
+                writer.WriteString("v", Version);
+                writer.WriteString("f", _fingerprint);
+                writer.WriteNumber("c", FoldersQueued);
+                if (Current is not null)
+                {
+                    writer.WritePropertyName("cur");
+                    Write(writer, Current);
+                    writer.WriteString("u", PageUrl);
+                    writer.WriteNumber("s", Skip);
+                }
+                writer.WriteStartArray("q");
+                foreach (var folder in Queue) Write(writer, folder);
+                writer.WriteEndArray();
+                writer.WriteEndObject();
+            }
+            return DocumentListingRules.EncodeToken(Encoding.UTF8.GetString(buffer.ToArray()));
+        }
+
+        /// <summary>
+        /// Reads a token back, or <see langword="null"/> when it is not one this listing issued.
+        /// A page link that does not point at the Graph endpoint is refused: it would carry the
+        /// bearer token somewhere else.
+        /// </summary>
+        public static ListingState? Parse(string token, string fingerprint, string graphBaseUrl)
+        {
+            var text = DocumentListingRules.DecodeToken(token);
+            if (text is null) return null;
+            try
+            {
+                using var json = JsonDocument.Parse(text);
+                var root = json.RootElement;
+                if (root.GetProperty("v").GetString() != Version || root.GetProperty("f").GetString() != fingerprint)
+                    return null;
+
+                var state = new ListingState(fingerprint) { FoldersQueued = root.GetProperty("c").GetInt32() };
+                if (root.TryGetProperty("cur", out var current))
+                {
+                    state.Current = Read(current);
+                    state.PageUrl = root.GetProperty("u").GetString();
+                    state.Skip = root.GetProperty("s").GetInt32();
+                    if (state.PageUrl is null || state.Skip < 0 ||
+                        !state.PageUrl.StartsWith(graphBaseUrl + "/", StringComparison.OrdinalIgnoreCase))
+                        return null;
+                }
+                foreach (var folder in root.GetProperty("q").EnumerateArray())
+                    state.Queue.Add(Read(folder));
+                if (state.Queue.Count > MaximumListingFolders + 1 || state.FoldersQueued > MaximumListingFolders)
+                    return null;
+                return state;
+            }
+            catch (Exception ex) when (ex is JsonException or KeyNotFoundException or InvalidOperationException or FormatException)
+            {
+                return null;
+            }
+        }
+
+        private static void Write(Utf8JsonWriter writer, ListingFolder folder)
+        {
+            writer.WriteStartObject();
+            writer.WriteString("d", folder.DriveId);
+            writer.WriteString("i", folder.ItemId);
+            if (folder.Display is not null) writer.WriteString("p", folder.Display);
+            writer.WriteNumber("l", folder.Depth);
+            writer.WriteEndObject();
+        }
+
+        private static ListingFolder Read(JsonElement folder)
+        {
+            var driveId = folder.GetProperty("d").GetString();
+            var itemId = folder.GetProperty("i").GetString();
+            var depth = folder.GetProperty("l").GetInt32();
+            if (string.IsNullOrEmpty(driveId) || string.IsNullOrEmpty(itemId) || depth < 0 || depth > MaximumListingDepth)
+                throw new FormatException("A listing folder is incomplete.");
+            return new ListingFolder(driveId!, itemId!,
+                folder.TryGetProperty("p", out var display) ? display.GetString() : null, depth);
+        }
     }
 
     // ── Graph plumbing ────────────────────────────────────────────────────────

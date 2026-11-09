@@ -279,6 +279,35 @@ public sealed class DocumentProviderRegistry
             : ChangeGranularity.Span;
     }
 
+    /// <summary>
+    /// Returns the listing provider configured for a connection id. A connection whose provider
+    /// does not implement <see cref="IDocumentListingProvider"/> fails with
+    /// <see cref="ProviderErrorCode.ConfigurationError"/>, as an unknown connection does.
+    /// </summary>
+    public IDocumentListingProvider ResolveListing(string connectionId)
+    {
+        var provider = ResolveConnection(connectionId);
+        return provider as IDocumentListingProvider
+            ?? throw new DocumentProviderException(
+                ProviderErrorCode.ConfigurationError,
+                $"Connection '{connectionId}' cannot list its documents: its provider does not support listing. Register documents by source instead.",
+                provider.Provider, connectionId, itemId: null);
+    }
+
+    /// <summary>
+    /// Describes, for every registered connection in registration order, whether it can be
+    /// listed and where its templates are.
+    /// </summary>
+    public IReadOnlyList<ConnectionListing> DescribeListings() =>
+        _providers.Select(provider => new ConnectionListing
+        {
+            ConnectionId = provider.ConnectionId,
+            Provider = provider.Provider,
+            Listable = provider is IDocumentListingProvider,
+            TemplatesFolder = (provider as IConnectionTemplateSource)?.TemplatesFolder,
+            TemplateLocation = (provider as IConnectionTemplateSource)?.TemplateLocation ?? TemplateLocationKind.None
+        }).ToList();
+
     /// <summary>Returns the set of registered <c>(Provider, ConnectionId)</c> pairs for host enumeration.</summary>
     public IReadOnlyList<(string Provider, string ConnectionId)> Connections =>
         _providers.Select(p => (p.Provider, p.ConnectionId)).ToList();
@@ -288,6 +317,32 @@ public sealed class DocumentProviderRegistry
         _providers.Any(p =>
             string.Equals(p.Provider, provider, StringComparison.OrdinalIgnoreCase) &&
             string.Equals(p.ConnectionId, connectionId, StringComparison.Ordinal));
+}
+
+/// <summary>What one connection offers for finding documents and templates.</summary>
+public sealed class ConnectionListing
+{
+    /// <summary>Gets the host-configured connection identifier.</summary>
+    public string ConnectionId { get; init; } = string.Empty;
+
+    /// <summary>Gets the provider type, for example <c>filesystem</c> or <c>sharepoint</c>.</summary>
+    public string Provider { get; init; } = string.Empty;
+
+    /// <summary>Gets whether the connection's provider implements <see cref="IDocumentListingProvider"/>.</summary>
+    public bool Listable { get; init; }
+
+    /// <summary>Gets the connection's templates folder as agents are shown it, or <see langword="null"/>.</summary>
+    public string? TemplatesFolder { get; init; }
+
+    /// <summary>Gets what kind of template location the connection is.</summary>
+    public TemplateLocationKind TemplateLocation { get; init; }
+
+    /// <summary>
+    /// Gets whether the connection has templates to search: a templates folder, or a location
+    /// that is templates as a whole.
+    /// </summary>
+    public bool HasTemplates =>
+        Listable && (TemplatesFolder is not null || TemplateLocation != TemplateLocationKind.None);
 }
 
 /// <summary>Contains a provider-backed apply result and the saved document reference.</summary>
