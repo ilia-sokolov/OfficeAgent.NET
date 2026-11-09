@@ -5735,6 +5735,8 @@ OfficeAgent:AmazonS3Connections[]:Region: String = ""
 OfficeAgent:AmazonS3Connections[]:RegistrationIndexPath: String = ""
 OfficeAgent:AmazonS3Connections[]:RejectFormulaErrors: Boolean = false
 OfficeAgent:AmazonS3Connections[]:ServiceUrl: String = ""
+OfficeAgent:AmazonS3Connections[]:TemplateLocation: String = ""
+OfficeAgent:AmazonS3Connections[]:TemplatesFolder: String = ""
 OfficeAgent:AzureBlobConnections[]:AllowedExtensions: IList<String> = [".docx"]
 OfficeAgent:AzureBlobConnections[]:CalculateFormulas: Boolean = false
 OfficeAgent:AzureBlobConnections[]:ConnectionId: String = ""
@@ -5748,6 +5750,8 @@ OfficeAgent:AzureBlobConnections[]:Prefix: String = ""
 OfficeAgent:AzureBlobConnections[]:RegistrationIndexPath: String = ""
 OfficeAgent:AzureBlobConnections[]:RejectFormulaErrors: Boolean = false
 OfficeAgent:AzureBlobConnections[]:ServiceUri: String = ""
+OfficeAgent:AzureBlobConnections[]:TemplateLocation: String = ""
+OfficeAgent:AzureBlobConnections[]:TemplatesFolder: String = ""
 OfficeAgent:BoxConnections[]:AllowedExtensions: IList<String> = [".docx"]
 OfficeAgent:BoxConnections[]:ApiBaseUrl: String = "https://api.box.com/2.0"
 OfficeAgent:BoxConnections[]:CalculateFormulas: Boolean = false
@@ -5762,6 +5766,8 @@ OfficeAgent:BoxConnections[]:RegistrationIndexPath: String = ""
 OfficeAgent:BoxConnections[]:RejectFormulaErrors: Boolean = false
 OfficeAgent:BoxConnections[]:SubjectId: String = ""
 OfficeAgent:BoxConnections[]:SubjectType: String = "Enterprise"
+OfficeAgent:BoxConnections[]:TemplateLocation: String = ""
+OfficeAgent:BoxConnections[]:TemplatesFolder: String = ""
 OfficeAgent:BoxConnections[]:UploadBaseUrl: String = "https://upload.box.com/api/2.0"
 OfficeAgent:EphemeralCalculateFormulas: Boolean = false
 OfficeAgent:EphemeralConnectionId: String = ""
@@ -5792,6 +5798,8 @@ OfficeAgent:GoogleDriveConnections[]:RegistrationIndexPath: String = ""
 OfficeAgent:GoogleDriveConnections[]:RejectFormulaErrors: Boolean = false
 OfficeAgent:GoogleDriveConnections[]:Scope: String = "https://www.googleapis.com/auth/drive"
 OfficeAgent:GoogleDriveConnections[]:Subject: String = ""
+OfficeAgent:GoogleDriveConnections[]:TemplateLocation: String = ""
+OfficeAgent:GoogleDriveConnections[]:TemplatesFolder: String = ""
 OfficeAgent:GoogleDriveConnections[]:UploadBaseUrl: String = "https://www.googleapis.com/upload/drive/v3"
 OfficeAgent:IManageConnections[]:AllowedExtensions: IList<String> = [".docx"]
 OfficeAgent:IManageConnections[]:ApiBasePath: String = "/work/api/v2"
@@ -5813,6 +5821,8 @@ OfficeAgent:IManageConnections[]:RegistrationIndexPath: String = ""
 OfficeAgent:IManageConnections[]:RejectFormulaErrors: Boolean = false
 OfficeAgent:IManageConnections[]:SaveComment: String = "Saved by OfficeAgent."
 OfficeAgent:IManageConnections[]:ServerUrl: String = ""
+OfficeAgent:IManageConnections[]:TemplateLocation: String = ""
+OfficeAgent:IManageConnections[]:TemplatesFolder: String = ""
 OfficeAgent:IManageConnections[]:TokenPath: String = "/auth/oauth2/token"
 OfficeAgent:IManageConnections[]:Username: String = ""
 OfficeAgent:OfficeTemplates: OfficeTemplateOptions = {"Enabled":false}
@@ -6794,6 +6804,7 @@ MaximumBytes = 104857600
 Region = ""
 RegistrationIndexPath = ""
 ServiceUrl = ""
+TemplatesFolder = ""
 ```
 
 ### `OfficeAgent.AzureBlob.AzureBlobDocumentProviderOptions`
@@ -6810,6 +6821,7 @@ MaximumBytes = 104857600
 Prefix = ""
 RegistrationIndexPath = ""
 ServiceUri = ""
+TemplatesFolder = ""
 ```
 
 ### `OfficeAgent.Box.BoxClientCredentialsOptions`
@@ -6832,6 +6844,7 @@ CreationFolderId = ""
 DefaultChangeGranularity = Span
 DefaultChangeMode = Tracked
 MaximumBytes = 52428800
+TemplatesFolder = ""
 UploadBaseUrl = "https://upload.box.com/api/2.0"
 ```
 
@@ -6902,6 +6915,7 @@ CreationFolderId = ""
 DefaultChangeGranularity = Span
 DefaultChangeMode = Tracked
 MaximumBytes = 104857600
+TemplatesFolder = ""
 UploadBaseUrl = "https://www.googleapis.com/upload/drive/v3"
 ```
 
@@ -6932,6 +6946,7 @@ LockDuringSave = true
 MaximumBytes = 104857600
 SaveComment = "Saved by OfficeAgent."
 ServerUrl = ""
+TemplatesFolder = ""
 ```
 
 ### `OfficeAgent.IManage.IManageOAuthOptions`

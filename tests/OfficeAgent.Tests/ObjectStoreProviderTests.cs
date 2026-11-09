@@ -26,7 +26,9 @@ public abstract class ObjectStoreProviderTests
         string prefix = Prefix,
         long maximumBytes = 100 * 1024 * 1024,
         string? registrationIndexPath = null,
-        bool registerOnce = false);
+        bool registerOnce = false,
+        string? templatesFolder = null,
+        IReadOnlyCollection<string>? allowedExtensions = null);
 
     protected abstract string ProviderName { get; }
 
@@ -602,6 +604,219 @@ public abstract class ObjectStoreProviderTests
         Assert.True(result.Committed);
         var inspected = await client.InspectAsync(result.Document!);
         Assert.Contains(inspected.Paragraphs, paragraph => paragraph.Text.Contains("Contoso"));
+    }
+
+    // ── Listing ───────────────────────────────────────────────────────────────
+
+    private IDocumentListingProvider Lister(
+        FakeObjectStore store, string prefix = Prefix, string? templatesFolder = null,
+        IReadOnlyCollection<string>? allowedExtensions = null, long maximumBytes = 100 * 1024 * 1024) =>
+        Assert.IsAssignableFrom<IDocumentListingProvider>(Provider(
+            store, prefix, maximumBytes, templatesFolder: templatesFolder, allowedExtensions: allowedExtensions));
+
+    [Fact]
+    public async Task Listing_pages_across_service_pages_and_resumes_inside_one()
+    {
+        var store = NewStore();
+        for (var i = 0; i < 205; i++) store.Seed($"contracts/doc{i:000}.docx", new byte[] { 1 });
+        store.Seed("outside.docx", new byte[] { 1 });
+        var provider = Lister(store);
+
+        var first = await provider.ListAsync(new DocumentListQuery { MaximumResults = 150 });
+        var second = await provider.ListAsync(new DocumentListQuery { MaximumResults = 150, ContinuationToken = first.ContinuationToken });
+
+        Assert.Equal(150, first.Items.Count);
+        Assert.NotNull(first.ContinuationToken);
+        Assert.Equal(55, second.Items.Count);
+        Assert.Null(second.ContinuationToken);
+        var names = first.Items.Concat(second.Items).Select(item => item.Name).ToList();
+        Assert.Equal(Enumerable.Range(0, 205).Select(i => $"doc{i:000}.docx"), names);
+        // The first page stopped inside the store's first page of 200; the second read it again
+        // from where it stopped, then the store's second page.
+        Assert.Equal(3, store.Count("LIST"));
+        Assert.All(store.Requests.Where(r => r.Method == "LIST"), r => Assert.Equal("contracts/", r.Name));
+        // The token is encrypted: it names neither the prefix nor the store.
+        Assert.DoesNotContain("contracts", first.ContinuationToken);
+        Assert.DoesNotContain(StorageIdentity, first.ContinuationToken);
+    }
+
+    [Fact]
+    public async Task Listing_filters_by_name_extension_and_size_and_never_lists_macro_files()
+    {
+        var store = NewStore();
+        store.Seed("contracts/Acme-NDA.docx", new byte[] { 1 });
+        store.Seed("contracts/acme-deck.pptx", new byte[] { 1 });
+        store.Seed("contracts/acme-budget.xlsx", new byte[] { 1 });
+        store.Seed("contracts/acme-macro.docm", new byte[] { 1 });
+        store.Seed("contracts/acme-big.docx", new byte[4096]);
+        store.Seed("contracts/other.docx", new byte[] { 1 });
+        var provider = Lister(store, allowedExtensions: new[] { ".docx", ".pptx", ".docm" }, maximumBytes: 1024);
+
+        var all = await provider.ListAsync(new DocumentListQuery());
+        var named = await provider.ListAsync(new DocumentListQuery { NameContains = "ACME" });
+        var narrowed = await provider.ListAsync(new DocumentListQuery { Extensions = new[] { "pptx", ".xlsx" } });
+        var macros = await provider.ListAsync(new DocumentListQuery { Extensions = new[] { ".docm" } });
+
+        Assert.Equal(new[] { "Acme-NDA.docx", "acme-deck.pptx", "other.docx" }, all.Items.Select(item => item.Name));
+        Assert.Equal(new[] { "Acme-NDA.docx", "acme-deck.pptx" }, named.Items.Select(item => item.Name));
+        Assert.Equal("acme-deck.pptx", Assert.Single(narrowed.Items).Name);
+        Assert.Empty(macros.Items);
+        Assert.Null(macros.ContinuationToken);
+        var entry = all.Items[0];
+        Assert.Equal("application/vnd.openxmlformats-officedocument.wordprocessingml.document", entry.ContentType);
+        Assert.Equal(1, entry.Length);
+        Assert.NotNull(entry.LastModified);
+        Assert.False(entry.IsTemplate);
+        Assert.Null(entry.Folder);
+    }
+
+    [Fact]
+    public async Task Listing_reads_one_level_unless_recursive_and_names_each_folder()
+    {
+        var store = NewStore();
+        store.Seed("contracts/top.docx", new byte[] { 1 });
+        store.Seed("contracts/2026/mid.docx", new byte[] { 1 });
+        store.Seed("contracts/2026/q1/deep.docx", new byte[] { 1 });
+        store.Seed("contracts/2026/", Array.Empty<byte>());
+        store.Seed("contractsX/beside.docx", new byte[] { 1 });
+        var provider = Lister(store);
+
+        var flat = await provider.ListAsync(new DocumentListQuery());
+        var recursive = await provider.ListAsync(new DocumentListQuery { Recursive = true });
+        var folder = await provider.ListAsync(new DocumentListQuery { Folder = "/2026/" });
+
+        Assert.Equal("top.docx", Assert.Single(flat.Items).Name);
+        Assert.Equal(
+            new[] { ("top.docx", (string?)null), ("mid.docx", "2026"), ("deep.docx", "2026/q1") },
+            recursive.Items.Select(item => (item.Name, item.Folder)));
+        Assert.Equal(new[] { "top.docx", "2026/mid.docx", "2026/q1/deep.docx" }, recursive.Items.Select(item => item.Source));
+        var mid = Assert.Single(folder.Items);
+        Assert.Equal(("mid.docx", "2026", "2026/mid.docx"), (mid.Name, mid.Folder, mid.Source));
+    }
+
+    [Fact]
+    public async Task Every_listed_source_registers_and_opens()
+    {
+        var store = NewStore();
+        store.Seed("contracts/acme.docx", Contract);
+        store.Seed("contracts/2026/beta.docx", Contract);
+        var provider = Lister(store);
+
+        var listed = await provider.ListAsync(new DocumentListQuery { Recursive = true });
+
+        Assert.Equal(2, listed.Items.Count);
+        foreach (var entry in listed.Items)
+        {
+            var reference = await provider.RegisterAsync(entry.Source);
+            Assert.Equal(entry.Name, reference.Name);
+            using var opened = await provider.OpenReadAsync(reference);
+            Assert.Equal(Contract, ReadAll(opened.Stream));
+        }
+    }
+
+    [Fact]
+    public async Task A_templates_listing_reads_the_templates_folder_and_flags_every_entry()
+    {
+        var store = NewStore();
+        store.Seed("contracts/templates/letter.dotx", Contract);
+        store.Seed("contracts/templates/memo.docx", new byte[] { 1 });
+        store.Seed("contracts/plan.dotx", new byte[] { 1 });
+        store.Seed("contracts/a.docx", new byte[] { 1 });
+        var provider = Lister(store, templatesFolder: "/templates/", allowedExtensions: new[] { ".docx", ".dotx" });
+        var source = Assert.IsAssignableFrom<IConnectionTemplateSource>(provider);
+
+        var templates = await provider.ListAsync(new DocumentListQuery { Templates = true });
+        var documents = await provider.ListAsync(new DocumentListQuery());
+
+        Assert.Equal("templates", source.TemplatesFolder);
+        Assert.Equal(TemplateLocationKind.Connection, source.TemplateLocation);
+        Assert.Equal(new[] { "letter.dotx", "memo.docx" }, templates.Items.Select(item => item.Name));
+        Assert.All(templates.Items, item => Assert.True(item.IsTemplate));
+        Assert.All(templates.Items, item => Assert.Null(item.Folder));
+        Assert.Equal("templates/letter.dotx", templates.Items[0].Source);
+        Assert.Equal("letter.dotx", (await provider.RegisterAsync(templates.Items[0].Source)).Name);
+        Assert.Equal(new[] { ("a.docx", false), ("plan.dotx", true) }, documents.Items.Select(item => (item.Name, item.IsTemplate)));
+    }
+
+    [Fact]
+    public async Task A_connection_without_templates_lists_none_without_asking_the_store()
+    {
+        var store = NewStore();
+        store.Seed("contracts/templates/letter.docx", new byte[] { 1 });
+        var provider = Lister(store);
+        var source = Assert.IsAssignableFrom<IConnectionTemplateSource>(provider);
+
+        var templates = await provider.ListAsync(new DocumentListQuery { Templates = true });
+
+        Assert.Null(source.TemplatesFolder);
+        Assert.Equal(TemplateLocationKind.None, source.TemplateLocation);
+        Assert.Empty(templates.Items);
+        Assert.Null(templates.ContinuationToken);
+        Assert.Equal(0, store.Count("LIST"));
+    }
+
+    [Theory]
+    [InlineData("..", ProviderErrorCode.AccessDenied)]
+    [InlineData("2026/../..", ProviderErrorCode.AccessDenied)]
+    [InlineData("./2026", ProviderErrorCode.AccessDenied)]
+    [InlineData("2026\\q1", ProviderErrorCode.AccessDenied)]
+    [InlineData("2026//q1", ProviderErrorCode.InvalidArgument)]
+    public async Task A_listing_folder_that_leaves_the_prefix_is_refused(string folder, ProviderErrorCode expected)
+    {
+        var store = NewStore();
+        store.Seed("secret.docx", new byte[] { 1 });
+        var provider = Lister(store);
+
+        var error = await Assert.ThrowsAsync<DocumentProviderException>(() =>
+            provider.ListAsync(new DocumentListQuery { Folder = folder }));
+
+        Assert.Equal(expected, error.Code);
+        Assert.Equal(0, store.Count("LIST"));
+    }
+
+    [Fact]
+    public async Task A_continuation_token_cannot_be_edited_reused_elsewhere_or_moved_out_of_the_prefix()
+    {
+        var store = NewStore();
+        for (var i = 0; i < 3; i++) store.Seed($"contracts/doc{i}.docx", new byte[] { 1 });
+        store.Seed("other/doc.docx", new byte[] { 1 });
+        var provider = Lister(store);
+        var token = (await provider.ListAsync(new DocumentListQuery { MaximumResults = 1 })).ContinuationToken!;
+        var edited = token.Substring(0, 10) + (token[10] == 'A' ? 'B' : 'A') + token.Substring(11);
+        // The same connection id confined to another prefix, as after a configuration change.
+        var narrowed = Lister(store, prefix: "other/");
+
+        foreach (var attempt in new Func<Task>[]
+                 {
+                     () => provider.ListAsync(new DocumentListQuery { MaximumResults = 1, ContinuationToken = edited }),
+                     () => provider.ListAsync(new DocumentListQuery { MaximumResults = 1, ContinuationToken = "not-a-token" }),
+                     () => provider.ListAsync(new DocumentListQuery { MaximumResults = 1, NameContains = "doc", ContinuationToken = token }),
+                     () => provider.ListAsync(new DocumentListQuery { MaximumResults = 1, Recursive = true, ContinuationToken = token }),
+                     () => narrowed.ListAsync(new DocumentListQuery { MaximumResults = 1, ContinuationToken = token })
+                 })
+        {
+            var error = await Assert.ThrowsAsync<DocumentProviderException>(attempt);
+            Assert.Equal(ProviderErrorCode.InvalidArgument, error.Code);
+        }
+        Assert.Equal(1, store.Count("LIST"));
+    }
+
+    [Theory]
+    [InlineData(403, "AuthorizationFailure", ProviderErrorCode.AccessDenied)]
+    [InlineData(404, "NotFound", ProviderErrorCode.NotFound)]
+    [InlineData(500, "InternalError", ProviderErrorCode.IO)]
+    public async Task Listing_failures_map_to_provider_errors(int status, string code, ProviderErrorCode expected)
+    {
+        var store = NewStore();
+        store.ListStatus = status;
+        store.ListErrorCode = code;
+        var provider = Lister(store);
+
+        var error = await Assert.ThrowsAsync<DocumentProviderException>(() => provider.ListAsync(new DocumentListQuery()));
+
+        Assert.Equal(expected, error.Code);
+        Assert.Equal(ProviderName, error.Provider);
+        Assert.DoesNotContain(StorageIdentity, error.Message);
     }
 
     protected abstract int PreconditionStatusForCreate { get; }

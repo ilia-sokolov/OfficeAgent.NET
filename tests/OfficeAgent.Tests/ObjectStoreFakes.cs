@@ -101,8 +101,53 @@ internal abstract class FakeObjectStore : HttpMessageHandler
 
     protected abstract string AlreadyExists(out HttpStatusCode status);
 
+    /// <summary>Every listing answers with this status.</summary>
+    public int? ListStatus { get; set; }
+    public string ListErrorCode { get; set; } = "AccessDenied";
+
+    /// <summary>Answers a listing request in the store's wire format, or returns <see langword="null"/> for any other request.</summary>
+    protected abstract HttpResponseMessage? List(HttpRequestMessage request, Dictionary<string, string> query);
+
+    /// <summary>
+    /// The names under <paramref name="prefix"/>, in ordinal order: an object directly under it, or
+    /// with a delimiter the next level's common prefix, once.
+    /// </summary>
+    protected List<(string Name, FakeObject? Item)> Enumerate(string prefix, string? delimiter)
+    {
+        var entries = new SortedDictionary<string, FakeObject?>(StringComparer.Ordinal);
+        foreach (var (name, item) in Objects)
+        {
+            if (!name.StartsWith(prefix, StringComparison.Ordinal)) continue;
+            var cut = string.IsNullOrEmpty(delimiter) ? -1 : name.IndexOf(delimiter, prefix.Length, StringComparison.Ordinal);
+            if (cut < 0) entries[name] = item;
+            else entries[name.Substring(0, cut + delimiter!.Length)] = null;
+        }
+        return entries.Select(pair => (pair.Key, pair.Value)).ToList();
+    }
+
+    protected static Dictionary<string, string> QueryOf(Uri uri) => uri.Query.TrimStart('?')
+        .Split('&', StringSplitOptions.RemoveEmptyEntries)
+        .Select(pair => pair.Split('=', 2))
+        .ToDictionary(pair => Uri.UnescapeDataString(pair[0]), pair => pair.Length > 1 ? Uri.UnescapeDataString(pair[1].Replace('+', ' ')) : string.Empty);
+
     protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
     {
+        if (request.Method == HttpMethod.Get)
+        {
+            var query = QueryOf(request.RequestUri!);
+            if (List(request, query) is { } listing)
+            {
+                Requests.Add(new FakeRequest("LIST", query.TryGetValue("prefix", out var listed) ? listed : string.Empty,
+                    new Dictionary<string, string>(), request.RequestUri!.Query));
+                if (ListStatus is { } listStatus)
+                {
+                    listing.Dispose();
+                    return Error((HttpStatusCode)listStatus, ListErrorCode, head: false);
+                }
+                return listing;
+            }
+        }
+
         var name = NameOf(request.RequestUri!) ?? string.Empty;
         var headers = request.Headers.Concat(request.Content?.Headers ?? Enumerable.Empty<KeyValuePair<string, IEnumerable<string>>>())
             .ToDictionary(pair => pair.Key, pair => string.Join(",", pair.Value), StringComparer.OrdinalIgnoreCase);
@@ -204,6 +249,47 @@ internal sealed class FakeBlobService : FakeObjectStore
     protected override string? ContentTypeOf(HttpRequestMessage request) =>
         request.Headers.TryGetValues("x-ms-blob-content-type", out var values) ? values.First() : null;
 
+    /// <summary>List Blobs (<c>comp=list</c>): the marker is the index of the next entry.</summary>
+    protected override HttpResponseMessage? List(HttpRequestMessage request, Dictionary<string, string> query)
+    {
+        if (!query.TryGetValue("comp", out var comp) || comp != "list") return null;
+        var prefix = query.TryGetValue("prefix", out var p) ? p : string.Empty;
+        var delimiter = query.TryGetValue("delimiter", out var d) ? d : null;
+        var max = query.TryGetValue("maxresults", out var m) ? int.Parse(m) : 5000;
+        var start = query.TryGetValue("marker", out var marker) && marker.Length > 0 ? int.Parse(marker) : 0;
+        var entries = Enumerate(prefix, delimiter);
+        var page = entries.Skip(start).Take(max).ToList();
+        var next = start + max < entries.Count ? (start + max).ToString() : string.Empty;
+
+        var xml = new System.Text.StringBuilder("<?xml version=\"1.0\" encoding=\"utf-8\"?>")
+            .Append($"<EnumerationResults ServiceEndpoint=\"https://{Account}.blob.core.windows.net/\" ContainerName=\"{Container}\">")
+            .Append($"<Prefix>{SecurityElement.Escape(prefix)}</Prefix><MaxResults>{max}</MaxResults>")
+            .Append(delimiter is null ? string.Empty : $"<Delimiter>{SecurityElement.Escape(delimiter)}</Delimiter>")
+            .Append("<Blobs>");
+        foreach (var (name, item) in page)
+        {
+            if (item is null)
+            {
+                xml.Append($"<BlobPrefix><Name>{SecurityElement.Escape(name)}</Name></BlobPrefix>");
+                continue;
+            }
+            xml.Append($"<Blob><Name>{SecurityElement.Escape(name)}</Name><Properties>")
+                .Append($"<Last-Modified>{Modified.ToString("R")}</Last-Modified>")
+                .Append($"<Etag>{SecurityElement.Escape(item.ETag.Trim('"'))}</Etag>")
+                .Append($"<Content-Length>{item.Bytes.Length}</Content-Length>")
+                .Append($"<Content-Type>{SecurityElement.Escape(item.ContentType)}</Content-Type>")
+                .Append("<BlobType>BlockBlob</BlobType></Properties></Blob>");
+        }
+        xml.Append($"</Blobs><NextMarker>{next}</NextMarker></EnumerationResults>");
+        return new HttpResponseMessage(HttpStatusCode.OK)
+        {
+            Content = new StringContent(xml.ToString(), System.Text.Encoding.UTF8, "application/xml")
+        };
+    }
+
+    /// <summary>The last-modified time every listed blob reports.</summary>
+    public static readonly DateTimeOffset Modified = new(2026, 11, 1, 9, 0, 0, TimeSpan.Zero);
+
     protected override string AlreadyExists(out HttpStatusCode status)
     {
         status = HttpStatusCode.Conflict;
@@ -257,6 +343,40 @@ internal sealed class FakeS3Service : FakeObjectStore
     }
 
     protected override string? ContentTypeOf(HttpRequestMessage request) => request.Content?.Headers.ContentType?.ToString();
+
+    /// <summary>ListObjectsV2 (<c>list-type=2</c>): the continuation token is the index of the next entry.</summary>
+    protected override HttpResponseMessage? List(HttpRequestMessage request, Dictionary<string, string> query)
+    {
+        if (!query.TryGetValue("list-type", out var type) || type != "2") return null;
+        var prefix = query.TryGetValue("prefix", out var p) ? p : string.Empty;
+        var delimiter = query.TryGetValue("delimiter", out var d) ? d : null;
+        var max = query.TryGetValue("max-keys", out var m) ? int.Parse(m) : 1000;
+        var start = query.TryGetValue("continuation-token", out var token) ? int.Parse(token) : 0;
+        var encode = query.TryGetValue("encoding-type", out var encoding) && encoding == "url";
+        string Text(string value) => SecurityElement.Escape(encode ? Uri.EscapeDataString(value) : value)!;
+        var entries = Enumerate(prefix, delimiter);
+        var page = entries.Skip(start).Take(max).ToList();
+        var truncated = start + max < entries.Count;
+
+        var xml = new System.Text.StringBuilder("<?xml version=\"1.0\" encoding=\"UTF-8\"?>")
+            .Append("<ListBucketResult xmlns=\"http://s3.amazonaws.com/doc/2006-03-01/\">")
+            .Append($"<Name>{Bucket}</Name><Prefix>{Text(prefix)}</Prefix><KeyCount>{page.Count}</KeyCount><MaxKeys>{max}</MaxKeys>")
+            .Append(delimiter is null ? string.Empty : $"<Delimiter>{Text(delimiter)}</Delimiter>")
+            .Append(encode ? "<EncodingType>url</EncodingType>" : string.Empty)
+            .Append($"<IsTruncated>{(truncated ? "true" : "false")}</IsTruncated>")
+            .Append(token is null ? string.Empty : $"<ContinuationToken>{token}</ContinuationToken>")
+            .Append(truncated ? $"<NextContinuationToken>{start + max}</NextContinuationToken>" : string.Empty);
+        foreach (var (name, item) in page.Where(entry => entry.Item is not null))
+            xml.Append($"<Contents><Key>{Text(name)}</Key><LastModified>2026-11-01T09:00:00.000Z</LastModified>")
+                .Append($"<ETag>{SecurityElement.Escape(item!.ETag)}</ETag><Size>{item.Bytes.Length}</Size><StorageClass>STANDARD</StorageClass></Contents>");
+        foreach (var (name, _) in page.Where(entry => entry.Item is null))
+            xml.Append($"<CommonPrefixes><Prefix>{Text(name)}</Prefix></CommonPrefixes>");
+        xml.Append("</ListBucketResult>");
+        return new HttpResponseMessage(HttpStatusCode.OK)
+        {
+            Content = new StringContent(xml.ToString(), System.Text.Encoding.UTF8, "application/xml")
+        };
+    }
 
     protected override string AlreadyExists(out HttpStatusCode status)
     {

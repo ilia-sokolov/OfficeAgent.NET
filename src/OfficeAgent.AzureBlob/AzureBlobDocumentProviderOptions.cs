@@ -1,4 +1,5 @@
 using OfficeAgent.Abstractions;
+using OfficeAgent.Core.DocumentProviders;
 
 namespace OfficeAgent.AzureBlob;
 
@@ -29,6 +30,20 @@ public sealed class AzureBlobDocumentProviderOptions
     /// registered by names relative to it, and every name must stay inside it.
     /// </summary>
     public string Prefix { get; set; } = string.Empty;
+
+    /// <summary>
+    /// Gets or sets an optional folder of templates relative to <see cref="Prefix"/>, such as
+    /// <c>templates</c>. A templates listing reads it, and every file listed from it counts as a
+    /// template. Empty means the connection has no templates folder.
+    /// </summary>
+    public string TemplatesFolder { get; set; } = string.Empty;
+
+    /// <summary>
+    /// Gets or sets where <see cref="TemplatesFolder"/> sits, such as
+    /// <see cref="TemplateLocationKind.Organization"/> for the organization's approved templates.
+    /// Unset means <see cref="TemplateLocationKind.Connection"/> when a templates folder is set.
+    /// </summary>
+    public TemplateLocationKind? TemplateLocation { get; set; }
 
     /// <summary>
     /// Gets or sets the client id of a user-assigned managed identity for

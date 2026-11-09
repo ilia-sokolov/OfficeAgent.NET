@@ -16,7 +16,8 @@ public sealed class AzureBlobProviderTests : ObjectStoreProviderTests
 
     private protected override IDocumentCreatingProvider Provider(
         FakeObjectStore store, string prefix = Prefix, long maximumBytes = 100 * 1024 * 1024,
-        string? registrationIndexPath = null, bool registerOnce = false) =>
+        string? registrationIndexPath = null, bool registerOnce = false, string? templatesFolder = null,
+        IReadOnlyCollection<string>? allowedExtensions = null) =>
         new AzureBlobDocumentProvider(
             new AzureBlobDocumentProviderOptions
             {
@@ -24,7 +25,8 @@ public sealed class AzureBlobProviderTests : ObjectStoreProviderTests
                 Prefix = prefix,
                 MaximumBytes = maximumBytes,
                 RegistrationIndexPath = registrationIndexPath ?? string.Empty,
-                AllowedExtensions = new[] { ".docx" }
+                AllowedExtensions = allowedExtensions ?? new[] { ".docx" },
+                TemplatesFolder = templatesFolder ?? string.Empty
             },
             ((FakeBlobService)store).Client(),
             registerOnce ? new RegisterOnceStore() : null);

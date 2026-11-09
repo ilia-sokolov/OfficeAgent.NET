@@ -223,8 +223,38 @@ internal static class StorageConnections
                 throw setting.Error($"allows no extension. Set {setting.Variable("AllowedExtensions__0")}, such as .docx.");
             OfficeAgentMcpServer.ParseChangeMode(connection.DefaultChangeMode, connection.ConnectionId);
             OfficeAgentMcpServer.ParseChangeGranularity(connection.DefaultChangeGranularity, connection.ConnectionId);
+            ParseTemplateLocation(connection, setting);
             validate(connection, setting);
         }
+    }
+
+    /// <summary>
+    /// The configured template location, or <see langword="null"/> to let the provider take
+    /// <see cref="TemplateLocationKind.Connection"/> when a templates folder is set.
+    /// </summary>
+    private static TemplateLocationKind? ParseTemplateLocation(StorageConnectionOptions c, Setting setting)
+    {
+        var hasFolder = HasFolder(c.TemplatesFolder);
+        if (string.IsNullOrWhiteSpace(c.TemplateLocation)) return null;
+        var trimmed = c.TemplateLocation.Trim();
+        if (char.IsDigit(trimmed[0]) || trimmed[0] == '-' ||
+            !Enum.TryParse<TemplateLocationKind>(trimmed, ignoreCase: true, out var location) ||
+            !Enum.IsDefined(typeof(TemplateLocationKind), location))
+            throw setting.Error($"has TemplateLocation '{trimmed}'. Expected Connection, Personal, Workgroup, Organization or None.");
+        if (!hasFolder && location != TemplateLocationKind.None)
+            throw setting.Error($"has TemplateLocation {location} but no TemplatesFolder. Set {setting.Variable("TemplatesFolder")}.");
+        if (hasFolder && location == TemplateLocationKind.None)
+            throw setting.Error("has a TemplatesFolder and TemplateLocation None. Leave TemplateLocation empty, or name where the folder sits.");
+        return location;
+    }
+
+    /// <summary>A templates folder for an object store is a plain relative path inside the connection's prefix.</summary>
+    private static void RequireRelativeFolder(string folder, Setting setting)
+    {
+        var trimmed = folder.Trim().Trim('/');
+        if (trimmed.Length == 0 || trimmed.IndexOf('\\') >= 0 ||
+            trimmed.Split('/').Any(segment => segment.Length == 0 || segment == "." || segment == ".." || segment.Any(char.IsControl)))
+            throw setting.Error("has a TemplatesFolder that is not a folder inside the connection's prefix. Use a relative path such as templates.");
     }
 
     private static void ValidateIManage(IManageConnectionOptions c, Setting setting)
@@ -252,6 +282,9 @@ internal static class StorageConnections
         if (HasFolder(c.CreationFolderId) && !IManageContainerId.IsMatch(c.CreationFolderId.Trim()))
             throw setting.Error(
                 "has a CreationFolderId that is not an iManage folder or workspace id. Use LIBRARY!number, such as ACTIVE!773.");
+        if (HasFolder(c.TemplatesFolder) && !IManageContainerId.IsMatch(c.TemplatesFolder.Trim()))
+            throw setting.Error(
+                "has a TemplatesFolder that is not an iManage folder or workspace id. Use LIBRARY!number, such as ACTIVE!780.");
     }
 
     private static void ValidateGoogleDrive(GoogleDriveConnectionOptions c, Setting setting)
@@ -267,6 +300,9 @@ internal static class StorageConnections
         Require(c.Scope, "Scope", "the OAuth scope, https://www.googleapis.com/auth/drive by default", setting);
         RequireUrl(c.ApiBaseUrl, httpsOnly: true, "ApiBaseUrl", "an absolute https URL", setting);
         RequireUrl(c.UploadBaseUrl, httpsOnly: true, "UploadBaseUrl", "an absolute https URL", setting);
+        if (HasFolder(c.TemplatesFolder) && !c.TemplatesFolder.Trim().All(ch =>
+                ch is (>= 'a' and <= 'z') or (>= 'A' and <= 'Z') or (>= '0' and <= '9') or '-' or '_'))
+            throw setting.Error("has a TemplatesFolder that is not a Google Drive folder id. Use the id from the folder's URL.");
     }
 
     private static void ValidateBox(BoxConnectionOptions c, Setting setting)
@@ -279,6 +315,8 @@ internal static class StorageConnections
         RequireUrl(c.UploadBaseUrl, httpsOnly: true, "UploadBaseUrl", "an absolute https URL", setting);
         if (HasFolder(c.CreationFolderId) && !c.CreationFolderId.Trim().All(ch => ch is >= '0' and <= '9'))
             throw setting.Error("has a CreationFolderId that is not a numeric Box folder id.");
+        if (HasFolder(c.TemplatesFolder) && !c.TemplatesFolder.Trim().All(ch => ch is >= '0' and <= '9'))
+            throw setting.Error("has a TemplatesFolder that is not a numeric Box folder id.");
     }
 
     private static void ValidateAzureBlob(AzureBlobConnectionOptions c, Setting setting)
@@ -292,6 +330,8 @@ internal static class StorageConnections
                 $"DefaultAzureCredential), or {setting.Variable("ConnectionString")} from a secret store.");
         if (hasUri)
             RequireUrl(c.ServiceUri, httpsOnly: false, "ServiceUri", "an absolute http(s) URL such as https://contoso.blob.core.windows.net", setting);
+        if (HasFolder(c.TemplatesFolder))
+            RequireRelativeFolder(c.TemplatesFolder, setting);
     }
 
     private static void ValidateAmazonS3(AmazonS3ConnectionOptions c, Setting setting)
@@ -299,6 +339,8 @@ internal static class StorageConnections
         Require(c.BucketName, "BucketName", "the bucket this connection is confined to", setting);
         if (!string.IsNullOrWhiteSpace(c.ServiceUrl))
             RequireUrl(c.ServiceUrl, httpsOnly: false, "ServiceUrl", "an absolute http(s) URL for an S3-compatible store", setting);
+        if (HasFolder(c.TemplatesFolder))
+            RequireRelativeFolder(c.TemplatesFolder, setting);
     }
 
     private static void Require(string? value, string name, string meaning, Setting setting)
@@ -387,6 +429,9 @@ internal static class StorageConnections
             }
         });
 
+    private static TemplateLocationKind? TemplateLocationOf(StorageKind kind, StorageConnectionOptions c) =>
+        ParseTemplateLocation(c, new Setting(kind, string.Empty, 0, c.ConnectionId));
+
     private static HttpClient Http(IServiceProvider services, string provider, Func<HttpClient> fallback) =>
         services.GetService<StorageTransports>()?.Http?.Invoke(provider) ?? fallback();
 
@@ -425,7 +470,9 @@ internal static class StorageConnections
             DefaultChangeMode = OfficeAgentMcpServer.ParseChangeMode(c.DefaultChangeMode, c.ConnectionId),
             DefaultChangeGranularity = OfficeAgentMcpServer.ParseChangeGranularity(c.DefaultChangeGranularity, c.ConnectionId),
             CalculateFormulas = c.CalculateFormulas,
-            RejectFormulaErrors = c.RejectFormulaErrors
+            RejectFormulaErrors = c.RejectFormulaErrors,
+            TemplatesFolder = c.TemplatesFolder,
+            TemplateLocation = TemplateLocationOf(StorageKind.IManage, c)
         }, http, tokens, store);
     }
 
@@ -454,7 +501,9 @@ internal static class StorageConnections
             DefaultChangeMode = OfficeAgentMcpServer.ParseChangeMode(c.DefaultChangeMode, c.ConnectionId),
             DefaultChangeGranularity = OfficeAgentMcpServer.ParseChangeGranularity(c.DefaultChangeGranularity, c.ConnectionId),
             CalculateFormulas = c.CalculateFormulas,
-            RejectFormulaErrors = c.RejectFormulaErrors
+            RejectFormulaErrors = c.RejectFormulaErrors,
+            TemplatesFolder = c.TemplatesFolder,
+            TemplateLocation = TemplateLocationOf(StorageKind.GoogleDrive, c)
         }, http, tokens, store);
     }
 
@@ -483,7 +532,9 @@ internal static class StorageConnections
             DefaultChangeMode = OfficeAgentMcpServer.ParseChangeMode(c.DefaultChangeMode, c.ConnectionId),
             DefaultChangeGranularity = OfficeAgentMcpServer.ParseChangeGranularity(c.DefaultChangeGranularity, c.ConnectionId),
             CalculateFormulas = c.CalculateFormulas,
-            RejectFormulaErrors = c.RejectFormulaErrors
+            RejectFormulaErrors = c.RejectFormulaErrors,
+            TemplatesFolder = c.TemplatesFolder,
+            TemplateLocation = TemplateLocationOf(StorageKind.Box, c)
         }, http, tokens, store);
     }
 
@@ -503,7 +554,9 @@ internal static class StorageConnections
             DefaultChangeMode = OfficeAgentMcpServer.ParseChangeMode(c.DefaultChangeMode, c.ConnectionId),
             DefaultChangeGranularity = OfficeAgentMcpServer.ParseChangeGranularity(c.DefaultChangeGranularity, c.ConnectionId),
             CalculateFormulas = c.CalculateFormulas,
-            RejectFormulaErrors = c.RejectFormulaErrors
+            RejectFormulaErrors = c.RejectFormulaErrors,
+            TemplatesFolder = c.TemplatesFolder,
+            TemplateLocation = TemplateLocationOf(StorageKind.AzureBlob, c)
         };
         return services.GetService<StorageTransports>()?.AzureBlob is { } container
             ? new AzureBlobDocumentProvider(options, container(c))
@@ -526,7 +579,9 @@ internal static class StorageConnections
             DefaultChangeMode = OfficeAgentMcpServer.ParseChangeMode(c.DefaultChangeMode, c.ConnectionId),
             DefaultChangeGranularity = OfficeAgentMcpServer.ParseChangeGranularity(c.DefaultChangeGranularity, c.ConnectionId),
             CalculateFormulas = c.CalculateFormulas,
-            RejectFormulaErrors = c.RejectFormulaErrors
+            RejectFormulaErrors = c.RejectFormulaErrors,
+            TemplatesFolder = c.TemplatesFolder,
+            TemplateLocation = TemplateLocationOf(StorageKind.AmazonS3, c)
         };
         return services.GetService<StorageTransports>()?.AmazonS3 is { } client
             ? new AmazonS3DocumentProvider(options, client(c))

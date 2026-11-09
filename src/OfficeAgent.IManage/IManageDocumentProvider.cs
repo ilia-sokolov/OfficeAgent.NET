@@ -47,6 +47,20 @@ public sealed class IManageDocumentProviderOptions
     /// </summary>
     public string CreationDocumentClass { get; set; } = string.Empty;
 
+    /// <summary>
+    /// Gets or sets the folder or workspace id, <c>LIBRARY!number</c>, of a templates folder. A
+    /// templates listing reads it, and every document listed from it counts as a template. Empty
+    /// means the connection has no templates folder.
+    /// </summary>
+    public string TemplatesFolder { get; set; } = string.Empty;
+
+    /// <summary>
+    /// Gets or sets where <see cref="TemplatesFolder"/> sits, such as
+    /// <see cref="TemplateLocationKind.Organization"/> for the firm's approved precedents.
+    /// Unset means <see cref="TemplateLocationKind.Connection"/> when a templates folder is set.
+    /// </summary>
+    public TemplateLocationKind? TemplateLocation { get; set; }
+
     /// <summary>Gets or sets the comment recorded on each version and document OfficeAgent saves.</summary>
     public string SaveComment { get; set; } = "Saved by OfficeAgent.";
 
@@ -95,11 +109,14 @@ public sealed class IManageDocumentProviderOptions
 /// keeps the registration id and NewVersion mints another. <see cref="SaveMode.NewDocument"/>
 /// and creation file a new document in the configured creation folder. Every save is conditional
 /// on the version that was opened, and by default the document is locked while the save checks
-/// and uploads. A document checked out by someone else is refused, never written. The agent only
-/// sees opaque ids - never library ids, document numbers, server URLs, or tokens. Removing a
-/// registration never deletes iManage content.
+/// and uploads. A document checked out by someone else is refused, never written. Edits address
+/// opaque ids; server URLs and tokens never reach the agent. A listing is the exception for ids:
+/// each entry's source is the document id registration takes, <c>LIBRARY!number.version</c>.
+/// Removing a registration never deletes iManage content. Registration has no folder scope;
+/// listing reads the creation folder, or the templates folder for a templates listing, and the
+/// folders below it.
 /// </remarks>
-public sealed class IManageDocumentProvider : IDocumentProvider, IDocumentCreatingProvider, IConnectionEditingDefaults, IConnectionGranularityDefaults, IConnectionCalculationDefaults
+public sealed class IManageDocumentProvider : IDocumentProvider, IDocumentCreatingProvider, IDocumentListingProvider, IConnectionTemplateSource, IConnectionEditingDefaults, IConnectionGranularityDefaults, IConnectionCalculationDefaults
 {
     /// <summary>Gets the provider discriminator used in document references.</summary>
     public const string ProviderName = "imanage";
@@ -117,6 +134,8 @@ public sealed class IManageDocumentProvider : IDocumentProvider, IDocumentCreati
     private readonly string _apiRoot;
     private readonly string? _creationFolderId;
     private readonly string? _creationLibrary;
+    private readonly string? _templatesFolderId;
+    private readonly TemplateLocationKind _templateLocation;
 
     /// <summary>Initializes a provider over one iManage Work customer.</summary>
     public IManageDocumentProvider(
@@ -150,6 +169,14 @@ public sealed class IManageDocumentProvider : IDocumentProvider, IDocumentCreati
             _creationFolderId = options.CreationFolderId.Trim();
             _creationLibrary = library;
         }
+        if (!string.IsNullOrWhiteSpace(options.TemplatesFolder))
+        {
+            if (!IManageIds.TryParseContainerId(options.TemplatesFolder, out _))
+                throw new ArgumentException(
+                    "TemplatesFolder must be an iManage folder or workspace id such as 'ACTIVE!773'.", nameof(options));
+            _templatesFolderId = options.TemplatesFolder.Trim();
+        }
+        _templateLocation = CloudListing.TemplateLocationFor(_templatesFolderId is not null, options.TemplateLocation, nameof(options));
 
         _server = server;
         _apiRoot = server.GetLeftPart(UriPartial.Authority) + "/" + options.ApiBasePath.Trim().Trim('/') +
@@ -184,6 +211,13 @@ public sealed class IManageDocumentProvider : IDocumentProvider, IDocumentCreati
 
     /// <inheritdoc />
     public bool RejectFormulaErrors => _options.RejectFormulaErrors;
+
+    /// <inheritdoc />
+    /// <remarks>The templates folder's id, <c>LIBRARY!number</c>.</remarks>
+    public string? TemplatesFolder => _templatesFolderId;
+
+    /// <inheritdoc />
+    public TemplateLocationKind TemplateLocation => _templateLocation;
 
     /// <inheritdoc />
     public async Task<DocumentReference> RegisterAsync(
@@ -330,6 +364,75 @@ public sealed class IManageDocumentProvider : IDocumentProvider, IDocumentCreati
         if (!await _store.RemoveAsync(reference.ItemId, cancellationToken).ConfigureAwait(false))
             throw Error(ProviderErrorCode.NotFound,
                 $"The provider document '{reference.ItemId}' is not registered.", reference.ItemId);
+    }
+
+    /// <inheritdoc />
+    /// <remarks>
+    /// Lists the creation folder, or the templates folder for a templates listing, with
+    /// <c>GET /libraries/{library}/folders/{id}/children</c> and <c>limit</c>/<c>offset</c> paging.
+    /// A connection without that folder reports <see cref="ProviderErrorCode.ConfigurationError"/>,
+    /// or an empty page for templates. <see cref="DocumentListQuery.Folder"/> is a path of folder
+    /// names below it, found by reading each level's children. Each entry's source is the listed
+    /// version's id, <c>LIBRARY!number.version</c>. Search folders are not descended into, so a
+    /// listing cannot reach documents filed elsewhere. A page makes at most
+    /// <see cref="CloudListing.MaximumServiceCalls"/> requests, folder lookups included.
+    /// </remarks>
+    public async Task<DocumentListPage> ListAsync(DocumentListQuery query, CancellationToken cancellationToken = default)
+    {
+        var request = CloudListingRequest.Create(query, _allowedExtensions, out var problem);
+        if (request is null)
+        {
+            var (code, message) = CloudListing.FolderError(problem);
+            throw Error(code, message);
+        }
+        var rootId = request.Templates ? _templatesFolderId : _creationFolderId;
+        if (rootId is null)
+        {
+            if (request.Templates) return new DocumentListPage();
+            throw Error(ProviderErrorCode.ConfigurationError,
+                "This iManage connection has no folder to list. Configure CreationFolderId, or TemplatesFolder for templates.");
+        }
+
+        try
+        {
+            var calls = CloudListing.MaximumServiceCalls;
+            CloudListingCursor cursor;
+            if (string.IsNullOrEmpty(query.ContinuationToken))
+            {
+                var folderId = rootId;
+                foreach (var segment in request.FolderSegments)
+                {
+                    string? found = null;
+                    string? offset = null;
+                    do
+                    {
+                        // At least one request must be left for the listing itself.
+                        if (calls <= 1) throw Error(ProviderErrorCode.InvalidArgument, CloudListing.TooDeepMessage);
+                        var page = await ListChildrenAsync(folderId, offset, cancellationToken).ConfigureAwait(false);
+                        calls--;
+                        found = page.Items.FirstOrDefault(item =>
+                            item.IsFolder && string.Equals(item.Name, segment, StringComparison.OrdinalIgnoreCase))?.Id;
+                        offset = page.NextToken;
+                    }
+                    while (found is null && offset is not null);
+                    folderId = found ?? throw Error(ProviderErrorCode.NotFound,
+                        $"No folder named '{segment}' is in the listed iManage folder.");
+                }
+                cursor = CloudListing.Start(folderId, request);
+            }
+            else if (!CloudListingCursor.TryUnprotect(query.ContinuationToken!, ConnectionId, request.Fingerprint, out cursor))
+            {
+                throw Error(ProviderErrorCode.InvalidArgument, CloudListing.InvalidTokenMessage);
+            }
+
+            return await CloudListing.WalkAsync(
+                request, cursor, ListChildrenAsync, calls, ConnectionId, cancellationToken).ConfigureAwait(false);
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException and not DocumentProviderException)
+        {
+            // Transport and token failures can carry request URLs, which name the folder.
+            throw Error(ProviderErrorCode.IO, "iManage could not be reached to list the folder.", itemId: null, ex);
+        }
     }
 
     // ── Sources ───────────────────────────────────────────────────────────────
@@ -529,6 +632,90 @@ public sealed class IManageDocumentProvider : IDocumentProvider, IDocumentCreati
         foreach (var child in ParseProfiles(payload, _creationLibrary!, 0, itemId, documentsOnly: true))
             names.Add(child.FileName);
         return names;
+    }
+
+    /// <summary>
+    /// One page of a folder's children with <c>limit</c>/<c>offset</c> paging, subfolders included,
+    /// so a recursive listing can descend. A full page means another may follow; the offset is the
+    /// page token.
+    /// </summary>
+    private async Task<CloudListingPage> ListChildrenAsync(string folderId, string? offset, CancellationToken cancellationToken)
+    {
+        if (!IManageIds.TryParseContainerId(folderId, out var library))
+            throw Error(ProviderErrorCode.IO, "iManage listed a folder whose id is not a folder id.");
+        var start = int.TryParse(offset, System.Globalization.NumberStyles.None,
+            System.Globalization.CultureInfo.InvariantCulture, out var parsed) ? parsed : 0;
+        var limit = CloudListing.ServicePageSize.ToString(System.Globalization.CultureInfo.InvariantCulture);
+        using var response = await SendAsync(
+            HttpMethod.Get,
+            $"{LibraryUrl(library)}/folders/{folderId.Trim()}/children?limit={limit}&offset={start.ToString(System.Globalization.CultureInfo.InvariantCulture)}",
+            content: null, HttpCompletionOption.ResponseContentRead, cancellationToken).ConfigureAwait(false);
+        await ThrowOnFailureAsync(response, itemId: null, write: false).ConfigureAwait(false);
+        var payload = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
+
+        var children = new List<CloudListingChild>();
+        int count;
+        try
+        {
+            using var json = JsonDocument.Parse(payload);
+            var root = json.RootElement;
+            var data = root.ValueKind == JsonValueKind.Object && root.TryGetProperty("data", out var d) ? d : root;
+            if (data.ValueKind == JsonValueKind.Object && data.TryGetProperty("results", out var results))
+                data = results;
+            if (data.ValueKind != JsonValueKind.Array)
+                return new CloudListingPage();
+
+            count = data.GetArrayLength();
+            foreach (var element in data.EnumerateArray())
+            {
+                if (element.ValueKind != JsonValueKind.Object) continue;
+                var wstype = ReadString(element, "wstype") ?? string.Empty;
+                if (wstype.Equals("folder", StringComparison.OrdinalIgnoreCase) ||
+                    wstype.Equals("tab", StringComparison.OrdinalIgnoreCase))
+                {
+                    // A search folder's children are query results from anywhere in the library,
+                    // so it is not descended into.
+                    var id = ReadString(element, "id") ?? string.Empty;
+                    var search = (ReadString(element, "folder_type") ?? string.Empty)
+                        .IndexOf("search", StringComparison.OrdinalIgnoreCase) >= 0;
+                    if (IManageIds.TryParseContainerId(id, out _) && !search)
+                        children.Add(new CloudListingChild { Id = id.Trim(), Name = ReadString(element, "name") ?? string.Empty, IsFolder = true });
+                    continue;
+                }
+                if (wstype.Length > 0 && !wstype.Equals("document", StringComparison.OrdinalIgnoreCase))
+                    continue;
+
+                var profiles = new List<Profile>();
+                AddProfile(profiles, element, library, 0, documentsOnly: true);
+                if (profiles.Count == 0) continue;
+                var profile = profiles[0];
+                var valid = IManageIds.IsLibrary(profile.Library) && profile.DocumentNumber > 0 && profile.Version > 0;
+                children.Add(new CloudListingChild
+                {
+                    Id = valid ? $"{profile.Library}!{profile.DocumentNumber}.{profile.Version}" : string.Empty,
+                    Name = profile.FileName,
+                    Unusable = !valid || profile.Size > _options.MaximumBytes,
+                    Length = profile.Size,
+                    LastModified = DateTimeOffset.TryParse(profile.EditDate, System.Globalization.CultureInfo.InvariantCulture,
+                        System.Globalization.DateTimeStyles.AssumeUniversal, out var edited)
+                        ? edited
+                        : null
+                });
+            }
+        }
+        catch (Exception ex) when (ex is JsonException or InvalidOperationException or FormatException)
+        {
+            throw Error(ProviderErrorCode.IO, "iManage returned an unreadable folder listing.", itemId: null, ex);
+        }
+
+        // The page size is what was asked for, so a short page is the last one.
+        return new CloudListingPage
+        {
+            Items = children,
+            NextToken = count >= CloudListing.ServicePageSize
+                ? (start + count).ToString(System.Globalization.CultureInfo.InvariantCulture)
+                : null
+        };
     }
 
     private async Task<Profile> UploadAsync(

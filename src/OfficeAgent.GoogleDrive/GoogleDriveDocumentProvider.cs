@@ -32,6 +32,20 @@ public sealed class GoogleDriveDocumentProviderOptions
     public string CreationFolderId { get; set; } = string.Empty;
 
     /// <summary>
+    /// Gets or sets the Drive folder id of a templates folder. A templates listing reads it, and
+    /// every file listed from it counts as a template. Empty means the connection has no
+    /// templates folder.
+    /// </summary>
+    public string TemplatesFolder { get; set; } = string.Empty;
+
+    /// <summary>
+    /// Gets or sets where <see cref="TemplatesFolder"/> sits, such as
+    /// <see cref="TemplateLocationKind.Organization"/> for the organization's approved templates.
+    /// Unset means <see cref="TemplateLocationKind.Connection"/> when a templates folder is set.
+    /// </summary>
+    public TemplateLocationKind? TemplateLocation { get; set; }
+
+    /// <summary>
     /// Gets or sets the change mode used when an operation does not state one. The
     /// default is <see cref="ChangeMode.Tracked"/>, which suits documents a person
     /// reviews. Set <see cref="ChangeMode.Direct"/> for generated or machine-owned files,
@@ -83,8 +97,13 @@ public sealed class GoogleDriveDocumentProviderOptions
 /// <see cref="ProviderErrorCode.AlreadyExists"/> refusal is a name check made just before the
 /// upload. Removing a registration never deletes Drive content.
 /// </para>
+/// <para>
+/// Registration has no folder scope: any file the identity can reach can be registered. Listing
+/// does: it reads the creation folder, or the templates folder for a templates listing, and the
+/// folders below it, with <c>files.list</c>.
+/// </para>
 /// </remarks>
-public sealed class GoogleDriveDocumentProvider : IDocumentProvider, IDocumentCreatingProvider, IConnectionEditingDefaults, IConnectionGranularityDefaults, IConnectionCalculationDefaults
+public sealed class GoogleDriveDocumentProvider : IDocumentProvider, IDocumentCreatingProvider, IDocumentListingProvider, IConnectionTemplateSource, IConnectionEditingDefaults, IConnectionGranularityDefaults, IConnectionCalculationDefaults
 {
     /// <summary>Gets the provider discriminator used in document references.</summary>
     public const string ProviderName = "googledrive";
@@ -95,6 +114,7 @@ public sealed class GoogleDriveDocumentProvider : IDocumentProvider, IDocumentCr
     private const string FileFields =
         "id,name,mimeType,size,version,headRevisionId,parents,driveId,trashed," +
         "capabilities(canModifyContent),contentRestrictions(readOnly)";
+    private const string ListFields = "nextPageToken,files(id,name,mimeType,size,modifiedTime,trashed)";
 
     private static readonly HttpMethod Patch = new("PATCH");
 
@@ -106,6 +126,8 @@ public sealed class GoogleDriveDocumentProvider : IDocumentProvider, IDocumentCr
     private readonly string _uploadBaseUrl;
     private readonly HashSet<string> _allowedExtensions;
     private readonly string? _creationFolderId;
+    private readonly string? _templatesFolderId;
+    private readonly TemplateLocationKind _templateLocation;
 
     /// <summary>Initializes a provider over the Drive files the token's identity can reach.</summary>
     public GoogleDriveDocumentProvider(
@@ -136,6 +158,12 @@ public sealed class GoogleDriveDocumentProvider : IDocumentProvider, IDocumentCr
         _creationFolderId = string.IsNullOrWhiteSpace(options.CreationFolderId)
             ? null
             : options.CreationFolderId.Trim();
+        _templatesFolderId = string.IsNullOrWhiteSpace(options.TemplatesFolder)
+            ? null
+            : options.TemplatesFolder.Trim();
+        if (_templatesFolderId is not null && !IsFileId(_templatesFolderId))
+            throw new ArgumentException("TemplatesFolder must be a Google Drive folder id.", nameof(options));
+        _templateLocation = CloudListing.TemplateLocationFor(_templatesFolderId is not null, options.TemplateLocation, nameof(options));
     }
 
     /// <inheritdoc />
@@ -155,6 +183,13 @@ public sealed class GoogleDriveDocumentProvider : IDocumentProvider, IDocumentCr
 
     /// <inheritdoc />
     public bool RejectFormulaErrors => _options.RejectFormulaErrors;
+
+    /// <inheritdoc />
+    /// <remarks>The templates folder's Drive folder id.</remarks>
+    public string? TemplatesFolder => _templatesFolderId;
+
+    /// <inheritdoc />
+    public TemplateLocationKind TemplateLocation => _templateLocation;
 
     /// <inheritdoc />
     public async Task<DocumentReference> RegisterAsync(
@@ -342,6 +377,71 @@ public sealed class GoogleDriveDocumentProvider : IDocumentProvider, IDocumentCr
                 $"The provider document '{reference.ItemId}' is not registered.", reference.ItemId);
     }
 
+    /// <inheritdoc />
+    /// <remarks>
+    /// Lists the creation folder, or the templates folder for a templates listing, with
+    /// <c>files.list</c> and a <c>'folder' in parents and trashed = false</c> query. A connection
+    /// without that folder reports <see cref="ProviderErrorCode.ConfigurationError"/>, or an empty
+    /// page for templates. <see cref="DocumentListQuery.Folder"/> is a path of folder names below
+    /// it, found with one name query per name. Each entry's source is the Drive file id. Native
+    /// Google files, shortcuts and files over the size cap are not listed. A page makes at most
+    /// <see cref="CloudListing.MaximumServiceCalls"/> requests, folder lookups included.
+    /// </remarks>
+    public async Task<DocumentListPage> ListAsync(DocumentListQuery query, CancellationToken cancellationToken = default)
+    {
+        var request = CloudListingRequest.Create(query, _allowedExtensions, out var problem);
+        if (request is null)
+        {
+            var (code, message) = CloudListing.FolderError(problem);
+            throw Error(code, message);
+        }
+        var rootId = request.Templates ? _templatesFolderId : _creationFolderId;
+        if (rootId is null)
+        {
+            if (request.Templates) return new DocumentListPage();
+            throw Error(ProviderErrorCode.ConfigurationError,
+                "This Google Drive connection has no folder to list. Configure CreationFolderId, or TemplatesFolder for templates.");
+        }
+
+        try
+        {
+            var calls = CloudListing.MaximumServiceCalls;
+            CloudListingCursor cursor;
+            if (string.IsNullOrEmpty(query.ContinuationToken))
+            {
+                var root = await GetFileAsync(rootId, itemId: null, cancellationToken).ConfigureAwait(false);
+                calls--;
+                if (!string.Equals(root.MimeType, FolderMimeType, StringComparison.Ordinal) || root.Trashed)
+                    throw Error(ProviderErrorCode.ConfigurationError, "The configured Google Drive listing folder is not a folder.");
+
+                var folderId = root.Id;
+                foreach (var segment in request.FolderSegments)
+                {
+                    if (calls <= 1) throw Error(ProviderErrorCode.InvalidArgument, CloudListing.TooDeepMessage);
+                    folderId = await FindFolderAsync(folderId, root.DriveId, segment, cancellationToken).ConfigureAwait(false)
+                        ?? throw Error(ProviderErrorCode.NotFound, $"No folder named '{segment}' is in the listed Google Drive folder.");
+                    calls--;
+                }
+                cursor = CloudListing.Start(folderId, request, root.DriveId);
+            }
+            else if (!CloudListingCursor.TryUnprotect(query.ContinuationToken!, ConnectionId, request.Fingerprint, out cursor))
+            {
+                throw Error(ProviderErrorCode.InvalidArgument, CloudListing.InvalidTokenMessage);
+            }
+
+            var driveId = cursor.Context;
+            return await CloudListing.WalkAsync(
+                request, cursor,
+                (folderId, pageToken, ct) => ListChildrenAsync(folderId, driveId, pageToken, ct),
+                calls, ConnectionId, cancellationToken).ConfigureAwait(false);
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException and not DocumentProviderException)
+        {
+            // Transport and token failures can carry request URLs, which name folder ids.
+            throw Error(ProviderErrorCode.IO, "Google Drive could not be reached to list the folder.", itemId: null, ex);
+        }
+    }
+
     // ── Source parsing ────────────────────────────────────────────────────────
 
     /// <summary>
@@ -493,6 +593,96 @@ public sealed class GoogleDriveDocumentProvider : IDocumentProvider, IDocumentCr
             throw Error(ProviderErrorCode.IO, "Google Drive returned an unreadable file list.", itemId, ex);
         }
     }
+
+    /// <summary>One page of a folder's children, folders included, so a recursive listing can descend.</summary>
+    private async Task<CloudListingPage> ListChildrenAsync(
+        string folderId, string? driveId, string? pageToken, CancellationToken cancellationToken)
+    {
+        var query = $"'{EscapeQuery(folderId)}' in parents and trashed = false";
+        var url = new StringBuilder($"{_apiBaseUrl}/files?q={Uri.EscapeDataString(query)}")
+            .Append("&fields=").Append(Uri.EscapeDataString(ListFields))
+            .Append("&pageSize=").Append(CloudListing.ServicePageSize.ToString(System.Globalization.CultureInfo.InvariantCulture))
+            .Append("&supportsAllDrives=true&includeItemsFromAllDrives=true");
+        if (!string.IsNullOrEmpty(driveId))
+            url.Append("&corpora=drive&driveId=").Append(Uri.EscapeDataString(driveId));
+        if (!string.IsNullOrEmpty(pageToken))
+            url.Append("&pageToken=").Append(Uri.EscapeDataString(pageToken));
+
+        using var response = await SendAsync(HttpMethod.Get, url.ToString(), content: null, cancellationToken).ConfigureAwait(false);
+        await ThrowOnFailureAsync(response, itemId: null).ConfigureAwait(false);
+        try
+        {
+            using var json = JsonDocument.Parse(await response.Content.ReadAsStringAsync().ConfigureAwait(false));
+            var root = json.RootElement;
+            var children = new List<CloudListingChild>();
+            if (root.TryGetProperty("files", out var files) && files.ValueKind == JsonValueKind.Array)
+            {
+                foreach (var file in files.EnumerateArray())
+                {
+                    var id = StringOf(file, "id");
+                    var mimeType = StringOf(file, "mimeType");
+                    long? size = file.TryGetProperty("size", out var sizeValue) ? ParseLong(sizeValue) : null;
+                    children.Add(new CloudListingChild
+                    {
+                        Id = id,
+                        Name = StringOf(file, "name"),
+                        IsFolder = string.Equals(mimeType, FolderMimeType, StringComparison.Ordinal) && IsFileId(id),
+                        // Native files and shortcuts cannot be registered, so they are not offered.
+                        Unusable = !IsFileId(id) ||
+                                   mimeType.StartsWith(GoogleAppsMimePrefix, StringComparison.Ordinal) ||
+                                   (file.TryGetProperty("trashed", out var trashed) && trashed.ValueKind == JsonValueKind.True) ||
+                                   size > _options.MaximumBytes,
+                        Length = size,
+                        LastModified = ParseTime(StringOf(file, "modifiedTime"))
+                    });
+                }
+            }
+            var next = StringOf(root, "nextPageToken");
+            return new CloudListingPage { Items = children, NextToken = next.Length == 0 ? null : next };
+        }
+        catch (Exception ex) when (ex is JsonException or InvalidOperationException or FormatException)
+        {
+            throw Error(ProviderErrorCode.IO, "Google Drive returned an unreadable file list.", itemId: null, ex);
+        }
+    }
+
+    /// <summary>The id of the subfolder with this name, or <see langword="null"/> when there is none.</summary>
+    private async Task<string?> FindFolderAsync(string parentId, string? driveId, string name, CancellationToken cancellationToken)
+    {
+        var query = $"name = '{EscapeQuery(name)}' and '{EscapeQuery(parentId)}' in parents " +
+                    $"and mimeType = '{FolderMimeType}' and trashed = false";
+        var url = new StringBuilder($"{_apiBaseUrl}/files?q={Uri.EscapeDataString(query)}")
+            .Append("&fields=").Append(Uri.EscapeDataString("files(id,name)"))
+            .Append("&pageSize=10&supportsAllDrives=true&includeItemsFromAllDrives=true");
+        if (!string.IsNullOrEmpty(driveId))
+            url.Append("&corpora=drive&driveId=").Append(Uri.EscapeDataString(driveId));
+
+        using var response = await SendAsync(HttpMethod.Get, url.ToString(), content: null, cancellationToken).ConfigureAwait(false);
+        await ThrowOnFailureAsync(response, itemId: null).ConfigureAwait(false);
+        try
+        {
+            using var json = JsonDocument.Parse(await response.Content.ReadAsStringAsync().ConfigureAwait(false));
+            if (!json.RootElement.TryGetProperty("files", out var files) || files.ValueKind != JsonValueKind.Array)
+                return null;
+            foreach (var file in files.EnumerateArray())
+            {
+                var id = StringOf(file, "id");
+                if (IsFileId(id) && string.Equals(StringOf(file, "name"), name, StringComparison.OrdinalIgnoreCase))
+                    return id;
+            }
+            return null;
+        }
+        catch (JsonException ex)
+        {
+            throw Error(ProviderErrorCode.IO, "Google Drive returned an unreadable file list.", itemId: null, ex);
+        }
+    }
+
+    private static DateTimeOffset? ParseTime(string value) =>
+        DateTimeOffset.TryParse(value, System.Globalization.CultureInfo.InvariantCulture,
+            System.Globalization.DateTimeStyles.AssumeUniversal, out var parsed)
+            ? parsed
+            : null;
 
     private static string EscapeQuery(string value) => value.Replace("\\", "\\\\").Replace("'", "\\'");
 

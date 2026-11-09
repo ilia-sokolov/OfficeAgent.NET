@@ -61,6 +61,17 @@ corresponding GitHub release.
   is published with the other source-addressed tools under `AllowRegistration`, is marked
   destructive, and is refused on a server with `RequirePlanSnapshot`. See
   [edit many documents at once](docs/translation-and-bulk-edits.md#edit-many-documents-at-once).
+- **Listing in every cloud connection.** The Google Drive, Box, Azure Blob, Amazon S3 and
+  iManage providers implement `IDocumentListingProvider` with each service's own listing call.
+  Azure Blob and S3 list under the prefix; the others list under the creation folder. Pages are
+  bounded, continuation tokens are encrypted and bound to their query, and every entry's source
+  registers as it is. Macro-enabled files and extensions outside `AllowedExtensions` are never
+  listed. See [listing the cloud connections](docs/document-providers.md#listing-the-cloud-connections).
+- **Templates folders for cloud connections.** `TemplatesFolder` and `TemplateLocation` on the
+  same five providers, and the `TemplatesFolder` and `TemplateLocation` keys of their MCP
+  connection lists, name a templates folder that `IConnectionTemplateSource` reports and a
+  templates listing reads. A malformed folder, or a location without a folder, stops the server
+  at startup.
 - **Every match, or the exact one.** A `find` target in `edit_document`, `edit_documents` and
   `edit_document_content` takes `"match": "all"`, which repeats the operation for every
   occurrence, in headers, footers and notes too, and skips it where there is none, plus

@@ -382,9 +382,9 @@ public static class OfficeAgentMcpServer
                 ParseChangeGranularity(c.DefaultChangeGranularity, c.ConnectionId).ToString(),
                 c.CalculatesFormulas)
             {
-                // From configuration alone, only the providers this server knows to list are
-                // listable; the tool itself asks the live providers instead.
-                Listable = c.Kind == StorageKind.FileSystem || c.Kind == StorageKind.SharePoint,
+                // Every storage kind this server configures can list; the tool itself asks the
+                // live providers, which is what a custom provider is judged by.
+                Listable = true,
                 TemplatesFolder = c.TemplatesFolder,
                 TemplateLocation = location == TemplateLocationKind.None && c.TemplatesFolder is not null
                     ? TemplateLocationKind.Connection

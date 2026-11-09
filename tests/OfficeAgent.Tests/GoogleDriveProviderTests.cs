@@ -781,7 +781,10 @@ public class GoogleDriveProviderTests
         public string UploadReason { get; set; } = "badRequest";
         public bool StoreThenLoseResponse { get; set; }
 
-        public string Seed(string name, byte[] bytes, string mimeType = DocxMime, long? size = -1)
+        /// <summary>Every folder listing answers with this status.</summary>
+        public HttpStatusCode? ListStatus { get; set; }
+
+        public string Seed(string name, byte[] bytes, string mimeType = DocxMime, long? size = -1, string parent = FolderId)
         {
             var entry = new Entry
             {
@@ -790,13 +793,17 @@ public class GoogleDriveProviderTests
                 MimeType = mimeType,
                 Bytes = bytes,
                 Size = size == -1 ? bytes.LongLength : size,
-                Parents = new List<string> { FolderId },
+                Parents = new List<string> { parent },
                 HeadRevision = mimeType.StartsWith("application/vnd.google-apps.", StringComparison.Ordinal) ? null : NextRevision(),
                 Version = 1
             };
             _files[entry.Id] = entry;
             return entry.Id;
         }
+
+        /// <summary>Adds a folder under <paramref name="parent"/> and returns its id.</summary>
+        public string SeedFolder(string name, string parent = FolderId) =>
+            Seed(name, Array.Empty<byte>(), "application/vnd.google-apps.folder", size: null, parent);
 
         public string Revision(string fileId) => _files[fileId].HeadRevision!;
         public byte[] Bytes(string fileId) => _files[fileId].Bytes;
@@ -828,14 +835,18 @@ public class GoogleDriveProviderTests
         public GoogleDriveDocumentProvider Provider(
             long maximumBytes = 100 * 1024 * 1024,
             bool configureCreation = true,
-            IGoogleDriveRegistrationStore? registrationStore = null) => new(
+            IGoogleDriveRegistrationStore? registrationStore = null,
+            string? templatesFolder = null,
+            IReadOnlyCollection<string>? allowedExtensions = null) => new(
             new GoogleDriveDocumentProviderOptions
             {
                 ConnectionId = "drive",
                 ApiBaseUrl = Api,
                 UploadBaseUrl = Upload,
                 MaximumBytes = maximumBytes,
-                CreationFolderId = configureCreation ? FolderId : string.Empty
+                CreationFolderId = configureCreation ? FolderId : string.Empty,
+                TemplatesFolder = templatesFolder ?? string.Empty,
+                AllowedExtensions = allowedExtensions ?? new[] { ".docx" }
             },
             _http,
             new FixedTokens(),
@@ -984,15 +995,48 @@ public class GoogleDriveProviderTests
                     Assert.Equal("drive", query["corpora"]);
                     Assert.Equal(_drive.SharedDriveId, query["driveId"]);
                 }
-                var match = Regex.Match(query["q"], @"^name = '((?:[^'\\]|\\.)*)' and '([^']*)' in parents and trashed = false$");
+                var children = Regex.Match(query["q"], @"^'([^']*)' in parents and trashed = false$");
+                if (children.Success)
+                    return Children(children.Groups[1].Value, query);
+
+                var match = Regex.Match(query["q"],
+                    @"^name = '((?:[^'\\]|\\.)*)' and '([^']*)' in parents (?:and mimeType = '([^']*)' )?and trashed = false$");
                 Assert.True(match.Success, query["q"]);
                 var name = Regex.Unescape(match.Groups[1].Value.Replace("\\'", "'"));
                 var parent = match.Groups[2].Value;
+                var mimeType = match.Groups[3].Success ? match.Groups[3].Value : null;
                 var files = _drive._files.Values
                     .Where(f => !f.Trashed && f.Parents.Contains(parent) && string.Equals(f.Name, name, StringComparison.OrdinalIgnoreCase))
+                    .Where(f => mimeType is null || f.MimeType == mimeType)
                     .Select(f => new Dictionary<string, object> { ["id"] = f.Id, ["name"] = f.Name })
                     .ToList();
                 return Json(new Dictionary<string, object> { ["files"] = files });
+            }
+
+            /// <summary>files.list over one folder: the page token is the index of the next file.</summary>
+            private HttpResponseMessage Children(string parent, Dictionary<string, string> query)
+            {
+                if (_drive.ListStatus is { } status) return Error(status, "insufficientFilePermissions");
+                if (!_drive._files.ContainsKey(parent)) return Error(HttpStatusCode.NotFound, "notFound");
+                var size = int.Parse(query["pageSize"]);
+                var start = query.TryGetValue("pageToken", out var token) ? int.Parse(token) : 0;
+                var all = _drive._files.Values
+                    .Where(f => !f.Trashed && f.Parents.Contains(parent))
+                    .OrderBy(f => f.Id, StringComparer.Ordinal)
+                    .ToList();
+                var files = all.Skip(start).Take(size).Select(f =>
+                {
+                    var file = new Dictionary<string, object?>
+                    {
+                        ["id"] = f.Id, ["name"] = f.Name, ["mimeType"] = f.MimeType, ["trashed"] = f.Trashed,
+                        ["modifiedTime"] = "2026-11-01T09:00:00.000Z"
+                    };
+                    if (f.Size is { } bytes) file["size"] = bytes.ToString();
+                    return file;
+                }).ToList();
+                var payload = new Dictionary<string, object> { ["files"] = files };
+                if (start + size < all.Count) payload["nextPageToken"] = (start + size).ToString();
+                return Json(payload);
             }
 
             private HttpResponseMessage File(Entry entry)

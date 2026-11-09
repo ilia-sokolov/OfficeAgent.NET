@@ -271,7 +271,7 @@ public sealed class OfficeTemplateOptions
 
 /// <summary>
 /// The settings every storage-provider connection shares: its id, size and extension limits,
-/// editing defaults, formula calculation, and where registrations are kept.
+/// editing defaults, formula calculation, where registrations are kept, and its templates folder.
 /// </summary>
 /// <remarks>
 /// The change mode and granularity are bound as strings, as on the filesystem and SharePoint
@@ -320,6 +320,21 @@ public abstract class StorageConnectionOptions
     /// <see cref="CalculateFormulas"/>. Defaults to <see langword="false"/>.
     /// </summary>
     public bool RejectFormulaErrors { get; set; }
+
+    /// <summary>
+    /// Gets or sets the connection's templates folder, which a templates listing reads: a Drive
+    /// folder id, a numeric Box folder id, an iManage folder id (<c>LIBRARY!number</c>), or for
+    /// Azure Blob and Amazon S3 a folder relative to the prefix, such as <c>templates</c>. Leave
+    /// empty for a connection without templates.
+    /// </summary>
+    public string TemplatesFolder { get; set; } = string.Empty;
+
+    /// <summary>
+    /// Gets or sets where <see cref="TemplatesFolder"/> sits: <c>Connection</c>, <c>Personal</c>,
+    /// <c>Workgroup</c> or <c>Organization</c>. Empty means <c>Connection</c> when a templates
+    /// folder is set. Bound as a string for the reason the change mode is.
+    /// </summary>
+    public string TemplateLocation { get; set; } = string.Empty;
 }
 
 /// <summary>

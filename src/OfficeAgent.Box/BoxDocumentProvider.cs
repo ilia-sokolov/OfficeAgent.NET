@@ -36,6 +36,20 @@ public sealed class BoxDocumentProviderOptions
     public string CreationFolderId { get; set; } = string.Empty;
 
     /// <summary>
+    /// Gets or sets the numeric Box folder id of a templates folder. A templates listing reads
+    /// it, and every file listed from it counts as a template. Empty means the connection has no
+    /// templates folder.
+    /// </summary>
+    public string TemplatesFolder { get; set; } = string.Empty;
+
+    /// <summary>
+    /// Gets or sets where <see cref="TemplatesFolder"/> sits, such as
+    /// <see cref="TemplateLocationKind.Organization"/> for the organization's approved templates.
+    /// Unset means <see cref="TemplateLocationKind.Connection"/> when a templates folder is set.
+    /// </summary>
+    public TemplateLocationKind? TemplateLocation { get; set; }
+
+    /// <summary>
     /// Gets or sets the change mode used when an operation does not state one. The
     /// default is <see cref="ChangeMode.Tracked"/>, which suits documents a person
     /// reviews. Set <see cref="ChangeMode.Direct"/> for generated or machine-owned files,
@@ -76,13 +90,16 @@ public sealed class BoxDocumentProviderOptions
 /// (412), and Box keeps the previous version in the file's history. New documents and
 /// versioned siblings are uploaded as new files, which Box refuses with 409 when the name is
 /// taken, so creation never overwrites. Removing a registration never deletes Box content.
+/// Registration has no folder scope; listing reads the creation folder, or the templates folder
+/// for a templates listing, and the folders below it.
 /// </remarks>
-public sealed class BoxDocumentProvider : IDocumentProvider, IDocumentCreatingProvider, IConnectionEditingDefaults, IConnectionGranularityDefaults, IConnectionCalculationDefaults
+public sealed class BoxDocumentProvider : IDocumentProvider, IDocumentCreatingProvider, IDocumentListingProvider, IConnectionTemplateSource, IConnectionEditingDefaults, IConnectionGranularityDefaults, IConnectionCalculationDefaults
 {
     /// <summary>Gets the provider discriminator used in document references.</summary>
     public const string ProviderName = "box";
 
     private const string FileFields = "id,type,name,size,etag,parent,item_status";
+    private const string ItemFields = "id,type,name,size,modified_at,item_status";
 
     private readonly BoxDocumentProviderOptions _options;
     private readonly HttpClient _http;
@@ -92,6 +109,8 @@ public sealed class BoxDocumentProvider : IDocumentProvider, IDocumentCreatingPr
     private readonly string _uploadBaseUrl;
     private readonly HashSet<string> _allowedExtensions;
     private readonly string? _creationFolderId;
+    private readonly string? _templatesFolderId;
+    private readonly TemplateLocationKind _templateLocation;
 
     /// <summary>Initializes a provider over the Box content the token's identity can reach.</summary>
     public BoxDocumentProvider(
@@ -115,6 +134,8 @@ public sealed class BoxDocumentProvider : IDocumentProvider, IDocumentCreatingPr
             throw new ArgumentException("At least one allowed document extension is required.", nameof(options));
         if (!string.IsNullOrWhiteSpace(options.CreationFolderId) && !IsBoxId(options.CreationFolderId.Trim()))
             throw new ArgumentException("CreationFolderId must be a numeric Box folder id.", nameof(options));
+        if (!string.IsNullOrWhiteSpace(options.TemplatesFolder) && !IsBoxId(options.TemplatesFolder.Trim()))
+            throw new ArgumentException("TemplatesFolder must be a numeric Box folder id.", nameof(options));
 
         _allowedExtensions = new HashSet<string>(
             options.AllowedExtensions.Select(NormalizeExtension),
@@ -124,6 +145,10 @@ public sealed class BoxDocumentProvider : IDocumentProvider, IDocumentCreatingPr
         _creationFolderId = string.IsNullOrWhiteSpace(options.CreationFolderId)
             ? null
             : options.CreationFolderId.Trim();
+        _templatesFolderId = string.IsNullOrWhiteSpace(options.TemplatesFolder)
+            ? null
+            : options.TemplatesFolder.Trim();
+        _templateLocation = CloudListing.TemplateLocationFor(_templatesFolderId is not null, options.TemplateLocation, nameof(options));
     }
 
     /// <inheritdoc />
@@ -143,6 +168,13 @@ public sealed class BoxDocumentProvider : IDocumentProvider, IDocumentCreatingPr
 
     /// <inheritdoc />
     public bool RejectFormulaErrors => _options.RejectFormulaErrors;
+
+    /// <inheritdoc />
+    /// <remarks>The templates folder's numeric Box folder id.</remarks>
+    public string? TemplatesFolder => _templatesFolderId;
+
+    /// <inheritdoc />
+    public TemplateLocationKind TemplateLocation => _templateLocation;
 
     /// <inheritdoc />
     public async Task<DocumentReference> RegisterAsync(
@@ -305,6 +337,76 @@ public sealed class BoxDocumentProvider : IDocumentProvider, IDocumentCreatingPr
                 $"The provider document '{reference.ItemId}' is not registered.", reference.ItemId);
     }
 
+    /// <inheritdoc />
+    /// <remarks>
+    /// Lists the creation folder, or the templates folder for a templates listing, with
+    /// <c>GET /folders/{id}/items</c> and marker paging. A connection without that folder reports
+    /// <see cref="ProviderErrorCode.ConfigurationError"/>, or an empty page for templates.
+    /// <see cref="DocumentListQuery.Folder"/> is a path of folder names below it, found by reading
+    /// each level's items. Each entry's source is the Box file id. Web links and files over the
+    /// size cap are not listed. A page makes at most <see cref="CloudListing.MaximumServiceCalls"/>
+    /// requests, folder lookups included.
+    /// </remarks>
+    public async Task<DocumentListPage> ListAsync(DocumentListQuery query, CancellationToken cancellationToken = default)
+    {
+        var request = CloudListingRequest.Create(query, _allowedExtensions, out var problem);
+        if (request is null)
+        {
+            var (code, message) = CloudListing.FolderError(problem);
+            throw Error(code, message);
+        }
+        var rootId = request.Templates ? _templatesFolderId : _creationFolderId;
+        if (rootId is null)
+        {
+            if (request.Templates) return new DocumentListPage();
+            throw Error(ProviderErrorCode.ConfigurationError,
+                "This Box connection has no folder to list. Configure CreationFolderId, or TemplatesFolder for templates.");
+        }
+
+        try
+        {
+            var calls = CloudListing.MaximumServiceCalls;
+            CloudListingCursor cursor;
+            if (string.IsNullOrEmpty(query.ContinuationToken))
+            {
+                var folderId = rootId;
+                foreach (var segment in request.FolderSegments)
+                {
+                    string? found = null;
+                    string? marker = null;
+                    do
+                    {
+                        // At least one request must be left for the listing itself.
+                        if (calls <= 1) throw Error(ProviderErrorCode.InvalidArgument, CloudListing.TooDeepMessage);
+                        var page = await ListItemsAsync(folderId, marker, limit: 1000, cancellationToken).ConfigureAwait(false);
+                        calls--;
+                        found = page.Items.FirstOrDefault(item =>
+                            item.IsFolder && string.Equals(item.Name, segment, StringComparison.OrdinalIgnoreCase))?.Id;
+                        marker = page.NextToken;
+                    }
+                    while (found is null && marker is not null);
+                    folderId = found ?? throw Error(ProviderErrorCode.NotFound,
+                        $"No folder named '{segment}' is in the listed Box folder.");
+                }
+                cursor = CloudListing.Start(folderId, request);
+            }
+            else if (!CloudListingCursor.TryUnprotect(query.ContinuationToken!, ConnectionId, request.Fingerprint, out cursor))
+            {
+                throw Error(ProviderErrorCode.InvalidArgument, CloudListing.InvalidTokenMessage);
+            }
+
+            return await CloudListing.WalkAsync(
+                request, cursor,
+                (folderId, marker, ct) => ListItemsAsync(folderId, marker, CloudListing.ServicePageSize, ct),
+                calls, ConnectionId, cancellationToken).ConfigureAwait(false);
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException and not DocumentProviderException)
+        {
+            // Transport and token failures can carry request URLs, which name folder ids.
+            throw Error(ProviderErrorCode.IO, "Box could not be reached to list the folder.", itemId: null, ex);
+        }
+    }
+
     // ── Source parsing ────────────────────────────────────────────────────────
 
     /// <summary>
@@ -359,6 +461,60 @@ public sealed class BoxDocumentProvider : IDocumentProvider, IDocumentCreatingPr
         using var response = await SendAsync(HttpMethod.Get, url, content: null, ifMatch: null, cancellationToken).ConfigureAwait(false);
         await ThrowOnFailureAsync(response, itemId).ConfigureAwait(false);
         return ParseFile(await response.Content.ReadAsStringAsync().ConfigureAwait(false), itemId);
+    }
+
+    /// <summary>One page of a folder's items with marker paging, folders included, so a recursive listing can descend.</summary>
+    private async Task<CloudListingPage> ListItemsAsync(string folderId, string? marker, int limit, CancellationToken cancellationToken)
+    {
+        var url = new StringBuilder($"{_apiBaseUrl}/folders/{Uri.EscapeDataString(folderId)}/items")
+            .Append("?fields=").Append(Uri.EscapeDataString(ItemFields))
+            .Append("&limit=").Append(limit.ToString(System.Globalization.CultureInfo.InvariantCulture))
+            .Append("&usemarker=true");
+        if (!string.IsNullOrEmpty(marker))
+            url.Append("&marker=").Append(Uri.EscapeDataString(marker));
+
+        using var response = await SendAsync(HttpMethod.Get, url.ToString(), content: null, ifMatch: null, cancellationToken).ConfigureAwait(false);
+        await ThrowOnFailureAsync(response, itemId: null).ConfigureAwait(false);
+        try
+        {
+            using var json = JsonDocument.Parse(await response.Content.ReadAsStringAsync().ConfigureAwait(false));
+            var root = json.RootElement;
+            var children = new List<CloudListingChild>();
+            if (root.TryGetProperty("entries", out var entries) && entries.ValueKind == JsonValueKind.Array)
+            {
+                foreach (var entry in entries.EnumerateArray())
+                {
+                    var id = StringOf(entry, "id");
+                    var type = StringOf(entry, "type");
+                    var status = StringOf(entry, "item_status");
+                    long? size = entry.TryGetProperty("size", out var sizeValue) && sizeValue.ValueKind == JsonValueKind.Number
+                        ? sizeValue.GetInt64()
+                        : null;
+                    children.Add(new CloudListingChild
+                    {
+                        Id = id,
+                        Name = StringOf(entry, "name"),
+                        IsFolder = type == "folder" && IsBoxId(id),
+                        // A web link, or a file that is not active, cannot be registered.
+                        Unusable = type != "file" || !IsBoxId(id) ||
+                                   (status.Length > 0 && status != "active") ||
+                                   size > _options.MaximumBytes,
+                        Length = size,
+                        LastModified = DateTimeOffset.TryParse(StringOf(entry, "modified_at"),
+                            System.Globalization.CultureInfo.InvariantCulture,
+                            System.Globalization.DateTimeStyles.AssumeUniversal, out var modified)
+                            ? modified
+                            : null
+                    });
+                }
+            }
+            var next = StringOf(root, "next_marker");
+            return new CloudListingPage { Items = children, NextToken = next.Length == 0 ? null : next };
+        }
+        catch (Exception ex) when (ex is JsonException or InvalidOperationException or FormatException)
+        {
+            throw Error(ProviderErrorCode.IO, "Box returned an unreadable folder listing.", itemId: null, ex);
+        }
     }
 
     private async Task<byte[]> DownloadAsync(string fileId, string itemId, CancellationToken cancellationToken)

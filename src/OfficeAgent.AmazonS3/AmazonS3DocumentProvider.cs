@@ -23,9 +23,10 @@ namespace OfficeAgent.AmazonS3;
 /// id of the object it read or wrote; otherwise it is the ETag. Each write carries a random
 /// <c>officeagent-write-id</c> metadata value, so a precondition failure caused by the SDK
 /// retrying a request whose first attempt landed is recognised as this provider's own write.
-/// Removing a registration never deletes the object.
+/// Removing a registration never deletes the object. Listing uses <c>ListObjectsV2</c> with the
+/// <c>/</c> delimiter, one prefix level per request, and never reads outside the key prefix.
 /// </remarks>
-public sealed class AmazonS3DocumentProvider : IDocumentProvider, IDocumentCreatingProvider, IConnectionEditingDefaults, IConnectionGranularityDefaults, IConnectionCalculationDefaults
+public sealed class AmazonS3DocumentProvider : IDocumentProvider, IDocumentCreatingProvider, IDocumentListingProvider, IConnectionTemplateSource, IConnectionEditingDefaults, IConnectionGranularityDefaults, IConnectionCalculationDefaults
 {
     /// <summary>Gets the provider discriminator used in document references.</summary>
     public const string ProviderName = "amazons3";
@@ -40,6 +41,9 @@ public sealed class AmazonS3DocumentProvider : IDocumentProvider, IDocumentCreat
     private readonly IAmazonS3RegistrationStore _store;
     private readonly string _bucket;
     private readonly string _prefix;
+    private readonly string? _templatesPrefix;
+    private readonly string? _templatesFolder;
+    private readonly TemplateLocationKind _templateLocation;
     private readonly HashSet<string> _allowedExtensions;
 
     /// <summary>
@@ -77,6 +81,9 @@ public sealed class AmazonS3DocumentProvider : IDocumentProvider, IDocumentCreat
 
         _bucket = options.BucketName.Trim();
         _prefix = ObjectKeys.NormalizePrefix(options.KeyPrefix, nameof(options));
+        _templatesFolder = ObjectKeys.NormalizeFolder(options.TemplatesFolder, nameof(options));
+        _templatesPrefix = _templatesFolder is null ? null : _prefix + _templatesFolder + "/";
+        _templateLocation = CloudListing.TemplateLocationFor(_templatesFolder is not null, options.TemplateLocation, nameof(options));
         _allowedExtensions = new HashSet<string>(
             options.AllowedExtensions.Select(ObjectKeys.NormalizeExtension),
             StringComparer.OrdinalIgnoreCase);
@@ -102,6 +109,13 @@ public sealed class AmazonS3DocumentProvider : IDocumentProvider, IDocumentCreat
 
     /// <inheritdoc />
     public bool RejectFormulaErrors => _options.RejectFormulaErrors;
+
+    /// <inheritdoc />
+    /// <remarks>The folder relative to the key prefix, such as <c>templates</c>.</remarks>
+    public string? TemplatesFolder => _templatesFolder;
+
+    /// <inheritdoc />
+    public TemplateLocationKind TemplateLocation => _templateLocation;
 
     /// <inheritdoc />
     public async Task<DocumentReference> RegisterAsync(
@@ -253,6 +267,18 @@ public sealed class AmazonS3DocumentProvider : IDocumentProvider, IDocumentCreat
             throw Error(ProviderErrorCode.NotFound,
                 $"The provider document '{reference.ItemId}' is not registered.", reference.ItemId);
     }
+
+    /// <inheritdoc />
+    /// <remarks>
+    /// Lists with <c>ListObjectsV2</c> under the key prefix (or the templates folder), one prefix
+    /// level per request with the <c>/</c> delimiter. Each entry's source is the key relative to
+    /// the key prefix. A page makes at most <see cref="CloudListing.MaximumServiceCalls"/> requests,
+    /// and a recursive listing descends at most <see cref="CloudListing.MaximumDepth"/> levels.
+    /// </remarks>
+    public Task<DocumentListPage> ListAsync(DocumentListQuery query, CancellationToken cancellationToken = default) =>
+        ObjectListing.ListAsync(
+            query, ConnectionId, _prefix, _templatesPrefix, _allowedExtensions, _options.MaximumBytes,
+            (code, message) => Error(code, message), ReadListingPageAsync, cancellationToken);
 
     // ── Writes ────────────────────────────────────────────────────────────────
 
@@ -473,6 +499,47 @@ public sealed class AmazonS3DocumentProvider : IDocumentProvider, IDocumentCreat
         {
             throw ReadFailure(ex, itemId, beforeWrite: false);
         }
+    }
+
+    private async Task<ListedObjectPage> ReadListingPageAsync(string prefix, string? continuationToken, CancellationToken cancellationToken)
+    {
+        ListObjectsV2Response response;
+        try
+        {
+            response = await _s3.ListObjectsV2Async(new ListObjectsV2Request
+            {
+                BucketName = _bucket,
+                Prefix = prefix,
+                Delimiter = "/",
+                MaxKeys = CloudListing.ServicePageSize,
+                ContinuationToken = continuationToken
+            }, cancellationToken).ConfigureAwait(false);
+        }
+        catch (AmazonServiceException ex) when (ex.StatusCode == HttpStatusCode.NotFound)
+        {
+            throw Error(ProviderErrorCode.NotFound, $"The connection's bucket does not exist.{CodeSuffix(ex)}", itemId: null, ex);
+        }
+        catch (Exception ex) when (ex is not DocumentProviderException and not OperationCanceledException)
+        {
+            throw ReadFailure(ex, itemId: null, beforeWrite: false);
+        }
+
+        // SDK v4 leaves an absent collection null rather than empty.
+        return new ListedObjectPage
+        {
+            Objects = (response.S3Objects ?? new List<S3Object>()).Select(item => new ListedObject
+            {
+                Key = item.Key ?? string.Empty,
+                Size = item.Size,
+                LastModified = item.LastModified is { } modified
+                    ? new DateTimeOffset(modified.Kind == DateTimeKind.Unspecified
+                        ? DateTime.SpecifyKind(modified, DateTimeKind.Utc)
+                        : modified.ToUniversalTime())
+                    : null
+            }).ToList(),
+            Prefixes = response.CommonPrefixes ?? new List<string>(),
+            NextToken = response.IsTruncated == true ? response.NextContinuationToken : null
+        };
     }
 
     /// <summary>

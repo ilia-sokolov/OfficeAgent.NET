@@ -40,6 +40,23 @@ internal static class ObjectKeys
         return trimmed + "/";
     }
 
+    /// <summary>
+    /// Normalizes a configured folder relative to the prefix, such as a templates folder, to
+    /// <see langword="null"/> or <c>"segment/…"</c> without slashes at either end. A folder that is
+    /// not a plain relative path is a host configuration error, so it throws.
+    /// </summary>
+    internal static string? NormalizeFolder(string? folder, string parameterName)
+    {
+        if (string.IsNullOrWhiteSpace(folder)) return null;
+        var trimmed = folder!.Trim().Trim('/');
+        if (trimmed.Length == 0) return null;
+        if (Check(trimmed) != ObjectKeyProblem.None)
+            throw new ArgumentException(
+                "TemplatesFolder must be a folder relative to the prefix, without '.', '..', empty segments, backslashes, or control characters.",
+                parameterName);
+        return trimmed;
+    }
+
     /// <summary>Checks a name relative to the connection's prefix.</summary>
     internal static ObjectKeyProblem Check(string relative)
     {

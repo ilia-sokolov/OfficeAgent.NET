@@ -857,6 +857,34 @@ public class IManageProviderTests
             return number;
         }
 
+        /// <summary>Every folder listing answers with this status.</summary>
+        public HttpStatusCode? ListStatus { get; set; }
+
+        // Subfolders by id, with their name and parent. ACTIVE!774 is the folder the creation
+        // folder has always held, named like a document to prove name checks pass folders over.
+        private readonly Dictionary<string, (string Name, string Parent)> _subfolders = new()
+        {
+            ["ACTIVE!774"] = ("brief", "ACTIVE!773")
+        };
+        private readonly Dictionary<string, List<long>> _filed = new();
+
+        /// <summary>Adds a folder under <paramref name="parent"/> and returns its id.</summary>
+        public string AddFolder(string name, string parent = "ACTIVE!773")
+        {
+            var id = $"ACTIVE!{_nextNumber++}";
+            _subfolders[id] = (name, parent);
+            return id;
+        }
+
+        /// <summary>Files a new document in a folder other than the creation folder.</summary>
+        public long SeedIn(string folderId, string fileName, byte[] bytes)
+        {
+            var number = Seed(fileName, bytes);
+            if (!_filed.TryGetValue(folderId, out var numbers)) _filed[folderId] = numbers = new List<long>();
+            numbers.Add(number);
+            return number;
+        }
+
         public string IdOf(long number) => $"ACTIVE!{number}.{_docs[number].Latest.Version}";
         public void AddVersion(long number, byte[] bytes)
         {
@@ -887,7 +915,9 @@ public class IManageProviderTests
             long maximumBytes = 100 * 1024 * 1024,
             bool configureCreation = true,
             IIManageRegistrationStore? registrationStore = null,
-            bool lockDuringSave = true) => new(
+            bool lockDuringSave = true,
+            string? templatesFolder = null,
+            IReadOnlyCollection<string>? allowedExtensions = null) => new(
             new IManageDocumentProviderOptions
             {
                 ConnectionId = "legal",
@@ -896,7 +926,9 @@ public class IManageProviderTests
                 MaximumBytes = maximumBytes,
                 CreationFolderId = configureCreation ? "ACTIVE!773" : string.Empty,
                 CreationDocumentClass = "legal-class",
-                LockDuringSave = lockDuringSave
+                LockDuringSave = lockDuringSave,
+                TemplatesFolder = templatesFolder ?? string.Empty,
+                AllowedExtensions = allowedExtensions ?? new[] { ".docx" }
             },
             _http,
             new StaticTokens(),
@@ -1005,17 +1037,27 @@ public class IManageProviderTests
 
                 if (collection == "folders")
                 {
-                    if (id != "ACTIVE!773" || _server.MissingFolder)
+                    var known = id == "ACTIVE!773" ? !_server.MissingFolder : _server._subfolders.ContainsKey(id);
+                    if (!known || (id != "ACTIVE!773" && request.Method != HttpMethod.Get))
                         return Error(HttpStatusCode.NotFound, "NRC_NO_RECORD");
                     if (request.Method == HttpMethod.Get && action == "children")
                     {
-                        var children = _server._folder.Select(n => _server._docs[n])
+                        if (_server.ListStatus is { } listStatus) return Error(listStatus, "NRC_ACCESS_DENIED");
+                        var numbers = id == "ACTIVE!773" ? _server._folder : _server._filed.TryGetValue(id, out var filed) ? filed : new List<long>();
+                        var children = numbers.Select(n => _server._docs[n])
                             .Select(d => (object)_server.ProfileOf(d, d.Latest))
-                            .Append(new Dictionary<string, object?>
+                            .Concat(_server._subfolders.Where(pair => pair.Value.Parent == id).Select(pair => (object)new Dictionary<string, object?>
                             {
-                                ["id"] = "ACTIVE!774", ["name"] = "brief", ["extension"] = "docx", ["wstype"] = "folder"
-                            })
+                                ["id"] = pair.Key, ["name"] = pair.Value.Name, ["extension"] = "docx", ["wstype"] = "folder"
+                            }))
                             .ToList();
+                        // limit and offset page the children when the caller asks for them.
+                        var query = url.Contains('?') ? url.Substring(url.IndexOf('?') + 1).Split('&')
+                            .Select(pair => pair.Split('=', 2)).ToDictionary(pair => pair[0], pair => pair.Length > 1 ? pair[1] : string.Empty)
+                            : new Dictionary<string, string>();
+                        if (query.TryGetValue("limit", out var limit))
+                            children = children.Skip(query.TryGetValue("offset", out var offset) ? int.Parse(offset) : 0)
+                                .Take(int.Parse(limit)).ToList();
                         return Json(new { data = children });
                     }
                     if (request.Method == HttpMethod.Post && action == "documents")

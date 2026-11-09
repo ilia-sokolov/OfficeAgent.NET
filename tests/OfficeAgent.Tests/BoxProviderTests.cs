@@ -582,12 +582,27 @@ public class BoxProviderTests
         public bool AnswerContentWithAccepted { get; set; }
         public Action? BeforeNextUpload { get; set; }
 
-        public string Seed(string name, byte[] bytes)
+        /// <summary>Every folder listing answers with this status and code.</summary>
+        public (HttpStatusCode Status, string Code)? ListStatus { get; set; }
+
+        public string Seed(string name, byte[] bytes, string parent = FolderId, string type = "file")
         {
-            var entry = new Entry { Id = (++_nextId).ToString(), Name = name, Bytes = bytes, Parent = FolderId };
+            var entry = new Entry { Id = (++_nextId).ToString(), Name = name, Bytes = bytes, Parent = parent, Type = type };
             _files[entry.Id] = entry;
             return entry.Id;
         }
+
+        /// <summary>Adds a folder under <paramref name="parent"/> and returns its id.</summary>
+        public string SeedFolder(string name, string parent = FolderId)
+        {
+            var id = (++_nextId).ToString();
+            _folders[id] = (name, parent);
+            return id;
+        }
+
+        private readonly Dictionary<string, (string Name, string Parent)> _folders = new(StringComparer.Ordinal);
+
+        private bool FolderExists(string id) => id == FolderId ? _folderExists : _folders.ContainsKey(id);
 
         public string ETag(string id) => _files[id].ETag.ToString();
         public byte[] Bytes(string id) => _files[id].Bytes;
@@ -608,14 +623,18 @@ public class BoxProviderTests
         public BoxDocumentProvider Provider(
             long maximumBytes = 50 * 1024 * 1024,
             bool configureCreation = true,
-            IBoxRegistrationStore? registrationStore = null) => new(
+            IBoxRegistrationStore? registrationStore = null,
+            string? templatesFolder = null,
+            IReadOnlyCollection<string>? allowedExtensions = null) => new(
             new BoxDocumentProviderOptions
             {
                 ConnectionId = "box",
                 ApiBaseUrl = Api,
                 UploadBaseUrl = Upload,
                 MaximumBytes = maximumBytes,
-                CreationFolderId = configureCreation ? FolderId : string.Empty
+                CreationFolderId = configureCreation ? FolderId : string.Empty,
+                TemplatesFolder = templatesFolder ?? string.Empty,
+                AllowedExtensions = allowedExtensions ?? new[] { ".docx" }
             },
             _http,
             new FixedTokens(),
@@ -637,6 +656,7 @@ public class BoxProviderTests
             public int ETag;
             public string Status = "active";
             public bool Locked;
+            public string Type = "file";
         }
 
         private sealed class Handler : HttpMessageHandler
@@ -705,7 +725,48 @@ public class BoxProviderTests
                     return redirect;
                 }
 
+                if (path.StartsWith(Api + "/folders/", StringComparison.Ordinal) && path.EndsWith("/items", StringComparison.Ordinal) &&
+                    request.Method == HttpMethod.Get)
+                    return Items(path.Substring((Api + "/folders/").Length).Replace("/items", ""), request.RequestUri!);
+
                 return Error(HttpStatusCode.NotFound, "not_found");
+            }
+
+            /// <summary>
+            /// <c>GET /folders/{id}/items</c> with marker paging: folders first, then files, by id.
+            /// The marker is the index of the next item.
+            /// </summary>
+            private HttpResponseMessage Items(string folderId, Uri uri)
+            {
+                if (_box.ListStatus is { } refused) return Error(refused.Status, refused.Code);
+                if (!_box.FolderExists(folderId)) return Error(HttpStatusCode.NotFound, "not_found", $"Folder {folderId} not found");
+                var query = uri.Query.TrimStart('?').Split('&', StringSplitOptions.RemoveEmptyEntries)
+                    .Select(pair => pair.Split('=', 2))
+                    .ToDictionary(pair => pair[0], pair => pair.Length > 1 ? Uri.UnescapeDataString(pair[1]) : string.Empty);
+                Assert.Equal("true", query["usemarker"]);
+                var limit = int.Parse(query["limit"]);
+                var start = query.TryGetValue("marker", out var marker) ? int.Parse(marker) : 0;
+
+                var items = _box._folders
+                    .Where(pair => pair.Value.Parent == folderId)
+                    .OrderBy(pair => long.Parse(pair.Key))
+                    .Select(pair => (object)new Dictionary<string, object> { ["type"] = "folder", ["id"] = pair.Key, ["name"] = pair.Value.Name })
+                    .Concat(_box._files.Values
+                        .Where(f => f.Parent == folderId && f.Status == "active")
+                        .OrderBy(f => long.Parse(f.Id))
+                        .Select(f => (object)new Dictionary<string, object>
+                        {
+                            ["type"] = f.Type, ["id"] = f.Id, ["name"] = f.Name, ["size"] = f.Bytes.LongLength,
+                            ["modified_at"] = "2026-11-01T09:00:00-08:00", ["item_status"] = f.Status
+                        }))
+                    .ToList();
+                var payload = new Dictionary<string, object?>
+                {
+                    ["entries"] = items.Skip(start).Take(limit).ToList(),
+                    ["limit"] = limit,
+                    ["next_marker"] = start + limit < items.Count ? (start + limit).ToString() : null
+                };
+                return Json(payload);
             }
 
             private async Task<(JsonDocument Attributes, byte[] Bytes)> ReadFormAsync(HttpRequestMessage request)
@@ -779,7 +840,7 @@ public class BoxProviderTests
 
             private static Dictionary<string, object> File(Entry entry) => new()
             {
-                ["type"] = "file",
+                ["type"] = entry.Type,
                 ["id"] = entry.Id,
                 ["etag"] = entry.ETag.ToString(),
                 ["name"] = entry.Name,

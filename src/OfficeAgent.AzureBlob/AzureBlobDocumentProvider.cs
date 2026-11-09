@@ -23,8 +23,10 @@ namespace OfficeAgent.AzureBlob;
 /// the SDK retried a request whose first attempt landed, the provider reads the blob back and
 /// recognises its own write instead of reporting a conflict. Removing a registration never
 /// deletes the blob. The agent sees opaque ids and file names, never account URLs or credentials.
+/// Listing uses <c>GetBlobsByHierarchy</c> with the <c>/</c> delimiter, one prefix level per
+/// request, and never reads outside the prefix.
 /// </remarks>
-public sealed class AzureBlobDocumentProvider : IDocumentProvider, IDocumentCreatingProvider, IConnectionEditingDefaults, IConnectionGranularityDefaults, IConnectionCalculationDefaults
+public sealed class AzureBlobDocumentProvider : IDocumentProvider, IDocumentCreatingProvider, IDocumentListingProvider, IConnectionTemplateSource, IConnectionEditingDefaults, IConnectionGranularityDefaults, IConnectionCalculationDefaults
 {
     /// <summary>Gets the provider discriminator used in document references.</summary>
     public const string ProviderName = "azureblob";
@@ -38,6 +40,9 @@ public sealed class AzureBlobDocumentProvider : IDocumentProvider, IDocumentCrea
     private readonly BlobContainerClient _container;
     private readonly IAzureBlobRegistrationStore _store;
     private readonly string _prefix;
+    private readonly string? _templatesPrefix;
+    private readonly string? _templatesFolder;
+    private readonly TemplateLocationKind _templateLocation;
     private readonly HashSet<string> _allowedExtensions;
 
     /// <summary>
@@ -73,6 +78,9 @@ public sealed class AzureBlobDocumentProvider : IDocumentProvider, IDocumentCrea
             throw new ArgumentException("At least one allowed document extension is required.", nameof(options));
 
         _prefix = ObjectKeys.NormalizePrefix(options.Prefix, nameof(options));
+        _templatesFolder = ObjectKeys.NormalizeFolder(options.TemplatesFolder, nameof(options));
+        _templatesPrefix = _templatesFolder is null ? null : _prefix + _templatesFolder + "/";
+        _templateLocation = CloudListing.TemplateLocationFor(_templatesFolder is not null, options.TemplateLocation, nameof(options));
         _allowedExtensions = new HashSet<string>(
             options.AllowedExtensions.Select(ObjectKeys.NormalizeExtension),
             StringComparer.OrdinalIgnoreCase);
@@ -98,6 +106,13 @@ public sealed class AzureBlobDocumentProvider : IDocumentProvider, IDocumentCrea
 
     /// <inheritdoc />
     public bool RejectFormulaErrors => _options.RejectFormulaErrors;
+
+    /// <inheritdoc />
+    /// <remarks>The folder relative to the prefix, such as <c>templates</c>.</remarks>
+    public string? TemplatesFolder => _templatesFolder;
+
+    /// <inheritdoc />
+    public TemplateLocationKind TemplateLocation => _templateLocation;
 
     /// <inheritdoc />
     public async Task<DocumentReference> RegisterAsync(
@@ -254,6 +269,18 @@ public sealed class AzureBlobDocumentProvider : IDocumentProvider, IDocumentCrea
             throw Error(ProviderErrorCode.NotFound,
                 $"The provider document '{reference.ItemId}' is not registered.", reference.ItemId);
     }
+
+    /// <inheritdoc />
+    /// <remarks>
+    /// Lists with <c>GetBlobsByHierarchy</c> under the prefix (or the templates folder), one prefix
+    /// level per request with the <c>/</c> delimiter. Each entry's source is the blob name relative
+    /// to the prefix. A page makes at most <see cref="CloudListing.MaximumServiceCalls"/> requests,
+    /// and a recursive listing descends at most <see cref="CloudListing.MaximumDepth"/> levels.
+    /// </remarks>
+    public Task<DocumentListPage> ListAsync(DocumentListQuery query, CancellationToken cancellationToken = default) =>
+        ObjectListing.ListAsync(
+            query, ConnectionId, _prefix, _templatesPrefix, _allowedExtensions, _options.MaximumBytes,
+            (code, message) => Error(code, message), ReadListingPageAsync, cancellationToken);
 
     // ── Writes ────────────────────────────────────────────────────────────────
 
@@ -449,6 +476,53 @@ public sealed class AzureBlobDocumentProvider : IDocumentProvider, IDocumentCrea
         {
             throw ReadFailure(ex, itemId, beforeWrite: false);
         }
+    }
+
+    private async Task<ListedObjectPage> ReadListingPageAsync(string prefix, string? continuationToken, CancellationToken cancellationToken)
+    {
+        var objects = new List<ListedObject>();
+        var prefixes = new List<string>();
+        string? next = null;
+        try
+        {
+            var pages = _container
+                .GetBlobsByHierarchyAsync(new GetBlobsByHierarchyOptions { Delimiter = "/", Prefix = prefix }, cancellationToken)
+                .AsPages(continuationToken, CloudListing.ServicePageSize);
+            var enumerator = pages.GetAsyncEnumerator(cancellationToken);
+            try
+            {
+                if (await enumerator.MoveNextAsync().ConfigureAwait(false))
+                {
+                    var page = enumerator.Current;
+                    foreach (var item in page.Values)
+                    {
+                        if (item.IsPrefix)
+                            prefixes.Add(item.Prefix);
+                        else if (item.IsBlob)
+                            objects.Add(new ListedObject
+                            {
+                                Key = item.Blob.Name,
+                                Size = item.Blob.Properties?.ContentLength,
+                                LastModified = item.Blob.Properties?.LastModified
+                            });
+                    }
+                    next = page.ContinuationToken;
+                }
+            }
+            finally
+            {
+                await enumerator.DisposeAsync().ConfigureAwait(false);
+            }
+        }
+        catch (RequestFailedException ex) when (ex.Status == 404)
+        {
+            throw Error(ProviderErrorCode.NotFound, $"The connection's container does not exist.{CodeSuffix(ex)}", itemId: null, ex);
+        }
+        catch (Exception ex) when (ex is not DocumentProviderException and not OperationCanceledException)
+        {
+            throw ReadFailure(ex, itemId: null, beforeWrite: false);
+        }
+        return new ListedObjectPage { Objects = objects, Prefixes = prefixes, NextToken = string.IsNullOrEmpty(next) ? null : next };
     }
 
     /// <summary>

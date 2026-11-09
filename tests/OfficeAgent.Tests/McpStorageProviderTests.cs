@@ -7,6 +7,7 @@ using Microsoft.Extensions.DependencyInjection;
 using OfficeAgent.Abstractions;
 using OfficeAgent.AgentFramework;
 using OfficeAgent.Core;
+using OfficeAgent.Core.DocumentProviders;
 using OfficeAgent.Mcp;
 
 namespace OfficeAgent.Tests;
@@ -65,6 +66,12 @@ public class McpStorageProviderTests
 
         public abstract StorageTransports Transports();
 
+        /// <summary>The templates folder as the connection's TemplatesFolder setting names it.</summary>
+        public abstract string TemplatesFolder { get; }
+
+        /// <summary>Puts a template in <see cref="TemplatesFolder"/>.</summary>
+        public abstract void SeedTemplate(string name);
+
         public virtual void Dispose()
         {
         }
@@ -119,6 +126,12 @@ public class McpStorageProviderTests
 
         public override StorageTransports Transports() => new() { Http = _ => _server.Http };
 
+        private string? _templates;
+
+        public override string TemplatesFolder => _templates ??= _server.AddFolder("Precedents", parent: "ACTIVE!1");
+
+        public override void SeedTemplate(string name) => _server.SeedIn(TemplatesFolder, name, DocxFactory.Contract());
+
         public override void Dispose() => _server.Dispose();
     }
 
@@ -172,6 +185,12 @@ public class McpStorageProviderTests
 
         public override StorageTransports Transports() => new() { Http = _ => _drive.Http };
 
+        private string? _templates;
+
+        public override string TemplatesFolder => _templates ??= _drive.SeedFolder("Templates", parent: "sharedRoot");
+
+        public override void SeedTemplate(string name) => _drive.Seed(name, DocxFactory.Contract(), parent: TemplatesFolder);
+
         public override void Dispose() => _drive.Dispose();
     }
 
@@ -224,6 +243,12 @@ public class McpStorageProviderTests
 
         public override StorageTransports Transports() => new() { Http = _ => _box.Http };
 
+        private string? _templates;
+
+        public override string TemplatesFolder => _templates ??= _box.SeedFolder("Templates", parent: "0");
+
+        public override void SeedTemplate(string name) => _box.Seed(name, DocxFactory.Contract(), parent: TemplatesFolder);
+
         public override void Dispose() => _box.Dispose();
     }
 
@@ -253,6 +278,10 @@ public class McpStorageProviderTests
             Store.BeforeWrite = written => Store.Touch(written);
             return ToolErrorCodes.VersionConflict;
         }
+
+        public override string TemplatesFolder => "templates";
+
+        public override void SeedTemplate(string name) => Store.Seed("contracts/templates/" + name, DocxFactory.Contract());
     }
 
     private sealed class AzureBlobRig : ObjectStoreRig
@@ -331,6 +360,9 @@ public class McpStorageProviderTests
         public OfficeAgentClient Client => _services.GetRequiredService<OfficeAgentClient>();
 
         public string Description(string tool) => McpTools.Single(t => t.ProtocolTool.Name == tool).ProtocolTool.Description ?? string.Empty;
+
+        public IDocumentProvider Provider(string connectionId) =>
+            _services.GetServices<IDocumentProvider>().Single(p => p.ConnectionId == connectionId);
 
         public void Dispose() => _services.Dispose();
     }
@@ -436,6 +468,45 @@ public class McpStorageProviderTests
 
         Assert.True(created.RootElement.GetProperty("committed").GetBoolean(), created.RootElement.ToString());
         Assert.Equal("brief.docx", created.RootElement.GetProperty("outputName").GetString());
+    }
+
+    [Theory]
+    [MemberData(nameof(Providers))]
+    public async Task A_configured_templates_folder_is_listed_and_its_templates_register(string provider)
+    {
+        using var rig = NewRig(provider);
+        var options = new OfficeAgentMcpOptions();
+        rig.Configure(options, creation: true, minimal: false);
+        var connection = (StorageConnectionOptions)Connection(options);
+        connection.TemplatesFolder = rig.TemplatesFolder;
+        connection.TemplateLocation = "organization";
+        connection.AllowedExtensions = new List<string> { ".docx", ".dotx" };
+        rig.SeedTemplate("letter.dotx");
+        using var server = new Server(options, rig.Transports());
+
+        var listing = Assert.IsAssignableFrom<IDocumentListingProvider>(server.Provider(rig.ConnectionId));
+        var templates = Assert.IsAssignableFrom<IConnectionTemplateSource>(listing);
+        var page = await listing.ListAsync(new DocumentListQuery { Templates = true });
+
+        Assert.Equal(TemplateLocationKind.Organization, templates.TemplateLocation);
+        Assert.Equal(rig.TemplatesFolder, templates.TemplatesFolder);
+        var entry = Assert.Single(page.Items);
+        Assert.True(entry.IsTemplate);
+        using var registered = JsonDocument.Parse(await server.Tools.RegisterDocument(rig.ConnectionId, entry.Source));
+        Assert.Equal("letter.dotx", registered.RootElement.GetProperty("name").GetString());
+    }
+
+    [Theory]
+    [MemberData(nameof(Providers))]
+    public void A_connection_without_a_templates_folder_reports_none(string provider)
+    {
+        using var rig = NewRig(provider);
+        using var server = Start(rig);
+
+        var templates = Assert.IsAssignableFrom<IConnectionTemplateSource>(server.Provider(rig.ConnectionId));
+
+        Assert.Null(templates.TemplatesFolder);
+        Assert.Equal(TemplateLocationKind.None, templates.TemplateLocation);
     }
 
     // ── Discovery ─────────────────────────────────────────────────────────────
@@ -627,6 +698,13 @@ public class McpStorageProviderTests
         { "s3-no-bucket", new[] { "Amazon S3 connection 'bucket'", "BucketName" } },
         { "s3-bad-endpoint", new[] { "ServiceUrl" } },
         { "s3-bad-mode", new[] { "DefaultChangeMode 'Tracke'", "Tracked or Direct" } },
+        { "imanage-bad-templates", new[] { "iManage connection 'matters'", "TemplatesFolder", "ACTIVE!780" } },
+        { "drive-bad-templates", new[] { "Google Drive connection 'drive'", "TemplatesFolder", "Google Drive folder id" } },
+        { "box-bad-templates", new[] { "Box connection 'box'", "TemplatesFolder that is not a numeric Box folder id" } },
+        { "blob-bad-templates", new[] { "Azure Blob connection 'blobs'", "TemplatesFolder", "inside the connection's prefix" } },
+        { "s3-bad-template-location", new[] { "TemplateLocation 'Global'", "Expected Connection, Personal, Workgroup, Organization or None" } },
+        { "s3-template-location-without-folder", new[] { "TemplateLocation Workgroup but no TemplatesFolder", "OfficeAgent__AmazonS3Connections__0__TemplatesFolder" } },
+        { "s3-templates-folder-with-location-none", new[] { "TemplatesFolder and TemplateLocation None" } },
     };
 
     [Theory]
@@ -658,6 +736,9 @@ public class McpStorageProviderTests
             ["OfficeAgent:BoxConnections:0:SubjectType"] = "User",
             ["OfficeAgent:AzureBlobConnections:0:ConnectionId"] = "blobs",
             ["OfficeAgent:AzureBlobConnections:0:Prefix"] = "contracts/",
+            ["OfficeAgent:AzureBlobConnections:0:TemplatesFolder"] = "templates",
+            ["OfficeAgent:AzureBlobConnections:0:TemplateLocation"] = "Organization",
+            ["OfficeAgent:BoxConnections:0:TemplatesFolder"] = "4242",
             ["OfficeAgent:AmazonS3Connections:0:ConnectionId"] = "bucket",
             ["OfficeAgent:AmazonS3Connections:0:ForcePathStyle"] = "true",
             ["OfficeAgent:AmazonS3Connections:0:DefaultChangeGranularity"] = "Minimal",
@@ -673,6 +754,8 @@ public class McpStorageProviderTests
         Assert.Equal("User", Assert.Single(options.BoxConnections).SubjectType);
         Assert.Equal(50 * 1024 * 1024, options.BoxConnections[0].MaximumBytes);
         Assert.Equal("contracts/", Assert.Single(options.AzureBlobConnections).Prefix);
+        Assert.Equal(("templates", "Organization"), (options.AzureBlobConnections[0].TemplatesFolder, options.AzureBlobConnections[0].TemplateLocation));
+        Assert.Equal(("4242", ""), (options.BoxConnections[0].TemplatesFolder, options.BoxConnections[0].TemplateLocation));
         Assert.True(Assert.Single(options.AmazonS3Connections).ForcePathStyle);
         Assert.Equal("Minimal", options.AmazonS3Connections[0].DefaultChangeGranularity);
     }
@@ -759,6 +842,17 @@ public class McpStorageProviderTests
             case "s3-no-bucket": options.AmazonS3Connections.Add(With(S3(), c => c.BucketName = "")); break;
             case "s3-bad-endpoint": options.AmazonS3Connections.Add(With(S3(), c => c.ServiceUrl = "minio:9000")); break;
             case "s3-bad-mode": options.AmazonS3Connections.Add(With(S3(), c => c.DefaultChangeMode = "Tracke")); break;
+            case "imanage-bad-templates": options.IManageConnections.Add(With(IManage(), c => c.TemplatesFolder = "Precedents")); break;
+            case "drive-bad-templates": options.GoogleDriveConnections.Add(With(Drive(), c => c.TemplatesFolder = "Templates/Firm")); break;
+            case "box-bad-templates": options.BoxConnections.Add(With(Box(), c => c.TemplatesFolder = "Templates")); break;
+            case "blob-bad-templates": options.AzureBlobConnections.Add(With(Blob(), c => c.TemplatesFolder = "../templates")); break;
+            case "s3-bad-template-location":
+                options.AmazonS3Connections.Add(With(S3(), c => { c.TemplatesFolder = "templates"; c.TemplateLocation = "Global"; }));
+                break;
+            case "s3-template-location-without-folder": options.AmazonS3Connections.Add(With(S3(), c => c.TemplateLocation = "workgroup")); break;
+            case "s3-templates-folder-with-location-none":
+                options.AmazonS3Connections.Add(With(S3(), c => { c.TemplatesFolder = "templates"; c.TemplateLocation = "None"; }));
+                break;
             default: throw new ArgumentOutOfRangeException(nameof(configuration));
         }
         return options;

@@ -347,13 +347,17 @@ A connection whose value cannot be read - a `MaximumBytes` that is not a number,
 | `MaximumBytes` / `AllowedExtensions` | 100 MB / `[".docx"]` | On every iManage, Google Drive, Box, Azure Blob and Amazon S3 connection, as for filesystem connections. |
 | `DefaultChangeMode` / `DefaultChangeGranularity` | `Tracked` / `Span` | On every iManage, Google Drive, Box, Azure Blob and Amazon S3 connection, as above. |
 | `CalculateFormulas` / `RejectFormulaErrors` | `false` / `false` | On every iManage, Google Drive, Box, Azure Blob and Amazon S3 connection, as above. |
+| `TemplatesFolder` | empty | On every iManage, Google Drive, Box, Azure Blob and Amazon S3 connection: the folder a templates listing reads. An iManage folder id (`ACTIVE!780`), a Drive folder id, a numeric Box folder id, or for Azure Blob and Amazon S3 a folder relative to the prefix (`templates`). Empty means the connection has no templates. |
+| `TemplateLocation` | `Connection` when `TemplatesFolder` is set | On the same connections: where the templates folder sits, `Connection`, `Personal`, `Workgroup` or `Organization`. Setting it without `TemplatesFolder`, or `None` with one, stops the server at startup. |
 
 A missing or malformed setting on any of these connections stops the server at startup with a
 message that names the connection and the environment variable to set, such as
 `OfficeAgent__IManageConnections__0__ServerUrl`. A message never quotes a secret. A
 `TemplateLocation` that is not one of the four names, a filesystem `TemplatesFolder` that is not
 a folder below the root, and a SharePoint `TemplatesFolder` that is neither a URL nor a pair stop
-it the same way.
+it the same way. A templates folder is set like any other key, for example
+`OfficeAgent__AzureBlobConnections__0__TemplatesFolder=templates` and
+`OfficeAgent__AzureBlobConnections__0__TemplateLocation=Organization`.
 
 ### Office template locations
 

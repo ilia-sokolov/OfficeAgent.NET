@@ -170,6 +170,17 @@ The same boundary rules apply, over iManage:
   such as `ACTIVE!773`. iManage gives every new document its own number, so creation can never
   overwrite. A name already in that folder is refused with `AlreadyExists`. Set
   `CreationDocumentClass` if the library requires a class on new documents.
+- **Listing reads the creation folder and the templates folder.** Registration has no folder
+  scope, so `ListAsync` lists below `CreationFolderId`, or below `TemplatesFolder` (a folder id
+  such as `ACTIVE!780`) for a templates listing. It reads
+  `GET /libraries/{library}/folders/{id}/children` with `limit` and `offset`, 200 children per
+  request. `Folder` is a path of folder names below that folder. Each entry's source is the
+  listed version's id, `LIBRARY!number.version`, which registration accepts, so a listing shows
+  the agent document ids that edits otherwise keep opaque. Search folders are not descended
+  into, because their results can come from anywhere in the library. Without a creation folder
+  a listing reports `ConfigurationError`. The iManage API reference is behind a customer login,
+  so the `limit` and `offset` parameters are unverified against a live server; the provider
+  treats a short page as the last one, and the tests run it against a fake server.
 - **Tokens stay out of references and tool results.** Authentication is an
   `IIManageAccessTokenProvider`. iManage sends the token in an `X-Auth-Token` header, which
   `HttpClient` does not strip on a redirect, so the provider uses its own `HttpClient` that does
@@ -191,6 +202,8 @@ export OfficeAgent__IManageConnections__0__ClientSecret=<from your secret store>
 export OfficeAgent__IManageConnections__0__Username=svc-officeagent
 export OfficeAgent__IManageConnections__0__Password=<from your secret store>
 export OfficeAgent__IManageConnections__0__CreationFolderId=ACTIVE!773   # optional
+export OfficeAgent__IManageConnections__0__TemplatesFolder=ACTIVE!780    # optional
+export OfficeAgent__IManageConnections__0__TemplateLocation=Organization # optional
 ```
 
 `GrantType` picks `Password` (the default), `RefreshToken` or `ClientCredentials`. A missing
@@ -277,6 +290,14 @@ services.AddGoogleDriveDocumentProvider(
   same moment can still both succeed, leaving two files with that name.
 - **Creation has one destination.** Set `CreationFolderId` to allow new documents in that folder.
   `NewVersion` and `NewDocument` write beside the source file.
+- **Listing reads the creation folder and the templates folder.** Registration has no folder
+  scope, so `ListAsync` lists below `CreationFolderId`, or below `TemplatesFolder` (a Drive
+  folder id) for a templates listing. It calls `files.list` with the query
+  `'{folder}' in parents and trashed = false`, quotes and backslashes escaped, 200 files per
+  request, on shared drives with `corpora=drive`. `Folder` is a path of folder names, each found
+  with one name query. Each entry's source is the Drive file id. Native Google files, shortcuts
+  and files over `MaximumBytes` are not listed. Without a creation folder a listing reports
+  `ConfigurationError`.
 - **Uploads are single requests.** The provider does not implement resumable uploads, which
   Google recommends for files over 5 MB. A failed single request is not retried, so keep
   `MaximumBytes` (100 MB by default) as low as your documents allow.
@@ -350,6 +371,12 @@ services.AddBoxDocumentProvider(
   picks the next free `.v{n}` name with Box's upload preflight check, which uploads nothing.
 - **Creation has one destination.** Set `CreationFolderId` to allow new documents in that folder.
   `NewVersion` and `NewDocument` write beside the source file.
+- **Listing reads the creation folder and the templates folder.** Registration has no folder
+  scope, so `ListAsync` lists below `CreationFolderId`, or below `TemplatesFolder` (a numeric
+  folder id) for a templates listing. It calls `GET /folders/{id}/items` with marker paging, 200
+  items per request. `Folder` is a path of folder names, found by reading each level's items.
+  Each entry's source is the Box file id. Web links and files over `MaximumBytes` are not
+  listed. Without a creation folder a listing reports `ConfigurationError`.
 - **A locked file says so.** A file locked by someone else is refused with `write-rejected` and
   a message that asks them to unlock it or suggests saving as a new document. A Box Shield
   access policy that blocks a download or upload is `access-denied`, and the message names the
@@ -387,9 +414,10 @@ In the MCP server, configure Google Drive with `OfficeAgent__GoogleDriveConnecti
 with `OfficeAgent__BoxConnections__N__*`. A Drive connection reads its service account key from
 `KeyFilePath`, or from `KeyJson` supplied through the environment, and acts as itself unless
 `Subject` names a Workspace user. A Box connection takes `ClientId`, `ClientSecret`, `SubjectType`
-and `SubjectId`. Both create documents only when `CreationFolderId` is set. A missing or unreadable
-key, or a missing Box credential, stops the server at startup. See
-[MCP server settings](mcp-server.md#settings).
+and `SubjectId`. Both create documents only when `CreationFolderId` is set, and both take
+`TemplatesFolder` and `TemplateLocation` for a templates folder. A missing or unreadable key, a
+missing Box credential, or a templates folder that is not a folder id stops the server at
+startup. See [MCP server settings](mcp-server.md#settings).
 
 ## The Azure Blob Storage provider
 
@@ -440,6 +468,12 @@ services.AddAzureBlobDocumentProvider("contracts", o =>
 - **Registrations** stay in memory unless you set `RegistrationIndexPath`. For several host
   instances, implement `IAzureBlobRegistrationStore` over shared storage and pass it to the
   `AzureBlobDocumentProvider` constructor. Removing a registration never deletes the blob.
+- **Listing stays inside the prefix.** `ListAsync` calls `GetBlobsByHierarchy` with the `/`
+  delimiter, 200 items per request, one prefix level at a time, so it never reads outside the
+  prefix. `Folder` is a path relative to the prefix, and the same escapes are refused with
+  `AccessDenied`. Each entry's source is the blob name relative to the prefix. Set
+  `TemplatesFolder` to a folder inside the prefix, such as `templates`, for a templates listing.
+  The identity needs list access on the container; *Storage Blob Data Contributor* includes it.
 
 ## The Amazon S3 provider
 
@@ -482,6 +516,10 @@ services.AddAmazonS3DocumentProvider("contracts", o =>
 - **Limits, registrations and removal** work as for Azure Blob. Implement
   `IAmazonS3RegistrationStore` for shared registrations. A single PUT holds at most 5 GB, so
   keep `MaximumBytes` below that.
+- **Listing stays inside the prefix.** `ListAsync` calls `ListObjectsV2` with the key prefix,
+  the `/` delimiter and S3's continuation token, 200 keys per request, one prefix level at a
+  time. `Folder`, sources and `TemplatesFolder` work as for Azure Blob. Listing needs
+  `s3:ListBucket` on the bucket, which you can limit to the prefix with an `s3:prefix` condition.
 
 **S3-compatible stores.** Set `ServiceUrl` (and usually `ForcePathStyle = true`). The store must
 honour both conditional headers, or `Replace` and creation lose their protection.
@@ -496,8 +534,38 @@ In the MCP server, configure Azure Blob Storage with `OfficeAgent__AzureBlobConn
 (`ContainerName` and `Prefix`, with `ServiceUri` for `DefaultAzureCredential` or a
 `ConnectionString` from the environment) and Amazon S3 with `OfficeAgent__AmazonS3Connections__N__*`
 (`BucketName`, `KeyPrefix`, `Region`, and `ServiceUrl` with `ForcePathStyle` for an S3-compatible
-store). S3 credentials come from the AWS default chain, never from OfficeAgent settings. See
+store). S3 credentials come from the AWS default chain, never from OfficeAgent settings. Both
+take `TemplatesFolder`, relative to the prefix, and `TemplateLocation`. See
 [MCP server settings](mcp-server.md#settings).
+
+## Listing the cloud connections
+
+The iManage, Google Drive, Box, Azure Blob and Amazon S3 providers implement
+`IDocumentListingProvider` and `IConnectionTemplateSource` with the same rules and bounds:
+
+- **A page is bounded.** `MaximumResults` is clamped to 1 to 500. One `ListAsync` call makes at
+  most 10 requests to the service, finding the query's folder included, so a page can hold
+  fewer entries than asked for, even none, while a continuation token is returned. A folder
+  path that would take more than that to find is refused with `InvalidArgument`.
+- **Recursion is bounded.** A recursive listing reads subfolders breadth first, at most 5 levels
+  below the listed folder, and holds at most 50 subfolders to read later. Further subfolders
+  found while 50 are waiting are not listed. Each entry's `Folder` is its path below the
+  connection's root, or the templates folder, in the form `Folder` accepts.
+- **The allow-list decides.** Only extensions in `AllowedExtensions` are listed, and
+  `Extensions` only narrows them. Macro-enabled formats (`.docm`, `.dotm`, `.xlsm`, `.xltm`,
+  `.xlam`, `.pptm`, `.potm`, `.ppsm`, `.ppam`, `.sldm`) are never listed. Files over
+  `MaximumBytes` are not listed, because registration would refuse them.
+- **Templates.** A templates listing reads `TemplatesFolder` and marks every entry as a
+  template; an entry elsewhere is a template when its extension is `.dotx`, `.potx` or `.xltx`.
+  A connection without a templates folder returns an empty page without calling the service.
+  `TemplateLocation` defaults to `Connection` when `TemplatesFolder` is set.
+- **Tokens cannot leave the listing.** A continuation token is encrypted and signed with a key
+  held in the process, and bound to the connection and the query. An edited token, a token from
+  another query, or one issued before the server restarted is refused with `InvalidArgument`;
+  list again without it. Several server instances behind a load balancer do not share tokens,
+  so route a listing's pages to one instance.
+- **Errors match the other calls.** A refused listing is `AccessDenied`, a missing folder,
+  container or bucket is `NotFound`, and other failures are `IO`.
 
 ## Other providers
 
