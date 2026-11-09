@@ -130,7 +130,7 @@ public class ConnectionChangeModeTests
                 "insertTable", "removeTable",
                 "insertTableRows", "removeTableRows",
                 "insertTableColumns", "removeTableColumns",
-                "insertImage", "removeImage",
+                "insertImage", "removeImage", "replaceImage",
                 "insertBreak", "note"
             }, StringComparer.OrdinalIgnoreCase),
             trackable);

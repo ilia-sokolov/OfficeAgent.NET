@@ -47,16 +47,11 @@ public sealed partial class OfficeAgentClient
     {
         if (template is null) throw new ArgumentNullException(nameof(template));
 
-        byte[] bytes;
-        using (var content = await OpenReadAsync(template, cancellationToken).ConfigureAwait(false))
-        using (var buffer = new MemoryStream())
-        {
-            await content.Stream.CopyToAsync(buffer, 81920, cancellationToken).ConfigureAwait(false);
-            bytes = buffer.ToArray();
-        }
-
+        // A .dotx or .potx is read as the document it will become, so what discovery reports
+        // is exactly what a batch binds against.
+        var converted = await ReadTemplateAsync(template, cancellationToken).ConfigureAwait(false);
         var inspect = await InspectAsync(
-            new StreamHandle(new MemoryStream(bytes, writable: false)),
+            new StreamHandle(new MemoryStream(converted.Bytes, writable: false)),
             InspectOptions.Default,
             cancellationToken).ConfigureAwait(false);
 
@@ -99,7 +94,7 @@ public sealed partial class OfficeAgentClient
                 ? RepeatingCandidates(inspect)
                 : Array.Empty<RepeatingRowCandidate>(),
             Diagnostics = diagnostics,
-            TemplateSha256 = Sha256(bytes)
+            TemplateSha256 = Sha256(converted.Original)
         };
     }
 
@@ -130,16 +125,10 @@ public sealed partial class OfficeAgentClient
         var limits = EffectiveLimits(request);
         var batchDiagnostics = new List<WorkflowDiagnostic>();
 
-        byte[] bytes;
-        using (var content = await OpenReadAsync(template, cancellationToken).ConfigureAwait(false))
-        using (var buffer = new MemoryStream())
-        {
-            await content.Stream.CopyToAsync(buffer, 81920, cancellationToken).ConfigureAwait(false);
-            bytes = buffer.ToArray();
-        }
-
+        var converted = await ReadTemplateAsync(template, cancellationToken).ConfigureAwait(false);
+        var bytes = converted.Original;
         var inspection = await InspectAsync(
-            new StreamHandle(new MemoryStream(bytes, writable: false)),
+            new StreamHandle(new MemoryStream(converted.Bytes, writable: false)),
             InspectOptions.Default,
             cancellationToken).ConfigureAwait(false);
 
@@ -162,6 +151,19 @@ public sealed partial class OfficeAgentClient
                 Message = $"Output name '{duplicate.Key}' is requested {duplicate.Count()} times. " +
                           "Names must be unique; nothing is overwritten.",
                 Path = duplicate.Key
+            });
+
+        // Batch-wide, like a duplicate name, so the commit refuses it before any output exists:
+        // a .dotx output saved as .pptx would be a Word document Office cannot open by its name.
+        foreach (var mismatched in request.Items.Where(item =>
+                     !string.IsNullOrWhiteSpace(item.OutputName) &&
+                     !string.Equals(Path.GetExtension(item.OutputName), converted.DocumentExtension, StringComparison.OrdinalIgnoreCase)))
+            batchDiagnostics.Add(new WorkflowDiagnostic
+            {
+                Code = TemplateDiagnosticCodes.OutputFormatMismatch,
+                Message = $"The template is a {converted.Format} file, so every output name must end in " +
+                          $"'{converted.DocumentExtension}'; '{mismatched.OutputName}' does not.",
+                Path = mismatched.OutputName
             });
 
         var items = new List<TemplateBatchPreviewItem>();
@@ -300,8 +302,12 @@ public sealed partial class OfficeAgentClient
         TemplateBatchLimits limits,
         CancellationToken cancellationToken)
     {
-        var inspection = await InspectAsync(template, InspectOptions.Default, cancellationToken)
-            .ConfigureAwait(false);
+        // The same retyped bytes the commit applies the plan to, so the plan's snapshot holds.
+        var converted = await ReadTemplateAsync(template, cancellationToken).ConfigureAwait(false);
+        var inspection = await InspectAsync(
+            new StreamHandle(new MemoryStream(converted.Bytes, writable: false)),
+            InspectOptions.Default,
+            cancellationToken).ConfigureAwait(false);
 
         var scalar = BuildTemplatePlanCore(inspection, binding);
         var media = await ResolveMediaAsync(inspection, binding, limits.Media, cancellationToken)

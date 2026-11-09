@@ -92,7 +92,7 @@ Table-row, table-cell, and image paths come from `inspect_document.nodes`:
 | `table#N` | the N-th table |
 | `table#N/row#M` | row M of table N (used by `format` against a row) |
 | `table#N/cell#R/C` | cell at row R, column C |
-| `image#N` | the N-th inline image |
+| `image#N` | the N-th drawing, inline or floating: usually a picture |
 
 ## Change mode
 
@@ -100,7 +100,7 @@ Every verb that changes Word content carries an optional `mode`: `Tracked` write
 as revision markup a reviewer accepts or rejects, `Direct` writes it into the content. It
 applies to `changeText`, `insert`, `insertParagraphs`, `removeParagraph`, `fill`, `format`,
 `insertTable`, `removeTable`, the table row and column verbs (including `repeatTableRow`),
-`insertImage`, `removeImage`, `insertBreak`, and `note`.
+`insertImage`, `removeImage`, `replaceImage`, `insertBreak`, and `note`.
 
 The default depends on how the plan enters the engine:
 
@@ -121,6 +121,8 @@ Tracking is not decoration on the text edit alone. Under `Tracked`:
 - a removed row stays in place, struck through, with its cell text moved into `w:delText`,
   until someone accepts the deletion — the same for a removed table, column, or image, whose
   bytes are kept because a rejected deletion has to restore the picture;
+- a replaced image is the old picture marked deleted beside the new one marked inserted, so
+  accepting keeps the new image and rejecting restores the old one;
 - `format` records the properties it replaced (`w:rPrChange` / `w:pPrChange` and their table
   equivalents), so rejecting restores exactly what was there. A format that changes nothing
   records no revision.
@@ -653,6 +655,18 @@ already has changes nothing; a second Word link to the same range is tagged `…
 { "op": "bindData", "target": { "paraId": "w14:…", "expect": "$3.1M" }, "source": "Revenue" }
 ```
 
+#### Known limits
+
+- `fillTable` refuses a table with merged cells, in Word and in PowerPoint: a cell that spans
+  columns or rows has no single position to fill. Unmerge it first.
+- `setChartData` refuses scatter and bubble charts, which plot numbers on both axes rather than
+  values against category labels. Surface and stock charts are refused for the same reason.
+- SmartArt and other diagrams cannot be edited. Their text and layout live in diagram parts that
+  no verb reads or writes, so `changeText`, `fill` and `find` do not reach them. A diagram is
+  handled only as a whole: on a slide it is a `shape#…` node that can be moved, resized or
+  removed, and in Word it is an `image#N` drawing that `removeImage` removes. `replaceImage`
+  refuses it, because it holds no picture.
+
 ### `insertImage` / `removeImage`
 
 Add an inline image and remove one by `image#N` (discover paths via `inspect_document.nodes`).
@@ -693,6 +707,46 @@ Remove by node anchor:
 { "op": "removeImage",
   "target": { "kind": "image", "path": "image#0" } }
 ```
+
+### `replaceImage`
+
+Put a new image into a picture that is already there, such as the photo or logo slot of a
+company template, and keep everything the template set around it: position, frame size,
+wrapping, shape geometry, outline and effects, z-order, hyperlink and alt text. The target is the
+picture's node from `inspect_document.nodes`: `image#N` in Word, inline or floating, and
+`image#{slideId}/{shapeId}` on a slide, or the same picture's `shape#…` path. A picture
+placeholder that already holds a picture counts; an empty one holds nothing to replace. The
+image arrives exactly as `insertImage` takes it, `base64Bytes` or `imageConnectionId` +
+`imageDocumentId`, with the same image types, and the bytes must be the declared `imageType`.
+
+```json
+{ "op": "replaceImage",
+  "target":      { "kind": "image", "path": "image#0" },
+  "base64Bytes": "iVBORw0KGgo…",
+  "imageType":   "png",
+  "fit":         "cover",
+  "description": "Product photograph" }
+```
+
+`fit` decides how an image of another shape meets the frame. The frame is never resized or
+moved; the picture's crop rectangle does the work, as Office's own Crop to Fill and Crop to
+Fit do:
+
+| `fit` | Result |
+| --- | --- |
+| `cover` (default) | The image fills the frame exactly, centre-cropped to the frame's proportions. |
+| `contain` | The whole image is visible, centred, with empty space on two sides inside the frame. |
+
+`description` replaces the alt text; leave it out to keep the picture's own. A picture placeholder
+with no size of its own is fitted to the frame its layout gives it. An SVG picture's vector
+image is dropped, so the new image is what Office draws. The old image is removed from the
+package only when nothing else references it, so a logo shared by several pictures or slides
+stays where it is still used.
+
+In Word, `Direct` replaces the image in place, and `Tracked` (the default) records the old
+picture as deleted and the new one as inserted beside it, so accept and reject work as for any
+redline. A deck takes `Direct` only and refuses `Tracked`, as it does for every verb. Charts,
+SmartArt, shapes and video or audio objects hold no picture to replace and are refused.
 
 ### `backgroundImage`
 

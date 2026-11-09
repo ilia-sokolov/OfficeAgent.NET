@@ -508,6 +508,21 @@ target: Anchor
 templateRowIndex: Int32
 ```
 
+### `replaceImage`
+
+Type: `OfficeAgent.Abstractions.ReplaceImageOp`
+
+```text
+base64Bytes: String
+description: String
+fit: ImageFit
+imageConnectionId: String
+imageDocumentId: String
+imageType: String
+mode: ChangeMode?
+target: Anchor
+```
+
 ### `revision`
 
 Type: `OfficeAgent.Abstractions.RevisionOp`
@@ -749,12 +764,22 @@ MCP annotations: title "Create a document"; readOnly false, destructive false, i
     "planJson": {
       "default": "",
       "type": "string"
+    },
+    "templateConnectionId": {
+      "default": "",
+      "type": "string"
+    },
+    "templateSource": {
+      "default": "",
+      "type": "string"
     }
   },
   "required": [
     "connectionId",
     "name",
-    "planJson"
+    "planJson",
+    "templateConnectionId",
+    "templateSource"
   ],
   "type": "object"
 }
@@ -6470,6 +6495,13 @@ TablePath = ""
 ```text
 Records = []
 TablePath = ""
+```
+
+### `OfficeAgent.Abstractions.ReplaceImageOp`
+
+```text
+Fit = Cover
+ImageType = "png"
 ```
 
 ### `OfficeAgent.Abstractions.RevisionMetadata`

@@ -701,6 +701,8 @@ edit_document({
 
 To start from nothing instead, replace step 2 with `create_document({ "connectionId": "documents", "name": "brief.docx", "planJson": "" })` → `{ committed: true, outputDocumentId: "…" }`. The new document holds one empty paragraph addressed as `auto-0000`, so `planJson` can carry an initial plan targeting it. Plan-validation errors happen before the write; provider errors may occur after storage accepted the file, so do not retry the same name blindly.
 
+To start from the company's template, add `templateSource` (a source exactly as `register_document` takes it) and, when the template lives elsewhere, `templateConnectionId`: `create_document({ "connectionId": "documents", "name": "invoice-0042.docx", "planJson": "…", "templateConnectionId": "templates", "templateSource": "Invoice.dotx" })`. The new document is a copy of the template with the plan applied, and the template is only read. Inspect the template first for its anchors and snapshot; they hold for the copy. A `.dotx`, `.potx` or `.xltx` becomes a normal `.docx`, `.pptx` or `.xlsx`, so `name` must use that extension or the call fails with `invalid-argument` before anything is written. A macro-enabled template fails with `macro-enabled-document`. The template connection needs register and read access, and its `AllowedExtensions` must include the template's extension.
+
 ## SharePoint operational limits
 
 A save under 4 MiB is a single Graph request; a larger one goes through a Graph

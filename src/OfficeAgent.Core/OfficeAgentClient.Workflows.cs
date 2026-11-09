@@ -233,11 +233,13 @@ public sealed partial class OfficeAgentClient
 
             try
             {
-                var applied = await CommitAsync(template, plan.Plan, new SaveDocumentOptions
+                // Applied to the template retyped as a document, so an output of a .dotx or
+                // .potx opens in Office as the .docx or .pptx it is named.
+                var applied = await CommitCoreAsync(template, plan.Plan, new SaveDocumentOptions
                 {
                     Mode = SaveMode.NewDocument,
                     NewName = item.OutputName
-                }, cancellationToken).ConfigureAwait(false);
+                }, asDocument: true, cancellationToken).ConfigureAwait(false);
                 results.Add(new TemplateBatchItemResult
                 {
                     OutputName = item.OutputName,

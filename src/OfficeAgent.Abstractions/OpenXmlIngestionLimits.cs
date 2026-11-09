@@ -169,3 +169,22 @@ public sealed class EncryptedDocumentException : Exception
     {
     }
 }
+
+/// <summary>
+/// Thrown when a template or document a new document would start from is macro-enabled
+/// (<c>.dotm</c>, <c>.potm</c>, <c>.xltm</c>, <c>.docm</c>, <c>.pptm</c>, <c>.xlsm</c>, or any
+/// package carrying a VBA project). OfficeAgent does not copy macros into the documents it
+/// creates.
+/// </summary>
+public sealed class MacroEnabledDocumentException : Exception
+{
+    /// <summary>The stable wire code reported to agents and tools.</summary>
+    public const string Code = "macro-enabled-document";
+
+    /// <summary>Initializes the exception with the standard explanation.</summary>
+    public MacroEnabledDocumentException()
+        : base("The template is macro-enabled, and OfficeAgent does not create documents from one. " +
+               "Save it in Office as a macro-free template (.dotx, .potx or .xltx) or document, and use that.")
+    {
+    }
+}

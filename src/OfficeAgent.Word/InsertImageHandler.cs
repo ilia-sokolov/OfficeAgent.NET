@@ -18,7 +18,8 @@ namespace OfficeAgent.Word;
 /// wrapped in a new paragraph placed before or after the anchor paragraph
 /// according to <see cref="InsertImageOp.Position"/>. The drawing is a reference to a
 /// shared <see cref="DocumentFormat.OpenXml.Packaging.ImagePart"/>: identical bytes
-/// already embedded in the document are reused rather than duplicated.
+/// already embedded in the same part are reused rather than duplicated, because a
+/// relationship id does not cross parts.
 /// </summary>
 internal sealed class InsertImageHandler : IOperationHandler
 {
@@ -107,7 +108,7 @@ internal sealed class InsertImageHandler : IOperationHandler
         // An image is a reference to a shared resource: when identical bytes are already
         // embedded in the same part, point the new drawing at that existing ImagePart
         // instead of duplicating the bytes in the package.
-        var relationshipId = ReferenceOrAddImagePart(owner, imageType, bytes);
+        var relationshipId = PictureFill.ReferenceOrAddImagePart(owner, imageType, bytes);
 
         // Each drawing needs its own DocProperties id; deriving it from the (now shared)
         // relationship id would collide when the same image is referenced more than once.
@@ -140,27 +141,8 @@ internal sealed class InsertImageHandler : IOperationHandler
         return (root as OpenXmlPartRootElement)?.OpenXmlPart;
     }
 
-    /// <summary>
-    /// Returns the relationship id for the image bytes, reusing an already-embedded
-    /// <see cref="ImagePart"/> in the same part whose content is byte-identical, or adding
-    /// a fresh part when none matches. Deduplicating keeps a repeated image a single shared
-    /// resource; the reuse is per part, because a relationship id does not cross one.
-    /// </summary>
-    private static string ReferenceOrAddImagePart(
-        OpenXmlPartContainer owner, PartTypeInfo imageType, byte[] bytes)
-    {
-        foreach (var existing in owner.GetPartsOfType<ImagePart>())
-            if (PartContentEquals(existing, bytes))
-                return owner.GetIdOfPart(existing);
-
-        var imagePart = owner.AddNewPart<ImagePart>(imageType.ContentType);
-        using (var source = new MemoryStream(bytes, writable: false))
-            imagePart.FeedData(source);
-        return owner.GetIdOfPart(imagePart);
-    }
-
     /// <summary>Returns a DocProperties id one greater than any drawing already present.</summary>
-    private static uint NextDrawingId(IOpenXmlPackage package)
+    internal static uint NextDrawingId(IOpenXmlPackage package)
     {
         uint max = 0;
         foreach (var (drawing, _) in ImageNodeProvider.EnumerateDrawingsWithHost(package))
@@ -169,16 +151,6 @@ internal sealed class InsertImageHandler : IOperationHandler
             if (id > max) max = id;
         }
         return max + 1U;
-    }
-
-    private static bool PartContentEquals(ImagePart part, byte[] candidate)
-    {
-        using var stream = part.GetStream(FileMode.Open, FileAccess.Read);
-        if (stream.CanSeek && stream.Length != candidate.LongLength) return false;
-
-        using var buffer = new MemoryStream();
-        stream.CopyTo(buffer);
-        return buffer.ToArray().AsSpan().SequenceEqual(candidate);
     }
 
     private static readonly Dictionary<string, PartTypeInfo> ImagePartTypes = new(StringComparer.OrdinalIgnoreCase)

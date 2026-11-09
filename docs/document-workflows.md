@@ -64,6 +64,22 @@ suits generated documents; select `Tracked` when a reviewer needs to accept or r
 population in Word. Repeating rows are Word-only. Scalar binding also supports unique
 PowerPoint shape names.
 
+The template may be a `.docx` or `.pptx`, or a real `.dotx` or `.potx` template. Discovery,
+preview and population read a template as the document it becomes, and every output is a normal
+`.docx` or `.pptx` that Office opens as a document rather than as a template. Each `OutputName`
+must therefore end in the document extension of the template's format; a batch with one that
+does not is refused with `output-format-mismatch` before anything is written. A macro-enabled
+template (`.dotm`, `.potm`) is refused with `macro-enabled-document`. The connection's
+`AllowedExtensions` must include the template's extension for it to be registered.
+
+To make one document from a template and edit it in the same call, without slots, use
+`create_document` with `templateSource`, or `OfficeAgentClient.CreateFromTemplateAsync`:
+
+```csharp
+var template = await client.RegisterAsync("templates", @"C:\Templates\Invoice.dotx");
+var created = await client.CreateFromTemplateAsync("documents", "invoice-0042.docx", template, plan);
+```
+
 The equivalent MCP or Agent Framework call is `populate_template_batch(connectionId,
 documentId, requestJson, expectedTokenJson)`. The host must opt in with `AllowCreation`; its
 connection access policy must also grant read and create. For example:

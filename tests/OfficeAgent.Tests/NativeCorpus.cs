@@ -225,6 +225,19 @@ internal static class NativeCorpus
         yield return W("w-removeimage", "removeImage", "Remove the picture", imaged,
             new PlanOperation[] { new RemoveImageOp { Target = image, Mode = ChangeMode.Direct } },
             new() { ["inlineShapes"] = 0 });
+        // The 160x80 picture takes a square image and keeps its frame, so the image is cropped
+        // top and bottom to fill it. Tracked, Word must accept to the new image and reject to
+        // the old, uncropped one.
+        var square = Png(80, 80, 0xE0, 0x8A, 0x1E);
+        yield return W("w-replaceimage", "replaceImage", "Replace a picture's image, cropped to fill its frame", imaged,
+            new PlanOperation[] { new ReplaceImageOp { Target = image, Base64Bytes = square, ImageType = "png", Fit = ImageFit.Cover, Mode = ChangeMode.Direct } },
+            new() { ["inlineShapes"] = 1, ["inlineShapeSizePt"] = new[] { 120.0, 60.0 }, ["inlineCropSigns"] = new[] { 0, 1, 0, 1 }, ["revisions"] = 0 },
+            visual: true);
+        yield return W("w-replaceimage-tracked", "replaceImage", "Tracked picture replacement, accepted and rejected in Word", imaged,
+            new PlanOperation[] { new ReplaceImageOp { Target = image, Base64Bytes = square, ImageType = "png", Fit = ImageFit.Cover, Mode = ChangeMode.Tracked } },
+            new() { ["revisionsAtLeast"] = 2, ["inlineShapes"] = 2,
+                    ["acceptInlineShapes"] = 1, ["acceptInlineCropSigns"] = new[] { 0, 1, 0, 1 },
+                    ["rejectInlineShapes"] = 1, ["rejectInlineCropSigns"] = new[] { 0, 0, 0, 0 } });
         yield return W("w-backgroundimage", "backgroundImage", "Page background picture", contract,
             new PlanOperation[] { new BackgroundImageOp { Base64Bytes = Png(64, 64, 0xF2, 0xE8, 0xD5), ImageType = "png" } },
             new() { ["headerPictureBehindText"] = true }, visual: true);
@@ -284,6 +297,18 @@ internal static class NativeCorpus
         yield return W("w-create-with-plan", "create", "Blank document from OfficeAgent, then written", created,
             new PlanOperation[] { new ChangeTextOp { Target = new TextSpanAnchor { ParaId = "auto-0000", Expect = "" }, With = "Created by OfficeAgent.", Mode = ChangeMode.Direct } },
             new() { ["textContains"] = new[] { "Created by OfficeAgent." }, ["revisions"] = 0, ["wordCompatibilityMode"] = 15 });
+
+        // A company .dotx: the new document is a copy of it, written, and Word opens the copy as
+        // a document rather than as a template. The input is the template's own bytes.
+        var letterhead = CreateFromTemplateTests.Retyped(contract, DocumentFormat.OpenXml.WordprocessingDocumentType.Template);
+        yield return new Case("w-create-from-template", "word", "create", "A .docx created from a .dotx template, then written",
+            letterhead,
+            FromTemplate(letterhead, "letterhead.dotx", "letter.docx", new PlanOperation[]
+            {
+                new InsertOp { Target = anchor, Position = InsertPosition.After, Text = "Prepared for Northwind Traders.", Mode = ChangeMode.Direct }
+            }),
+            new Dictionary<string, object> { ["documentType"] = 0, ["revisions"] = 0,
+                ["textContains"] = new[] { "Prepared for Northwind Traders.", "Acme Corp" } }, AnyPart, false);
 
         var template = Commit(client, TemplateWithRow(), "input.docx", Array.Empty<PlanOperation>());
         var populated = Commit(client, template, "input.docx", new PlanOperation[]
@@ -455,9 +480,31 @@ internal static class NativeCorpus
         });
         yield return new Case("p-insertimage", "powerpoint", "insertImage", "Insert a picture", deck, pictured,
             new Dictionary<string, object> { ["pictures"] = 1 }, AnyPart, true);
+        var picturePath = Paths(client, pictured, "image", ".pptx").First();
         yield return P("p-removeimage", "removeImage", "Remove the picture", pictured,
-            new PlanOperation[] { new RemoveImageOp { Target = new NodeAnchor { Kind = "image", Path = Paths(client, pictured, "image", ".pptx").First() } } },
+            new PlanOperation[] { new RemoveImageOp { Target = new NodeAnchor { Kind = "image", Path = picturePath } } },
             new() { ["pictures"] = 0 });
+        // The 200x100 picture takes a square image: cover crops it top and bottom to fill the
+        // frame. The picture placeholder takes its 4:1 frame from the layout: contain pads the
+        // square left and right inside it. Neither frame moves or changes size.
+        var square = Png(100, 100, 0xE0, 0x8A, 0x1E);
+        yield return P("p-replaceimage-cover", "replaceImage", "Replace a picture's image, cropped to fill its frame", pictured,
+            new PlanOperation[] { new ReplaceImageOp { Target = new NodeAnchor { Kind = "image", Path = picturePath }, Base64Bytes = square, ImageType = "png", Fit = ImageFit.Cover } },
+            new() { ["pictures"] = 1, ["pictureSizePt"] = new[] { 150.0, 75.0 }, ["pictureCropSigns"] = new[] { 0, 1, 0, 1 } }, visual: true);
+        var (placeholderDeck, placeholderPicture) = ReplaceImageTests.Deck(placeholder: true);
+        yield return P("p-replaceimage-contain", "replaceImage", "Replace a picture placeholder's image, whole image inside the layout's frame", placeholderDeck,
+            new PlanOperation[] { new ReplaceImageOp { Target = new NodeAnchor { Kind = "image", Path = placeholderPicture }, Base64Bytes = square, ImageType = "png", Fit = ImageFit.Contain } },
+            new() { ["pictureSizePt"] = new[] { 576.0, 144.0 }, ["pictureCropSigns"] = new[] { -1, 0, -1, 0 } }, visual: true);
+
+        // A company .potx: the new deck keeps its masters and named layouts, and is a deck.
+        var brand = CreateFromTemplateTests.Retyped(SlideTemplateLayoutTests.CompanyTemplate(), DocumentFormat.OpenXml.PresentationDocumentType.Template);
+        yield return new Case("p-create-from-template", "powerpoint", "create", "A .pptx created from a .potx template, with a slide on its own layout",
+            brand,
+            FromTemplate(brand, "brand.potx", "pitch.pptx", new PlanOperation[]
+            {
+                new InsertSlideOp { Slide = new SlideData { Layout = "Two Column With Logo", Title = "Why Northwind", Body = new[] { "Twelve years in logistics" } } }
+            }),
+            new Dictionary<string, object> { ["slides"] = 2, ["textContains"] = new[] { "Why Northwind", "Twelve years in logistics" } }, AnyPart, false);
         yield return P("p-backgroundimage", "backgroundImage", "Slide background picture", deck,
             new PlanOperation[] { new BackgroundImageOp { Target = new NodeAnchor { Kind = "slide", Path = "slide#256" }, Base64Bytes = Png(64, 64, 0xF2, 0xE8, 0xD5), ImageType = "png" } },
             new() { ["backgroundPicture"] = true }, visual: true);
@@ -727,6 +774,47 @@ internal static class NativeCorpus
                 throw new InvalidOperationException("Template batch failed: " + string.Join("; ",
                     result.Items.SelectMany(i => i.Diagnostics).Select(d => $"{d.Code}: {d.Message}")));
             return File.ReadAllBytes(Path.Combine(root, "out" + extension));
+        }
+        finally
+        {
+            Directory.Delete(root, recursive: true);
+        }
+    }
+
+    /// <summary>
+    /// Creates one document from a template through the real creation path, on the filesystem
+    /// provider, and returns the bytes it wrote.
+    /// </summary>
+    private static byte[] FromTemplate(byte[] template, string templateName, string outputName, PlanOperation[] ops)
+    {
+        var root = Path.Combine(Path.GetTempPath(), $"officeagent-native-create-{Guid.NewGuid():N}");
+        Directory.CreateDirectory(root);
+        try
+        {
+            var client = new OfficeAgentClient(
+                new DocumentProviderRegistry(new[]
+                {
+                    new FileSystemDocumentProvider(new FileSystemDocumentProviderOptions
+                    {
+                        ConnectionId = "workspace", RootPath = root, DefaultChangeMode = ChangeMode.Direct,
+                        AllowedExtensions = new[] { ".docx", ".pptx", ".dotx", ".potx" }
+                    })
+                }),
+                new WordModule(), new PowerPointModule());
+            var path = Path.Combine(root, templateName);
+            File.WriteAllBytes(path, template);
+            var reference = client.RegisterAsync("workspace", path).GetAwaiter().GetResult();
+            var result = client.CreateFromTemplateAsync("workspace", outputName, reference, new DocumentPlan
+            {
+                Operations = ops,
+                Revision = new RevisionMetadata { Author = "OfficeAgent", TimestampUtc = new DateTimeOffset(2026, 9, 22, 12, 0, 0, TimeSpan.Zero) }
+            }).GetAwaiter().GetResult();
+            if (!result.Committed)
+                throw new InvalidOperationException("Creation from the template failed: " +
+                    string.Join("; ", result.Report.Errors.Select(e => $"{e.Code}: {e.Message}")));
+            if (!File.ReadAllBytes(path).AsSpan().SequenceEqual(template))
+                throw new InvalidOperationException("Creation changed the template.");
+            return File.ReadAllBytes(Path.Combine(root, outputName));
         }
         finally
         {

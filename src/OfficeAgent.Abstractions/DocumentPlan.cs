@@ -1012,6 +1012,73 @@ public sealed class RemoveImageOp : PlanOperation, ITrackedOperation
 }
 
 /// <summary>
+/// Specifies how a replacement image fills the frame of the picture it replaces.
+/// </summary>
+public enum ImageFit
+{
+    /// <summary>
+    /// The image fills the frame exactly, centre-cropped through the picture's crop rectangle.
+    /// </summary>
+    Cover,
+
+    /// <summary>
+    /// The whole image is visible inside the frame, centred, with the frame's size unchanged.
+    /// </summary>
+    Contain
+}
+
+/// <summary>
+/// Replaces the image of an existing picture in place, keeping the template's look: the
+/// picture's position, frame size, effects, z-order, hyperlink and alt text stay as they were.
+/// </summary>
+/// <remarks>
+/// <para>
+/// The target is an image node from <c>inspect_document.nodes</c>: <c>image#N</c> in Word, and
+/// <c>image#{slideId}/{shapeId}</c> (or the same picture's <c>shape#…</c> path) on a slide,
+/// including a picture placeholder that already holds a picture. Image bytes arrive exactly as
+/// <see cref="InsertImageOp"/> takes them, with the same image types.
+/// </para>
+/// <para>
+/// <see cref="Fit"/> decides how an image of a different shape meets the frame: the crop
+/// rectangle is recomputed for the new image, and the frame itself is never resized or moved.
+/// An SVG picture's stale vector reference is dropped so the new raster image is what shows,
+/// and the old image part is released only when nothing else references it. In Word a tracked
+/// replacement is the deletion of the old picture and the insertion of the new one, so
+/// accepting or rejecting it works as for any other redline; a deck takes
+/// <see cref="ChangeMode.Direct"/> only.
+/// </para>
+/// </remarks>
+public sealed class ReplaceImageOp : PlanOperation, ITrackedOperation
+{
+    /// <inheritdoc />
+    public ChangeMode? Mode { get; init; }
+
+    /// <summary>Base64-encoded image bytes. Mutually exclusive with <see cref="ImageDocumentId"/>.</summary>
+    public string? Base64Bytes { get; init; }
+
+    /// <summary>
+    /// Connection id of the provider the image was added to.
+    /// Required when <see cref="ImageDocumentId"/> is set.
+    /// </summary>
+    public string? ImageConnectionId { get; init; }
+
+    /// <summary>
+    /// Opaque, provider-assigned document id for an image previously added to a
+    /// provider connection. Mutually exclusive with <see cref="Base64Bytes"/>.
+    /// </summary>
+    public string? ImageDocumentId { get; init; }
+
+    /// <summary>Image format: <c>png</c> (default), <c>jpeg</c>, <c>gif</c>, <c>bmp</c>, or <c>tiff</c>.</summary>
+    public string ImageType { get; init; } = "png";
+
+    /// <summary>How the new image fills the existing frame. Defaults to <see cref="ImageFit.Cover"/>.</summary>
+    public ImageFit Fit { get; init; } = ImageFit.Cover;
+
+    /// <summary>New alt text for the picture. Omitted keeps the alt text it already has.</summary>
+    public string? Description { get; init; }
+}
+
+/// <summary>
 /// Specifies where a slide lands relative to the deck or to a reference slide.
 /// </summary>
 public enum SlidePosition

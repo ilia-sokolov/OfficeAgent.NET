@@ -58,6 +58,12 @@ function ContainsAll([string]$text, $items, [string]$label) {
 function ExcludesAll([string]$text, $items, [string]$label) {
     foreach ($s in $items) { Check "$label excludes '$s'" $false ($text.Contains($s)) (-not $text.Contains($s)) }
 }
+# A picture's crop as Office reports it, left, top, right and bottom, each as -1, 0 or 1: a
+# positive crop trims the image and a negative one pads it.
+function CropSigns($format, $expected, [string]$label) {
+    $signs = @($format.CropLeft, $format.CropTop, $format.CropRight, $format.CropBottom) | ForEach-Object { [math]::Sign([math]::Round([double]$_, 1)) }
+    Check "$label (left, top, right, bottom)" ($expected -join ', ') ($signs -join ', ') ((@($expected) -join '|') -eq ($signs -join '|'))
+}
 
 # Excel writes a repair log to %TEMP% when it repairs a workbook on open.
 function RepairLogs { @(Get-ChildItem -Path $env:TEMP -Filter 'error*.xml' -ErrorAction SilentlyContinue | ForEach-Object FullName) }
@@ -130,6 +136,9 @@ function Check-Word($app, $case, [string]$path) {
             Check 'picture size in points' ($want -join ' x ') ('{0} x {1}' -f $shape.Width, $shape.Height) $ok
         }
         if (Has $e 'inlineShapes') { Check 'inline pictures' $e.inlineShapes $doc.InlineShapes.Count ($doc.InlineShapes.Count -eq $e.inlineShapes) }
+        if (Has $e 'inlineCropSigns') { CropSigns $doc.InlineShapes.Item(1).PictureFormat $e.inlineCropSigns 'picture crop' }
+        # wdTypeDocument is 0 and wdTypeTemplate 1: a document made from a .dotx must open as a document.
+        if (Has $e 'documentType') { $t = $doc.Type; Check 'opened as a document, not a template' $e.documentType $t ($t -eq $e.documentType) }
         if (Has $e 'contentControlsAtLeast') { Check 'content controls at least' $e.contentControlsAtLeast $doc.ContentControls.Count ($doc.ContentControls.Count -ge $e.contentControlsAtLeast) }
         if (Has $e 'contentControlTags') {
             $tags = @($doc.ContentControls | ForEach-Object { $_.Tag })
@@ -169,17 +178,19 @@ function Check-Word($app, $case, [string]$path) {
             Check 'Word reads the same text as in the input' $was $text ($was -eq $text)
         }
 
-        if ((Has $e 'acceptContains') -or (Has $e 'acceptExcludes') -or (Has $e 'acceptTableColumns')) {
+        if ((Has $e 'acceptContains') -or (Has $e 'acceptExcludes') -or (Has $e 'acceptTableColumns') -or (Has $e 'acceptInlineShapes')) {
             $doc.Revisions.AcceptAll()
             $t = WordText $doc
             Check 'revisions after accept all' 0 $doc.Revisions.Count ($doc.Revisions.Count -eq 0)
             if (Has $e 'acceptContains') { ContainsAll $t $e.acceptContains 'accepted text' }
             if (Has $e 'acceptExcludes') { ExcludesAll $t $e.acceptExcludes 'accepted text' }
             if (Has $e 'acceptTableColumns') { $n = $doc.Tables.Item(1).Columns.Count; Check 'table columns after accept all' $e.acceptTableColumns $n ($n -eq $e.acceptTableColumns) }
+            if (Has $e 'acceptInlineShapes') { $n = $doc.InlineShapes.Count; Check 'inline pictures after accept all' $e.acceptInlineShapes $n ($n -eq $e.acceptInlineShapes) }
+            if (Has $e 'acceptInlineCropSigns') { CropSigns $doc.InlineShapes.Item(1).PictureFormat $e.acceptInlineCropSigns 'picture crop after accept all' }
         }
     } finally { $doc.Close($false) }
 
-    if ((Has $e 'rejectContains') -or (Has $e 'rejectExcludes') -or (Has $e 'rejectTableColumns')) {
+    if ((Has $e 'rejectContains') -or (Has $e 'rejectExcludes') -or (Has $e 'rejectTableColumns') -or (Has $e 'rejectInlineShapes')) {
         $doc = Open-Word $app $path $true
         try {
             $doc.Revisions.RejectAll()
@@ -188,6 +199,8 @@ function Check-Word($app, $case, [string]$path) {
             if (Has $e 'rejectContains') { ContainsAll $t $e.rejectContains 'rejected text' }
             if (Has $e 'rejectExcludes') { ExcludesAll $t $e.rejectExcludes 'rejected text' }
             if (Has $e 'rejectTableColumns') { $n = $doc.Tables.Item(1).Columns.Count; Check 'table columns after reject all' $e.rejectTableColumns $n ($n -eq $e.rejectTableColumns) }
+            if (Has $e 'rejectInlineShapes') { $n = $doc.InlineShapes.Count; Check 'inline pictures after reject all' $e.rejectInlineShapes $n ($n -eq $e.rejectInlineShapes) }
+            if (Has $e 'rejectInlineCropSigns') { CropSigns $doc.InlineShapes.Item(1).PictureFormat $e.rejectInlineCropSigns 'picture crop after reject all' }
         } finally { $doc.Close($false) }
     }
 
@@ -218,6 +231,7 @@ function Check-Word($app, $case, [string]$path) {
 $ppSaveAsOpenXMLPresentation = 24
 $ppSaveAsPDF = 32
 $msoPicture = 13
+$msoPlaceholder = 14
 $msoMedia = 16
 $msoFillPicture = 6
 
@@ -254,6 +268,16 @@ function Check-Deck($app, $case, [string]$path) {
         $shapes = @(Shapes $deck)
         if (Has $e 'tables') { $n = @($shapes | Where-Object { $_.HasTable }).Count; Check 'tables' $e.tables $n ($n -eq $e.tables) }
         if (Has $e 'pictures') { $n = @($shapes | Where-Object { $_.Type -eq $msoPicture }).Count; Check 'pictures' $e.pictures $n ($n -eq $e.pictures) }
+        if ((Has $e 'pictureSizePt') -or (Has $e 'pictureCropSigns')) {
+            # A filled picture placeholder is a placeholder whose content is a picture.
+            $picture = @($shapes | Where-Object { $_.Type -eq $msoPicture -or ($_.Type -eq $msoPlaceholder -and $_.PlaceholderFormat.ContainedType -eq $msoPicture) })[0]
+            if (Has $e 'pictureSizePt') {
+                $want = @($e.pictureSizePt)
+                $ok = [math]::Abs($picture.Width - $want[0]) -le 1 -and [math]::Abs($picture.Height - $want[1]) -le 1
+                Check 'picture frame in points' ($want -join ' x ') ('{0} x {1}' -f $picture.Width, $picture.Height) $ok
+            }
+            if (Has $e 'pictureCropSigns') { CropSigns $picture.PictureFormat $e.pictureCropSigns 'picture crop' }
+        }
         if (Has $e 'media') { $n = @($shapes | Where-Object { $_.Type -eq $msoMedia }).Count; Check 'media objects' $e.media $n ($n -eq $e.media) }
         if (Has $e 'charts') { $n = @($shapes | Where-Object { $_.HasChart }).Count; Check 'charts' $e.charts $n ($n -eq $e.charts) }
         if (Has $e 'chartEditable') {
@@ -412,6 +436,8 @@ function New-App([string]$prog) {
         [void][Runtime.InteropServices.Marshal]::ReleaseComObject($app)
         throw "$prog attached to an instance this run did not start; close it or run where no one is using Office"
     }
+    # Recorded for the parent, which stops exactly these on a hang and no other Office process.
+    if ($Worker) { $started | ForEach-Object { $_.Id } | Out-File -Append -Encoding ascii ($Worker + '.pids') }
     switch ($prog) {
         'Word.Application' { $app.Visible = $false; $app.DisplayAlerts = $wdAlertsNone }
         'PowerPoint.Application' { $app.DisplayAlerts = 1 }  # ppAlertsNone
@@ -472,14 +498,23 @@ function Run-Isolated($case) {
     $args = @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', $PSCommandPath, '-Corpus', $Corpus, '-Worker', $out, '-Id', $case.id)
     if ($Trace) { $args += '-Trace' }
     $process = Start-Process powershell -ArgumentList $args -PassThru -NoNewWindow
+    $pids = $out + '.pids'
     if (-not $process.WaitForExit($TimeoutSeconds * 1000)) {
-        # Hung, almost always on a modal dialog: kill the worker and the Office process it drove.
+        # Hung, almost always on a modal dialog: kill the worker and the Office process it
+        # started, by the id it recorded. Selecting by image name and start time could take an
+        # Office someone opened meanwhile.
         Stop-Process -Id $process.Id -Force -ErrorAction SilentlyContinue
-        Get-Process $images[$case.format] -ErrorAction SilentlyContinue | Where-Object { $_.StartTime -ge $started } | Stop-Process -Force
+        $own = if (Test-Path $pids) { @(Get-Content $pids | Where-Object { $_ -match '^\d+$' } | ForEach-Object { [int]$_ }) } else { @() }
+        foreach ($officePid in $own) {
+            Get-Process -Id $officePid -ErrorAction SilentlyContinue |
+                Where-Object { $_.ProcessName -eq $images[$case.format] -and $_.StartTime -ge $started } | Stop-Process -Force
+        }
+        Remove-Item $pids -ErrorAction SilentlyContinue
         return [ordered]@{ id = $case.id; format = $case.format; family = $case.family; description = $case.description
             openedCleanly = $false; error = "no answer within $TimeoutSeconds s (killed; a modal dialog is the usual cause)"
             pass = $false; hung = $true; observed = @{}; checks = @() }
     }
+    Remove-Item $pids -ErrorAction SilentlyContinue
     if (-not (Test-Path $out)) {
         return [ordered]@{ id = $case.id; format = $case.format; family = $case.family; description = $case.description
             openedCleanly = $false; error = "worker exited $($process.ExitCode) without a result"; pass = $false; observed = @{}; checks = @() }

@@ -20,15 +20,21 @@ internal sealed class OfficeAgentEngine : IDocumentService, ICapabilityReporting
         OpenXmlIngestionLimits? limits = null,
         bool renderingAvailable = false,
         IFormulaEvaluator? formulaEvaluator = null)
-        => _flow = new FlowOrchestrator(
+    {
+        Limits = limits ?? OpenXmlIngestionLimits.Default;
+        _flow = new FlowOrchestrator(
             modules,
-            resolvers ?? DefaultHandleResolver.For(limits ?? OpenXmlIngestionLimits.Default),
+            resolvers ?? DefaultHandleResolver.For(Limits),
             (loggerFactory ?? NullLoggerFactory.Instance).CreateLogger(OfficeAgentTelemetry.LogCategory),
-            limits ?? OpenXmlIngestionLimits.Default)
+            Limits)
         {
             RenderingAvailable = renderingAvailable,
             FormulaEvaluator = formulaEvaluator
         };
+    }
+
+    /// <summary>The host ingestion ceilings every package this engine opens is held to.</summary>
+    internal OpenXmlIngestionLimits Limits { get; }
 
     /// <inheritdoc />
     public EngineCapabilities Describe() => _flow.Describe();

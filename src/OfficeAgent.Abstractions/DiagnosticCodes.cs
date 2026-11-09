@@ -128,6 +128,12 @@ public static class TemplateDiagnosticCodes
     /// <summary>A batch item has no output name.</summary>
     public const string MissingOutputName = "missing-output-name";
 
+    /// <summary>
+    /// A batch item's output name does not end in the document extension of the template's
+    /// format: <c>.docx</c> for a Word template, <c>.pptx</c> for a PowerPoint one.
+    /// </summary>
+    public const string OutputFormatMismatch = "output-format-mismatch";
+
     /// <summary>No value was supplied for a template slot and missing values are refused.</summary>
     public const string MissingTemplateValue = "missing-template-value";
 

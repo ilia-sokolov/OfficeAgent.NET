@@ -937,6 +937,14 @@ public interface ITrackedOperation
 public ChangeMode? Mode { get; }
 ```
 
+### `OfficeAgent.Abstractions.ImageFit`
+
+```csharp
+public enum ImageFit : System.IComparable, System.IConvertible, System.IFormattable, System.ISpanFormattable
+Cover = 0
+Contain = 1
+```
+
 ### `OfficeAgent.Abstractions.InsertBreakOp`
 
 ```csharp
@@ -1128,6 +1136,14 @@ public sealed class LinkOp : OfficeAgent.Abstractions.PlanOperation, OfficeAgent
 public LinkOp();
 public ChangeMode? Mode { get; init; }
 public string Url { get; init; }
+```
+
+### `OfficeAgent.Abstractions.MacroEnabledDocumentException`
+
+```csharp
+public sealed class MacroEnabledDocumentException : System.Exception, System.Runtime.Serialization.ISerializable
+public MacroEnabledDocumentException();
+public const string Code = "macro-enabled-document";
 ```
 
 ### `OfficeAgent.Abstractions.MatchOptions`
@@ -1519,6 +1535,20 @@ public string TablePath { get; init; }
 public int TemplateRowIndex { get; init; }
 ```
 
+### `OfficeAgent.Abstractions.ReplaceImageOp`
+
+```csharp
+public sealed class ReplaceImageOp : OfficeAgent.Abstractions.PlanOperation, OfficeAgent.Abstractions.ITrackedOperation
+public ReplaceImageOp();
+public string? Base64Bytes { get; init; }
+public string? Description { get; init; }
+public ImageFit Fit { get; init; }
+public string? ImageConnectionId { get; init; }
+public string? ImageDocumentId { get; init; }
+public string ImageType { get; init; }
+public ChangeMode? Mode { get; init; }
+```
+
 ### `OfficeAgent.Abstractions.RevisionAction`
 
 ```csharp
@@ -1898,6 +1928,7 @@ public const string MediaInRepeatingRow = "media-in-repeating-row";
 public const string MissingAltText = "missing-alt-text";
 public const string MissingOutputName = "missing-output-name";
 public const string MissingTemplateValue = "missing-template-value";
+public const string OutputFormatMismatch = "output-format-mismatch";
 public const string StaleBatchPreview = "stale-batch-preview";
 public const string TemplateAnchorNotFound = "template-anchor-not-found";
 public const string TemplateTableNotFound = "template-table-not-found";
@@ -2294,6 +2325,7 @@ public const string PlanOperations = "Each operation is one object. Concrete exa
 { \"op\": \"insertImage\", \"target\": { \"paraId\": \"w14:...\", \"expect\": \"...\" }, \"base64Bytes\": \"iVBORw0KGgo...\", \"imageType\": \"png\", \"widthPx\": 200, \"heightPx\": 80 }
 { \"op\": \"insertImage\", \"target\": { \"paraId\": \"w14:...\", \"expect\": \"...\" }, \"imageConnectionId\": \"images\", \"imageDocumentId\": \"<opaque id from a prior add>\", \"imageType\": \"png\", \"widthPx\": 200, \"heightPx\": 80 }
 { \"op\": \"removeImage\", \"target\": { \"kind\": \"image\", \"path\": \"image#0\" } }
+{ \"op\": \"replaceImage\", \"target\": { \"kind\": \"image\", \"path\": \"image#0\" }, \"base64Bytes\": \"iVBORw0KGgo...\", \"imageType\": \"png\", \"fit\": \"cover\" }   // keeps the frame, position and effects; fit cover (crop to fill) or contain
 { \"op\": \"backgroundImage\", \"base64Bytes\": \"iVBORw0KGgo...\", \"imageType\": \"png\", \"opacity\": 0.2 }
 { \"op\": \"backgroundImage\", \"target\": { \"kind\": \"slide\", \"path\": \"slide#256\" }, \"base64Bytes\": \"iVBORw0KGgo...\", \"opacity\": 0.15 }
 { \"op\": \"headerFooter\", \"header\": \"Northwind Traders\", \"footer\": \"Confidential\", \"showPageNumber\": true, \"alignment\": \"edges\", \"differentFirstPage\": true }
@@ -2365,7 +2397,7 @@ Plan shape, anchors, safety loop
 Working with a PowerPoint deck
 - Each slide is one outline entry. Paragraph ids read \"slide{slideId}/shape{shapeId}/p{n}\", with \"notes/...\" for speaker notes and \".../r{row}c{col}/...\" inside a table cell.
 - A slide has no text flow, so insertTable, insertImage, and an added comment target the SLIDE - { \"kind\": \"slide\", \"path\": \"slide#256\" } - not a paragraph. Resolve a comment with { \"op\": \"comment\", \"action\": \"Resolve\", \"target\": { \"kind\": \"comment\", \"path\": \"comment#256/{id}\" } }.
-- Only these verbs work on a deck: setProperty (core document properties only), changeText, insert, format, fill, copyStyles, clearStyles, insertTable, removeTable, insertTableRows, removeTableRows, insertTableColumns, removeTableColumns, insertImage, removeImage, backgroundImage, insertShape, removeShape, insertMedia, insertChart, updateChart, comment, section, headerFooter, transition, animate, insertSlide, removeSlide, moveSlide, duplicateSlide.
+- Only these verbs work on a deck: setProperty (core document properties only), changeText, insert, format, fill, copyStyles, clearStyles, insertTable, removeTable, insertTableRows, removeTableRows, insertTableColumns, removeTableColumns, insertImage, removeImage, replaceImage, backgroundImage, insertShape, removeShape, insertMedia, insertChart, updateChart, comment, section, headerFooter, transition, animate, insertSlide, removeSlide, moveSlide, duplicateSlide.
 - Native charts: insertChart targets a slide and takes kind ClusteredColumn, Bar, Line, or Pie, categories, numeric series, title, showLegend, description, and pixel placement. It creates an editable chart with an embedded workbook. updateChart targets a chart node and only edits charts OfficeAgent created.
 - Slide transitions: { \"op\": \"transition\", \"effect\": \"push\", \"direction\": \"up\", \"durationMs\": 700 }. No target applies it to every slide, which is PowerPoint's \"Apply To All\"; a slide target sets just that one. effect \"none\" removes it. Set advanceAfterMs for a self-running deck and advanceOnClick:false to stop clicks skipping ahead.
 - Shape animations target a SHAPE node: { \"op\": \"animate\", \"target\": { \"kind\": \"shape\", \"path\": \"shape#257/2\" }, \"effect\": \"fade\", \"kind\": \"Entrance\", \"trigger\": \"OnClick\", \"durationMs\": 600 }. trigger is OnClick, WithPrevious or AfterPrevious and decides where the effect lands in the slide's sequence - a new click step, alongside the previous effect, or straight after it. Effects play in the order you send the operations. effect \"none\" removes that shape's animations.
@@ -2397,7 +2429,7 @@ public IReadOnlyList<ConnectionListing> DescribeListings();
 public Task<EngineCapabilities> DescribeCapabilitiesAsync(CancellationToken cancellationToken = default);
 public Task<string> ApplyPlan(string connectionId, string documentId, string planJson, string saveMode = "Replace", string newName = "", CancellationToken cancellationToken = default);
 public Task<string> CompareDocuments(string originalConnectionId, string originalDocumentId, string revisedConnectionId, string revisedDocumentId, string revisionAuthor = "OfficeAgent Compare", CancellationToken cancellationToken = default);
-public Task<string> CreateDocument(string connectionId, string name, string planJson = "", CancellationToken cancellationToken = default);
+public Task<string> CreateDocument(string connectionId, string name, string planJson = "", string templateConnectionId = "", string templateSource = "", CancellationToken cancellationToken = default);
 public Task<string> CreateDocumentContent(string name, string planJson = "", CancellationToken cancellationToken = default);
 public Task<string> DescribeCapabilities(CancellationToken cancellationToken = default);
 public Task<string> DiscoverTemplate(string connectionId, string documentId, CancellationToken cancellationToken = default);
@@ -3224,6 +3256,7 @@ public Task<InspectResult> InspectAsync(string connectionId, string documentId, 
 public Task<ProviderApplyResult> CommitAsync(DocumentReference reference, DocumentPlan plan, SaveDocumentOptions? options = null, CancellationToken cancellationToken = default);
 public Task<ProviderApplyResult> CommitAsync(string connectionId, string documentId, DocumentPlan plan, SaveDocumentOptions? options = null, CancellationToken cancellationToken = default);
 public Task<ProviderApplyResult> CreateAsync(string connectionId, string name, DocumentPlan? plan = null, CancellationToken cancellationToken = default);
+public Task<ProviderApplyResult> CreateFromTemplateAsync(string connectionId, string name, DocumentReference template, DocumentPlan? plan = null, CancellationToken cancellationToken = default);
 public Task<TemplateBatchPreview> PreviewTemplateBatchAsync(DocumentReference template, TemplateBatchRequest request, CancellationToken cancellationToken = default);
 public Task<TemplateBatchPreview> PreviewTemplateBatchAsync(string connectionId, string documentId, TemplateBatchRequest request, CancellationToken cancellationToken = default);
 public Task<TemplateBatchResult> PopulateTemplateBatchAsync(DocumentReference template, TemplateBatchRequest request, CancellationToken cancellationToken = default);

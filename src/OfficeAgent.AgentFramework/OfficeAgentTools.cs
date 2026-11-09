@@ -339,7 +339,7 @@ public sealed class OfficeAgentTools
         Working with a PowerPoint deck
         - Each slide is one outline entry. Paragraph ids read "slide{slideId}/shape{shapeId}/p{n}", with "notes/..." for speaker notes and ".../r{row}c{col}/..." inside a table cell.
         - A slide has no text flow, so insertTable, insertImage, and an added comment target the SLIDE - { "kind": "slide", "path": "slide#256" } - not a paragraph. Resolve a comment with { "op": "comment", "action": "Resolve", "target": { "kind": "comment", "path": "comment#256/{id}" } }.
-        - Only these verbs work on a deck: setProperty (core document properties only), changeText, insert, format, fill, copyStyles, clearStyles, insertTable, removeTable, insertTableRows, removeTableRows, insertTableColumns, removeTableColumns, insertImage, removeImage, backgroundImage, insertShape, removeShape, insertMedia, insertChart, updateChart, comment, section, headerFooter, transition, animate, insertSlide, removeSlide, moveSlide, duplicateSlide.
+        - Only these verbs work on a deck: setProperty (core document properties only), changeText, insert, format, fill, copyStyles, clearStyles, insertTable, removeTable, insertTableRows, removeTableRows, insertTableColumns, removeTableColumns, insertImage, removeImage, replaceImage, backgroundImage, insertShape, removeShape, insertMedia, insertChart, updateChart, comment, section, headerFooter, transition, animate, insertSlide, removeSlide, moveSlide, duplicateSlide.
         - Native charts: insertChart targets a slide and takes kind ClusteredColumn, Bar, Line, or Pie, categories, numeric series, title, showLegend, description, and pixel placement. It creates an editable chart with an embedded workbook. updateChart targets a chart node and only edits charts OfficeAgent created.
         - Slide transitions: { "op": "transition", "effect": "push", "direction": "up", "durationMs": 700 }. No target applies it to every slide, which is PowerPoint's "Apply To All"; a slide target sets just that one. effect "none" removes it. Set advanceAfterMs for a self-running deck and advanceOnClick:false to stop clicks skipping ahead.
         - Shape animations target a SHAPE node: { "op": "animate", "target": { "kind": "shape", "path": "shape#257/2" }, "effect": "fade", "kind": "Entrance", "trigger": "OnClick", "durationMs": 600 }. trigger is OnClick, WithPrevious or AfterPrevious and decides where the effect lands in the slide's sequence - a new click step, alongside the previous effect, or straight after it. Effects play in the order you send the operations. effect "none" removes that shape's animations.
@@ -539,11 +539,12 @@ public sealed class OfficeAgentTools
                 "name is a bare file name such as 'quarterly-report.docx'; an existing name is never overwritten. " +
                 "The extension picks the format: '.docx' makes Word, '.pptx' PowerPoint, and '.xlsx' Excel. " +
                 "Pass planJson \"\" for a minimal document. The starting anchor differs by format: a Word document has one empty paragraph at { \"paraId\": \"auto-0000\", \"expect\": \"\" }; a deck has one empty title placeholder at { \"paraId\": \"slide256/shape2/p0\", \"expect\": \"\" }, and its slide-targeted verbs use { \"kind\": \"slide\", \"path\": \"slide#256\" }. " +
+                "To start from the company's template instead, pass templateSource, a source exactly as register_document takes it, in templateConnectionId (default: connectionId). The new document is a copy of the template with planJson applied, and the template is never changed; inspect the template first for its anchors, which the copy keeps. A .dotx, .potx or .xltx becomes a normal .docx, .pptx or .xlsx, so name must use that extension; an ordinary document works as a template too. A macro-enabled template is refused with 'macro-enabled-document'. " +
                 "Plan-validation errors guarantee no write. Provider and cancellation errors may occur after storage accepted the file, so do not retry the same name; report the possibly unregistered name to the host for recovery. " +
                 "Returns {isValid, committed, receipt, sourceDocumentId, outputConnectionId, outputDocumentId, outputVersion, outputName, outputContentType, changes, errors, calculation}; non-applicable values are null.")));
             functions.Add(AIFunctionFactory.Create(DiscoverTemplate, Opts(schema,
                 "discover_template",
-                "Read a Word or PowerPoint template and report what it can be bound to, without writing anything. " +
+                "Read a Word or PowerPoint template (.docx, .dotx, .pptx or .potx) and report what it can be bound to, without writing anything. " +
                 "Returns {slots, mediaSlots, repeatingRows, diagnostics, templateSha256}: scalar slots are content-control tags or PowerPoint shape names, mediaSlots are image placements and native charts already in the template, and repeatingRows are Word-only {{Field}} rows. " +
                 "Call this before building a batch instead of guessing tag names: a name that does not exist is a binding error at commit time. Diagnostics report ambiguity, such as one tag used twice, which still reads but cannot be bound.")));
             functions.Add(AIFunctionFactory.Create(PreviewTemplateBatch, Opts(schema,
@@ -554,6 +555,7 @@ public sealed class OfficeAgentTools
             functions.Add(AIFunctionFactory.Create(PopulateTemplateBatch, Opts(schema,
                 "populate_template_batch",
                 "Populate one Word or PowerPoint template into separate new documents. requestJson contains items with outputName and binding. " +
+                "A .dotx or .potx template produces normal .docx or .pptx documents, so every outputName must end in the template format's document extension. " +
                 "Scalar values address content-control tags or PowerPoint shape names. Bindings may also place an image or set the data of a native chart the template already contains; discover_template lists those slots. Repeating rows are Word-only and replace {{Field}} placeholders in an explicitly selected row. " +
                 "The batch is preflighted whether or not you asked for a preview, so a batch that cannot validate writes nothing rather than leaving part of itself in storage. Pass expectedTokenJson from preview_template_batch to additionally refuse a commit whose template or batch changed since that preview. " +
                 "Every output validates and saves atomically and returns its own receipt.")));
@@ -680,6 +682,7 @@ public sealed class OfficeAgentTools
             "{ \"op\": \"insertImage\", \"target\": { \"paraId\": \"w14:...\", \"expect\": \"...\" }, \"base64Bytes\": \"iVBORw0KGgo...\", \"imageType\": \"png\", \"widthPx\": 200, \"heightPx\": 80 }\n" +
             "{ \"op\": \"insertImage\", \"target\": { \"paraId\": \"w14:...\", \"expect\": \"...\" }, \"imageConnectionId\": \"images\", \"imageDocumentId\": \"<opaque id from a prior add>\", \"imageType\": \"png\", \"widthPx\": 200, \"heightPx\": 80 }\n" +
             "{ \"op\": \"removeImage\", \"target\": { \"kind\": \"image\", \"path\": \"image#0\" } }\n" +
+            "{ \"op\": \"replaceImage\", \"target\": { \"kind\": \"image\", \"path\": \"image#0\" }, \"base64Bytes\": \"iVBORw0KGgo...\", \"imageType\": \"png\", \"fit\": \"cover\" }   // keeps the frame, position and effects; fit cover (crop to fill) or contain\n" +
             "{ \"op\": \"backgroundImage\", \"base64Bytes\": \"iVBORw0KGgo...\", \"imageType\": \"png\", \"opacity\": 0.2 }\n" +
             "{ \"op\": \"backgroundImage\", \"target\": { \"kind\": \"slide\", \"path\": \"slide#256\" }, \"base64Bytes\": \"iVBORw0KGgo...\", \"opacity\": 0.15 }\n" +
             "{ \"op\": \"headerFooter\", \"header\": \"Northwind Traders\", \"footer\": \"Confidential\", \"showPageNumber\": true, \"alignment\": \"edges\", \"differentFirstPage\": true }\n\n" +
@@ -1052,25 +1055,86 @@ public sealed class OfficeAgentTools
         });
 
     /// <summary>
-    /// Creates a new document in a provider connection, optionally applying an initial
-    /// plan to it before anything is written.
+    /// Creates a new document in a provider connection, optionally starting from a template
+    /// and applying an initial plan to it before anything is written.
     /// </summary>
+    /// <remarks>
+    /// <paramref name="templateSource"/> names the template exactly as <c>register_document</c>
+    /// takes a source, in <paramref name="templateConnectionId"/> (default: the output
+    /// connection). The template is registered there and read, never written.
+    /// </remarks>
     public Task<string> CreateDocument(
         string connectionId,
         string name,
         string planJson = "",
+        string templateConnectionId = "",
+        string templateSource = "",
         CancellationToken cancellationToken = default)
-        => SafeAsync("connectionId, name, or a document the plan references", async () =>
+        => SafeAsync(
+            string.IsNullOrWhiteSpace(templateSource) && string.IsNullOrWhiteSpace(templateConnectionId)
+                ? "connectionId, name, or a document the plan references"
+                : "connectionId, name, templateConnectionId, templateSource, or a document the plan references",
+            async () =>
         {
             await DemandAccessAsync(connectionId, ConnectionCapability.Create, cancellationToken).ConfigureAwait(false);
+            var fromTemplate = !string.IsNullOrWhiteSpace(templateSource);
+            if (!fromTemplate && !string.IsNullOrWhiteSpace(templateConnectionId))
+                throw new ArgumentException(
+                    "templateConnectionId names where the template is, so templateSource is needed too. " +
+                    "Leave both empty to start from a blank document.", nameof(templateSource));
+            var templateConnection = string.IsNullOrWhiteSpace(templateConnectionId) ? connectionId : templateConnectionId;
+            if (fromTemplate)
+            {
+                await DemandAccessAsync(templateConnection, ConnectionCapability.Register, cancellationToken).ConfigureAwait(false);
+                await DemandAccessAsync(templateConnection, ConnectionCapability.Read, cancellationToken).ConfigureAwait(false);
+                RefuseMismatchedTemplateName(name, templateSource);
+            }
+
             var plan = string.IsNullOrWhiteSpace(planJson) ? null : DeserializePlan(planJson, connectionId);
             if (plan is not null)
                 await DemandReferencedContentAccessAsync(plan, cancellationToken).ConfigureAwait(false);
-            var result = await _client.CreateAsync(connectionId, name, plan, cancellationToken).ConfigureAwait(false);
+
+            ProviderApplyResult result;
+            if (fromTemplate)
+            {
+                var template = await _client.RegisterAsync(templateConnection, templateSource, cancellationToken).ConfigureAwait(false);
+                // A URL source has no extension of its own; the registered name does.
+                RefuseMismatchedTemplateName(name, template.Name ?? string.Empty);
+                result =await _client.CreateFromTemplateAsync(connectionId, name, template, plan, cancellationToken).ConfigureAwait(false);
+            }
+            else
+            {
+                result = await _client.CreateAsync(connectionId, name, plan, cancellationToken).ConfigureAwait(false);
+            }
             return SerializeReport(
                 result.Report, result.Committed, result.Committed ? result.Document : null,
                 receipt: result.Receipt);
         });
+
+    /// <summary>
+    /// Refuses, before the template is registered or read, a name whose format plainly differs
+    /// from the template's own extension. The client checks the template's content again, which
+    /// also covers a source with no extension, such as a URL.
+    /// </summary>
+    private static void RefuseMismatchedTemplateName(string name, string templateSource)
+    {
+        var expected = DocumentExtensionFor(Path.GetExtension(templateSource.Trim()));
+        if (expected is null || string.IsNullOrWhiteSpace(name)) return;
+        var extension = Path.GetExtension(name.Trim());
+        if (!string.Equals(extension, expected, StringComparison.OrdinalIgnoreCase))
+            throw new ArgumentException(
+                $"A document made from '{Path.GetExtension(templateSource.Trim())}' is a '{expected}' file, so name must " +
+                $"end in '{expected}', not '{extension}'. Nothing was written.", nameof(name));
+    }
+
+    /// <summary>The document extension an Office template or document extension produces, or null for any other.</summary>
+    private static string? DocumentExtensionFor(string extension) => extension.ToLowerInvariant() switch
+    {
+        ".docx" or ".dotx" or ".docm" or ".dotm" => ".docx",
+        ".pptx" or ".potx" or ".ppsx" or ".pptm" or ".potm" or ".ppsm" => ".pptx",
+        ".xlsx" or ".xltx" or ".xlsm" or ".xltm" => ".xlsx",
+        _ => null
+    };
 
     /// <summary>
     /// Registers a document by its connection-relative source and inspects it in one call,
@@ -1944,6 +2008,7 @@ public sealed class OfficeAgentTools
         catch (OpenXmlIngestionLimitException ex) { return SerializeError(OpenXmlIngestionLimitException.Code, ex.Message); }
         catch (OpenXmlPackageRejectedException ex) { return SerializeError(OpenXmlPackageRejectedException.Code, ex.Message); }
         catch (EncryptedDocumentException ex) { return SerializeError(EncryptedDocumentException.Code, ex.Message); }
+        catch (MacroEnabledDocumentException ex) { return SerializeError(MacroEnabledDocumentException.Code, ex.Message); }
         catch (JsonException ex) { return SerializeError(ToolErrorCodes.InvalidJson, ex.Message); }
         catch (ArgumentException ex) { return SerializeError(ToolErrorCodes.InvalidArgument, ex.Message); }
         catch (DocumentProviderException ex)
@@ -2001,6 +2066,7 @@ public sealed class OfficeAgentTools
         var connections = plan.Operations.Select(operation => operation switch
             {
                 InsertImageOp image when !string.IsNullOrWhiteSpace(image.ImageDocumentId) => image.ImageConnectionId,
+                ReplaceImageOp replacement when !string.IsNullOrWhiteSpace(replacement.ImageDocumentId) => replacement.ImageConnectionId,
                 BackgroundImageOp background when !string.IsNullOrWhiteSpace(background.ImageDocumentId) => background.ImageConnectionId,
                 InsertMediaOp media when !string.IsNullOrWhiteSpace(media.MediaDocumentId) => media.MediaConnectionId,
                 _ => null

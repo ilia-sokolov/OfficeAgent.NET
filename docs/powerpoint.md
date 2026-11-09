@@ -68,6 +68,7 @@ guessing which line was meant; see [Anchor stability](#anchor-stability).
 | `insertTableRows` / `removeTableRows` | table node | `Start`/`End`/`Before`/`After`; negative indices count from the end |
 | `insertTableColumns` / `removeTableColumns` | table node | Grid and rows stay in step |
 | `insertImage` / `removeImage` | slide / image node | `base64Bytes` or a provider-backed `imageDocumentId`; `altText` is carried through |
+| `replaceImage` | image node, or the picture's shape node | New image in an existing picture or filled picture placeholder; frame, position and effects kept; `fit` `cover` or `contain` |
 | `comment` (add) | slide node | |
 | `comment` (resolve) | comment node | `"action": "Resolve"` |
 | `fill` | slot (shape name) | Structured template population. `{ "tag": "ClientName" }`; a name reused across slides is refused as ambiguous until qualified `slide256/ClientName` |

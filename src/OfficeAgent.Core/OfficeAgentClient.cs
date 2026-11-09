@@ -288,6 +288,78 @@ public sealed partial class OfficeAgentClient
         if (plan is not null && DocumentPlanCompatibility.InvalidReport(plan) is { } incompatible)
             return new ProviderApplyResult { Report = incompatible, Committed = false };
 
+        var (provider, creator) = CreatingProvider(connectionId);
+        var bytes = CreateBlankDocument(name, provider);
+        return await CreateCoreAsync(provider, creator, name, bytes, plan, cancellationToken).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// Creates a new document inside a configured connection that starts as a copy of
+    /// <paramref name="template"/> rather than the built-in blank, optionally applies
+    /// <paramref name="plan"/> to it, and writes the result through the provider.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// The template may live in any connection the client can read, and is never written to.
+    /// A Word, PowerPoint or Excel template (<c>.dotx</c>, <c>.potx</c>, <c>.xltx</c>) becomes an
+    /// ordinary document: its main part is retyped as a <c>.docx</c>, <c>.pptx</c> or
+    /// <c>.xlsx</c> one, so Office opens the output as a document rather than as a template.
+    /// An ordinary document used as a template is copied as it is. A macro-enabled template or
+    /// document is refused with <see cref="MacroEnabledDocumentException"/>.
+    /// </para>
+    /// <para>
+    /// <paramref name="name"/>'s extension must be the document extension of the template's
+    /// format (<c>.docx</c> for a Word template, and so on), or the call fails with
+    /// <see cref="ProviderErrorCode.InvalidArgument"/> before anything is written. Otherwise
+    /// the result is that of
+    /// <see cref="CreateAsync(string, string, DocumentPlan?, CancellationToken)"/>: the plan is
+    /// validated before the write, a name in use fails with
+    /// <see cref="ProviderErrorCode.AlreadyExists"/>, and the receipt's input hash is that of
+    /// the document the plan was applied to.
+    /// </para>
+    /// </remarks>
+    /// <exception cref="DocumentProviderException">
+    /// The connection cannot create documents, the template cannot be read, the name does not
+    /// match the template's format, or the provider refused the write.
+    /// </exception>
+    /// <exception cref="MacroEnabledDocumentException">The template is macro-enabled.</exception>
+    public async Task<ProviderApplyResult> CreateFromTemplateAsync(
+        string connectionId,
+        string name,
+        DocumentReference template,
+        DocumentPlan? plan = null,
+        CancellationToken cancellationToken = default)
+    {
+        if (template is null) throw new ArgumentNullException(nameof(template));
+        if (plan is not null && DocumentPlanCompatibility.InvalidReport(plan) is { } incompatible)
+            return new ProviderApplyResult { Report = incompatible, Committed = false };
+
+        var (provider, creator) = CreatingProvider(connectionId);
+        try
+        {
+            ValidateDocumentName(name);
+        }
+        catch (ArgumentException ex)
+        {
+            throw new DocumentProviderException(
+                ProviderErrorCode.InvalidArgument, ex.Message, provider.Provider, provider.ConnectionId, itemId: null);
+        }
+
+        var converted = await ReadTemplateAsync(template, cancellationToken).ConfigureAwait(false);
+        var extension = Path.GetExtension(name);
+        if (!string.Equals(extension, converted.DocumentExtension, StringComparison.OrdinalIgnoreCase))
+            throw new DocumentProviderException(
+                ProviderErrorCode.InvalidArgument,
+                $"The template is a {converted.Format} file, so the new document's name must end in " +
+                $"'{converted.DocumentExtension}', not '{extension}'. Nothing was written.",
+                provider.Provider, provider.ConnectionId, itemId: null);
+
+        return await CreateCoreAsync(provider, creator, name, converted.Bytes, plan, cancellationToken).ConfigureAwait(false);
+    }
+
+    /// <summary>The provider behind a connection, which must be able to create documents.</summary>
+    private (IDocumentProvider Provider, IDocumentCreatingProvider Creator) CreatingProvider(string connectionId)
+    {
         var provider = _providers.ResolveConnection(connectionId);
         if (provider is not IDocumentCreatingProvider creator)
             throw new DocumentProviderException(
@@ -295,8 +367,40 @@ public sealed partial class OfficeAgentClient
                 $"The '{provider.Provider}' connection '{connectionId}' does not support creating documents; " +
                 "register an existing document instead.",
                 provider.Provider, connectionId, itemId: null);
+        return (provider, creator);
+    }
 
-        var bytes = CreateBlankDocument(name, provider);
+    /// <summary>
+    /// Reads a template and returns the document bytes a new file or a batch output starts
+    /// from. Creation and the template workflows share it, so every path that makes a
+    /// document from a template refuses and retypes in the same way.
+    /// </summary>
+    internal async Task<TemplatePackages.Converted> ReadTemplateAsync(
+        DocumentReference template, CancellationToken cancellationToken)
+    {
+        byte[] bytes;
+        using (var content = await OpenWithTelemetryAsync(template, cancellationToken).ConfigureAwait(false))
+            bytes = await OpenXmlPackageService.ReadBoundedAsync(
+                content.Stream, IngestionLimits.MaximumCompressedBytes, cancellationToken).ConfigureAwait(false);
+        return TemplatePackages.AsDocument(bytes, IngestionLimits);
+    }
+
+    /// <summary>The ingestion ceilings of the engine behind this client.</summary>
+    private OpenXmlIngestionLimits IngestionLimits =>
+        (_service as OfficeAgentEngine)?.Limits ?? OpenXmlIngestionLimits.Default;
+
+    /// <summary>
+    /// The shared body of creation: applies the plan to the starting bytes in memory, then
+    /// writes the result through the provider. Nothing is written when the plan fails.
+    /// </summary>
+    private async Task<ProviderApplyResult> CreateCoreAsync(
+        IDocumentProvider provider,
+        IDocumentCreatingProvider creator,
+        string name,
+        byte[] bytes,
+        DocumentPlan? plan,
+        CancellationToken cancellationToken)
+    {
         var report = new ChangeReport { IsValid = true };
         ApplyReceipt? receipt = null;
 
@@ -366,6 +470,27 @@ public sealed partial class OfficeAgentClient
     /// <exception cref="ArgumentException">The name is unusable, or no registered module can create that format.</exception>
     public byte[] CreateBlank(string name)
     {
+        ValidateDocumentName(name);
+
+        var extension = Path.GetExtension(name);
+        var factory = _blankDocumentFactories.FirstOrDefault(candidate =>
+            !string.IsNullOrWhiteSpace(candidate.Extension) &&
+            string.Equals(extension, candidate.Extension, StringComparison.OrdinalIgnoreCase));
+        if (extension.Length == 0 || factory is null)
+            throw new ArgumentException(
+                $"No registered format module can create a document named '{name}'. " +
+                $"Creatable extensions: {(_blankDocumentFactories.Count == 0 ? "none (register a format module such as AddWordFormat())" : string.Join(", ", _blankDocumentFactories.Select(item => item.Extension)))}.",
+                nameof(name));
+
+        return factory.CreateBlank();
+    }
+
+    /// <summary>
+    /// The format-independent checks on a new document's name, applied before anything is
+    /// read or minted.
+    /// </summary>
+    private static void ValidateDocumentName(string name)
+    {
         if (string.IsNullOrWhiteSpace(name))
             throw new ArgumentException(
                 "A document name is required, including its extension (for example 'report.docx').",
@@ -389,18 +514,6 @@ public sealed partial class OfficeAgentClient
             throw new ArgumentException(
                 $"The document name '{name}' must not begin or end with whitespace or end with a dot.",
                 nameof(name));
-
-        var extension = Path.GetExtension(name);
-        var factory = _blankDocumentFactories.FirstOrDefault(candidate =>
-            !string.IsNullOrWhiteSpace(candidate.Extension) &&
-            string.Equals(extension, candidate.Extension, StringComparison.OrdinalIgnoreCase));
-        if (extension.Length == 0 || factory is null)
-            throw new ArgumentException(
-                $"No registered format module can create a document named '{name}'. " +
-                $"Creatable extensions: {(_blankDocumentFactories.Count == 0 ? "none (register a format module such as AddWordFormat())" : string.Join(", ", _blankDocumentFactories.Select(item => item.Extension)))}.",
-                nameof(name));
-
-        return factory.CreateBlank();
     }
 
     /// <summary>
@@ -557,11 +670,24 @@ public sealed partial class OfficeAgentClient
     }
 
     /// <summary>Commits a plan and saves the result through the selected provider.</summary>
-    public async Task<ProviderApplyResult> CommitAsync(
+    public Task<ProviderApplyResult> CommitAsync(
         DocumentReference reference,
         DocumentPlan plan,
         SaveDocumentOptions? options = null,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default) =>
+        CommitCoreAsync(reference, plan, options, asDocument: false, cancellationToken);
+
+    /// <summary>
+    /// The body of a provider commit. With <paramref name="asDocument"/> the source is a
+    /// template, and the plan is applied to it retyped as a document; the template itself is
+    /// only read, and the output is saved beside it under the requested name.
+    /// </summary>
+    private async Task<ProviderApplyResult> CommitCoreAsync(
+        DocumentReference reference,
+        DocumentPlan plan,
+        SaveDocumentOptions? options,
+        bool asDocument,
+        CancellationToken cancellationToken)
     {
         if (DocumentPlanCompatibility.InvalidReport(plan) is { } incompatible)
             return new ProviderApplyResult { Report = incompatible, Committed = false };
@@ -570,8 +696,17 @@ public sealed partial class OfficeAgentClient
         var provider = _providers.Resolve(reference);
         var saveOpts = options ?? new SaveDocumentOptions();
         using var content = await OpenWithTelemetryAsync(provider, reference, cancellationToken).ConfigureAwait(false);
+        var source = new StreamHandle(content.Stream, content.Reference.Name);
+        if (asDocument)
+        {
+            var original = await OpenXmlPackageService.ReadBoundedAsync(
+                content.Stream, IngestionLimits.MaximumCompressedBytes, cancellationToken).ConfigureAwait(false);
+            var converted = TemplatePackages.AsDocument(original, IngestionLimits);
+            source = new StreamHandle(new MemoryStream(converted.Bytes, writable: false), saveOpts.NewName ?? content.Reference.Name);
+        }
+
         using var result = await ApplyAsync(
-            new StreamHandle(content.Stream, content.Reference.Name),
+            source,
             plan,
             WithCalculation(Attributed(dryRun: false, saveOpts.Actor), provider),
             cancellationToken).ConfigureAwait(false);
@@ -775,6 +910,7 @@ public sealed partial class OfficeAgentClient
         static bool NeedsResolving(PlanOperation op) => op switch
         {
             InsertImageOp i => !string.IsNullOrEmpty(i.ImageDocumentId),
+            ReplaceImageOp r => !string.IsNullOrEmpty(r.ImageDocumentId),
             BackgroundImageOp b => !string.IsNullOrEmpty(b.ImageDocumentId),
             _ => false
         };
@@ -801,6 +937,19 @@ public sealed partial class OfficeAgentClient
                     Position = image.Position,
                     AltText = image.AltText,
                     Mode = image.Mode
+                });
+            }
+            else if (op is ReplaceImageOp replacement && !string.IsNullOrEmpty(replacement.ImageDocumentId))
+            {
+                var bytes = await OpenImageBytesAsync(replacement.ImageConnectionId!, replacement.ImageDocumentId!, cancellationToken).ConfigureAwait(false);
+                rewritten.Add(new ReplaceImageOp
+                {
+                    Target = replacement.Target,
+                    Base64Bytes = Convert.ToBase64String(bytes),
+                    ImageType = replacement.ImageType,
+                    Fit = replacement.Fit,
+                    Description = replacement.Description,
+                    Mode = replacement.Mode
                 });
             }
             else if (op is BackgroundImageOp background && !string.IsNullOrEmpty(background.ImageDocumentId))

@@ -19,6 +19,20 @@ corresponding GitHub release.
   formatting; `setChartData` replaces the data of any PowerPoint chart, including one made in
   PowerPoint, and keeps its type, colours and layout; `bindData` writes the `xl:` marker that
   links a Word text span or table, or a PowerPoint shape, table or chart, to a range.
+- **Create a document from a company template.** `create_document` takes `templateSource` and
+  `templateConnectionId`, and `OfficeAgentClient.CreateFromTemplateAsync` does the same from C#:
+  the new document starts as a copy of the template, the plan is applied, and the template is
+  only read. A `.dotx`, `.potx` or `.xltx` becomes a normal `.docx`, `.pptx` or `.xlsx` that
+  Office opens as a document; a macro-enabled template is refused with `macro-enabled-document`.
+  `discover_template`, `preview_template_batch` and `populate_template_batch` accept `.dotx`
+  and `.potx` templates the same way, and refuse an output named in another format with
+  `output-format-mismatch`.
+- **Replace a picture and keep the template's look.** `replaceImage` puts a new image into an
+  existing Word or PowerPoint picture, including a filled picture placeholder, and keeps its
+  position, frame, effects, z-order, hyperlink and alt text. `fit` `cover` crops the image to
+  fill the frame and `contain` shows all of it inside the frame. An SVG picture's vector image
+  is dropped, and the old image is removed only when nothing else uses it. In Word a tracked
+  replacement accepts to the new image and rejects to the old one.
 - **Cells as Excel shows them.** Excel inspection reports each cell's `formattedValue`, with its
   number format applied, and the workbook's `definedNames`. Inspected nodes report the `name`
   an author gave them: a PowerPoint shape's Selection Pane name or a Word table's alt-text

@@ -87,6 +87,7 @@ public sealed class WordModule : IFormatModule, IBlankDocumentFactory, IPlanVali
             new DefineStyleHandler(),
             new InsertImageHandler(),
             new RemoveImageHandler(),
+            new ReplaceImageHandler(),
             new WordHeaderFooterHandler(),
             new WordBackgroundImageHandler(),
             new WordPageSetupHandler(),

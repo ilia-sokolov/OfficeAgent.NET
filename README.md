@@ -5,7 +5,7 @@
 [![NuGet](https://img.shields.io/nuget/v/OfficeAgent.Core.svg)](https://www.nuget.org/packages/OfficeAgent.Core)
 [![.NET 8 | 10](https://img.shields.io/badge/.NET-8%20%7C%2010-512BD4)](https://github.com/ilia-sokolov/OfficeAgent.NET/blob/main/docs/compatibility.md)
 [![API: SemVer 1.x stable](https://img.shields.io/badge/API-SemVer%201.x%20stable-2ea44f)](https://github.com/ilia-sokolov/OfficeAgent.NET/blob/main/docs/compatibility.md)
-[![native Office: 88/88 cases verified](https://img.shields.io/badge/native%20Office-88%2F88%20cases%20verified-2ea44f)](https://github.com/ilia-sokolov/OfficeAgent.NET/blob/main/docs/native-compatibility.md)
+[![native Office: 94/94 cases verified](https://img.shields.io/badge/native%20Office-94%2F94%20cases%20verified-2ea44f)](https://github.com/ilia-sokolov/OfficeAgent.NET/blob/main/docs/native-compatibility.md)
 [![OpenSSF Best Practices](https://img.shields.io/cii/level/15172?label=openssf%20best%20practices)](https://www.bestpractices.dev/projects/15172)
 [![OpenSSF Scorecard](https://img.shields.io/ossf-scorecard/github.com/ilia-sokolov/OfficeAgent.NET?label=openssf%20scorecard)](https://securityscorecards.dev/viewer/?uri=github.com/ilia-sokolov/OfficeAgent.NET)
 [![good first issues](https://img.shields.io/github/issues/ilia-sokolov/OfficeAgent.NET/good%20first%20issue?label=good%20first%20issues)](https://github.com/ilia-sokolov/OfficeAgent.NET/labels/good%20first%20issue)

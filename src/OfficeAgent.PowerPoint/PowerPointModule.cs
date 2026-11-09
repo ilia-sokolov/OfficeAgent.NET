@@ -137,6 +137,7 @@ public sealed class PowerPointModule : IFormatModule, IBlankDocumentFactory, IPl
             new SlideRemoveTableColumnsHandler(),
             new SlideInsertImageHandler(),
             new SlideRemoveImageHandler(),
+            new SlideReplaceImageHandler(),
             new SlideCommentHandler(clock),
             new SlideFormatHandler(),
             new SlideInsertHandler(),

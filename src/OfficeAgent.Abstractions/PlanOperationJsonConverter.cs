@@ -53,6 +53,7 @@ public sealed class PlanOperationJsonConverter : JsonConverter<PlanOperation>
             ["defineStyle"] = typeof(DefineStyleOp),
             ["insertImage"] = typeof(InsertImageOp),
             ["removeImage"] = typeof(RemoveImageOp),
+            ["replaceImage"] = typeof(ReplaceImageOp),
             ["insertSlide"] = typeof(InsertSlideOp),
             ["removeSlide"] = typeof(RemoveSlideOp),
             ["moveSlide"] = typeof(MoveSlideOp),
