@@ -4,10 +4,10 @@ using System.Text.Json;
 
 /// <summary>
 /// Checks that the netstandard2.0 build of each library exposes exactly the public surface the
-/// net8.0 baseline records.
+/// net10.0 baseline records.
 /// </summary>
 /// <remarks>
-/// The baseline is rendered from the net8.0 assemblies, so on its own it says nothing about a
+/// The baseline is rendered from the net10.0 assemblies, so on its own it says nothing about a
 /// .NET Framework or Unity consumer, who compiles against the netstandard2.0 build. The two can
 /// differ: a member inside <c>#if NET8_0_OR_GREATER</c>, or a polyfill made public by mistake,
 /// changes one target's surface and not the other's. This loads the netstandard2.0 binaries into
@@ -45,7 +45,7 @@ internal static class TargetParity
                 compared++;
                 if (!actual.TryGetValue(type, out var nsLines))
                 {
-                    differences.Add($"{name}: {type} is public in net8.0 only");
+                    differences.Add($"{name}: {type} is public in net10.0 only");
                     continue;
                 }
                 if (!expected.TryGetValue(type, out var netLines))
@@ -53,7 +53,7 @@ internal static class TargetParity
                     differences.Add($"{name}: {type} is public in {NetStandard} only");
                     continue;
                 }
-                differences.AddRange(netLines.Except(nsLines).Select(line => $"{name}: {type}: net8.0 only: {line}"));
+                differences.AddRange(netLines.Except(nsLines).Select(line => $"{name}: {type}: net10.0 only: {line}"));
                 differences.AddRange(nsLines.Except(netLines).Select(line => $"{name}: {type}: {NetStandard} only: {line}"));
             }
         }
@@ -104,7 +104,7 @@ internal static class TargetParity
         public string? PathOf(string name) => _paths.TryGetValue(name, out var path) ? path : null;
 
         // OfficeAgent assemblies must come from here even though the tool's own context already
-        // holds their net8.0 builds under the same names. Everything else falls through to the
+        // holds their net10.0 builds under the same names. Everything else falls through to the
         // runtime, and then to the Resolving handler for packages only netstandard2.0 needs.
         protected override Assembly? Load(AssemblyName name) =>
             name.Name!.StartsWith("OfficeAgent.", StringComparison.Ordinal) && _paths.TryGetValue(name.Name, out var path)

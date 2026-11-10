@@ -45,5 +45,5 @@ body:
       label: Environment
       placeholder: |
         - OS:
-        - .NET runtime (for example 8.0.x or 10.0.x):
+        - .NET runtime (for example 10.0.x):
         - TFM the consumer targets:

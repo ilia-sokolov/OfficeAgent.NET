@@ -3,7 +3,7 @@ namespace System.Diagnostics.CodeAnalysis;
 
 /// <summary>
 /// The compiler recognises this attribute by name, so the netstandard2.0 build reports the same
-/// diagnostic as the net8.0 build, where the type ships in the runtime.
+/// diagnostic as the net10.0 build, where the type ships in the runtime.
 /// </summary>
 [AttributeUsage(AttributeTargets.Assembly | AttributeTargets.Module | AttributeTargets.Class |
                 AttributeTargets.Struct | AttributeTargets.Enum | AttributeTargets.Constructor |

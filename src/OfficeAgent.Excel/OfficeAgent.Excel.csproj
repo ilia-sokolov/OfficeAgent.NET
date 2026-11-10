@@ -1,6 +1,6 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
-    <TargetFrameworks>netstandard2.0;net8.0</TargetFrameworks>
+    <TargetFrameworks>netstandard2.0;net10.0</TargetFrameworks>
     <Description>Excel .xlsx inspection and deterministic editing for OfficeAgent.NET: bounded ranges, cells, formulas, tables, and comments while preserving unrelated workbook parts.</Description>
   </PropertyGroup>
   <ItemGroup>

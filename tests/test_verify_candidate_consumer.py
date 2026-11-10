@@ -154,9 +154,8 @@ class CandidateWorkflowTests(unittest.TestCase):
         self.assertIn("test \"$count\" -eq 15", job)
         for package in (" AmazonS3 AzureBlob Box ", " Excel.Calculation ", " GoogleDrive IManage "):
             self.assertIn(package, job)
-        for cell in ("{ os: ubuntu-latest, runtime: '8' }", "{ os: windows-latest, runtime: '8' }",
-                     "{ os: macos-latest, runtime: '8' }", "{ os: ubuntu-latest, runtime: '10' }",
-                     "{ os: windows-latest, runtime: '10' }"):
+        for cell in ("{ os: ubuntu-latest, runtime: '10' }", "{ os: windows-latest, runtime: '10' }",
+                     "{ os: macos-latest, runtime: '10' }"):
             self.assertIn(cell, job)
         self.assertIn("OFFICEAGENT_EXPECT_RUNTIME_MAJOR: ${{ matrix.runtime }}", job)
 

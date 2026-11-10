@@ -55,7 +55,7 @@ foreach (var (output, render, label) in outputs)
     Console.WriteLine($"Generated {label}: {output}");
 }
 
-// The baseline is rendered from net8.0; a netstandard2.0 consumer compiles against the other
+// The baseline is rendered from net10.0; a netstandard2.0 consumer compiles against the other
 // build, so the two must match or the baseline describes only half the consumers.
 var (types, divergence) = TargetParity.Compare();
 foreach (var difference in divergence)
@@ -63,7 +63,7 @@ foreach (var difference in divergence)
 if (divergence.Count > 0)
     failed = true;
 else
-    Console.WriteLine($"netstandard2.0 and net8.0 expose the same public surface: {types} types compared");
+    Console.WriteLine($"netstandard2.0 and net10.0 expose the same public surface: {types} types compared");
 return failed ? 1 : 0;
 
 /// <summary>

@@ -1,7 +1,7 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-    <TargetFrameworks>netstandard2.0;net8.0</TargetFrameworks>
+    <TargetFrameworks>netstandard2.0;net10.0</TargetFrameworks>
     <Description>Microsoft.Extensions.AI tool adapter for OfficeAgent.NET: projects Word, PowerPoint, and Excel inspect, find, preview, and apply workflows as AIFunctions with structured JSON results.</Description>
   </PropertyGroup>
 

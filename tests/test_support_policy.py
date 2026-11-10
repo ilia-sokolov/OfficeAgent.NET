@@ -122,14 +122,17 @@ class SupportPolicyTests(unittest.TestCase):
                 self.assertIn(".NET 10", text)
                 self.assertIn(END_OF_SUPPORT["8"], text)
 
-    def test_the_dotnet_10_leg_asserts_the_runtime_it_claims(self) -> None:
-        workflow = read(".github/workflows/build.yml")
-        job = workflow[workflow.index("  runtime-dotnet10:"):workflow.index("  renderer-sandbox:")]
-        self.assertIn("10.0.x", job)
-        self.assertIn("DOTNET_ROLL_FORWARD: LatestMajor", job)
-        self.assertIn('OFFICEAGENT_EXPECT_RUNTIME_MAJOR: "10"', job)
-        self.assertIn("dotnet test OfficeAgent.NET.sln", job)
-        self.assertIn("smoke_packaged_artifacts.py", job)
+    def test_no_project_or_workflow_targets_dotnet_8_after_its_support_ended(self) -> None:
+        for workflow in (".github/workflows/build.yml", ".github/workflows/publish.yml"):
+            with self.subTest(workflow=workflow):
+                text = read(workflow)
+                self.assertNotIn("8.0.x", text)
+                self.assertIn("dotnet-version: 10.0.x", text)
+        for project in sorted((ROOT / "src").glob("*/*.csproj")):
+            with self.subTest(project=project.name):
+                text = project.read_text(encoding="utf-8")
+                self.assertNotIn("net8.0", text)
+                self.assertIn("net10.0", text)
 
     def test_the_container_runs_on_the_runtime_the_documents_state(self) -> None:
         runtime_image = re.search(r"^FROM mcr\.microsoft\.com/dotnet/aspnet:(\d+)\.\d+(?:@sha256:[0-9a-f]{64})? AS runtime$",

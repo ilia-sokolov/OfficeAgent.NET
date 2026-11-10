@@ -256,7 +256,7 @@ public sealed class GoogleServiceAccountAccessTokenProvider : IGoogleDriveAccess
 
 /// <summary>
 /// Reads a PEM RSA private key: PKCS#8 (<c>BEGIN PRIVATE KEY</c>, the form Google key files
-/// use) or PKCS#1 (<c>BEGIN RSA PRIVATE KEY</c>). On .NET 8 the platform importer does the
+/// use) or PKCS#1 (<c>BEGIN RSA PRIVATE KEY</c>). On .NET 10 the platform importer does the
 /// work; netstandard2.0 has no PEM or PKCS#8 importer, so a minimal DER reader is used there.
 /// </summary>
 internal static class RsaPrivateKey

@@ -1,9 +1,9 @@
 namespace OfficeAgent.Tests;
 
 /// <summary>
-/// Keeps a runtime CI leg honest. The .NET 10 leg runs these net8.0 tests with
-/// <c>DOTNET_ROLL_FORWARD=LatestMajor</c>; if the roll-forward did not happen, the suite would
-/// pass on .NET 8 and the leg would claim coverage it never had.
+/// Keeps a runtime CI leg honest. A leg that names a .NET major version must run on it; if a
+/// different runtime was picked up, the suite would pass there and the leg would claim coverage it
+/// never had.
 /// </summary>
 public sealed class RuntimeLegTests
 {

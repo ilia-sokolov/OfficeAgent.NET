@@ -1,7 +1,7 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-    <TargetFrameworks>netstandard2.0;net8.0</TargetFrameworks>
+    <TargetFrameworks>netstandard2.0;net10.0</TargetFrameworks>
     <Description>Word (.docx) format module for OfficeAgent.NET, a translation layer between AI agents and OOXML: WordprocessingML inspection, search, and operation handlers across body, headers, footers, footnotes, and endnotes.</Description>
   </PropertyGroup>
 

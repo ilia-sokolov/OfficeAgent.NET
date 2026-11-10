@@ -12,78 +12,78 @@
     {
       "id": "OfficeAgent.Abstractions",
       "project": "src/OfficeAgent.Abstractions/OfficeAgent.Abstractions.csproj",
-      "frameworks": ["netstandard2.0", "net8.0"]
+      "frameworks": ["netstandard2.0", "net10.0"]
     },
     {
       "id": "OfficeAgent.AgentFramework",
       "project": "src/OfficeAgent.AgentFramework/OfficeAgent.AgentFramework.csproj",
-      "frameworks": ["netstandard2.0", "net8.0"]
+      "frameworks": ["netstandard2.0", "net10.0"]
     },
     {
       "id": "OfficeAgent.AmazonS3",
       "project": "src/OfficeAgent.AmazonS3/OfficeAgent.AmazonS3.csproj",
-      "frameworks": ["netstandard2.0", "net8.0"]
+      "frameworks": ["netstandard2.0", "net10.0"]
     },
     {
       "id": "OfficeAgent.AzureBlob",
       "project": "src/OfficeAgent.AzureBlob/OfficeAgent.AzureBlob.csproj",
-      "frameworks": ["netstandard2.0", "net8.0"]
+      "frameworks": ["netstandard2.0", "net10.0"]
     },
     {
       "id": "OfficeAgent.Box",
       "project": "src/OfficeAgent.Box/OfficeAgent.Box.csproj",
-      "frameworks": ["netstandard2.0", "net8.0"]
+      "frameworks": ["netstandard2.0", "net10.0"]
     },
     {
       "id": "OfficeAgent.Core",
       "project": "src/OfficeAgent.Core/OfficeAgent.Core.csproj",
-      "frameworks": ["netstandard2.0", "net8.0"]
+      "frameworks": ["netstandard2.0", "net10.0"]
     },
     {
       "id": "OfficeAgent.Excel",
       "project": "src/OfficeAgent.Excel/OfficeAgent.Excel.csproj",
-      "frameworks": ["netstandard2.0", "net8.0"]
+      "frameworks": ["netstandard2.0", "net10.0"]
     },
     {
       "id": "OfficeAgent.Excel.Calculation",
       "project": "src/OfficeAgent.Excel.Calculation/OfficeAgent.Excel.Calculation.csproj",
-      "frameworks": ["netstandard2.0", "net8.0"]
+      "frameworks": ["netstandard2.0", "net10.0"]
     },
     {
       "id": "OfficeAgent.GoogleDrive",
       "project": "src/OfficeAgent.GoogleDrive/OfficeAgent.GoogleDrive.csproj",
-      "frameworks": ["netstandard2.0", "net8.0"]
+      "frameworks": ["netstandard2.0", "net10.0"]
     },
     {
       "id": "OfficeAgent.IManage",
       "project": "src/OfficeAgent.IManage/OfficeAgent.IManage.csproj",
-      "frameworks": ["netstandard2.0", "net8.0"]
+      "frameworks": ["netstandard2.0", "net10.0"]
     },
     {
       "id": "OfficeAgent.Mcp",
       "project": "src/OfficeAgent.Mcp/OfficeAgent.Mcp.csproj",
-      "frameworks": ["net8.0", "net10.0"],
+      "frameworks": ["net10.0"],
       "packageKind": "dotnet-tool"
     },
     {
       "id": "OfficeAgent.PowerPoint",
       "project": "src/OfficeAgent.PowerPoint/OfficeAgent.PowerPoint.csproj",
-      "frameworks": ["netstandard2.0", "net8.0"]
+      "frameworks": ["netstandard2.0", "net10.0"]
     },
     {
       "id": "OfficeAgent.Rendering",
       "project": "src/OfficeAgent.Rendering/OfficeAgent.Rendering.csproj",
-      "frameworks": ["net8.0"]
+      "frameworks": ["net10.0"]
     },
     {
       "id": "OfficeAgent.SharePoint",
       "project": "src/OfficeAgent.SharePoint/OfficeAgent.SharePoint.csproj",
-      "frameworks": ["netstandard2.0", "net8.0"]
+      "frameworks": ["netstandard2.0", "net10.0"]
     },
     {
       "id": "OfficeAgent.Word",
       "project": "src/OfficeAgent.Word/OfficeAgent.Word.csproj",
-      "frameworks": ["netstandard2.0", "net8.0"]
+      "frameworks": ["netstandard2.0", "net10.0"]
     }
   ],
   "skills": [
