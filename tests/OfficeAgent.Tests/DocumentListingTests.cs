@@ -70,12 +70,15 @@ public class DocumentListingTests
         workspace.Write("notes.txt");
         var hidden = workspace.Write("hidden.docx");
         File.SetAttributes(hidden, File.GetAttributes(hidden) | FileAttributes.Hidden);
+        // Linux has no hidden attribute, only dot-prefixed names, so there the file stays visible.
+        var attributeKept = (File.GetAttributes(hidden) & FileAttributes.Hidden) != 0;
         var provider = workspace.Provider();
         await provider.RegisterAsync("kept.docx");
 
         var page = await provider.ListAsync(new DocumentListQuery { Recursive = true });
 
-        Assert.Equal(new[] { "kept.docx" }, page.Items.Select(i => i.Source));
+        Assert.Equal(attributeKept ? new[] { "kept.docx" } : new[] { "hidden.docx", "kept.docx" },
+            page.Items.Select(i => i.Source));
     }
 
     [Fact]
