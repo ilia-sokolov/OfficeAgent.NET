@@ -1,5 +1,5 @@
 /// <summary>
-/// TASK T3: Table Row Insert with Tracked Changes and Comment Preservation
+/// Table row insert with tracked changes and comment preservation.
 ///
 /// Demonstrates inserting a new row into a contract table with:
 /// - Change tracking enabled
@@ -115,7 +115,7 @@ string outputPath = Path.Combine(Path.GetTempPath(), "contract_with_inserted_row
 File.WriteAllBytes(outputPath, resultDoc);
 Console.WriteLine($"\nResult saved to: {outputPath}");
 
-Console.WriteLine("\n✓ Task T3 completed successfully");
+Console.WriteLine("\n✓ Completed successfully");
 Console.WriteLine("  - Row inserted into table");
 Console.WriteLine("  - Changes tracked natively");
 Console.WriteLine("  - Comments preserved");

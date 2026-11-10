@@ -2,7 +2,6 @@ using System.Text.Json;
 using OfficeAgent.Abstractions;
 using OfficeAgent.Rendering;
 using DocumentFormat.OpenXml.Packaging;
-using System.Xml.Linq;
 
 var arguments = args.Where(a => !a.StartsWith("--")).ToArray();
 var quiet = args.Contains("--quiet", StringComparer.Ordinal);
@@ -19,7 +18,7 @@ if (arguments.Length == 0)
     Console.Error.WriteLine("  --quiet              Suppress verbose output");
     Console.Error.WriteLine();
     Console.Error.WriteLine("Default (no --openxml): Uses LibreOffice rendering for accurate page count");
-    Console.Error.WriteLine("With --openxml: Uses core properties or structure estimation");
+    Console.Error.WriteLine("With --openxml: Uses the page count Word recorded, or a structure estimate");
     return 2;
 }
 
@@ -43,20 +42,25 @@ foreach (var documentPath in arguments)
         if (useOpenXml)
         {
             // Approach 1: OpenXML SDK (no external dependencies)
-            var pageCount = GetPageCountFromOpenXml(fullPath);
+            var (pageCount, recorded) = GetPageCountFromOpenXml(fullPath);
             Console.WriteLine($"Page count: {pageCount}");
 
             if (!quiet)
             {
-                Console.WriteLine($"  Method: OpenXML SDK inspection");
-                Console.WriteLine($"  Accuracy: Medium (depends on Word updating core.xml)");
+                Console.WriteLine(recorded
+                    ? "  Method: OpenXML SDK, the Pages value Word recorded in docProps/app.xml"
+                    : "  Method: OpenXML SDK, estimated from the body (no Pages value recorded)");
+                Console.WriteLine(recorded
+                    ? "  Accuracy: Medium (Word's count when it last saved the file)"
+                    : "  Accuracy: Low (one page per 50 paragraphs plus one per 3 tables)");
                 Console.WriteLine($"  External dependencies: None");
             }
         }
         else
         {
             // Approach 2: LibreOffice rendering (most accurate)
-            await TestLibreOfficeApproachAsync(fullPath, quiet);
+            if (!await TestLibreOfficeApproachAsync(fullPath, quiet))
+                exitCode = 1;
         }
     }
     catch (OperationCanceledException)
@@ -86,46 +90,38 @@ foreach (var documentPath in arguments)
 return exitCode;
 
 /// <summary>
-/// Approach 1: Using OpenXML SDK to read core properties and estimate page count.
-/// Requires NO external dependencies.
+/// Approach 1: Using OpenXML SDK to read the page count Word recorded, or estimate it.
+/// Requires NO external dependencies. Recorded is false when the count is an estimate.
 /// </summary>
-static int GetPageCountFromOpenXml(string filePath)
+static (int Pages, bool Recorded) GetPageCountFromOpenXml(string filePath)
 {
     using (var doc = WordprocessingDocument.Open(filePath, isEditable: false))
     {
-        // Try to get page count from core properties (set by Word)
-        var coreProperties = doc.CoreFilePropertiesPart;
-        if (coreProperties != null)
+        // Word records the page count in the extended properties (docProps/app.xml) when it saves
+        var pages = doc.ExtendedFilePropertiesPart?.Properties?.Pages?.Text;
+        if (int.TryParse(pages, out var pageCount) && pageCount > 0)
         {
-            using var stream = coreProperties.GetStream();
-            var coreXml = XDocument.Load(stream);
-            var ns = XNamespace.Get("http://schemas.openxmlformats.org/officeDocument/2006/extended-properties");
-
-            var pages = coreXml.Descendants(ns + "Pages").FirstOrDefault();
-            if (pages?.Value != null && int.TryParse(pages.Value, out var pageCount) && pageCount > 0)
-            {
-                return pageCount;
-            }
+            return (pageCount, true);
         }
 
         // Fallback: estimate from document structure
         var body = doc.MainDocumentPart?.Document?.Body;
-        if (body == null) return 1;
+        if (body == null) return (1, false);
 
         var paragraphs = body.Descendants<DocumentFormat.OpenXml.Wordprocessing.Paragraph>().Count();
         var tables = body.Descendants<DocumentFormat.OpenXml.Wordprocessing.Table>().Count();
 
         // Rough estimate: typical page has 40-60 paragraphs
         var estimatedPages = Math.Max(1, (paragraphs / 50) + (tables / 3));
-        return estimatedPages;
+        return (estimatedPages, false);
     }
 }
 
 /// <summary>
 /// Approach 2: Using LibreOffice to render document to PDF, then rasterize to count pages.
-/// Most accurate but requires LibreOffice installation.
+/// Most accurate but requires LibreOffice installation. Returns false when the render failed.
 /// </summary>
-async Task TestLibreOfficeApproachAsync(string filePath, bool quiet)
+async Task<bool> TestLibreOfficeApproachAsync(string filePath, bool quiet)
 {
     using var content = new FileStream(filePath, FileMode.Open, FileAccess.Read, FileShare.Read, 4096, useAsync: true);
 
@@ -161,7 +157,7 @@ async Task TestLibreOfficeApproachAsync(string filePath, bool quiet)
     {
         Console.Error.WriteLine($"Rendering failed: {result.FailureCode}");
         Console.Error.WriteLine($"  Details: {result.Message}");
-        return;
+        return false;
     }
 
     var pageCount = result.PageCount;
@@ -180,6 +176,8 @@ async Task TestLibreOfficeApproachAsync(string filePath, bool quiet)
             Console.WriteLine($"  Average page size: {FormatBytes(avgPageSize)}");
         }
     }
+
+    return true;
 }
 
 static string FormatBytes(long bytes)
