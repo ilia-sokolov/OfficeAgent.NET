@@ -1,7 +1,8 @@
 # Compatibility
 
 What OfficeAgent.NET 1.x promises, what it does not, and how each promise is enforced. For the
-changes between 0.9 and 1.0, see [upgrading to 1.0](upgrading-to-1.0.md).
+changes between 0.9 and 1.0, see [upgrading to 1.0](upgrading-to-1.0.md). For what behaves
+differently in 1.3, see [behaviour changes in 1.3](#behaviour-changes-in-13).
 
 ## The promise
 
@@ -13,7 +14,7 @@ receiving the JSON it was written for. Breaking changes wait for 2.0.
 | Baseline | Records | Covers |
 | --- | --- | --- |
 | [C# API reference](csharp-api.md) | Every public type and member, with constant values, enum values, default arguments, `init` versus `set`, nullability, base types, protected members and stability class | Compiled and recompiled .NET callers |
-| [Wire contract](wire-contract.md) | Plan operations and their members, anchors, the input schemas of all 22 tools (including the MCP-only `list_connections`), responses (see below), configuration keys, and the default value of every member a caller constructs | Agents, MCP clients, stored plans, configuration files |
+| [Wire contract](wire-contract.md) | Plan operations and their members, anchors, the input schemas of all 26 tools (including the MCP-only `list_connections`), responses (see below), configuration keys, and the default value of every member a caller constructs | Agents, MCP clients, stored plans, configuration files |
 
 Responses are frozen in three layers, and only what they list is frozen:
 
@@ -21,13 +22,14 @@ Responses are frozen in three layers, and only what they list is frozen:
   member in every state;
 - the parts anonymous envelopes share are enumerated: the change-target summary of each of the 6
   anchor types, and the receipt payload with its optional members absent and present;
-- 74 named response states across all 22 tools, among them success, validation failure,
+- 89 named response states across all 26 tools, among them success, validation failure,
   provider failure, access denied, cancellation, storage accepting a write and then failing,
   a partial and an uncertain template batch, and empty and populated collections. Generation
   fails unless each response is in the state it is named after.
 
-The states are driven through memory, filesystem and a fault-injecting provider. SharePoint is
-not driven; its responses use the same envelopes, but that is not what these baselines prove.
+The states are driven through memory, filesystem and a fault-injecting provider. SharePoint,
+iManage Work, Google Drive, Box, Azure Blob Storage and Amazon S3 are not driven; their responses
+use the same envelopes, but that is not what these baselines prove.
 
 CI regenerates both baselines and fails when either differs from the committed file. A change
 that shows up in either diff is a contract change and needs a recorded decision. Fifteen
@@ -101,7 +103,12 @@ These are part of the contract and are recorded in the [wire contract's defaults
   Connections, the MCP server and `ChangeTextOp.Granularity` all default to `Span` throughout
   1.x; `Minimal`, which marks only the words that differ, is opt-in and becomes the default in 2.0.
 - Creation, registration and inline content are opt-in on the in-process tools. On the MCP server,
-  registration defaults to on and creation to off.
+  registration defaults to on and creation to off. `list_documents` and `find_templates` come
+  with registration, and `edit_documents` is refused when `RequirePlanSnapshot` is on.
+- On the MCP server, Office's own template folders (`OfficeTemplates:Enabled`), the signed-in
+  user as the author of tracked changes (`RevisionAuthorFromActor`) and formula calculation on
+  every connection, the session connection included, are off by default.
+- A read-only filesystem connection refuses every save, creation and registration removal.
 - Every ingestion ceiling, and every merge, comparison and template-batch limit, keeps its default.
   A request can lower a host ceiling but can never raise it.
 - Connection access is checked before any read or write, and a denied call fails with
@@ -115,6 +122,42 @@ These are part of the contract and are recorded in the [wire contract's defaults
 A 1.x release may **tighten** one of these to fix a vulnerability, for example by refusing an
 input that was accepted before. It will never loosen one. The changelog calls out every such
 tightening, with the stable code the refusal carries.
+
+A 1.x release may also **refuse, as a bug fix, an input that produced a silently wrong
+document**: one where the plan committed but the result was not what it asked for. The refusal
+comes at validation, so nothing is written, and its message says what was wrong. The changelog
+lists each one under "Changed". An input that produced the intended document keeps working.
+
+## Behaviour changes in 1.3
+
+1.3 adds tools, operations and response fields, and every default keeps the 1.2 behaviour. These
+changes are visible to a 1.2 caller.
+
+The packages target `net10.0` instead of `net8.0`, because Microsoft support for .NET 8 ended on
+2026-11-10. A .NET 10 application sees no difference. A .NET 8 application builds against the
+libraries' `netstandard2.0` assets, untested, and cannot use `OfficeAgent.Rendering` or the MCP
+tool; see [Platforms](#platforms).
+
+Now refused, each because the plan used to commit with a silently wrong result:
+
+| Input | 1.2 | 1.3 |
+| --- | --- | --- |
+| A Word paragraph or table style that neither the document nor the plan defines | Written anyway; Word showed the paragraph as Normal | Refused with the document's own styles of that type. Normal, Heading 1 to 3, List Paragraph and Table Grid are added from their standard definitions instead, as Word does. Plans from document comparison keep their styles as before |
+| `insertSlide` with a title the layout has no title placeholder for, or a body it has no text placeholder for | The title or body was dropped | Refused with `invalid-operation`, naming which. Body text no longer goes into a picture, chart, table, footer or date placeholder |
+| A `find` target whose `match` is a string other than `"all"` | Ignored | Refused with `invalid-argument` |
+
+Different output for the same request:
+
+- A row `insertTableRows` adds keeps the template row's text formatting, and no longer copies
+  bookmarks, comment ranges or comment references.
+- `fill` on a slide writes its run before `a:endParaRPr`, as the schema requires, and an empty
+  value leaves the shape with no run.
+- `find_in_document` on a deck reports `slide` or `notes` as each hit's `location`.
+- An ambiguous `find` target names each candidate's location in its message, and a save refused
+  because a SharePoint file is checked out or locked names the lock. Both keep their codes.
+- The `server.json` MCP Registry entry passes `--stdio` to the NuGet package.
+- The creation guidance tells an agent to call `find_templates` and start from the best
+  template. Guidance is not part of the contract.
 
 ## Not part of the contract
 
@@ -184,15 +227,17 @@ working until then. Nothing is removed within 1.x.
 
 ## Platforms
 
-The libraries target `netstandard2.0` and `net8.0`; `OfficeAgent.Rendering` targets `net8.0`, and
-the MCP server targets `net8.0` and `net10.0`. Both library targets expose the same public surface, and the gate checks this on
+The libraries target `netstandard2.0` and `net10.0`; `OfficeAgent.Rendering` and the MCP server
+target `net10.0`. Both library targets expose the same public surface, and the gate checks this on
 every build. It loads the netstandard2.0 binaries, renders them with the same renderer as the
 baseline, and fails on any type or member that exists in only one target.
 [SUPPORT.md](../SUPPORT.md#runtime-and-platform-compatibility) states which targets CI executes as
 well as compiles.
 
-The supported runtimes are the .NET versions Microsoft supports and CI executes: .NET 8 until its
-end of support on 2026-11-10, and .NET 10. Moving from .NET 8 to .NET 10 needs no OfficeAgent change,
-because a .NET 10 application consumes the `net8.0` assets. Adding a target framework in a 1.x
-minor release is allowed; removing one, or raising the minimum runtime a supported application
-needs, waits for 2.0.
+The supported runtimes are the .NET versions Microsoft supports and CI executes. CI executes
+.NET 10. Microsoft support for .NET 8 ended on 2026-11-10, and 1.3.0 replaced the `net8.0` target
+with `net10.0`; a .NET 8 application still compiles against the `netstandard2.0` assets, untested.
+Adding a target framework in a 1.x minor release is allowed. Removing one whose runtime Microsoft
+still supports, or raising the minimum runtime a supported application needs, waits for 2.0; a
+target whose runtime has left Microsoft support can go in a minor release, named in its
+changelog.

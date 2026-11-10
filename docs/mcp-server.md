@@ -101,10 +101,12 @@ with `"mode": "Direct"`.
 ### Claude Code plugin
 
 `plugins/officeagent` is a Claude plugin that bundles the server with the two agent skills. It
-starts the server with `uv run --locked --isolated officeagent-mcp --stdio` against the
-`pyproject.toml` and `uv.lock` in the plugin folder, which pin `officeagent-mcp` to one version
-and each platform's wheel to its SHA-256. [uv](https://docs.astral.sh/uv/) must be installed, and roots the server's one folder connection at `.`, the project folder Claude Code starts
-it in. Creating documents and calculating formulas are plugin options that
+starts the server with
+`uv run --project ${CLAUDE_PLUGIN_ROOT} --locked --isolated officeagent-mcp --stdio`, against
+the `pyproject.toml` and `uv.lock` in the plugin folder, which pin `officeagent-mcp` to one
+version and each platform's wheel to its SHA-256. [uv](https://docs.astral.sh/uv/) must be
+installed. The plugin roots the server's one folder connection at `.`, the project folder
+Claude Code starts it in. Creating documents and calculating formulas are plugin options that
 stay off until the user turns them on. Try it with:
 
 ```bash
@@ -318,6 +320,7 @@ A connection whose value cannot be read - a `MaximumBytes` that is not a number,
 | `SharePointConnections[n]:DefaultChangeGranularity` | `Span` | As above, per library. |
 | `SharePointConnections[n]:CalculateFormulas` / `RejectFormulaErrors` | `false` / `false` | As above, per library. |
 | `SharePointConnections[n]:TemplatesFolder` / `TemplateLocation` | empty / empty | A templates folder, as a folder URL or `driveId/itemId` pair, and its kind, as for filesystem connections. Set `Organization` for an organization assets library; it is not found automatically. |
+| `SharePointConnections[n]:ReadOnly` | `false` | Refuse every save and creation with `access-denied` before Graph is called, whatever the identity may write. Registrations still persist. Use it for a templates library people share, beside a writable connection; it cannot also name `CreationDriveId` or `CreationFolderItemId`, and is never offered to `create_document`. |
 | `OfficeTemplates:Enabled` | `false` | Add the Office template folders found on this machine as read-only filesystem connections `office-personal-templates` and `office-workgroup-templates`. See [Office template locations](#office-template-locations). |
 | `IManageConnections[n]:ConnectionId` | - | Connection id for an iManage Work connection. Documents are registered by id (`ACTIVE!12345.1`) or an iManage Work link on `ServerUrl`. |
 | `IManageConnections[n]:ServerUrl` / `CustomerId` | - | The https iManage server, such as `https://cloudimanage.com`, and the customer id from its `/api` response. Both required. |
@@ -349,15 +352,37 @@ A connection whose value cannot be read - a `MaximumBytes` that is not a number,
 | `CalculateFormulas` / `RejectFormulaErrors` | `false` / `false` | On every iManage, Google Drive, Box, Azure Blob and Amazon S3 connection, as above. |
 | `TemplatesFolder` | empty | On every iManage, Google Drive, Box, Azure Blob and Amazon S3 connection: the folder a templates listing reads. An iManage folder id (`ACTIVE!780`), a Drive folder id, a numeric Box folder id, or for Azure Blob and Amazon S3 a folder relative to the prefix (`templates`). Empty means the connection has no templates. |
 | `TemplateLocation` | `Connection` when `TemplatesFolder` is set | On the same connections: where the templates folder sits, `Connection`, `Personal`, `Workgroup` or `Organization`. Setting it without `TemplatesFolder`, or `None` with one, stops the server at startup. |
+| `ReadOnly` | `false` | On the same connections: refuse every save and creation with `access-denied` before the service is called. Registrations still persist. An iManage, Google Drive or Box connection that is `ReadOnly` cannot also name `CreationFolderId`; a read-only connection is never offered to `create_document`. |
 
 A missing or malformed setting on any of these connections stops the server at startup with a
 message that names the connection and the environment variable to set, such as
 `OfficeAgent__IManageConnections__0__ServerUrl`. A message never quotes a secret. A
 `TemplateLocation` that is not one of the four names, a filesystem `TemplatesFolder` that is not
-a folder below the root, and a SharePoint `TemplatesFolder` that is neither a URL nor a pair stop
-it the same way. A templates folder is set like any other key, for example
+a folder below the root, a SharePoint `TemplatesFolder` that is neither a URL nor a pair, and a
+`ReadOnly` connection that names a creation folder stop it the same way. A templates folder is set like any other key, for example
 `OfficeAgent__AzureBlobConnections__0__TemplatesFolder=templates` and
 `OfficeAgent__AzureBlobConnections__0__TemplateLocation=Organization`.
+
+Templates people share belong on a read-only connection of their own, beside the writable
+connection agents create and edit documents on. For a SharePoint templates library:
+
+```text
+OfficeAgent__SharePointConnections__0__ConnectionId=documents
+OfficeAgent__SharePointConnections__0__CreationDriveId=<drive-id>
+OfficeAgent__SharePointConnections__0__CreationFolderItemId=<folder-item-id>
+OfficeAgent__SharePointConnections__1__ConnectionId=templates
+OfficeAgent__SharePointConnections__1__ReadOnly=true
+OfficeAgent__SharePointConnections__1__TemplatesFolder=https://contoso.sharepoint.com/sites/brand/Templates
+OfficeAgent__SharePointConnections__1__TemplateLocation=Organization
+OfficeAgent__SharePointConnections__1__AllowedExtensions__0=.dotx
+OfficeAgent__SharePointConnections__1__AllowedExtensions__1=.potx
+```
+
+`find_templates` finds a template on `templates`, and `create_document` with
+`connectionId=documents`, `templateConnectionId=templates` and its `templateSource` files the
+new document on `documents`. Nothing an agent does can change the template: every save to
+`templates` is refused with `access-denied`. Set the credential keys on both connections as
+usual.
 
 ### Office template locations
 

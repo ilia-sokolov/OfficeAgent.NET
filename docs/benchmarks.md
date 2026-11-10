@@ -27,7 +27,7 @@ property of the product; they say nothing about how many calls a model would cho
 
 ## What is measured
 
-Six scenarios, each driven through the provider-backed .NET client against fixtures committed
+Eight scenarios, each driven through the provider-backed .NET client against fixtures committed
 in `tests/OfficeAgent.Tests/Corpus/v0.8.0/`:
 
 | Scenario | Work | At once |
@@ -40,6 +40,9 @@ in `tests/OfficeAgent.Tests/Corpus/v0.8.0/`:
 | `powerpoint-image-heavy-deck` | Grow a deck to eight slides and place a background image on each | 1 |
 | `excel-bounded-cell-edit` | Edit eight cells in a styled workbook under a bounded cell budget | 1 |
 | `word-concurrent-edits` | Apply a tracked edit to four documents simultaneously through one client | 4 |
+
+Report refresh, creation from a template, picture replacement and `edit_documents` have no
+scenario yet, so no performance figure for them is published.
 
 Every scenario asserts its own correctness. A scenario that produced the wrong result records
 a failed iteration; it is never dropped, and a scenario with any failure is reported as failed

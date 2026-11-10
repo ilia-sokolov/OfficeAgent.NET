@@ -48,7 +48,7 @@ Every public method has an async overload that accepts a `CancellationToken`:
 await client.CommitAsync(handle, plan, ct);
 ```
 
-File IO uses `File.ReadAllBytesAsync` / `File.WriteAllBytesAsync` on .NET 8+ and falls back to `Task.Run` on `netstandard2.0` so the token is observed at the boundary either way. The engine checks the token between operations, so cancelling a long multi-op plan stops at the next operation. **Cancellation is not propagated inside a single handler invocation** - inspecting a 100k-paragraph document or applying a single very large `ChangeTextOp` will run to completion regardless. If you need finer granularity, slice the work into smaller plans.
+File IO uses `File.ReadAllBytesAsync` / `File.WriteAllBytesAsync` on .NET 10 and falls back to `Task.Run` on `netstandard2.0` so the token is observed at the boundary either way. The engine checks the token between operations, so cancelling a long multi-op plan stops at the next operation. **Cancellation is not propagated inside a single handler invocation** - inspecting a 100k-paragraph document or applying a single very large `ChangeTextOp` will run to completion regardless. If you need finer granularity, slice the work into smaller plans.
 
 ## Logging and telemetry
 
@@ -82,12 +82,16 @@ and avoid debug logging in production unless it is needed for a bounded incident
 ## Registration-state durability
 
 Filesystem connections persist registrations in
-`{root}/.officeagent/index.json`. SharePoint uses memory unless
+`{root}/.officeagent/index.json`, except a `ReadOnly` one, which writes nothing
+under its root and keeps its registrations in memory. SharePoint, iManage, Google
+Drive, Box, Azure Blob and Amazon S3 connections use memory unless
 `RegistrationIndexPath` is configured. A JSON registration index is sensitive
 application state: restrict its ACL, back it up with the referenced documents,
-and let only one process write it. For a multi-instance deployment, implement
-`ISharePointRegistrationStore` over shared storage with appropriate concurrency
-control.
+and let only one process write it. For a multi-instance deployment, implement the
+provider's store - `ISharePointRegistrationStore`, `IIManageRegistrationStore`,
+`IGoogleDriveRegistrationStore`, `IBoxRegistrationStore`,
+`IAzureBlobRegistrationStore` or `IAmazonS3RegistrationStore` - over shared
+storage with appropriate concurrency control.
 
 ## Filesystem root trust boundary
 
@@ -106,8 +110,13 @@ copy validated bytes into the root through the trusted host.
 
 ## Provider retries
 
-OfficeAgent does not automatically retry Microsoft Graph requests or interpret
-`Retry-After`. Reads can be retried with normal bounded backoff. A refused upload,
+OfficeAgent does not retry a single Microsoft Graph request, a read or a save
+under the upload-session threshold, or interpret `Retry-After` for one. A save at
+or above `UploadSessionThresholdBytes` (4 MiB by default) goes through a Graph
+upload session, and a failed chunk is retried up to three times,
+waiting as `Retry-After` says or backing off when Graph sends none; see
+[SharePoint operational limits](mcp-server.md#sharepoint-operational-limits).
+Reads can be retried with normal bounded backoff. A refused upload,
 such as a 409, 423 or 429, is reported as `WriteRejected` or `AlreadyExists`: nothing
 was stored, and it can be retried once the cause clears. A server error, a timeout or
 a lost response is reported as an unknown outcome: reconcile it as
@@ -179,7 +188,12 @@ For a direct in-memory call, pass the actor with
 | `DocumentVersionConflictException` from a `Replace` save | Another writer changed the document between this commit's open and its save | Re-inspect and re-author the plan against the current bytes; nothing was overwritten |
 | `Errors` contains `unsupported-operation` on a deck | The verb is Word-only - the PowerPoint module implements a subset | Use a verb the deck supports, or record the intent as a comment. See [PowerPoint support](powerpoint.md) |
 | `Errors` contains `invalid-operation` naming mode `Tracked` on a deck | PresentationML has no redline vocabulary | Send `"mode": "Direct"`, or set the connection's `DefaultChangeMode` so deck plans need not restate it |
-| MCP server exits during startup | An invalid `AuthMode`, unreadable config file, or incomplete provider configuration | Read the named configuration error and restart. No storage configuration by itself starts the `session` connection; invalid authentication modes never fall back to app-only. |
+| `EncryptedDocumentException`, or `encrypted-document` from a tool | The file is protected by a sensitivity label or a password; OfficeAgent does not decrypt | Ask for an unprotected copy, or remove the protection in Office |
+| `MacroEnabledDocumentException`, or `macro-enabled-document` from a tool | The document or template is macro-enabled | Save it in Office as a macro-free document or template and use that |
+| `OpenXmlPackageRejectedException`, or `malformed-package` from a tool | The bytes are not a readable Office package | Do not retry the same file; get an intact copy |
+| `access-denied` on a save, a creation or a registration removal | The connection is `ReadOnly`, as Office template connections always are. A read-only SharePoint, iManage, Google Drive, Box, Azure Blob or Amazon S3 connection refuses saves and creation, not registration removal | Save to a writable connection, or create from the template with `templateConnectionId` and `templateSource` |
+| `write-rejected` naming a lock on a SharePoint save | The file is checked out or open for exclusive editing | Ask whoever holds the lock to check it in or close it, or save as a new document |
+| MCP server exits during startup | An invalid `AuthMode`, unreadable config file, incomplete provider configuration, or a malformed `TemplatesFolder` or `TemplateLocation`, or a `ReadOnly` connection that names a creation folder | Read the named configuration error and restart. No storage configuration by itself starts the `session` connection; invalid authentication modes never fall back to app-only. |
 | Graph returns 429 or a transient 5xx | Throttling or a service interruption | Respect `Retry-After` in the host; reconcile an attempted write before retrying |
 | A create call reports `registration-failed` or `outcome-unknown` and the name is now occupied | Storage accepted the file before registration, or the response was lost | Inspect the destination and register the surviving item; do not overwrite or blindly retry the name. See [recovery](recovery.md) |
 

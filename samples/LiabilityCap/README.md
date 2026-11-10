@@ -112,7 +112,7 @@ var plan = new DocumentPlan
     Revision = new RevisionMetadata { Author = "LiabilityCap Editor" },
     Operations = new PlanOperation[] {
         new ChangeTextOp {
-            Target = hits[0].Anchor,
+            Target = hits[0].Anchor,   // the first occurrence
             With = newValue,
             Mode = ChangeMode.Tracked  // ← Preserves as redline
         }
@@ -127,7 +127,8 @@ var commit = await client.CommitAsync("local", document.ItemId, plan);
 
 // 7. Save
 using var saved = await client.OpenReadAsync(commit.Document!);
-await saved.Stream.CopyToAsync(File.Create(output));
+using var outFile = File.Create(output);
+await saved.Stream.CopyToAsync(outFile);
 ```
 
 ### Why `ChangeMode.Tracked` Matters
@@ -147,17 +148,19 @@ For contract review workflows, `Tracked` is essential for audit trails and appro
 
 ### "Could not find the value"
 
-The old value must match **exactly** (case-sensitive by default). Check:
+The sample searches with a plain `FindQuery`, which ignores case but otherwise matches the text
+as written. Check:
 - Exact spelling and punctuation
 - Whitespace (e.g., "thirty days" vs "thirty  days" with extra spaces)
 - Hidden characters in the document
 
 ### "Preview failed"
 
-This indicates a structural issue with the document or the requested change. Check the error code:
-- `drift` — Document changed between inspect and preview
-- `invalid-anchor` — The target anchor is no longer valid
-- `contract-mismatch` — Document format mismatch
+The preview names the reason with a stable code. The ones this sample can meet:
+- `stale-snapshot` — The document changed between inspect and preview
+- `anchor-not-found` — The target anchor could not be resolved
+- `expect-mismatch` — The text at the anchor is no longer the text that was found
+- `contract-mismatch` — The plan's contract version does not match the engine's
 
 ### Document opened in Word is read-only
 
@@ -168,11 +171,12 @@ Word may lock the file for editing if it was recently modified. Close and reopen
 - Modify the `ChangeMode` to `Direct` for direct (non-tracked) edits
 - Change `Revision.Author` to reflect your workflow's actor
 - Loop over multiple occurrences by iterating `hits`
-- Use `FindQuery(text, new MatchOptions { Regex = true })` for pattern matching
+- Use `new FindQuery(text) { Options = new MatchOptions { Regex = true } }` for pattern matching,
+  or `CaseSensitive = true` and `WholeWord = true` for a stricter match
 
 ## References
 
-- [OfficeAgent.NET Documentation](https://github.com/dotaction/OfficeAgent.NET#readme)
+- [OfficeAgent.NET Documentation](../../README.md)
 - [Document Plans](../../docs/document-plans.md)
 - [Getting Started](../../docs/getting-started.md)
 - [C# API Reference](../../docs/csharp-api.md)

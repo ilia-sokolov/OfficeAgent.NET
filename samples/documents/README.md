@@ -1,7 +1,14 @@
-# Sample document
+# Sample documents
 
 `services-agreement.docx` is a fictional contract for trying OfficeAgent against something
-that behaves like a real document. Northwind Traders and Contoso Consulting do not exist.
+that behaves like a real document. Northwind Traders and Contoso Consulting do not exist. A deck
+and a workbook for the PowerPoint and Excel samples are [described below](#the-deck-and-the-workbook).
+
+The contract is the input of [QuickEdit](../QuickEdit/),
+[SemanticKernelWordEdit](../SemanticKernelWordEdit/),
+[python-openai-agents](../python-openai-agents/), [python-langgraph](../python-langgraph/) and
+[M365ContractReviewer](../M365ContractReviewer/), and the example input of
+[LiabilityCap](../LiabilityCap/) and [PageCounter](../PageCounter/).
 
 This sample exercises the Word review subset of OfficeAgent. It is one focused example,
 not a complete capability demo; the project also creates and edits Word documents and
@@ -34,7 +41,8 @@ forty-five days"* should produce:
 
 - **Clause 3 reads "within forty-five days of receipt"**, as a tracked change — `thirty days`
   struck through, `forty-five days` underlined beside it. Open the file in Word and both
-  appear in the review pane, attributable and reversible.
+  appear in the review pane, attributable and reversible. With `"granularity": "Minimal"`, the
+  redline keeps `days` and marks only `thirty` and `forty-five`.
 - **Nothing else moved.** The heading styles, the table, the existing 2%→3% redline and
   Priya's comment are all still there, untouched. This is the part worth checking: a
   rewrite-and-replace approach loses the comment and flattens the pending revision.

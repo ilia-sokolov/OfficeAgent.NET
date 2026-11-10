@@ -41,6 +41,15 @@ dotnet tool install --global OfficeAgent.Mcp
 That puts `officeagent-mcp` on your PATH. (No global install? Use
 `dotnet /path/to/OfficeAgent.Mcp.dll --stdio` as the command instead.)
 
+No .NET? Run the same server from PyPI with [uv](https://docs.astral.sh/uv/): use
+`uvx` as the command and `officeagent-mcp --stdio` as its arguments wherever the
+examples below say `officeagent-mcp --stdio`. See
+[install and run](mcp-server.md#install-and-run).
+
+For Claude Code there is also a plugin that bundles the server with the two agent
+skills and roots it at the project folder: `claude --plugin-dir ./plugins/officeagent`
+from a clone of the repository. See [the Claude Code plugin](mcp-server.md#claude-code-plugin).
+
 **2a. Claude Code.**
 
 ```bash
@@ -395,13 +404,13 @@ assignment before starting the server.
 - [ ] `AuthMode` chosen deliberately; for `onBehalfOf`, the gateway forwards the caller's bearer token unchanged.
 - [ ] Hosted clients that use `onBehalfOf` are configured for interactive OAuth, not a shared API key or service token.
 - [ ] For `appOnly`, the app registration uses `Sites.Selected`, admin consent is complete, and the app has an explicit `write` assignment on every intended site.
-- [ ] Client secret supplied from a secret store / environment, never committed.
-- [ ] `RegistrationIndexPath` set if registrations must survive restarts. Protect the JSON file as sensitive application state, include it in backups, and use it from only one process. For multiple instances, implement `ISharePointRegistrationStore` over shared storage.
-- [ ] `MaximumBytes` and `AllowedExtensions` reviewed against your documents (defaults: 100 MB, `.docx`). Add `.pptx` for decks and `.xlsx` for workbooks.
+- [ ] Secrets - `ClientSecret`, `Password`, `RefreshToken`, `KeyJson` and `ConnectionString` - supplied from a secret store / environment, never committed.
+- [ ] `RegistrationIndexPath` set on every SharePoint, iManage, Google Drive, Box, Azure Blob and Amazon S3 connection whose registrations must survive restarts. Protect the JSON file as sensitive application state, include it in backups, and use it from only one process. For multiple instances, implement the provider's store over shared storage: `ISharePointRegistrationStore`, `IIManageRegistrationStore`, `IGoogleDriveRegistrationStore`, `IBoxRegistrationStore`, `IAzureBlobRegistrationStore` or `IAmazonS3RegistrationStore`.
+- [ ] `MaximumBytes` and `AllowedExtensions` reviewed against your documents (defaults: 100 MB, `.docx`). Add `.pptx` for decks and `.xlsx` for workbooks. Put shared templates on a connection of their own with `ReadOnly` set, which every provider except the session one takes; it can allow `.dotx`, `.potx` and `.xltx`, and nothing an agent does can change a template there. Keep template extensions off the writable connections: on a connection agents can write to, they also let an agent save a file under a template name.
 - [ ] Every filesystem root is owned by the service/trusted administrators. Its ACL denies untrusted principals permission to create, rename, or replace directory entries; container volumes are not shared with untrusted writers.
 - [ ] `DefaultChangeMode` set per connection if `Tracked` is not what you want when a plan omits `mode` - notably `Direct` for a connection serving `.pptx`, since a deck refuses tracked changes.
 - [ ] `AllowRegistration` left on only if agents should stage their own document ids; otherwise set `false`. When on, the server exposes `register_document`, `remove_document`, and the source-addressed composites `open_document`, `edit_document`, `edit_documents` and `refresh_document`, and the read-only `list_documents` and `find_templates`, which list what a connection holds. All of them reach the same documents under the same connection boundary - the composites only save round trips and the listing tools only find sources, they do not widen it.
-- [ ] `AllowCreation` enabled only if agents should create files. Each SharePoint creation connection has both `CreationDriveId` and `CreationFolderItemId`; `list_connections` reports `canCreateDocuments` per connection whenever registration or creation discovery is enabled.
+- [ ] `AllowCreation` enabled only if agents should create files. Each SharePoint creation connection has both `CreationDriveId` and `CreationFolderItemId`, and each iManage, Google Drive or Box creation connection has `CreationFolderId`; Azure Blob and Amazon S3 create under the prefix. `list_connections` reports `canCreateDocuments` per connection whenever registration or creation discovery is enabled.
 
 ---
 

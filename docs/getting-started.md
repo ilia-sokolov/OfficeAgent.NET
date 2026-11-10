@@ -13,8 +13,7 @@ Estimated time: 10 minutes.
 
 ## Prerequisites
 
-- The [.NET 10 SDK](https://dotnet.microsoft.com/download/dotnet/10.0), or the .NET 8 SDK until its
-  support ends on 2026-11-10.
+- The [.NET 10 SDK](https://dotnet.microsoft.com/download/dotnet/10.0).
 - A Word `.docx` file containing the text `Acme Corp`.
 
 Create a console project and install the engine, Word module, and concrete
@@ -236,11 +235,25 @@ initial plan can target it. For `.pptx`, install `OfficeAgent.PowerPoint`, call
 `AddPowerPointFormat()`, allow `.pptx` on the connection, and see
 [Creating a deck](powerpoint.md#creating-a-deck).
 
+To start from a company template instead of a blank document, register the template and call
+`CreateFromTemplateAsync`. The new document starts as a copy of the template, the optional plan
+is applied, and the template is only read. A `.dotx` template becomes a normal `.docx`. The
+connection that holds the template must list `.dotx` in its `AllowedExtensions`, which allow
+only `.docx` by default:
+
+```csharp
+var template = await client.RegisterAsync("contracts", Path.Combine(storageRoot, "Letter.dotx"));
+var letter = await client.CreateFromTemplateAsync("contracts", "letter.docx", template);
+```
+
+See [creating from a template](document-workflows.md#populate-a-template-batch) for the MCP
+equivalent and what is refused.
+
 ## Next steps
 
 - [Concepts](concepts.md) — anchors, snapshots, plans, capabilities, and transactions.
 - [Document plans](document-plans.md) — every supported operation and JSON shape.
-- [Document providers](document-providers.md) — save modes and SharePoint.
+- [Document providers](document-providers.md) — save modes, storage providers, and listing documents and templates.
 - [Agent integration](agent-integration.md) — expose bounded agent tools.
 - [MCP server](mcp-server.md) — use the same workflow without a .NET integration.
 - [Troubleshooting](troubleshooting.md) — common setup and runtime failures.

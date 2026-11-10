@@ -14,8 +14,10 @@ Or run the self-contained fixture:
 dotnet run --project samples/DocumentComparison -- --demo redline.docx
 ```
 
-Version 0.8 comparison covers free body-paragraph text and paragraph insertions/removals.
-Existing revisions or changes in run structure, direct formatting, tables, image bytes,
-headers, footers, notes, styles, fields, properties, relationships, or package metadata return
-diagnostics and no plan. The coverage gate is deliberately strict and can reject metadata-only
-changes that do not affect visible output.
+The comparison covers body-paragraph text, paragraph insertions and removals, and the text of
+table cells whose table kept its shape. Runs that Word split differently but format the same
+are not a difference. An input that already carries tracked revisions, and any other change,
+such as table rows or columns, cell or paragraph formatting, styles, headers, footers, notes,
+images or package metadata, return diagnostics and no plan. The coverage gate is deliberately strict and can reject metadata-only changes that
+do not affect visible output. See
+[what the comparison understands](../../docs/document-workflows.md#what-the-comparison-understands).

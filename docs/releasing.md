@@ -4,9 +4,9 @@ This is the reusable maintainer runbook for publishing an OfficeAgent.NET releas
 GitHub issue for release-specific scope, blockers, and approvals; keep this file independent
 of any one version.
 
-Publishing writes to GitHub, NuGet, and the MCP Registry. Work through the steps in order and
-verify each public artifact before continuing. A NuGet version cannot be replaced after it is
-published.
+Publishing writes to GitHub, NuGet, the GitHub Container Registry, PyPI and the MCP Registry.
+Work through the steps in order and verify each public artifact before continuing. Neither a
+NuGet version nor a PyPI version can be replaced after it is published.
 
 ## Prerequisites
 
@@ -16,11 +16,15 @@ elsewhere. [Maintenance and continuity](maintenance.md) lists who holds each acc
 Tools on the maintainer's machine:
 
 - the .NET SDK that [`global.json`](../global.json) selects (a stable 10.0 feature band at or
-  above 10.0.100), and the .NET 8 runtime for the net8.0 test projects;
+  above 10.0.100);
 - Python 3 with the hash-pinned packages in `scripts/requirements-ci.txt` (`python -m pip install --require-hashes -r scripts/requirements-ci.txt`) for `scripts/validate_server_manifest.py`;
 - `git`, and the GitHub CLI `gh` signed in to an account with the access below;
 - `mcp-publisher`, the Model Context Protocol Registry CLI, for step 3;
-- Docker with `buildx`, for step 4.
+- Docker with `buildx`, for step 4;
+- the Azure CLI with Bicep (`az bicep build`), to regenerate `deploy/azure/azuredeploy.json` in
+  step 0;
+- [`uv`](https://docs.astral.sh/uv/), to refresh the Claude plugin's `uv.lock` once the plugin's
+  hold ends (see [the Claude plugin](#the-claude-plugin-is-held)).
 
 Access, each held by the account that owns it:
 
@@ -29,10 +33,11 @@ Access, each held by the account that owns it:
 | GitHub repository `ilia-sokolov/OfficeAgent.NET` | Push tags, create releases, dispatch workflows, approve the `nuget` environment | Repository settings: collaborators and the `nuget` environment's required reviewers |
 | NuGet.org account `ilia-sokolov` | Owner of every `OfficeAgent.*` package, with a Trusted Publishing policy for this repository, workflow `publish.yml` and environment `nuget` | NuGet.org account settings. The workflow logs in as `ilia-sokolov` (`NuGet/login`), so a new owner must change that `user` input and the policy together |
 | GitHub Container Registry `ghcr.io/ilia-sokolov/officeagent-mcp` | Package write from the workflow's `GITHUB_TOKEN` | Package settings: this repository's Actions must keep write access (the 0.9.0 image was published this way) |
+| PyPI project `officeagent-mcp` | A trusted publisher for this repository, workflow `publish-python.yml` and environment `pypi`, and approval of the `pypi` environment | PyPI project settings (Publishing) and the repository's `pypi` environment |
 | MCP Registry namespace `io.github.ilia-sokolov` | `mcp-publisher login github` as the owner of that GitHub namespace | Derived from the GitHub account; no separate secret |
 
 No long-lived publishing secret is stored: NuGet uses a short-lived key from Trusted Publishing,
-and GHCR uses the workflow token.
+PyPI uses trusted publishing, and GHCR uses the workflow token.
 
 ## 0. Prepare the release
 
@@ -68,7 +73,8 @@ dotnet test OfficeAgent.NET.sln --no-build --configuration Release
 python scripts/check_vulnerable_packages.py
 python scripts/validate_docs.py
 python scripts/validate_server_manifest.py
-python -m unittest tests/test_agent_evaluation.py tests/test_package_samples.py tests/test_package_skills.py tests/test_release_evidence.py tests/test_support_policy.py tests/test_verify_candidate_consumer.py tests/test_verify_quickedit_sample.py tests/test_verify_integration_kit.py -v
+python scripts/sync_claude_plugin.py --check
+python -m unittest tests/test_agent_evaluation.py tests/test_benchmark_report.py tests/test_byte_exact_fixtures.py tests/test_claude_plugin.py tests/test_package_samples.py tests/test_package_skills.py tests/test_package_standalone.py tests/test_package_wheels.py tests/test_release_evidence.py tests/test_smoke_packaged_artifacts.py tests/test_support_policy.py tests/test_verify_candidate_consumer.py tests/test_verify_quickedit_sample.py tests/test_verify_integration_kit.py -v
 ```
 
 Verify the candidate as a consumer sees it, from locally packed packages. The version can be a
@@ -89,11 +95,10 @@ ordinary build packs the committed version, so it is branch evidence; only the c
 and verifies the requested version:
 
 ```bash
-gh workflow run build.yml --ref v1.0.0 -f candidate_version="$CANDIDATE"
+gh workflow run build.yml --ref "release/$VERSION" -f candidate_version="$CANDIDATE"
 ```
 
-Its `candidate-packages` job covers .NET 8 on Ubuntu, Windows and macOS and .NET 10 on Ubuntu and
-Windows, and fails unless every installed assembly, `serverInfo` and `/healthz` carry exactly
+Its `candidate-packages` job covers .NET 10 on Ubuntu, Windows and macOS, and fails unless every installed assembly, `serverInfo` and `/healthz` carry exactly
 `$CANDIDATE`, and the QuickEdit sample and the integration-kit recipes fail before they run unless
 restore, from a fresh package cache, resolved `OfficeAgent.Abstractions`, `OfficeAgent.Core` and
 `OfficeAgent.Word` at exactly `$CANDIDATE`. Record the run URL and its commit as the candidate's
@@ -116,6 +121,25 @@ passes. The run's summary lists the artifacts it built.
 
 Update the supported-versions table in [`SECURITY.md`](../SECURITY.md#supported-versions) so its
 supported row names this minor version; `tests/test_support_policy.py` fails until it does.
+
+Move the deployment definitions to the release. No check enforces these, so do each one:
+
+- `param image` in [`deploy/azure/main.bicep`](../deploy/azure/main.bicep) to
+  `ghcr.io/ilia-sokolov/officeagent-mcp:$VERSION`;
+- [`deploy/azure/azuredeploy.json`](../deploy/azure/azuredeploy.json), regenerated from it, which
+  the Deploy to Azure button reads from `main`:
+
+  ```bash
+  az bicep build --file deploy/azure/main.bicep --outfile deploy/azure/azuredeploy.json
+  ```
+
+- `info.version` in both connector definitions,
+  [`officeagent-oauth.swagger.yaml`](../deploy/copilot-studio/officeagent-oauth.swagger.yaml) and
+  [`officeagent-apikey.swagger.yaml`](../deploy/copilot-studio/officeagent-apikey.swagger.yaml).
+
+The button deploys the image the template names, so a deployment from it fails to pull the image
+from the moment `main` carries the release commit until step 4's image is published. Keep that
+window short.
 
 Update the changelog heading from `unreleased` to the release date. Remove any temporary
 prerelease notice for this version from the README, then commit those changes. The tag must
@@ -311,11 +335,26 @@ the packages and the .NET runtime pack compiled into that file, and the verifier
 artifacts carry the executable it describes. Missing license values mean upstream NuGet metadata did not supply them;
 they are not inferred.
 
+Every project under `src` except `Shared` is a package, fifteen in all: `OfficeAgent.Abstractions`,
+`OfficeAgent.AgentFramework`, `OfficeAgent.AmazonS3`, `OfficeAgent.AzureBlob`, `OfficeAgent.Box`,
+`OfficeAgent.Core`, `OfficeAgent.Excel`, `OfficeAgent.Excel.Calculation`,
+`OfficeAgent.GoogleDrive`, `OfficeAgent.IManage`, `OfficeAgent.Mcp`, `OfficeAgent.PowerPoint`,
+`OfficeAgent.Rendering`, `OfficeAgent.SharePoint` and `OfficeAgent.Word`. A project added under
+`src` is a new package ID.
+
+A new package ID has never been pushed, so its first push is also the first use of the Trusted
+Publishing policy for it. 1.3.0 adds five: `OfficeAgent.AmazonS3`, `OfficeAgent.AzureBlob`,
+`OfficeAgent.Box`, `OfficeAgent.GoogleDrive` and `OfficeAgent.IManage`. Before tagging a release
+that adds one, check on NuGet.org that the Trusted Publishing policy for this repository,
+`publish.yml` and environment `nuget` is active and owned by `ilia-sokolov`, and that no one else
+owns the new ID. After the publish workflow, open each new package's page and confirm that it
+exists, shows the release version, and lists `ilia-sokolov` as its owner.
+
 Verify all of the following before publishing the MCP Registry entry:
 
 - the GitHub release exists at
   [github.com/ilia-sokolov/OfficeAgent.NET/releases](https://github.com/ilia-sokolov/OfficeAgent.NET/releases);
-- all expected packages show the new version on NuGet;
+- all fifteen packages show the new version on NuGet, the new IDs among them;
 - `word-document-review.zip` contains `word-document-review/SKILL.md`;
 - `officeagent-integration.zip` contains `officeagent-integration/SKILL.md`, its recipe reference, and its recipe assets;
 - `quickedit-sample.zip` restores, builds, and edits its included fictional contract outside the repository;
@@ -376,16 +415,27 @@ Windows and macOS, and only then uploads through PyPI trusted publishing. It wai
 uploading. PyPI never accepts the same version twice, so a published wheel cannot be replaced;
 fix a broken one in the next release.
 
-### Update the Claude plugin
+Then check that [pypi.org/project/officeagent-mcp](https://pypi.org/project/officeagent-mcp/)
+shows the release version with one wheel per platform, and that
+`uvx officeagent-mcp@$VERSION --stdio` starts the server on a machine without .NET.
 
-Once PyPI serves the new `officeagent-mcp`, move the plugin to it: set `version` in
-`plugins/officeagent/.claude-plugin/plugin.json`, and `version` and the `officeagent-mcp==` pin
-in `plugins/officeagent/pyproject.toml`, to the release version. Run `uv lock` in
-`plugins/officeagent` to refresh `uv.lock`, run `python scripts/sync_claude_plugin.py`, and
-commit. The directory holds a server started with a bare `uvx` or `npx` package for review, so
-the plugin always starts it from the lock. Anthropic's directory follows `main` and
-scans the new commit; a version that runs a package from PyPI is always held for a reviewer
-before it goes live.
+### The Claude plugin is held
+
+The Claude plugin in `plugins/officeagent` is not listed in Anthropic's plugin directory.
+Submission is held until Anthropic grants the publisher Verified organization status, and the
+plugin stays unlisted until then. While the hold lasts, skip this step: do not move the
+plugin's version and do not submit it. No release check ties the plugin's version to the
+release; `tests/test_claude_plugin.py` only holds `plugin.json`, `pyproject.toml` and `uv.lock`
+to the same version.
+
+When the hold ends, and once PyPI serves the new `officeagent-mcp`, move the plugin to it: set
+`version` in `plugins/officeagent/.claude-plugin/plugin.json`, and `version` and the
+`officeagent-mcp==` pin in `plugins/officeagent/pyproject.toml`, to the release version. Run
+`uv lock` in `plugins/officeagent` to refresh `uv.lock`, run
+`python scripts/sync_claude_plugin.py`, and commit. The plugin starts the server with
+`uv run --project ${CLAUDE_PLUGIN_ROOT} --locked --isolated officeagent-mcp --stdio`, so it runs
+exactly the version and wheel hashes in the lock rather than a bare `uvx` package. Then submit
+that commit to the directory.
 
 ## 3. Publish the MCP Registry entry
 
@@ -505,8 +555,10 @@ Complete the release issue with links to:
 
 - the final commit and tag;
 - the GitHub release and publish workflow;
-- the NuGet packages;
+- the NuGet packages, including any new package IDs;
+- the PyPI release and its `publish python` workflow run;
 - the MCP Registry version;
+- whether the Claude plugin was moved and submitted, or is still held;
 - clean-machine verification evidence;
 - adoption results and known limitations carried into the next release.
 
@@ -520,5 +572,8 @@ The `word-document-review` and `officeagent-integration` skills are packaged as 
 assets, but they are not automatically installed into agent skill directories. If a broadly
 used skill registry or installer becomes available, treat submission there as a separate
 distribution task.
+
+The Claude plugin is not in Anthropic's plugin directory: its submission is held until Anthropic
+grants Verified organization status (see [the Claude plugin](#the-claude-plugin-is-held)).
 
 `glama.json` contains repository metadata and does not normally need a version update.

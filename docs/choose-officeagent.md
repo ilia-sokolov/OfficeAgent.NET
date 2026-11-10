@@ -24,6 +24,10 @@ the `v1.2.0` tag. For another release, use the documentation from that release's
   tracked forms of supported edits.
 - You want the same engine behind a direct .NET application and, optionally, MCP
   or `Microsoft.Extensions.AI` tools.
+- You start documents from your organization's templates, including `.dotx`, `.potx` and
+  `.xltx` files, or refresh a report or deck's numbers, tables and charts from a workbook.
+- You need one change across many documents, or a translation that keeps each phrase's
+  formatting.
 
 The complete operation shapes and format-specific behavior are in
 [Document plans](document-plans.md), [PowerPoint support](powerpoint.md), and
@@ -35,8 +39,12 @@ operation-specific package evidence and its native Office limits.
 
 - A general editor for `.docm`, `.xlsm`, `.pptm`, legacy Office formats, PDF, or
   arbitrary OOXML features outside the documented operation set.
+- A decryption tool. A file encrypted by a sensitivity label or a password is refused with
+  `encrypted-document`.
 - A Word or PowerPoint layout and pagination engine.
-- An Excel calculation or data-refresh engine. Formula operations write formulas and
+- An Excel calculation engine, or a refresh engine for Excel's own external data such as Power
+  Query and data connections. [Report refresh](report-refresh.md) copies workbook values into a
+  Word or PowerPoint document; it does not refresh the workbook. Formula operations write formulas and
   request recalculation when Excel next opens the workbook. The optional
   `OfficeAgent.Excel.Calculation` package fills in cached values for a verified set of
   functions and reports every formula it does not calculate; it is not a replacement for

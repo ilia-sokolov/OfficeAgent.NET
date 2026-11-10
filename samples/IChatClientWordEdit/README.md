@@ -1,8 +1,14 @@
 # IChatClientWordEdit - direct IChatClient integration
 
-This minimal console sample exposes OfficeAgent.NET's four bounded Word tools
-directly to a `Microsoft.Extensions.AI.IChatClient`. It does not use
-`ChatClientAgent` or Microsoft Agent Framework.
+This minimal console sample exposes OfficeAgent.NET's default tool set directly to a
+`Microsoft.Extensions.AI.IChatClient`. It does not use `ChatClientAgent` or Microsoft
+Agent Framework.
+
+`OfficeAgentTools.AsAIFunctions()` with default options returns seven tools that address
+documents by connection and opaque id: `describe_capabilities`, `inspect_document`,
+`find_in_document`, `preview_plan`, `apply_plan`, `compare_documents` and
+`preview_document_merge`. None of them takes a file path or URL. The edit
+here needs only `inspect_document`, `find_in_document`, `preview_plan` and `apply_plan`.
 
 The sample:
 

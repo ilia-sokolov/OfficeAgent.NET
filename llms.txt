@@ -7,25 +7,30 @@ Use OfficeAgent when the result has to be the user's own file, not a new documen
 Good fits:
 
 - Fill a company Word template: content controls, bookmarks, and tables with repeating rows
+- Start a new document from the organization's own template, including `.dotx`, `.potx` and `.xltx` files
 - Change specific clauses, prices or dates in a Word document, as tracked changes for review, and add or resolve comments
-- Add slides to a company PowerPoint deck on its own layouts, and fill named shapes, tables and charts
+- Add slides to a company PowerPoint deck on its own layouts, and fill named shapes, tables, charts and pictures
 - Refresh numbers, tables and charts in a report or deck from an Excel workbook
+- Translate a Word or PowerPoint paragraph and keep its bold, italic, colour and links
+- Make one change across many documents, or at every match of a phrase
 - Update cells, tables and rows in an Excel workbook
 - Compare two Word documents, or assemble several into one
+- Work on files in a folder, SharePoint, iManage Work, Google Drive, Box, Azure Blob Storage or Amazon S3
 
 Poor fits:
 
 - Designing a new deck or document with no template; an assistant's built-in generation may suit better
 - Pivot tables, Power Query, DAX, macros, or formula work that needs Excel's own calculation
 - `.docm`, `.xlsm`, `.pptm`, legacy Office formats, or PDF
+- Files encrypted by a sensitivity label or a password, which are refused, and native Google Docs, Sheets or Slides
 - Pixel-exact layout checks: OfficeAgent does not render pages itself
 
-Slides on a template's own named layouts, Word styles by display name, and report refresh arrive in version 1.3. Check the server version before relying on them.
+Version 1.3 adds slides on a template's own named layouts, Word styles by display name, report refresh, creating from a template, replacing pictures, translation with formatting kept, edits across many documents, listing documents and templates, and the Google Drive, Box, Azure Blob Storage and Amazon S3 providers. Check the server version before relying on them.
 
 ## Install
 
-- [MCP server guide](https://raw.githubusercontent.com/ilia-sokolov/OfficeAgent.NET/main/docs/mcp-server.md): `uvx officeagent-mcp --stdio` runs the server with no .NET installed. NuGet, container, standalone and Claude Desktop options are here too, along with connection settings
-- [Client setup](https://raw.githubusercontent.com/ilia-sokolov/OfficeAgent.NET/main/docs/deployment.md): Claude Code, Codex, Copilot Studio and Microsoft 365 Copilot
+- [MCP server guide](https://raw.githubusercontent.com/ilia-sokolov/OfficeAgent.NET/main/docs/mcp-server.md): `uvx officeagent-mcp --stdio` runs the server with no .NET installed. NuGet, container, standalone, Claude Desktop and Claude Code plugin options are here too, along with connection settings
+- [Client setup](https://raw.githubusercontent.com/ilia-sokolov/OfficeAgent.NET/main/docs/deployment.md): Claude Code, Codex, Google ADK, Copilot Studio, Microsoft 365 Copilot, Microsoft Foundry and ChatGPT
 - [Getting started in C#](https://raw.githubusercontent.com/ilia-sokolov/OfficeAgent.NET/main/docs/getting-started.md): the .NET library without MCP
 
 ## Docs
@@ -34,6 +39,7 @@ Slides on a template's own named layouts, Word styles by display name, and repor
 - [PowerPoint](https://raw.githubusercontent.com/ilia-sokolov/OfficeAgent.NET/main/docs/powerpoint.md): slides, layouts, templates, tables and charts
 - [Excel](https://raw.githubusercontent.com/ilia-sokolov/OfficeAgent.NET/main/docs/excel.md): cells, tables, and what is not supported
 - [Report refresh](https://raw.githubusercontent.com/ilia-sokolov/OfficeAgent.NET/main/docs/report-refresh.md): update a report or deck from a workbook
+- [Document providers](https://raw.githubusercontent.com/ilia-sokolov/OfficeAgent.NET/main/docs/document-providers.md): storage connections, listing documents and templates, and creating new documents
 - [Choosing OfficeAgent](https://raw.githubusercontent.com/ilia-sokolov/OfficeAgent.NET/main/docs/choose-officeagent.md): scope, limits, and when to use something else
 - [Agent integration](https://raw.githubusercontent.com/ilia-sokolov/OfficeAgent.NET/main/docs/agent-integration.md): how agents should inspect, plan, preview and apply
 - [Troubleshooting](https://raw.githubusercontent.com/ilia-sokolov/OfficeAgent.NET/main/docs/troubleshooting.md): common errors and what they mean

@@ -55,8 +55,8 @@ host ceiling.** Host policy is the maximum, always.
 | `Inspect`/`Find`/`Preview`/`Commit` on a byte array | Compressed ceiling, then every package ceiling |
 | The same on a `StreamHandle` | Bounded read at the handle, before the engine copies anything |
 | The same on a `FileHandle` | File length checked before the file is read at all |
-| Provider reads (filesystem, SharePoint) | The provider's own `MaximumBytes`, then every package ceiling |
-| `create_document`, `edit_document`, `edit_documents`, `refresh_document`, `open_document` | Every package ceiling, for each document |
+| Provider reads (filesystem, SharePoint, iManage, Google Drive, Box, Azure Blob, Amazon S3) | The provider's own `MaximumBytes`, then every package ceiling |
+| `create_document`, `edit_document`, `edit_documents`, `refresh_document`, `open_document` | Every package ceiling, for each document, and for the template `create_document` starts from |
 | Inline base64 tools (`inspect_document_content` and friends) | Refused from the encoded length before decoding, then every package ceiling |
 | Session import and export | Every package ceiling |
 | Template population, comparison | Every package ceiling, per document read |
@@ -80,13 +80,17 @@ a document must satisfy both.
 | Traversing (`../`) or absolute entry name | `malformed-package` |
 | Document type definition or external entity in the manifest | `malformed-package`; DTDs are prohibited and no entity is resolved |
 | Missing `[Content_Types].xml` | `malformed-package` |
-| Relationship with no target or an invalid target, part with no root element, or attribute that does not parse as its type | `malformed-package`, whether found at open or when the part is first read |
+| Relationship with no target or an invalid target, part reached under two spellings, unreadable core properties part, empty main or slide part, part with no root element, or attribute that does not parse as its type | `malformed-package`, whether found at open or when the part is first read |
 | XML deeper than the depth ceiling | `input-too-large` |
+| Macro-enabled template a new document would start from (`.dotm`, `.potm`, `.xltm`, `.docm`, `.pptm`, `.xlsm`, or any package carrying a VBA project) | `macro-enabled-document`; OfficeAgent does not copy macros into the documents it creates |
 
 Directly, these surface as `OpenXmlIngestionLimitException`,
-`OpenXmlPackageRejectedException` and `EncryptedDocumentException`. Through agent and MCP
-tools they surface as the stable wire codes `input-too-large`, `malformed-package` and
-`encrypted-document`.
+`OpenXmlPackageRejectedException`, `EncryptedDocumentException` and
+`MacroEnabledDocumentException`. Through agent and MCP tools they surface as the stable wire
+codes `input-too-large`, `malformed-package`, `encrypted-document` and
+`macro-enabled-document`. The last applies only where a document is created from a template
+(`create_document` with `templateSource`, `CreateFromTemplateAsync`, and template discovery,
+preview and population).
 
 The inline base64 tools are the one deliberate exception. Content that decodes but is
 not a readable package is reported as `invalid-argument` there, because on that path the
@@ -112,7 +116,8 @@ Beyond the unit tests, a fuzz target feeds the ingestion path inputs nobody wrot
 [`tests/OfficeAgent.Fuzz`](../tests/OfficeAgent.Fuzz/README.md). It wraps arbitrary bytes in a
 `StreamHandle` and inspects them through a client with the Word, PowerPoint and Excel modules,
 under the default ceilings, using SharpFuzz and libFuzzer, seeded from `samples/documents` and the
-test corpus. An input must produce a result or one of the three refusals above. Any other
+test corpus. An input must produce a result or one of the refusals `input-too-large`,
+`malformed-package` or `encrypted-document`. Any other
 exception, a hang past 10 seconds, more than 2 GiB of live managed memory, more than 1 GiB
 allocated by one inspection, or a refusal message of 600 characters or more is a finding. It runs
 locally from its README; it is not part of CI.

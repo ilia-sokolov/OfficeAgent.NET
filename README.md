@@ -3,7 +3,7 @@
 
 [![build](https://img.shields.io/github/actions/workflow/status/ilia-sokolov/OfficeAgent.NET/build.yml?branch=main)](https://github.com/ilia-sokolov/OfficeAgent.NET/actions/workflows/build.yml)
 [![NuGet](https://img.shields.io/nuget/v/OfficeAgent.Core.svg)](https://www.nuget.org/packages/OfficeAgent.Core)
-[![.NET 8 | 10](https://img.shields.io/badge/.NET-8%20%7C%2010-512BD4)](https://github.com/ilia-sokolov/OfficeAgent.NET/blob/main/docs/compatibility.md)
+[![.NET 10](https://img.shields.io/badge/.NET-10-512BD4)](https://github.com/ilia-sokolov/OfficeAgent.NET/blob/main/docs/compatibility.md)
 [![API: SemVer 1.x stable](https://img.shields.io/badge/API-SemVer%201.x%20stable-2ea44f)](https://github.com/ilia-sokolov/OfficeAgent.NET/blob/main/docs/compatibility.md)
 [![native Office: 94/94 cases verified](https://img.shields.io/badge/native%20Office-94%2F94%20cases%20verified-2ea44f)](https://github.com/ilia-sokolov/OfficeAgent.NET/blob/main/docs/native-compatibility.md)
 [![OpenSSF Best Practices](https://img.shields.io/cii/level/15172?label=openssf%20best%20practices)](https://www.bestpractices.dev/projects/15172)
@@ -47,14 +47,16 @@ it for a workflow that depends on Office's layout or calculation engine.
 
 | Area | Supported workflows |
 | --- | --- |
-| Word creation and editing | Create `.docx` files; inspect and change text, paragraphs, tables, images, styles, content controls, headers, footers, notes, page setup, and document properties |
-| Word review | Read and manage comments, preserve or resolve review state, set one revision identity per plan, and record supported edits as tracked revisions |
-| PowerPoint creation and editing | Build or update decks with slides, layouts, text, tables, native editable charts, images, media, notes, comments, sections, transitions, and animations |
-| Excel inspection and editing | Inspect worksheets, tables, and bounded ranges; find raw or displayed values; set cells and formulas; append table rows; manage cell notes |
-| Template generation | Bind unique Word content-control tags or PowerPoint shape names, expand repeating Word table rows, and create bounded batches with one receipt per output |
+| Word creation and editing | Create `.docx` files, blank or from a `.docx` or `.dotx` template; inspect and change text, paragraphs, tables, images, styles, content controls, headers, footers, notes, page setup, and document properties; replace a picture and keep its frame |
+| Word review | Read and manage comments, preserve or resolve review state, set one revision identity per plan, and record supported edits as tracked revisions, marking only the changed words if you choose |
+| PowerPoint creation and editing | Build decks, blank or from a `.pptx` or `.potx` template, or update them with slides on the template's own layouts, text, tables, native editable charts, images, media, notes, comments, sections, transitions, and animations |
+| Excel inspection and editing | Inspect worksheets, tables, and bounded ranges; read cells as Excel displays them; find raw or displayed values; set cells and formulas; append table rows; manage cell notes |
+| Report refresh | Update the numbers, tables and charts of a Word report or PowerPoint deck from an Excel workbook, through links the document keeps for next month |
+| Translation and bulk edits | Rewrite a paragraph in another language and keep its formatting; change every match of a phrase; apply one plan to up to 100 documents |
+| Template generation | Find the organization's templates, bind unique Word content-control tags or PowerPoint shape names, expand repeating Word table rows, and create bounded batches with one receipt per output |
 | Word comparison | Compare supported free-body paragraph text read-only and produce a snapshot-bound native redline plan only when all other package content is unchanged |
 | Agent and application integration | Use MCP over stdio or HTTP, Microsoft Agent Framework tools, or the direct .NET API, with SHA-256 apply receipts and host-supplied audit actors |
-| Document access | Work with bounded filesystem roots, SharePoint, iManage Work, in-memory sessions, or self-contained inline content |
+| Document access | Work with bounded filesystem roots, SharePoint, iManage Work, Google Drive, Box, Azure Blob Storage, Amazon S3, in-memory sessions, or self-contained inline content; list a connection's documents and templates |
 
 ## Choose a starting point
 
@@ -63,16 +65,21 @@ it for a workflow that depends on Office's layout or calculation engine.
 | Decide whether OfficeAgent fits my application | [Library selection guide](docs/choose-officeagent.md) |
 | Try a targeted Word edit | [Try a Word edit](#try-a-word-edit) |
 | Use OfficeAgent in Claude Desktop, or run the server without .NET (from 1.2.0) | [Standalone downloads](docs/mcp-server.md#standalone-downloads) |
+| Run the server from PyPI with `uvx officeagent-mcp`, with no .NET installed | [Install and run](docs/mcp-server.md#install-and-run) |
+| Try the server and both skills as a Claude Code plugin | [Claude Code plugin](docs/mcp-server.md#claude-code-plugin) |
 | Create a Word document from scratch | [Create a document](docs/getting-started.md#create-a-document-instead) |
 | Create or edit a PowerPoint deck | [PowerPoint support](docs/powerpoint.md) |
 | Inspect or edit an Excel workbook | [Excel support](docs/excel.md) |
-| Connect Codex, Claude Code, Copilot Studio, or Microsoft 365 Copilot | [Deployment and client setup](docs/deployment.md) |
+| Connect Codex, Claude Code, Google ADK, Copilot Studio, Microsoft 365 Copilot, Microsoft Foundry, or ChatGPT | [Deployment and client setup](docs/deployment.md) |
 | Use OfficeAgent from C# | [Getting started](docs/getting-started.md) |
 | Add tools to a Microsoft Agent Framework agent | [Agent integration](docs/agent-integration.md) |
 | Add tools to a Semantic Kernel agent | [SemanticKernelWordEdit sample](samples/SemanticKernelWordEdit/) |
 | Use OfficeAgent from Python with the OpenAI Agents SDK or LangGraph | [python-openai-agents](samples/python-openai-agents/) and [python-langgraph](samples/python-langgraph/) samples |
 | Give Microsoft 365 Copilot a contract redline reviewer | [M365ContractReviewer sample](samples/M365ContractReviewer/) |
-| Host the MCP server or use SharePoint | [MCP server](docs/mcp-server.md) and [document providers](docs/document-providers.md) |
+| Host the MCP server, or keep documents in SharePoint, iManage Work, Google Drive, Box, Azure Blob Storage, or Amazon S3 | [MCP server](docs/mcp-server.md) and [document providers](docs/document-providers.md) |
+| Deploy the server to Azure Container Apps | [Azure deployment](deploy/azure/README.md) |
+| Add the server to Copilot Studio as a custom connector | [Copilot Studio connector](deploy/copilot-studio/README.md) |
+| Start new documents from the organization's templates | [List documents and templates](docs/document-providers.md#list-documents-and-templates) and [Office template locations](docs/mcp-server.md#office-template-locations) |
 | Add per-user hosted connection authorization | [Hosted gateway reference](samples/HostedGateway/) |
 | Add optional PDF/page-image rendering | [Visual rendering](docs/rendering.md) |
 | Edit documents with no storage configured | [Documents with no storage](docs/mcp-server.md#documents-with-no-storage) |
@@ -239,7 +246,7 @@ skills and makes clear that a skill does not install the runtime, NuGet packages
 ### What reaches the model
 
 The inspect and find tools return document text and structure to the model — that is how it
-locates an edit. Filesystem and SharePoint operations keep the package behind an opaque id.
+locates an edit. Operations on a storage connection keep the package behind an opaque id.
 Inline tools carry the whole file as base64 on every call. Session import/export also carries
 the package as base64 if the agent performs those calls; a host integration can instead move
 the bytes outside model context. Connect storage and model providers appropriate for the data.
@@ -319,6 +326,10 @@ turns covered body-paragraph differences into a reviewable Word redline.
 The [DocumentAssembly](samples/DocumentAssembly/) sample combines a proposal, statement of
 work, and appendix into one editable package with a multi-source audit receipt. See
 [Word document assembly](docs/document-assembly.md) for its formatting and compatibility scope.
+[LiabilityCap](samples/LiabilityCap/) changes a value in a commented table cell as a tracked
+change, [TableRowInsertion](samples/TableRowInsertion/) adds a table row as a tracked change and
+keeps the existing comments, and [PageCounter](samples/PageCounter/) counts rendered pages with
+the optional [rendering package](docs/rendering.md).
 
 ## How it works
 
@@ -360,10 +371,14 @@ specifics in [PowerPoint support](docs/powerpoint.md).
 Documents are accessed through configured providers. After registration,
 editing calls use a `(connectionId, documentId)` pair instead of a storage path
 or credentials. The filesystem provider restricts registrations to its root;
-the SharePoint provider uses the permissions of its configured identity.
-`CreateAsync` starts a new document inside a connection: the requested `.docx`
-or `.pptx` extension selects a registered blank-document factory. The engine
-applies an optional initial plan in memory, and then asks
+the SharePoint, iManage Work, Google Drive and Box providers use the permissions of their
+configured identity, and the Azure Blob Storage and Amazon S3 providers keep registrations
+under the connection's prefix.
+`CreateAsync` starts a new document inside a connection: the requested `.docx`,
+`.pptx` or `.xlsx` extension selects a registered blank-document factory.
+`CreateFromTemplateAsync` starts it as a copy of a template instead, and only reads the
+template; a `.dotx`, `.potx` or `.xltx` template becomes a normal `.docx`, `.pptx` or `.xlsx`.
+The engine applies an optional initial plan in memory, and then asks
 the provider to create and register it without overwriting an existing name.
 
 ## Documentation
@@ -376,16 +391,18 @@ the provider to create and register it without overwriting an existing name.
 | [Concepts](docs/concepts.md) | Anchors, snapshots, plans, providers, transactions, and capabilities |
 | [C# API reference](docs/csharp-api.md) | Generated public types and members for every library package |
 | [Document plans](docs/document-plans.md) | JSON shapes and validation rules for every operation |
-| [Document providers](docs/document-providers.md) | Filesystem, SharePoint, iManage Work, save modes, and custom providers |
+| [Document providers](docs/document-providers.md) | Filesystem, SharePoint, iManage Work, Google Drive, Box, Azure Blob Storage, Amazon S3, listing, templates folders, save modes, and custom providers |
 | [PowerPoint support](docs/powerpoint.md) | Slide addressing, the verbs the deck module implements, and what it preserves |
-| [Template population and comparison](docs/document-workflows.md) | Batch binding, repeating Word rows, comparison limits, and redline generation |
+| [Template population and comparison](docs/document-workflows.md) | Creating from a template, batch binding, repeating Word rows, comparison limits, and redline generation |
+| [Report refresh](docs/report-refresh.md) | Linking a report or deck to workbook ranges and refreshing it in one call |
+| [Translation and bulk edits](docs/translation-and-bulk-edits.md) | Translating with formatting kept, and one plan across many documents |
 | [Agent integration](docs/agent-integration.md) | Microsoft Agent Framework and `Microsoft.Extensions.AI` tools |
 | [MCP server](docs/mcp-server.md) | Server configuration, transports, security notes, and tool contracts |
-| [Deployment and client setup](docs/deployment.md) | Codex, Claude Code, Microsoft Copilot clients, containers, and Azure |
+| [Deployment and client setup](docs/deployment.md) | Codex, Claude Code, Google ADK, Microsoft Copilot clients, Microsoft Foundry, ChatGPT, containers, and Azure |
 | [Operations](docs/operations.md) | Concurrency, streams, cancellation, telemetry, and production concerns |
 | [Troubleshooting](docs/troubleshooting.md) | Startup, registration, validation, concurrency, and provider failures |
 | [Failure modes](docs/operations.md#failure-modes-you-should-handle) | Common plan errors and what to do next |
-| [Releasing](docs/releasing.md) | Publishing to NuGet, the MCP Registry, and GitHub |
+| [Releasing](docs/releasing.md) | Publishing to NuGet, PyPI, the MCP Registry, and GitHub |
 
 ## Contributing
 
@@ -396,7 +413,7 @@ document feature involved, the operation you attempted, and the error or
 unexpected result. Do not attach confidential documents; a small sanitised
 reproduction is enough.
 
-To work on the code, install the .NET 10 SDK and the .NET 8 runtime, fork the repository, and run:
+To work on the code, install the .NET 10 SDK, fork the repository, and run:
 
 ```bash
 dotnet build OfficeAgent.NET.sln
@@ -412,7 +429,10 @@ for code style, tests, and pull-request expectations.
 ## Scope and limitations
 
 OfficeAgent.NET edits Word `.docx`, PowerPoint `.pptx`, and Excel `.xlsx` files;
-it does not automate the Office desktop applications.
+it does not automate the Office desktop applications. It does not decrypt: a file protected by a
+sensitivity label or a password is refused with `encrypted-document`. It does not start a
+document from a macro-enabled template or document, which is refused with
+`macro-enabled-document`.
 
 The deck module refuses the verbs a presentation has no vocabulary for -
 `setProperty`, `revision`, `pageSetup`, `insertBreak` and `note` - per

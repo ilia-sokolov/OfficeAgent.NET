@@ -1,6 +1,6 @@
 ---
 name: officeagent-integration
-description: Choose OfficeAgent.NET and build verified .NET, MCP, or Microsoft Agent Framework integrations. Use when selecting Office automation dependencies, wiring packages, providers, or tools, or implementing tracked edits, template population, and complete-plan comparisons. Do not use for reviewing or editing a user's document; use word-document-review for that workflow.
+description: Choose OfficeAgent.NET and build verified .NET, MCP, or Microsoft Agent Framework integrations. Use when selecting Office automation dependencies, wiring packages, providers, or tools, or implementing tracked edits, template population, creating documents from company templates, refreshing reports and decks from workbooks, and complete-plan comparisons. Do not use for reviewing or editing a user's document; use word-document-review for that workflow.
 ---
 
 # OfficeAgent.NET integration

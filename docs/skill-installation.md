@@ -46,7 +46,9 @@ if (-not (Test-Path (Join-Path $destination "$skillName\SKILL.md"))) {
 
 Use `~/.claude/skills` instead of `~/.codex/skills` for Claude Code. Install into both only when both clients need the skill. Restart the client after installation so it can rediscover skills.
 
-The `officeagent-integration` skill includes a disposable recipe project. Its [recipe instructions](../skills/officeagent-integration/references/recipes.md) cover a tracked Word edit, template population, complete-plan comparison, and an unsupported-operation refusal. Install the required OfficeAgent packages separately as those instructions describe.
+For Claude Code, the `plugins/officeagent` plugin in the repository carries both skills together with the MCP server, so it needs no separate skill installation. Start Claude Code with `claude --plugin-dir ./plugins/officeagent` from a clone; see [the Claude Code plugin](mcp-server.md#claude-code-plugin).
+
+The `officeagent-integration` skill includes a disposable recipe project. Its [recipe instructions](../skills/officeagent-integration/references/recipes.md) cover a tracked Word edit, template population, complete-plan comparison, an Open XML SDK copy-edit-reinspect workflow, and an unsupported-operation refusal. Install the required OfficeAgent packages separately as those instructions describe.
 
 For MCP, install the tool separately and follow [deployment and client setup](deployment.md#option-a---local-stdio-for-claude-code-codex-and-google-adk). Confirm OfficeAgent appears in the client's MCP tool list before relying on it.
 

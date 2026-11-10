@@ -1,13 +1,14 @@
 # Native Office compatibility
 
 This page records what desktop Word, PowerPoint and Excel observed when they opened
-OfficeAgent 1.0 output. Every operation `describe_capabilities` advertises has at least one case,
-and so do the Word workflows: template population, comparison and assembly. It is evidence for
+OfficeAgent 1.x output. Every operation `describe_capabilities` advertises has at least one case,
+and so do the workflows: creation, including creation from a template, template population,
+comparison and assembly. It is evidence for
 these files in these applications, not a claim about every Office version, every authoring
 application or pixel-identical rendering.
 
-The recorded run used Microsoft 365 Apps build **16.0.20326.20158** (Word, PowerPoint and Excel,
-Click-to-Run, 64-bit) on **Windows 11 Pro 10.0.26200**. The exact files Office opened, their
+The recorded run used Microsoft 365 Apps build **16.0.20527.20150** (Word, PowerPoint and Excel,
+Click-to-Run, 64-bit) on **Windows 11 Pro 10.0.26300**. The exact files Office opened, their
 SHA-256 hashes and every observation are in the
 [native corpus](../tests/OfficeAgent.Tests/Corpus/v1.0.0/native/README.md).
 

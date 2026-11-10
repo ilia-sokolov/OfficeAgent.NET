@@ -1,6 +1,6 @@
 # Word document assembly
 
-OfficeAgent 0.8 can assemble ordered, whole `.docx` documents into one new editable Word
+OfficeAgent can assemble ordered, whole `.docx` documents into one new editable Word
 package. It preserves supported source content and formatting, starts each imported document
 in a section on the next page, and leaves the sources untouched. This workflow does not
 reconcile independently edited versions, select page ranges, or normalize a corporate theme.
@@ -74,7 +74,9 @@ existing revisions, comments, footnotes/endnotes, charts, SmartArt, VML/vector d
 macros, signatures, embedded objects, custom XML bindings, unsupported fields/markup,
 linked images, and unknown package dependencies block the entire assembly. No content is
 silently omitted. Diagnostics identify the source index and offending part. The initial
-assessment stops at the first blocking issue; preview again after correcting it.
+assessment stops at the first blocking issue; preview again after correcting it. A source
+protected by a sensitivity label or a password is refused with `encrypted-document`, because
+OfficeAgent does not decrypt.
 
 ## Receipts, limits, and authorization
 

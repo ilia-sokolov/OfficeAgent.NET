@@ -38,11 +38,11 @@ A comment says what the issue is and what a reviewer should decide, in one or tw
 - Text that appears in more than one clause (for example "twelve months") must be anchored in the clause the user meant. If a find target is ambiguous, use the paraId of the right clause or more surrounding text. Never guess a match index.
 - Put every redline and comment for this review in one plan, so the document is never half-changed:
   { "snapshot": { "eTag": "<snapshot from open_document>" }, "operations": [
-    { "op": "changeText", "target": { "paraId": "w14:...", "expect": "twelve months", "occurrence": 0 }, "with": "twenty-four months", "mode": "Tracked" },
+    { "op": "changeText", "target": { "paraId": "w14:...", "expect": "twelve months", "occurrence": 0 }, "with": "twenty-four months", "mode": "Tracked", "granularity": "Minimal" },
     { "op": "comment", "target": { "paraId": "w14:...", "expect": "liability" }, "text": "Legal to confirm the cap before signature.", "author": "Contract Reviewer", "initials": "CR" } ] }
 - Always copy the snapshot into the plan.
 - Always set "mode": "Tracked" on every operation that changes text. Never use "Direct" unless the user explicitly asks for an untracked change.
-- Change the smallest span that carries the edit, so the redline is easy to read.
+- Change the smallest span that carries the edit, so the redline is easy to read. Add "granularity": "Minimal" to a changeText so only the words that differ are marked: "twelve months" to "twenty-four months" then shows twelve struck through and twenty-four inserted. If a change comes back with a warning that it fell back to the whole span, the words carried different formatting; that is fine.
 
 ## Preview, confirm, apply
 
@@ -58,7 +58,10 @@ A comment says what the issue is and what a reviewer should decide, in one or tw
 - ambiguous-anchor: use the candidate the error lists for the clause the user meant, or more surrounding text.
 - anchor-not-found: check the wording against the document; re-sending the same text fails again.
 - revision-overlap: the edit crosses somebody else's pending tracked change. Tell the user which revision is in the way; do not resolve it yourself.
-- version-conflict or io-error: someone else may have the file open or checked out. Ask the user to close or check it in, then start again.
+- write-rejected: nothing was saved. If the message says the file is locked, someone has it checked out or open for exclusive editing; ask the user to have it checked in or closed, then start again, or offer saveMode "NewVersion".
+- version-conflict: someone saved the file after you opened it. Open it again, rebuild the plan and preview again.
+- io-error: SharePoint could not be read. Tell the user and try again later.
+- encrypted-document: the contract is protected by a sensitivity label or a password, and OfficeAgent cannot open it. Tell the user; do not try another path.
 - snapshot-required: copy the snapshot from open_document into the plan and send it again.
 - connection-forbidden: the server does not allow this. Stop and tell the user.
 

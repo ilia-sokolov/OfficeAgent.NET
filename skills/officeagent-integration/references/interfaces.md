@@ -37,7 +37,7 @@ var tools = new OfficeAgentTools(client).AsAIFunctions();
 var instructions = OfficeAgentTools.SystemPromptGuidance;
 ```
 
-Registration and creation tools are off by default. Enable them only when the host grants the corresponding storage capability. The host must deliver committed output bytes through its own attachment or download channel.
+Registration and creation tools are off by default. Enable them only when the host grants the corresponding storage capability, and append the matching guidance to the instructions: `OfficeAgentTools.RegistrationPromptGuidance` with `AllowRegistration`, which adds `list_documents`, `find_templates`, `edit_documents` and `refresh_document`, and `OfficeAgentTools.CreationPromptGuidance` with `AllowCreation`. The creation guidance tells the model to call `find_templates` first and create from the best template, so templates-first creation needs both switches. The host must deliver committed output bytes through its own attachment or download channel.
 
 ## MCP
 
@@ -48,7 +48,13 @@ dotnet tool install --global OfficeAgent.Mcp --version 1.2.0
 officeagent-mcp --stdio
 ```
 
-A local MCP client configuration uses the executable as a stdio child process:
+With no .NET installed, the PyPI package carries the same self-contained server; [uv](https://docs.astral.sh/uv/) runs it without a separate install step:
+
+```bash
+uvx officeagent-mcp --stdio
+```
+
+A client configured that way uses `"command": "uvx"` with `"args": ["officeagent-mcp", "--stdio"]`. A local MCP client configuration uses the executable as a stdio child process:
 
 ```json
 {
@@ -61,6 +67,6 @@ A local MCP client configuration uses the executable as a stdio child process:
 }
 ```
 
-Configure allowed filesystem roots or SharePoint connections in the server, not in model-supplied plan JSON. Restart the client and confirm that OfficeAgent tools are listed. Skill discovery and MCP connection discovery are separate checks.
+Configure allowed filesystem roots or SharePoint, iManage, Google Drive, Box, Azure Blob Storage or Amazon S3 connections in the server, not in model-supplied plan JSON. Restart the client and confirm that OfficeAgent tools are listed. Skill discovery and MCP connection discovery are separate checks.
 
 Use the versioned [agent integration guide](https://github.com/ilia-sokolov/OfficeAgent.NET/blob/v1.2.0/docs/agent-integration.md) and [MCP server reference](https://github.com/ilia-sokolov/OfficeAgent.NET/blob/v1.2.0/docs/mcp-server.md) for the complete option and tool contracts.

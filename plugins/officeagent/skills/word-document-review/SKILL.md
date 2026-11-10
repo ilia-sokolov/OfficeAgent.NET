@@ -22,7 +22,7 @@ that follows, and getting it wrong is the most common way a session falls apart.
 
 | What you see | What it means | Use |
 | --- | --- | --- |
-| A connection with `provider: "filesystem"` or `"sharepoint"` | The document is in storage the host controls | Address it by `(connectionId, documentId)`. Edits save in place. |
+| A connection with `provider: "filesystem"`, `"sharepoint"`, `"imanage"`, `"googledrive"`, `"box"`, `"azureblob"` or `"amazons3"` | The document is in storage the host controls | Address it by `(connectionId, documentId)`. Edits save in place. |
 | A connection with `provider: "session"` | The server holds documents in memory for this session | Same `(connectionId, documentId)` loop. `import_document_content` to put a document in, `export_document_content` once at the end. |
 | Only `*_content` tools, no connections | Nothing is stored anywhere | `create_document_content` / `edit_document_content`, which carry the document as base64 both ways. |
 
@@ -67,6 +67,8 @@ that decides what the user actually wants:
 - `kind: "comment"` — each comment with its author, its text, whether it is resolved, and
   which comment it replies to.
 - `kind: "table"` / `"note"` / `"image"` — addressable structures.
+- `kind: "sensitivityLabel"` — the document's Microsoft Purview label. No operation changes
+  it, and saving keeps it.
 
 On a large document use `fidelity: "outline"` or `"structure"` first and only pull
 `"content"` for the part you need. Page with `paragraphOffset` / `paragraphLimit`.
@@ -85,6 +87,15 @@ directly as `{ "find": "Acme Corp" }` and the server resolves it. That saves a r
 If the text matches more than once the call fails and lists each candidate — re-issue with
 `{ "find": "Acme Corp", "match": 2 }` (zero-based), or use more surrounding text. Never
 guess a match index; use one the error listed.
+
+When the user means every occurrence - rename a party throughout - use
+`{ "find": "Acme Corp", "match": "all" }`. The operation is repeated for each match,
+including those in headers, footers and notes. `find` ignores case and matches inside
+words unless the target adds `"caseSensitive": true` or `"wholeWord": true`.
+
+If the user describes the document rather than naming its file ("the Fabrikam NDA"),
+find it with `list_documents` and pass the `source` it returns to `open_document`. Ask
+when several match.
 
 ### 3. Preview
 
@@ -117,8 +128,8 @@ save or deliver the result. Do not export between edits — each export spends t
 document in context for nothing. Documents in a session connection are gone when the server
 stops, so say so if the user might expect the file to be saved somewhere.
 
-For a filesystem or SharePoint connection there is nothing to export: `apply_plan` already
-wrote the file where it lives.
+For a connection backed by storage there is nothing to export: `apply_plan` already wrote
+the file where it lives.
 
 ## Make review edits explicitly tracked
 
@@ -134,6 +145,32 @@ Pass `"mode": "Direct"` only when the user has asked to change the document outr
 A deck (`.pptx`) has no revision vocabulary at all and refuses `"mode": "Tracked"`. Use
 `Direct` there and tell the user that deck edits cannot be redlined; add a comment if the
 change needs flagging.
+
+### Mark only the words that change
+
+A tracked `changeText` marks the whole `expect` as deleted and the whole `with` as
+inserted. Add `"granularity": "Minimal"` so the redline keeps the words the two share at
+the start and end and marks only the rest:
+
+```json
+{ "op": "changeText",
+  "target": { "paraId": "w14:...", "expect": "Either party may terminate on 60 days' written notice" },
+  "with": "Either party may terminate on 90 days' written notice",
+  "mode": "Tracked", "granularity": "Minimal" }
+```
+
+The reviewer sees ~~60~~ 90 rather than a retyped clause, and adding words to a sentence
+is a pure insertion. Words are split on whitespace and compared exactly. When the words to
+delete carry different formatting, the whole `expect` is marked instead and the change
+carries a `warning` saying so. The preview's `before` and `after` show what will be marked.
+
+### Translate a paragraph and keep its formatting
+
+A paragraph whose words differ in formatting has a `markedText` in `inspect_document`,
+such as `Payment is due within <1>30 days</1> of invoice.` Rewrite it keeping each
+`<n>…</n>` around the words that should carry that formatting, and send it as `withMarked`
+with `expect` set to the paragraph's full text. A paragraph without `markedText` takes a
+plain `with`.
 
 Reviewing an existing redline:
 
@@ -167,6 +204,8 @@ call is almost never it.
 | `unsupported-operation` | The verb does not exist for this format — `revision`, `setProperty`, `pageSetup`, `insertBreak`, `note` on a deck | Do not translate it into something else silently. Tell the user this format cannot do it. |
 | `requires-renderer` | Needs pagination or field recalculation | Out of scope. Explain rather than approximating. |
 | `operation-conflict` | Two operations target one location in a plan | Merge them, or apply in separate plans. |
+| `revision-overlap` | The edit spans somebody else's pending tracked change | Resolve that revision first with a `revision` operation if the user asks, or target a span wholly inside or outside it. Never resolve it as a side effect. |
+| `encrypted-document` | The file is protected by a sensitivity label or a password | OfficeAgent does not decrypt. Tell the user and ask for an unprotected copy. |
 | `version-conflict` | The stored document changed since you opened it | Re-open and rebuild. Someone else may be editing it. |
 | `invalid-argument` on `contentBase64` | The content did not arrive intact | Your copy is damaged; re-sending it fails the same way. Import the document by handle instead. |
 | `io-error` | The file could not be read or written | Usually open in Word. Tell the user to close it. |
@@ -186,7 +225,8 @@ Be straight with the user about these rather than approximating:
 
 - **No rendering.** Page counts, "does this fit on one page", table-of-contents *text*, and
   field values are outside the engine. It edits the document; Word lays it out.
-- **No Excel.** Word and PowerPoint only.
+- **This skill is for Word.** OfficeAgent also edits decks and workbooks, but review
+  state - tracked changes and comment threads - is Word's.
 - **Decks cannot be redlined.** PresentationML has no revision model.
 - **A note's number is Word's.** Never type a superscript number into the text — add a real
   footnote and Word renumbers the rest.

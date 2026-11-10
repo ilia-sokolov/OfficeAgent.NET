@@ -55,6 +55,9 @@ and formulas are left alone.
 - A Word paragraph whose text crosses a hyperlink, content control or pending tracked change
   has no `markedText` and refuses `withMarked`. Translate the parts on either side of the
   link or control with `with`, or accept or reject the pending revisions first.
+- A paragraph whose text holds a tab, line break, field, note reference or picture also
+  refuses `withMarked`, because a rewrite would drop it or move it to the end. Translate the
+  text on either side of it with `with`.
 - Comments, chart labels and SmartArt are not paragraphs, so a translation leaves them as
   they are. Text boxes in a Word document are paragraphs and are translated with the rest.
 - Length is not checked: a translation that runs longer can push a slide's text out of its
@@ -64,7 +67,9 @@ and formulas are left alone.
 ## Edit many documents at once
 
 `edit_documents` applies one plan to up to 100 documents named by source, each exactly as
-`edit_document` takes it. The agent lists the folder first, with its own file tools.
+`edit_document` takes it. The agent lists the folder first, with `list_documents` (by
+`folder`, `nameContains`, `extensions` and `recursive`), whose entries' `source` is what
+`edit_documents` takes, or with its own file tools.
 
 ```json
 {
@@ -122,4 +127,5 @@ described in [storage outcomes and recovery](recovery.md).
 - `edit_documents` is published with the other source-addressed tools, under
   `AllowRegistration`, and needs the same capabilities on the connection as `edit_document`.
 - A logo or picture differs per document, so replacing one is still a per-document edit:
-  inspect each document for its `image#N` node.
+  inspect each document for its `image#N` node, then `replaceImage` it, which keeps the
+  picture's position, frame and alt text.

@@ -2,11 +2,58 @@
 
 To combine whole documents in a specified order, see [Word document assembly](document-assembly.md).
 
-OfficeAgent 0.8 adds two higher-level workflows built on the same inspect, plan, preview,
-commit, provider, and receipt contracts as ordinary edits. Template population creates
+Two higher-level workflows are built on the same inspect, plan, preview, commit, provider,
+and receipt contracts as ordinary edits. Template population creates
 independent documents from tagged values and repeating Word rows. Comparison reads two Word
 documents and proposes a native tracked-change plan when it can account for every change in
 its supported scope and verify that unsupported package content is unchanged.
+
+## Create one document from a template
+
+`create_document` takes `templateSource`, a source exactly as `register_document` takes it,
+and `templateConnectionId`, which defaults to the connection the document is created in. The
+new document starts as a copy of the template, `planJson` is applied to the copy, and the
+template is only read. From C#, `OfficeAgentClient.CreateFromTemplateAsync` does the same:
+
+```csharp
+var template = await client.RegisterAsync("templates", @"C:\Templates\Invoice.dotx");
+var created = await client.CreateFromTemplateAsync("documents", "invoice-0042.docx", template, plan);
+```
+
+A `.dotx`, `.potx` or `.xltx` becomes a normal `.docx`, `.pptx` or `.xlsx` that Office opens
+as a document rather than as a template, so the new name must end in that extension; a name in
+another format is refused with `invalid-argument` and nothing is written. An ordinary document
+works as a template too. A macro-enabled template (`.dotm`, `.potm`, `.xltm`, or any package
+carrying a VBA project) is refused with `macro-enabled-document`. The copy keeps the
+template's content controls, styles, tables and shape names, so anchors taken by inspecting
+the template work on it.
+
+### Start from the organization's template
+
+The creation guidance an agent receives tells it to look for a template before creating any
+document, and to create a blank one only when none fits:
+
+1. `find_templates` with `format` (`word`, `powerpoint`, `excel`, or `""`) and a word from the
+   request in `nameContains`, such as `invoice`; then again without `nameContains` if nothing
+   matches. It searches every connection with a template location and returns the matches
+   best first: organization, then workgroup, then personal templates, then a connection's
+   templates folder. A connection that fails is listed in `connectionsFailed` beside the
+   results. When several fit equally the agent asks the user; when none fits it says so.
+2. `create_document` with the match's `connectionId` and `source` as `templateConnectionId`
+   and `templateSource`.
+3. Fill what the template already has rather than formatting text by hand: content controls
+   and named shapes with `fill`, existing tables with `fillTable`, existing text with
+   `changeText`, pictures with `replaceImage`, and the template's own style names in `styleId`
+   for anything added.
+
+A deck follows the same first two steps and then reuses the template's example slides:
+`duplicateSlide` the one that fits, change its text, tables, charts and pictures in place with
+`changeText`, `fill`, `fillTable`, `setChartData` and `replaceImage`, and `removeSlide` the
+examples not used. [Building a deck from a template](powerpoint.md#building-a-deck-from-a-template)
+gives the steps. `find_templates` and `list_documents` are published with `AllowRegistration`,
+and `create_document` with `AllowCreation`; see
+[list documents and templates](document-providers.md#list-documents-and-templates) for the
+connection settings that make templates findable.
 
 ## Populate a template batch
 
@@ -72,13 +119,8 @@ does not is refused with `output-format-mismatch` before anything is written. A 
 template (`.dotm`, `.potm`) is refused with `macro-enabled-document`. The connection's
 `AllowedExtensions` must include the template's extension for it to be registered.
 
-To make one document from a template and edit it in the same call, without slots, use
-`create_document` with `templateSource`, or `OfficeAgentClient.CreateFromTemplateAsync`:
-
-```csharp
-var template = await client.RegisterAsync("templates", @"C:\Templates\Invoice.dotx");
-var created = await client.CreateFromTemplateAsync("documents", "invoice-0042.docx", template, plan);
-```
+To make one document from a template and edit it in the same call, without a batch, see
+[create one document from a template](#create-one-document-from-a-template).
 
 The equivalent MCP or Agent Framework call is `populate_template_batch(connectionId,
 documentId, requestJson, expectedTokenJson)`. The host must opt in with `AllowCreation`; its
@@ -333,8 +375,10 @@ all revisions produces the revised body text and rejecting all revisions restore
 original body text. Preview the plan against the original immediately before commit so drift
 fails as `stale-snapshot`.
 
-The v0.8 comparison scope is deliberately bounded to free Word body-paragraph text. Existing
-revisions and changes in tables, images or image bytes, headers, footers, footnotes, endnotes,
+The comparison scope is deliberately bounded to free Word body-paragraph text and the words of
+table cells whose table shape has not changed (see
+[what the comparison understands](#what-the-comparison-understands)). Existing revisions and
+other changes in tables, images or image bytes, headers, footers, footnotes, endnotes,
 run structure, direct formatting, paragraph styles, fields, properties, comments, sections,
 relationships, or other package parts make the result incomplete and suppress the plan. The
 comparison uses structural checks plus an exact fingerprint of every package part after

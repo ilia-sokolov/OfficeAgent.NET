@@ -37,17 +37,22 @@ start from a clean setup.
 | 2 | Create a new Word document and add structured content | [MCP tools](mcp-server.md#tools) or [.NET `CreateAsync`](getting-started.md#create-a-document-instead) |
 | 3 | Create or update a PowerPoint deck with text plus one rich-content operation | [PowerPoint support](powerpoint.md#creating-a-deck) |
 | 4 | Review a Word document with tracked changes or comments | [Sample review workflows](../samples/documents/README.md#reproducible-review-workflows) and the [optional review skill](skill-installation.md) |
-| 5 | Complete one workflow through a second integration or storage path | [Agent integration](agent-integration.md), [SharePoint](document-providers.md#the-sharepoint-provider), or [session storage](mcp-server.md#documents-with-no-storage) |
+| 5 | Complete one workflow through a second integration or storage path | [Agent integration](agent-integration.md), [SharePoint](document-providers.md#the-sharepoint-provider), another [storage provider](document-providers.md#the-providers-at-a-glance), or [session storage](mcp-server.md#documents-with-no-storage) |
+| 6 | Create a document from an organization template the agent finds itself, with `find_templates` | [List documents and templates](document-providers.md#list-documents-and-templates) and [create from a template](document-providers.md#create-from-a-template) |
+
+Trial 6 is optional for the five-trial gate; run it when a release changes template discovery
+or creation.
 
 Record each attempt here:
 
 | Trial | Outcome | Client or API and version | OS | Server/package version | Skill, if used | Setup result | Correct saved file | Time to verification | Blocker or confusion |
-| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | 1 |  |  |  |  |  |  |  |  |  |
 | 2 |  |  |  |  |  |  |  |  |  |
 | 3 |  |  |  |  |  |  |  |  |  |
 | 4 |  |  |  |  |  |  |  |  |  |
 | 5 |  |  |  |  |  |  |  |  |  |
+| 6 |  |  |  |  |  |  |  |  |  |
 
 For each failure, capture the exact command or API step, stable OfficeAgent error code, and
 the first documentation sentence that caused uncertainty. Do not collect documents,

@@ -11,6 +11,23 @@ implementations live in the `OfficeAgent.Core.DocumentProviders` namespace.
 
 Every reference contains a provider name, a host-configured connection id, an **opaque, provider-assigned document id**, and an optional version. Ids are tokens, not addresses. `RegisterAsync` mints an id. `Replace` preserves it; `NewVersion`, `NewDocument`, and creation mint an id for the new item.
 
+## The providers at a glance
+
+| Provider | Package | A document is registered by | Version check | Signs in with | New documents go to | Templates folder |
+| --- | --- | --- | --- | --- | --- | --- |
+| Filesystem | `OfficeAgent.Core` | A path under the root | SHA-256 of the content | The host process's file access | The root | `TemplatesFolder`; the connection can be `ReadOnly` |
+| Session (memory) | `OfficeAgent.Core` | Its id; documents arrive by import or creation | SHA-256 of the content | Nothing; documents live in the process | The session | None |
+| SharePoint and OneDrive | `OfficeAgent.SharePoint` | A URL or a `driveId/itemId` pair | ETag, sent as `If-Match` | App-only client credentials or On-Behalf-Of | `CreationDriveId` and `CreationFolderItemId` | `TemplatesFolder`; the connection can be `ReadOnly` |
+| iManage Work | `OfficeAgent.IManage` | A document id such as `ACTIVE!12345.1`, or a Work link | Latest version number, edit time and size, checked again under a lock | iManage OAuth: password, refresh token or client credentials grant | `CreationFolderId` | `TemplatesFolder`; the connection can be `ReadOnly` |
+| Google Drive | `OfficeAgent.GoogleDrive` | A file id or a Drive URL | Head revision id, compared just before the upload | A service account key, as itself or through domain-wide delegation | `CreationFolderId` | `TemplatesFolder`; the connection can be `ReadOnly` |
+| Box | `OfficeAgent.Box` | A file id or a Box URL | ETag, sent as `If-Match` | Client credentials grant, as the service account or a user | `CreationFolderId` | `TemplatesFolder`; the connection can be `ReadOnly` |
+| Azure Blob Storage | `OfficeAgent.AzureBlob` | A blob name under the prefix, or its URL | ETag, sent as `If-Match` | `DefaultAzureCredential`, or a connection string | The prefix | `TemplatesFolder`, under the prefix; the connection can be `ReadOnly` |
+| Amazon S3 | `OfficeAgent.AmazonS3` | A key under the prefix, or `s3://bucket/key` | S3 version id with bucket versioning, otherwise ETag, sent as `If-Match` | The AWS SDK's default credential chain | The prefix | `TemplatesFolder`, under the prefix; the connection can be `ReadOnly` |
+
+Every provider lists documents, as [list documents and templates](#list-documents-and-templates)
+describes, and every one takes `DefaultChangeMode`, `DefaultChangeGranularity`,
+`CalculateFormulas` and `RejectFormulaErrors`.
+
 ## Register a connection
 
 ```csharp
@@ -82,6 +99,14 @@ The same boundary rules apply, over Microsoft Graph:
 - **Large files are uploaded in chunks.** A save of `UploadSessionThresholdBytes` or more (default 4 MiB) goes through a Graph upload session in chunks of `UploadSessionChunkBytes` (default 10 MiB, a multiple of 320 KiB and less than 60 MiB); a smaller one is a single request, as before. A session keeps the same conditions: `Replace` sends `If-Match`, and new names use `conflictBehavior=fail`. A chunk that fails for a dropped connection, a 5xx or a 429 is retried up to three times from the position Graph reports, honouring `Retry-After`. The bearer token is never sent to the session's pre-authenticated upload URL.
 - **What a failed chunked save means.** Graph stores the file only when it accepts the last chunk. A failure before that, including an expired session, is `WriteRejected`: nothing was stored, and the provider cancels the session. A failure on the last chunk, or a lost reply to it, is `OutcomeUnknown`, as for a single-request upload; a name conflict or a failed `If-Match` on the last chunk is a refusal and reported as such.
 - **The size limit is `MaximumBytes`.** Graph accepts files up to 250 GB in SharePoint and OneDrive, so the connection's own `MaximumBytes` is the limit that applies. Content that is not seekable is read into memory before it is uploaded, and the engine holds a document in memory while it edits it, so size `MaximumBytes` to the host's memory.
+
+Apart from the chunk retries above, Graph throttling and transient failures are not
+retried automatically. If a write times out or receives a throttling response, reconcile storage state before
+retrying: Graph may have accepted the bytes even when the response was lost.
+Microsoft Graph does not support replacing a sensitivity-labeled file with
+application permissions. An app-only connection cannot use `Replace` for that
+case; use On-Behalf-Of/delegated access or a separately validated workflow, and
+include a labeled file in preflight tests.
 
 ### Choosing an authentication mode
 
@@ -178,9 +203,7 @@ The same boundary rules apply, over iManage:
   listed version's id, `LIBRARY!number.version`, which registration accepts, so a listing shows
   the agent document ids that edits otherwise keep opaque. Search folders are not descended
   into, because their results can come from anywhere in the library. Without a creation folder
-  a listing reports `ConfigurationError`. The iManage API reference is behind a customer login,
-  so the `limit` and `offset` parameters are unverified against a live server; the provider
-  treats a short page as the last one, and the tests run it against a fake server.
+  a listing reports `ConfigurationError`. A page shorter than requested is the last one.
 - **Tokens stay out of references and tool results.** Authentication is an
   `IIManageAccessTokenProvider`. iManage sends the token in an `X-Auth-Token` header, which
   `HttpClient` does not strip on a redirect, so the provider uses its own `HttpClient` that does
@@ -237,6 +260,7 @@ implement `IIManageAccessTokenProvider` and register it directly.
 
 iManage throttling and transient failures are not retried automatically. If a save times out,
 reopen the document and compare its latest version with the intended output before retrying.
+
 ## The Google Drive provider
 
 ```bash
@@ -422,7 +446,9 @@ startup. See [MCP server settings](mcp-server.md#settings).
 ## The Azure Blob Storage provider
 
 ```bash
+dotnet add package OfficeAgent.Core
 dotnet add package OfficeAgent.AzureBlob
+dotnet add package Microsoft.Extensions.DependencyInjection
 ```
 
 `OfficeAgent.AzureBlob` keeps documents in Azure Blob Storage. One connection is one container
@@ -478,7 +504,9 @@ services.AddAzureBlobDocumentProvider("contracts", o =>
 ## The Amazon S3 provider
 
 ```bash
+dotnet add package OfficeAgent.Core
 dotnet add package OfficeAgent.AmazonS3
+dotnet add package Microsoft.Extensions.DependencyInjection
 ```
 
 `OfficeAgent.AmazonS3` keeps documents in Amazon S3. One connection is one bucket and an
@@ -571,6 +599,13 @@ The iManage, Google Drive, Box, Azure Blob and Amazon S3 providers implement
 
 Other cloud or document-management integrations implement `IDocumentProvider` and register one singleton per connection. Credentials live in host configuration, managed identity, delegated identity, or a secret store - **never** on `DocumentReference`.
 
+The rest is optional, one interface per capability: `IDocumentCreatingProvider` for creation,
+`IDocumentListingProvider` for listing, `IConnectionTemplateSource` for a templates folder, and
+`IConnectionEditingDefaults`, `IConnectionGranularityDefaults` and
+`IConnectionCalculationDefaults` for the connection's defaults. A provider that leaves one out
+gets the global behaviour: no creation, no listing, no templates, `Tracked`, `Span` and no
+calculation.
+
 ## Register, inspect, commit
 
 ```csharp
@@ -622,10 +657,10 @@ var report = await client.CreateAsync("contracts", "report.docx", new DocumentPl
 The Word module supplies a valid package with one empty paragraph, addressed as
 `auto-0000`, over a style catalogue the `styleId` examples name: `Normal`,
 `Heading1`, `Heading2`, `Heading3`, `ListParagraph`, and the `TableGrid` table
-style, plus the document defaults that set the base font. Without those a
-`styleId` would write a reference to a style the document does not define, and
-Word would silently render the paragraph as `Normal` — the plan committing while
-the document looked nothing like what was asked for. The optional plan is applied
+style, plus the document defaults that set the base font. A plan that names a
+style neither the document nor the plan defines is refused with the document's own styles,
+because Word would otherwise show the paragraph as `Normal` without saying so; see
+[styles by name](document-plans.md#styles-by-name). The optional plan is applied
 in memory before storage is touched. Providers use their native create-if-absent operation, so an existing
 name returns `AlreadyExists` and is never overwritten.
 
@@ -641,15 +676,25 @@ Google Drive or Box connection implements creation when its `CreationFolderId` n
 destination folder. An Azure Blob Storage or Amazon S3 connection creates documents under its
 prefix, and never over an existing name.
 
-Apart from the chunk retries above, Graph throttling and transient failures are not
-retried automatically. If a write times out or receives a throttling response, reconcile storage state before
-retrying: Graph may have accepted the bytes even when the response was lost.
-Microsoft Graph does not support replacing a sensitivity-labeled file with
-application permissions. An app-only connection cannot use `Replace` for that
-case; use On-Behalf-Of/delegated access or a separately validated workflow, and
-include a labeled file in preflight tests.
+### Create from a template
 
-### Sensitivity labels and protected files
+`CreateFromTemplateAsync` starts the new document as a copy of a registered template, applies
+the optional plan, and only reads the template, which can be on another connection:
+
+```csharp
+var template = await client.RegisterAsync("templates", "Invoice.dotx");
+var invoice = await client.CreateFromTemplateAsync("documents", "invoice-0042.docx", template, plan);
+```
+
+A `.dotx`, `.potx` or `.xltx` becomes a normal `.docx`, `.pptx` or `.xlsx` that Office opens as
+a document, so the new name must end in that extension, or the call fails with
+`InvalidArgument` before anything is written. The templates connection's `AllowedExtensions`
+must include the template's extension for it to be registered. A macro-enabled template is
+refused with `MacroEnabledDocumentException` (`macro-enabled-document` from the tools).
+`create_document` does the same with `templateSource` and `templateConnectionId`. See
+[template population](document-workflows.md#populate-a-template-batch).
+
+## Sensitivity labels and protected files
 
 Inspection lists a document's Microsoft Purview sensitivity label as a `sensitivityLabel`
 node, with the label id, its name when the file records one, and whether a person or a default
@@ -703,6 +748,11 @@ The built-in providers list as follows:
 | Filesystem | The path relative to the root, with `/` separators, such as `2026/acme.docx` | A folder below the root | At most 8 folders deep, 5,000 entries examined per call, 10,000 entries read per folder |
 | Session (memory) | The document's id | None; the connection has no folders | One page of the documents held |
 | SharePoint | The `driveId/itemId` pair | A folder URL, a `driveId/itemId` pair, or a path such as `Contracts/2026` under the creation folder | At most 5 folders deep, 100 folders per walk, 10 Graph requests per call |
+| iManage Work | The listed version's id, `LIBRARY!number.version` | A path of folder names below `CreationFolderId` | 200 children per request; the [cloud bounds](#listing-the-cloud-connections) |
+| Google Drive | The Drive file id | A path of folder names below `CreationFolderId` | 200 files per request; the cloud bounds |
+| Box | The Box file id | A path of folder names below `CreationFolderId` | 200 items per request; the cloud bounds |
+| Azure Blob Storage | The blob name relative to the prefix | A path relative to the prefix | 200 items per request; the cloud bounds |
+| Amazon S3 | The key relative to the prefix | A path relative to the prefix | 200 keys per request; the cloud bounds |
 
 The filesystem provider never leaves its root. Links, junctions and other reparse points are
 skipped rather than followed, a folder reached through one is refused with `AccessDenied`, and
@@ -723,8 +773,10 @@ in `Folder`, because a bare pair without that prefix is read as a path.
 ### Templates folders
 
 A connection can name a templates folder: `TemplatesFolder` on the filesystem options is a
-folder relative to the root, such as `Templates`, and on the SharePoint options a folder URL or
-a `driveId/itemId` pair. `DocumentListQuery.Templates` lists it instead of `Folder` (and
+folder relative to the root, such as `Templates`; on the SharePoint options a folder URL or
+a `driveId/itemId` pair; on the iManage, Google Drive and Box options a folder id; and on the
+Azure Blob Storage and Amazon S3 options a folder inside the prefix. The session connection has
+none. `DocumentListQuery.Templates` lists it instead of `Folder` (and
 `Folder` is then a path inside it), and every document listed from it has `IsTemplate` set.
 A `.dotx`, `.potx` or `.xltx` file is reported as a template wherever it is, but only a
 connection whose `AllowedExtensions` include those extensions lists or registers them; the
@@ -735,15 +787,41 @@ folder is set), `Personal`, `Workgroup` or `Organization`. A filesystem connecti
 location and no templates folder is a template location as a whole, which is how the MCP
 server adds Office's own template folders. Set `Organization` on a SharePoint connection whose
 templates folder is an organization assets library; OfficeAgent does not find that library on
-its own. Both providers implement `IConnectionTemplateSource`, which reports the two values.
+its own. Every provider except the session one implements `IConnectionTemplateSource`, which
+reports the two values. In the MCP server, an iManage, Google Drive, Box, Azure Blob or S3
+connection with a `TemplateLocation` and no `TemplatesFolder`, or with a malformed folder,
+stops the server at startup.
 
 ### Read-only connections
 
-`FileSystemDocumentProviderOptions.ReadOnly` makes a connection refuse every save, creation and
-registration removal with `AccessDenied` before anything is changed, so a tool reports
-`writeOutcome: notWritten`. Listing, registration and opening still work. A read-only connection
-creates no directory and keeps its registrations in memory instead of writing
-`.officeagent/index.json`, so a templates folder people share is never written to.
+Every provider except the session one takes `ReadOnly`. A read-only connection refuses every
+save and creation with `AccessDenied` before anything is sent to the storage, so a tool reports
+`writeOutcome: notWritten`, whatever the configured identity or credentials could write.
+Listing, registration, opening and use as a template still work. Put a templates folder people
+share on a read-only connection, beside a writable connection for the documents made from its
+templates:
+
+- `create_document` with `connectionId` naming the writable connection and
+  `templateConnectionId` naming the read-only one reads the template and files the new document
+  on the writable one.
+- `edit_document`, `apply_plan`, `edit_documents` and `refresh_document` cannot change a template,
+  even when an agent addresses the template itself.
+- The read-only connection can allow `.dotx`, `.potx` and `.xltx`, and the writable one need not.
+
+How each kind keeps its registrations differs:
+
+- **Filesystem.** A read-only folder creates no directory and keeps its registrations in memory
+  instead of writing `.officeagent/index.json` under the root. It also refuses removing a
+  registration.
+- **SharePoint, iManage, Google Drive, Box, Azure Blob and Amazon S3.** Registrations live in the
+  host's registration store or `RegistrationIndexPath`, not in the service, so they are kept and
+  removed as usual. A read-only SharePoint connection cannot name `CreationDriveId` or
+  `CreationFolderItemId`, and a read-only iManage, Google Drive or Box connection cannot name
+  `CreationFolderId`: the provider throws at construction and the MCP server stops at startup,
+  naming the setting.
+
+`ReadOnly` is enforced by OfficeAgent, not by the service. Give people who must not change the
+templates read-only permissions in the service as well.
 
 ## Remove (unregister) a document
 
@@ -836,14 +914,17 @@ Failures at the provider boundary throw `DocumentProviderException` carrying a s
 
 | Code | Cause |
 | --- | --- |
-| `NotFound` | Unknown / removed document id. |
-| `AccessDenied` | Path-like id, traversal attempt, symlink, or wrong connection. |
+| `NotFound` | Unknown / removed document id, or a missing folder, container or bucket. |
+| `AccessDenied` | Path-like id, traversal attempt, symlink, a name outside the prefix, wrong connection, a write to a read-only connection, or a refusal by the service. |
 | `ContentTooLarge` | Document exceeds the connection's configured size cap. |
 | `ExtensionNotAllowed` | Display-name extension is not in the allow-list. |
 | `VersionConflict` | Optimistic-concurrency check failed (`DocumentVersionConflictException`). |
-| `InvalidArgument` | Structurally bad reference or save options. |
-| `ConfigurationError` | Registry has zero or more than one provider for the requested `(provider, connectionId)`, or the connection's provider cannot create documents. |
+| `InvalidArgument` | Structurally bad reference, save options, listing folder or continuation token. |
+| `ConfigurationError` | Registry has zero or more than one provider for the requested `(provider, connectionId)`, or the connection's provider cannot create or list documents. |
 | `IO` | Underlying storage I/O error. |
 | `AlreadyExists` | A document with the requested name is already there; the provider refuses to overwrite it. Retry with a different name. |
+| `WriteRejected` | The storage definitely did not accept the write, such as a locked or checked-out file; nothing changed. Safe to retry once the cause is fixed. |
+| `OutcomeUnknown` | The write may or may not have been stored. Reopen the destination and compare it with the intended output before retrying. |
+| `RegistrationFailed` | The document was stored but its registration could not be persisted. Register the known name instead of creating it again. |
 
-These flatten cleanly into the agent-tool surface: `OfficeAgent.AgentFramework` returns each one as a stable wire code (`not-found`, `access-denied`, `content-too-large`, `extension-not-allowed`, `version-conflict`, `invalid-argument`, `configuration-error`, `io-error`, `already-exists`) so the LLM can act on it.
+These flatten cleanly into the agent-tool surface: `OfficeAgent.AgentFramework` returns each one as a stable wire code (`not-found`, `access-denied`, `content-too-large`, `extension-not-allowed`, `version-conflict`, `invalid-argument`, `configuration-error`, `io-error`, `already-exists`, `write-rejected`, `outcome-unknown`, `registration-failed`) so the LLM can act on it.

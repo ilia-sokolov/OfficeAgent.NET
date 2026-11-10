@@ -44,6 +44,9 @@ than to a document-wide position.
 A picture appears twice — as `image#…` and as `shape#…` — because the verbs care
 about different things: one about the picture, the other about the box it sits in.
 
+Each node reports the `name` PowerPoint's Selection Pane shows for it, such as
+`Revenue Chart` or `Logo`, so a template's own names say which shape is which.
+
 `slideId` is the id from `p:sldIdLst`, which survives reordering — unlike a slide
 number. Node paths are keyed by shape id rather than by ordinal for the same
 reason: adding a table to an earlier slide must not silently retarget a path that
@@ -64,6 +67,9 @@ guessing which line was meant; see [Anchor stability](#anchor-stability).
 | `insertTable` | slide node | Placed below existing content. `table.styleId` names a built-in look — `none` (no rules), `grid`, `themed`, `banded`. Left unset, PowerPoint draws its default boxed grid. Resizing the frame with `format` rescales the columns |
 | `insertChart` | slide node | Adds a native clustered-column, bar, line, or pie chart with an editable embedded workbook, title, legend, placement, and alternative text |
 | `updateChart` | chart node | Replaces the data and settings of a chart created by OfficeAgent |
+| `setChartData` | chart node | Replaces the data of any native chart, including one made in PowerPoint, and keeps its type, colours, labels, axes and layout. Scatter, bubble, surface and stock charts are refused |
+| `fillTable` | table node | Replaces every cell row by row, header included; the table grows or shrinks by rows, and each cell keeps its formatting. A table with merged cells is refused |
+| `bindData` | shape, table or chart node | Names the node `xl:<range>` so [report refresh](report-refresh.md) updates it from a workbook |
 | `removeTable` | table node | Removes the frame, not just the `a:tbl` |
 | `insertTableRows` / `removeTableRows` | table node | `Start`/`End`/`Before`/`After`; negative indices count from the end |
 | `insertTableColumns` / `removeTableColumns` | table node | Grid and rows stay in step |
@@ -134,6 +140,24 @@ The empty `expect` is still content-verified — it asserts the paragraph *is*
 blank, so if the deck drifted and something is already there the operation fails
 with `expect-mismatch` rather than overwriting it. Use it to fill a placeholder
 that is already there; use `insert` to add a line beside one that has text.
+
+### From a company template
+
+`create_document` with `templateSource`, and `templateConnectionId` when the template is on
+another connection, starts the deck as a copy of a template instead of a blank one;
+`OfficeAgentClient.CreateFromTemplateAsync` does the same from C#. The plan is applied to the
+copy and the template is only read. A `.potx` becomes a normal `.pptx` that PowerPoint opens as
+a presentation, so `name` must end in `.pptx`; an ordinary `.pptx` works as a template too. A
+`.potm`, or any template carrying a VBA project, is refused with `macro-enabled-document`.
+
+```csharp
+var template = await client.RegisterAsync("templates", "Northwind Board.potx");
+var deck = await client.CreateFromTemplateAsync("workspace", "board-q3.pptx", template, plan);
+```
+
+The copy keeps the template's slides, layouts, masters and shape names, so the anchors from
+inspecting the template work on it. [Building a deck from a template](#building-a-deck-from-a-template)
+is the usual way to fill it.
 
 ## Plans do not need a format
 
@@ -413,6 +437,33 @@ plan** — its slide id does not exist until the plan is applied, and `find`
 targets resolve against the pre-edit document. Set its text through
 `insertSlide`'s own `title`/`body`/`notes`, or apply, re-inspect, and edit.
 
+### Building a deck from a template
+
+A company template usually carries example slides as well as layouts: a chart slide, a
+table slide, a team slide with photos. Reusing them keeps the template's look in a way new
+slides cannot, so this is the flow the agent guidance follows:
+
+1. `find_templates` with `format` `powerpoint` and a word from the request in `nameContains`,
+   and again without it if nothing matches. Matches come best first: organization, then
+   workgroup, then personal templates, then a connection's templates folder.
+2. `create_document` with the match's `connectionId` and `source` as `templateConnectionId`
+   and `templateSource`, and `planJson` `""`.
+3. `inspect_document` the new deck. Each example slide shows its layout and what sits on it.
+4. In a first plan, `duplicateSlide` the example that fits each slide you need, `moveSlide`
+   the copies into order, and `removeSlide` the template's example slides you did not use,
+   so the finished deck holds only your slides. Apply it.
+5. Inspect again, then in a second plan change what is on the copies: text with
+   `changeText` (an empty `expect` for an empty placeholder) or `fill` by shape name, tables
+   with `fillTable`, charts with `setChartData`, and pictures with `replaceImage`, which keeps
+   the frame's position, size and crop.
+
+The two plans are needed because a slide duplicated in a plan cannot be edited in that same
+plan. Insert a new chart, table or picture only when the template has nothing similar, and use
+`insertSlide` with one of the deck's [own layout names](#a-templates-own-layouts) when no
+example slide fits. Some content cannot be changed in place: `fillTable` refuses a table with
+merged cells, `setChartData` refuses scatter, bubble, surface and stock charts, and SmartArt
+cannot be edited. Report those slides for a manual touch rather than rebuilding them.
+
 ## One plan, one operation per target
 
 The shared conflict rule keys an operation on its verb, its anchor, and (for positional
@@ -441,4 +492,6 @@ already resized.
 - `defineStyle`, `revision`, `pageSetup`, `insertBreak` and `note` are not implemented; a deck has no style catalogue to define into - its look lives in the layout and master - no redline model, no page geometry to set per slide, and no footnotes. `setProperty` covers the core properties only.
 - A deck refuses an explicit `"mode": "Tracked"` on any verb that carries one. An omitted mode is route-specific: inline and direct .NET operations resolve to `Direct`, while connection-addressed agent tools inherit `DefaultChangeMode`. Configure a deck connection as `Direct`; see [change mode](document-plans.md#change-mode).
 - Legacy `p:cm` comments are neither read nor written.
-- SmartArt is not addressable. Existing third-party charts are inspectable but `updateChart` deliberately accepts only charts created by OfficeAgent.
+- SmartArt and other diagrams cannot be edited: their text lives in diagram parts no verb reads or writes, so `changeText`, `fill` and `find` do not reach it. A diagram is a `shape#…` node that can be moved, resized or removed as a whole, and `replaceImage` refuses it.
+- `updateChart` deliberately accepts only charts created by OfficeAgent. `setChartData` changes the data of any native chart, but refuses scatter and bubble charts, which plot numbers on both axes rather than values against categories, and surface and stock charts.
+- `fillTable` refuses a table with merged cells, which have no single position to fill.

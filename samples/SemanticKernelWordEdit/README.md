@@ -35,7 +35,7 @@ The source copy is checked after the edit and the temporary workspace is deleted
 
 ## Prerequisites
 
-- .NET 10 SDK (the repository's `global.json` selects it) and the .NET 8 runtime
+- .NET 10 SDK (the repository's `global.json` selects it)
 - One of:
   - an Azure OpenAI deployment whose model supports function calling, with either an API key
     or an Azure CLI login (`az login`) by an identity that has the

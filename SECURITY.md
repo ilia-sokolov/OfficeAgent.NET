@@ -27,12 +27,18 @@ with `encrypted-document` when it is opened. A label on a file that is not encry
 by inspection and kept on every save; policy about labelled files belongs to the host. See
 [sensitivity labels and protected files](docs/document-providers.md#sensitivity-labels-and-protected-files).
 
+OfficeAgent does not copy macros into the documents it creates. A macro-enabled template or
+document a new document would start from is refused with `macro-enabled-document`, and
+listings never include macro-enabled files. A read-only connection, on any storage, refuses
+every save and creation before the service is called, so a shared templates folder cannot be
+changed through it. That is OfficeAgent's own check; the service's permissions still apply.
+
 ## Report a vulnerability privately
 
 Use [GitHub private vulnerability reporting](https://github.com/ilia-sokolov/OfficeAgent.NET/security/advisories/new).
 If that route is unavailable, email [contact@dotaction.io](mailto:contact@dotaction.io?subject=OfficeAgent.NET%20security%20report).
 Do not include a confidential customer document, production credential, access token,
-SharePoint registration index, or tenant identifier. A minimal synthetic document and exact
+registration index, or tenant identifier. A minimal synthetic document and exact
 package version are usually enough to reproduce an Office-processing issue.
 
 Include the affected version, deployment mode, document format, impact, reproduction steps,
@@ -52,8 +58,10 @@ depends on severity, exploitability, and upstream dependencies. The project has 
 and no backup responder; if a target is missed, the report is still handled, and the delay is
 stated in the next update.
 
-In scope: the published OfficeAgent packages, the MCP server and its container image, and the
-reference deployments in this repository used as documented. Out of scope: the security of a host
+In scope: the published OfficeAgent packages, the MCP server and its container image,
+standalone downloads and Claude Desktop bundles, the `officeagent-mcp` PyPI package, the Claude
+Code plugin in `plugins/officeagent`, and the reference deployments in this repository, such as
+`deploy/azure`, used as documented. Out of scope: the security of a host
 application built on OfficeAgent, a hosted endpoint that lacks the authentication the
 [security boundary](#security-boundary) requires, and vulnerabilities in dependencies that are
 not reachable through OfficeAgent (report those upstream).
@@ -68,12 +76,13 @@ The standalone open-source HTTP server does not authenticate callers. A hosted d
 add TLS, authentication, and a fail-closed `IConnectionAccessPolicy`. The
 [HostedGateway reference](samples/HostedGateway/) demonstrates two authenticated principals,
 disjoint connections, and trusted receipt actors, but it is not a production identity system.
-SharePoint credentials authorize storage access; they do not protect the public MCP endpoint.
+Storage credentials, for SharePoint or any other provider, authorize storage access; they do not
+protect the public MCP endpoint.
 See the [hosted deployment boundary](docs/deployment.md#b2-put-authentication-in-front)
 and [hosted deployment checklist](docs/deployment.md#pre-flight-checklist-for-a-hosted-deployment).
 
-Filesystem roots, SharePoint permissions, process identity, secrets, logs, and retention are
-controlled by the host. Limit each connection to the documents its callers need, keep secrets
+Filesystem roots, storage permissions and prefixes, process identity, secrets, logs, and
+retention are controlled by the host. Limit each connection to the documents its callers need, keep secrets
 outside prompts and configuration committed to source control, and avoid logging document
 content or tokens.
 

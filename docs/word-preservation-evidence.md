@@ -3,7 +3,7 @@
 This matrix preserves the historical `v0.9.0` corpus evidence for a fixed fictional
 Word package across two supported operations and two unsupported operations. It is
 operation-specific evidence, not a claim that every Word feature or document is
-preserved. For the broader 1.0 corpus and desktop-application results, see
+preserved. For the broader 1.x native corpus and desktop-application results, see
 [native Office compatibility](native-compatibility.md).
 
 The recorded run is based on commit
@@ -72,5 +72,5 @@ Microsoft Word 16.0.20326.20144 opened the tracked result in Compatibility Mode.
 The tracked replacement, prior revisions, classic comment, nested controls,
 numbering, field, and two-page section layout were visible. This is one native
 opening observation, not a visual-parity guarantee. Native accept and reject
-were not performed for this historical corpus. The separate 1.0 compatibility
+were not performed for this historical corpus. The separate 1.x compatibility
 corpus includes those checks.

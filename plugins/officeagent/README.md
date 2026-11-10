@@ -8,8 +8,9 @@ Word, and everything the edit did not touch stays as it was.
 
 ## What's included
 
-- **The OfficeAgent MCP server**, which gives Claude tools to inspect documents, find text,
-  preview and apply edit plans, compare two Word documents, and fill templates.
+- **The OfficeAgent MCP server**, which gives Claude tools to list and inspect documents, find
+  text, preview and apply edit plans, apply one plan to many documents, refresh a report or deck
+  from a workbook, compare two Word documents, and fill templates.
 - **The `word-document-review` skill**, which teaches Claude to review a Word document the way
   a person does: read the open comments first, redline with tracked changes, and resolve
   review state on request.
@@ -42,6 +43,15 @@ Windows (x64, Arm64), macOS 15 or later, and Linux with glibc 2.27 or later.
 
 The server is a local process, so it runs in Claude Code and in Cowork sessions on your
 computer. In claude.ai chat the skills load without it.
+
+## Install
+
+Clone the [repository](https://github.com/ilia-sokolov/OfficeAgent.NET) and start Claude Code
+with the plugin folder:
+
+```bash
+claude --plugin-dir ./plugins/officeagent
+```
 
 ## What it runs and what data it sends
 

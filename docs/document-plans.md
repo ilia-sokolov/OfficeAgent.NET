@@ -29,7 +29,7 @@ A `DocumentPlan` is the wire contract between an agent and the engine. It is a J
 
 ## Contract compatibility
 
-The package version and wire versions are separate. OfficeAgent.NET 1.0 uses edit-plan
+The package version and wire versions are separate. OfficeAgent.NET 1.x uses edit-plan
 contract `0.2`, merge-plan schema `1`, and receipt schema `1`, as 0.9 did. The
 [compatibility policy](compatibility.md) says what each of these promises within 1.x.
 
@@ -44,7 +44,7 @@ contract `0.2`, merge-plan schema `1`, and receipt schema `1`, as 0.9 did. The
 | Unknown property at any level | Rejected by agent and MCP tools with `invalid-json`; remove the property or correct its spelling. |
 | Unknown enum name or an integer enum value | Rejected by agent and MCP tools with `invalid-json`; use the documented string value. |
 
-There is no edit-plan migration in 0.9. The supported `0.2` shape is already the v0.8
+There is no edit-plan migration in 1.x. The supported `0.2` shape is already the v0.8
 shape, so the engine preserves it rather than rewriting it. Unknown versions are never
 silently upgraded or interpreted as `0.2`.
 
@@ -83,9 +83,12 @@ The anchor shapes and node paths below are the Word ones. A deck addresses slide
 | --- | --- |
 | `{ "paraId": "…", "expect": "…", "occurrence": 0 }` | text span in a paragraph |
 | `{ "tag": "ClientName" }` | content control or bookmark |
-| `{ "kind": "<nodeKind>", "path": "<path>" }` | document-level node - `kind` is `"table"`, `"tableRow"`, `"tableCell"`, `"image"`, `"docProperty"`, `"revision"`, or `"field"`, *not* the literal string `"node"` |
+| `{ "kind": "<nodeKind>", "path": "<path>" }` | document-level node - `kind` is `"table"`, `"tableRow"`, `"tableCell"`, `"image"`, `"docProperty"`, `"revision"`, `"field"`, `"comment"`, or `"note"`, *not* the literal string `"node"`. A deck adds `"slide"`, `"shape"`, `"chart"` and the others in [PowerPoint addressing](powerpoint.md#addressing) |
+| `{ "find": "…", "match": 0, "caseSensitive": false, "wholeWord": false }` | text named directly, resolved to a text span when the plan arrives. `edit_document`, `edit_documents` and `edit_document_content` only - see [naming text with `find`](#naming-text-with-find) |
 
-Table-row, table-cell, and image paths come from `inspect_document.nodes`:
+Table-row, table-cell, and image paths come from `inspect_document.nodes`. A node reports the
+`name` an author gave it, when there is one: a Word table's alt-text title, or a PowerPoint
+shape's Selection Pane name.
 
 | Path | Addresses |
 | --- | --- |
@@ -145,6 +148,31 @@ change something with `"mode": "Tracked"`, re-open, and the text you inserted is
 target for `find`, `changeText` and `format`. Text struck through by a tracked deletion is
 not part of it, and a text box's paragraphs belong to their own body rather than to the
 paragraph that carries them.
+
+### Naming text with `find`
+
+In `edit_document`, `edit_documents` and `edit_document_content`, a text-span target may name
+the text itself instead of a `paraId`. The tool resolves it against live content before
+anything is applied, and it can be mixed with `paraId` targets in one plan.
+
+```json
+{ "op": "changeText",
+  "target": { "find": "Acme Corp", "match": "all", "caseSensitive": true, "wholeWord": true },
+  "with":   "Globex Inc." }
+```
+
+| Field | Meaning |
+| --- | --- |
+| `find` | The literal text. It ignores case and matches inside words unless the next two fields say otherwise |
+| `match` | A zero-based index into the document's matches, or `"all"`. Any other string is refused with `invalid-argument` |
+| `caseSensitive` | `true` matches only the exact case |
+| `wholeWord` | `true` skips matches inside a longer word |
+
+Text matching more than once is refused with `ambiguous-anchor`, and the message names each
+candidate and where it is, such as `match 0 (body):`. `"match": "all"` repeats the operation for
+every match, including those in headers, footers and notes, and skips it where there is none. A
+plan whose every `"match": "all"` target matched nothing is refused with `anchor-not-found` and
+saves nothing. Regular expressions stay on `find_in_document`.
 
 ### `changeText`
 
@@ -428,7 +456,7 @@ Populate a named slot by tag. Slot tags come from `inspect_document.contentContr
 
 In Word a slot is a content control or bookmark (`kind: "contentControl"`). On a deck it is the **shape name** a template author sets, which PowerPoint shows in its Selection Pane (`kind: "shapeName"`); names repeat across slides, so a tag matching more than one shape is refused as `ambiguous-anchor` rather than filling an arbitrary one, and is qualified as `slide256/ClientName`.
 
-**`fill` populates a slot; it does not create one.** In Word that means the document must already carry the content control — no verb adds one, so `fill` applies to templates the host supplies rather than to documents `create_document` produced. A deck has no such gap: every named shape is a slot, and `insertShape` makes one.
+**`fill` populates a slot; it does not create one.** In Word that means the document must already carry the content control — no verb adds one, so `fill` applies to templates and to documents created from them (`create_document` with `templateSource`), not to a blank document `create_document` made. A deck has no such gap: every named shape is a slot, and `insertShape` makes one.
 
 ### `link`
 
@@ -560,6 +588,11 @@ Remove rows by explicit `rowIndices` (negative counts from the end), or set `onl
   "target":      { "kind": "table", "path": "table#0" },
   "onlyIfEmpty": true }
 ```
+
+In Word, a new row is a copy of the table's last row, and each value takes the formatting of
+that cell's first run, so rows added to a template's table look like the rows already there.
+Bookmarks, comment ranges and comment references in the copied row are left out, because
+their ids must be unique.
 
 ### `repeatTableRow`
 
@@ -1073,7 +1106,7 @@ Returned by `preview_plan` and `apply_plan` in the `errors` array. Stable wire c
 | Code | Meaning |
 | --- | --- |
 | `stale-snapshot` | The plan's format-specific text-host snapshot does not match live content. Re-inspect and rebuild. |
-| `anchor-not-found` | The target anchor cannot be resolved in the live document. |
+| `anchor-not-found` | The target anchor cannot be resolved in the live document: a `find` target matched nothing, its `match` index was out of range, or every `"match": "all"` target in the plan matched nothing, in which case nothing was changed and nothing was saved. |
 | `expect-mismatch` | The live content no longer matches the anchor's `expect`. |
 | `ambiguous-anchor` | The target is not specific enough to edit safely. |
 | `unsupported-operation` | No registered handler supports the verb / anchor combination. |
@@ -1084,12 +1117,14 @@ Returned by `preview_plan` and `apply_plan` in the `errors` array. Stable wire c
 | `revision-overlap` | The Word edit spans a pending tracked revision, so the resulting redline would no longer reject back to the original text. Resolve the pending revisions first, or target a span wholly inside or wholly outside them. See [pending revisions](pending-revisions.md). |
 | `contract-mismatch` | The edit-plan version is not exactly `0.2`, or the plan asserted a `format` the document is not. Omit the version for legacy `0.2` behavior or rebuild it for `0.2`, then preview again. |
 | `invalid-json` | The plan is not valid JSON, contains an unknown property, operation or enum value, uses an integer enum value, or supplies a non-string version. Correct the named member; unknown operation errors list the verbs that exist. |
-| `invalid-argument` | A tool argument outside the plan is wrong - an unrecognised `saveMode`, for example. |
+| `invalid-argument` | A tool argument outside the plan is wrong - an unrecognised `saveMode`, for example, or a `find` target whose `match` is neither a zero-based index nor `"all"`. |
 | `regex-timeout` | A regular-expression search exceeded its time limit. Simplify the pattern or use a literal search. |
 | `input-too-large` | The document exceeds a host ingestion ceiling. The message names the limit and the observed value. See [ingestion limits](ingestion-limits.md). |
 | `unsupported-table-change`, `unsupported-image-change`, `unsupported-note-change`, `unsupported-header-footer-change`, `unsupported-style-definition-change`, `unsupported-numbering-change` | A comparison found a difference in that area that it cannot represent as a plan. The findings it did detect are still returned; the plan is withheld. See [comparison coverage](document-workflows.md#reading-comparison-coverage). |
 | `unsupported-table-markup-change` | A table cell's words and its formatting both changed. The text change is not reproduced, because doing so would flatten the formatting. |
 | `encrypted-document` | The file is protected by a sensitivity label or a password. OfficeAgent does not decrypt, so remove the protection in Office or use a copy without it. Re-sending it will not help |
-| `malformed-package` | The document is not a package this engine will open: corrupt, truncated, carrying a duplicate or traversing part name, or declaring a document type definition. See [ingestion limits](ingestion-limits.md). |
+| `malformed-package` | The document is not a package this engine will open: corrupt, truncated, carrying a duplicate or traversing part name, declaring a document type definition, or damaged inside - a relationship with no target or an invalid one, a part reached under two spellings, an unreadable core properties part, an attribute that does not parse as its type, or an empty main or slide part. See [ingestion limits](ingestion-limits.md). |
+| `macro-enabled-document` | The template a new document would start from is macro-enabled (`.dotm`, `.potm`, `.xltm`, `.docm`, `.pptm`, `.xlsm`, or any package carrying a VBA project). OfficeAgent does not copy macros into the documents it creates: save the template in Office as a macro-free `.dotx`, `.potx` or `.xltx`, or as a document, and use that. |
+| `output-format-mismatch` | A template batch item's `outputName` does not end in the document extension of the template's format: `.docx` for a Word template, `.pptx` for a PowerPoint one. Nothing is written. |
 
 Provider boundary errors (`apply_plan` only) use a separate set of wire codes - see [document-providers.md](document-providers.md).

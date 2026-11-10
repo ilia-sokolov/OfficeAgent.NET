@@ -35,6 +35,8 @@ corpora and evaluations remain evidence for that release, not instructions for a
 | Edit a Word document from C# | [Getting started](getting-started.md) | [Concepts](concepts.md), [document plans](document-plans.md) |
 | Look up a public C# type or member | [Generated C# API reference](csharp-api.md) | [Getting started](getting-started.md), [document plans](document-plans.md) |
 | Create a Word document from scratch | [Create a document](getting-started.md#create-a-document-instead) | [Document plans](document-plans.md) |
+| Start a document from a company template | [Create from a template](document-workflows.md#populate-a-template-batch) | [List documents and templates](document-providers.md#list-documents-and-templates), [Office template locations](mcp-server.md#office-template-locations) |
+| Find a document or template the user describes | [List documents and templates](document-providers.md#list-documents-and-templates) | [Templates folders](document-providers.md#templates-folders), [listing the cloud connections](document-providers.md#listing-the-cloud-connections) |
 | Create or update a PowerPoint deck | [PowerPoint support](powerpoint.md#creating-a-deck) | [Generating a deck](powerpoint.md#generating-a-deck) |
 | Edit a deck for review, which has no tracked changes | [PowerPointReviewEdits sample](../samples/PowerPointReviewEdits/) | [PowerPoint support](powerpoint.md#addressing) |
 | Inspect or update an Excel workbook | [Excel support](excel.md) | [Document plans](document-plans.md) |
@@ -44,13 +46,23 @@ corpora and evaluations remain evidence for that release, not instructions for a
 | Update a report or deck from a new workbook | [Report refresh](report-refresh.md) | [Excel support](excel.md), [document plans](document-plans.md#filltable--setchartdata--binddata) |
 | Translate a document and keep its formatting | [Translate a document](translation-and-bulk-edits.md#translate-a-document) | [Document plans](document-plans.md#rewrite-a-paragraph-and-keep-its-formatting) |
 | Make one change across many documents | [Edit many documents at once](translation-and-bulk-edits.md#edit-many-documents-at-once) | [Agent integration](agent-integration.md#addressing-text-instead-of-paragraph-ids) |
+| Change a value in a commented table cell as a tracked change | [LiabilityCap sample](../samples/LiabilityCap/) | [Document plans](document-plans.md) |
+| Add a table row as a tracked change and keep the comments | [TableRowInsertion sample](../samples/TableRowInsertion/) | [Document plans](document-plans.md) |
 | Compare two Word documents and create a redline | [Document comparison](document-workflows.md#compare-two-word-documents) | [DocumentComparison sample](../samples/DocumentComparison/) |
 | Assemble a proposal and appendices | [Word document assembly](document-assembly.md) | [DocumentAssembly sample](../samples/DocumentAssembly/) |
 | Add document tools to an agent | [Agent integration](agent-integration.md) | [Document providers](document-providers.md) |
+| Add document tools to a Semantic Kernel agent | [SemanticKernelWordEdit sample](../samples/SemanticKernelWordEdit/) | [Agent integration](agent-integration.md) |
+| Use the MCP server from Python | [python-openai-agents sample](../samples/python-openai-agents/), [python-langgraph sample](../samples/python-langgraph/) | [MCP server](mcp-server.md) |
+| Give Microsoft 365 Copilot a contract redline reviewer | [M365ContractReviewer sample](../samples/M365ContractReviewer/) | [Deployment](deployment.md#option-b---hosted-http-for-every-client) |
+| Run the server with no .NET installed | [Install from PyPI](mcp-server.md#install-and-run) | [Standalone downloads](mcp-server.md#standalone-downloads) |
+| Try the server and skills as a Claude Code plugin | [Claude Code plugin](mcp-server.md#claude-code-plugin) | [Skill installation](skill-installation.md) |
 | Connect an MCP client locally | [MCP server](mcp-server.md#local-hosting-stdio) | [Deployment](deployment.md#option-a---local-stdio-for-claude-code-codex-and-google-adk) |
 | Host OfficeAgent for a team | [Deployment](deployment.md#option-b---hosted-http-for-every-client) | [Operations](operations.md), [troubleshooting](troubleshooting.md) |
+| Deploy the server to Azure | [Azure deployment](../deploy/azure/README.md) | [Deployment](deployment.md#authentication--identity) |
+| Add the server to Copilot Studio as a connector | [Copilot Studio connector](../deploy/copilot-studio/README.md) | [Deployment](deployment.md#b3-connect-each-client-to-the-hosted-url) |
 | Enforce per-user connection access | [Hosted gateway reference](../samples/HostedGateway/) | [Deployment](deployment.md#authentication--identity) |
-| Render pages for visual verification | [Visual rendering](rendering.md) | [Operations](operations.md) |
+| Render pages for visual verification | [Visual rendering](rendering.md) | [PageCounter sample](../samples/PageCounter/) |
+| Handle labelled or encrypted files | [Sensitivity labels and protected files](document-providers.md#sensitivity-labels-and-protected-files) | [Security policy](../SECURITY.md#protected-content) |
 | Read or write SharePoint files | [SharePoint provider](document-providers.md#the-sharepoint-provider) | [Authentication and identity](deployment.md#authentication--identity) |
 | Read or version iManage Work documents | [iManage Work provider](document-providers.md#the-imanage-work-provider) | [Storage outcomes and recovery](recovery.md) |
 | Read or write Office files in Google Drive or Box | [Google Drive provider](document-providers.md#the-google-drive-provider), [Box provider](document-providers.md#the-box-provider) | [Google Drive authentication](document-providers.md#google-drive-authentication), [Box authentication](document-providers.md#box-authentication) |
@@ -58,34 +70,37 @@ corpora and evaluations remain evidence for that release, not instructions for a
 | Look up an operation's JSON | [Document plans](document-plans.md) | [Validation errors](document-plans.md#validation-errors) |
 | Run a tracked Word review | [Sample review workflows](../samples/documents/README.md#reproducible-review-workflows) | [Optional review skill](skill-installation.md) |
 | Edit a document that already has tracked changes | [Pending revisions](pending-revisions.md) | [Document plans](document-plans.md#validation-errors) |
-| Bound what an untrusted document can spend | [Ingestion limits](ingestion-limits.md) | [Operations](operations.md) |
+| Bound what an untrusted document can spend | [Ingestion limits](ingestion-limits.md) | [Operations](operations.md), [fuzz target](../tests/OfficeAgent.Fuzz/README.md) |
 | Recover from a failed or uncertain save | [Storage outcomes and recovery](recovery.md) | [Operations](operations.md#what-a-failed-commit-tells-you-about-storage) |
 | Find out what the server supports before planning | [Capability discovery](capability-discovery.md) | [Document plans](document-plans.md) |
 | Measure a candidate, or check for a regression | [Benchmarks](benchmarks.md) | [Word preservation evidence](word-preservation-evidence.md) |
 | Move an existing integration from 0.9 to 1.0 | [Upgrading to 1.0](upgrading-to-1.0.md) | [Wire contract](wire-contract.md) |
+| Check what behaves differently in 1.3 | [Behaviour changes in 1.3](compatibility.md#behaviour-changes-in-13) | [Changelog](../CHANGELOG.md) |
 
 ## Packages
 
 | Package | Use it for | Target frameworks |
 | --- | --- | --- |
-| `OfficeAgent.Core` | Engine, direct .NET API, filesystem provider | `netstandard2.0`, `net8.0` |
-| `OfficeAgent.Word` | Word `.docx` inspection, creation, and editing | `netstandard2.0`, `net8.0` |
-| `OfficeAgent.PowerPoint` | PowerPoint `.pptx` inspection, creation, and editing | `netstandard2.0`, `net8.0` |
-| `OfficeAgent.Excel` | Excel `.xlsx` inspection, creation, and editing | `netstandard2.0`, `net8.0` |
-| `OfficeAgent.Excel.Calculation` | Optional formula calculation for a verified set of Excel functions | `netstandard2.0`, `net8.0` |
-| `OfficeAgent.AgentFramework` | `Microsoft.Extensions.AI` / Microsoft Agent Framework tools | `netstandard2.0`, `net8.0` |
-| `OfficeAgent.SharePoint` | Microsoft Graph document provider | `netstandard2.0`, `net8.0` |
-| `OfficeAgent.IManage` | iManage Work document provider | `netstandard2.0`, `net8.0` |
-| `OfficeAgent.GoogleDrive` | Google Drive document provider for Office files | `netstandard2.0`, `net8.0` |
-| `OfficeAgent.Box` | Box document provider | `netstandard2.0`, `net8.0` |
-| `OfficeAgent.AzureBlob` | Azure Blob Storage document provider | `netstandard2.0`, `net8.0` |
-| `OfficeAgent.AmazonS3` | Amazon S3 (and S3-compatible) document provider | `netstandard2.0`, `net8.0` |
-| `OfficeAgent.Mcp` | Standalone MCP server and .NET global tool | `net8.0` |
-| `OfficeAgent.Rendering` | Optional bounded LibreOffice and Poppler page-image rendering | `net8.0` |
+| `OfficeAgent.Core` | Engine, direct .NET API, filesystem provider | `netstandard2.0`, `net10.0` |
+| `OfficeAgent.Word` | Word `.docx` inspection, creation, and editing | `netstandard2.0`, `net10.0` |
+| `OfficeAgent.PowerPoint` | PowerPoint `.pptx` inspection, creation, and editing | `netstandard2.0`, `net10.0` |
+| `OfficeAgent.Excel` | Excel `.xlsx` inspection, creation, and editing | `netstandard2.0`, `net10.0` |
+| `OfficeAgent.Excel.Calculation` | Optional formula calculation for a verified set of Excel functions | `netstandard2.0`, `net10.0` |
+| `OfficeAgent.AgentFramework` | `Microsoft.Extensions.AI` / Microsoft Agent Framework tools | `netstandard2.0`, `net10.0` |
+| `OfficeAgent.SharePoint` | Microsoft Graph document provider | `netstandard2.0`, `net10.0` |
+| `OfficeAgent.IManage` | iManage Work document provider | `netstandard2.0`, `net10.0` |
+| `OfficeAgent.GoogleDrive` | Google Drive document provider for Office files | `netstandard2.0`, `net10.0` |
+| `OfficeAgent.Box` | Box document provider | `netstandard2.0`, `net10.0` |
+| `OfficeAgent.AzureBlob` | Azure Blob Storage document provider | `netstandard2.0`, `net10.0` |
+| `OfficeAgent.AmazonS3` | Amazon S3 (and S3-compatible) document provider | `netstandard2.0`, `net10.0` |
+| `OfficeAgent.Mcp` | Standalone MCP server and .NET global tool | `net10.0` |
+| `OfficeAgent.Rendering` | Optional bounded LibreOffice and Poppler page-image rendering | `net10.0` |
 
 Applications add `OfficeAgent.Core` plus at least one format module. Add a
 provider or agent adapter only when that hosting model needs it. The standalone
-MCP tool already includes all three format modules, formula calculation, and both built-in providers.
+MCP tool already includes all three format modules, formula calculation, and every built-in
+provider: filesystem, session, SharePoint, iManage Work, Google Drive, Box, Azure Blob Storage
+and Amazon S3.
 
 ## Core workflow
 
@@ -129,7 +144,9 @@ and optimistic-concurrency conflicts instead of guessing.
 - [Ingestion limits](ingestion-limits.md) - host ceilings for package size, expansion, parts, and XML, plus what is refused and how.
 - [Capability discovery](capability-discovery.md) - the contract version, per-format verbs and change modes, effective ceilings, and authorized connections.
 - [Visual rendering](rendering.md) — optional out-of-process PDF and page-image conversion.
-- [Template population and comparison](document-workflows.md) — batch binding, repeating Word rows, comparison coverage, and redline generation.
+- [Template population and comparison](document-workflows.md) — creating from a template, batch binding, repeating Word rows, comparison coverage, and redline generation.
+- [Report refresh](report-refresh.md) — link a report or deck to workbook ranges and refresh it in one call.
+- [Translation and bulk edits](translation-and-bulk-edits.md) — translate with formatting kept, and apply one plan to many documents.
 - [Troubleshooting](troubleshooting.md) — diagnose setup, identity, and edit failures.
 - [Support and compatibility](../SUPPORT.md) — supported runtimes, version policy, release assurances, and help routes.
 - [Compatibility policy](compatibility.md) — what 1.x promises for the API, JSON, configuration and defaults, and what it excludes.
@@ -144,7 +161,8 @@ and optimistic-concurrency conflicts instead of guessing.
 ### Maintainer and historical evidence
 
 - [Maintenance and continuity](maintenance.md) - ownership, release accounts, runtime lifecycle, and repository continuity.
-- [Releasing](releasing.md) — the maintainer steps for NuGet, the MCP Registry, GitHub releases, and repository metadata.
+- [Releasing](releasing.md) — the maintainer steps for NuGet, PyPI, the MCP Registry, GitHub releases, and repository metadata.
+- [Fuzz target](../tests/OfficeAgent.Fuzz/README.md) - feed arbitrary bytes to inspection locally with SharpFuzz and libFuzzer.
 - [Adoption validation](adoption-validation.md) — fresh-user trials required before broad promotion; blank rows are not evidence.
 - [v0.9.0 agent selection evaluation](../evaluations/agent-selection/v0.9.0/README.md) - historical controlled protocol with explicit live-evidence limits.
 - [v0.9.0 benchmarks](../evaluations/benchmarks/v0.9.0/README.md) - historical measurements, not 1.0 adoption proof.

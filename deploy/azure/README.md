@@ -68,6 +68,56 @@ The deployment's `serverUrl` output is the MCP endpoint. A call without a token 
 | `tenantId` | the subscription's tenant | Tenant of the signed-in users |
 | `name`, `location` | `officeagent`, the resource group's | Naming and region |
 
+## Create documents and use templates
+
+The template configures one SharePoint connection that edits existing `.docx`, `.pptx` and
+`.xlsx` files. It does not turn on document creation or name a templates folder, so
+`create_document` is not offered and `find_templates` finds nothing.
+
+To create documents, set these on the container:
+
+| Variable | Value |
+| --- | --- |
+| `OfficeAgent__AllowCreation` | `true` |
+| `OfficeAgent__SharePointConnections__0__CreationDriveId` | Graph drive id of the library new documents go to |
+| `OfficeAgent__SharePointConnections__0__CreationFolderItemId` | Graph item id of the folder in that drive. Set both ids, or creation stays off |
+
+For the organization's templates, add a second connection that is read-only, so nothing an
+agent does can change a template, and that may hold real `.dotx`, `.potx` and `.xltx` files:
+
+| Variable | Value |
+| --- | --- |
+| `OfficeAgent__SharePointConnections__1__ConnectionId` | `templates` |
+| `OfficeAgent__SharePointConnections__1__ReadOnly` | `true` |
+| `OfficeAgent__SharePointConnections__1__TemplatesFolder` | The templates folder, as a SharePoint folder URL or a `driveId/itemId` pair |
+| `OfficeAgent__SharePointConnections__1__TemplateLocation` | `Organization` |
+| `OfficeAgent__SharePointConnections__1__AllowedExtensions__0` to `__5` | `.dotx`, `.potx`, `.xltx`, `.docx`, `.pptx`, `.xlsx` |
+| `OfficeAgent__SharePointConnections__1__AuthMode`, `TenantId`, `ClientId`, `ClientSecret` | The same values as connection `0`; `ClientSecret` as `secretref:api-client-secret` |
+| `OfficeAgent__SharePointConnections__1__RegistrationIndexPath` | `/data/template-registrations.json` |
+
+Add them to the `env` list in `main.bicep` and deploy again, or set them on the running app:
+
+```bash
+az containerapp update --name officeagent --resource-group officeagent \
+  --set-env-vars OfficeAgent__AllowCreation=true \
+  OfficeAgent__SharePointConnections__1__ConnectionId=templates \
+  OfficeAgent__SharePointConnections__1__ReadOnly=true \
+  OfficeAgent__SharePointConnections__1__TemplatesFolder=<folder-url> \
+  OfficeAgent__SharePointConnections__1__TemplateLocation=Organization \
+  OfficeAgent__SharePointConnections__1__ClientSecret=secretref:api-client-secret
+```
+
+That command shows the template keys only; set the rest of the table the same way. A later
+deployment of the template replaces variables set that way, so prefer `main.bicep`. `--name` is
+the `name` parameter.
+
+An agent then finds a template with `find_templates` and creates from it with
+`create_document`, `connectionId` `sharepoint` (or your `connectionId`) and
+`templateConnectionId` `templates`. Keep `.dotx`, `.potx` and `.xltx` off connection `0`: on a
+connection agents can write to, a template extension also lets an agent save a file under a
+template name. `ReadOnly` is enforced by OfficeAgent; give users read-only SharePoint permissions
+on the templates folder as well.
+
 ## Connect a client
 
 For Copilot Studio, use the [connector and its README](../copilot-studio/README.md).

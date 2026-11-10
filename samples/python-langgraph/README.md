@@ -30,7 +30,7 @@ The input in `work/` is left as it was. The result is `work/services-agreement.v
 
 - Python 3.10 or later (tested with 3.12)
 - The OfficeAgent MCP server, 1.2.0 or later, from one of:
-  - the .NET tool: `dotnet tool install --global OfficeAgent.Mcp` (needs the .NET 8 or later
+  - the .NET tool: `dotnet tool install --global OfficeAgent.Mcp` (needs the .NET 10 or later
     SDK; run `dotnet tool update --global OfficeAgent.Mcp` if an older version is installed);
   - PyPI, with no .NET: `uvx officeagent-mcp --stdio` (see [below](#use-another-server-command));
   - this repository, built with the .NET 10 SDK (see [below](#use-another-server-command)).

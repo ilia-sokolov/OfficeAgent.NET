@@ -36,8 +36,9 @@ is always fine.
 
 ## Hacktoberfest
 
-The repository takes part in [Hacktoberfest](https://hacktoberfest.com). A pull request counts
-once it is merged or approved in review. The rules above still apply, and matter more in October:
+The repository takes part in [Hacktoberfest](https://hacktoberfest.com) each October. A pull
+request counts once it is merged or approved in review. The rules above still apply, and matter
+more during the event:
 
 - Start from an issue and claim it before you write code, so two people don't do the same work.
   Unclaimed fixes for something no issue describes may be closed.
@@ -49,17 +50,20 @@ once it is merged or approved in review. The rules above still apply, and matter
 ## Local development
 
 ```bash
-# Prerequisites: a stable .NET 10 SDK, and the .NET 8 runtime for the net8.0 test
-# projects. global.json selects the latest installed 10.0 feature band at or above
-# 10.0.100.
+# Prerequisites: a stable .NET 10 SDK. global.json selects the latest installed 10.0
+# feature band at or above 10.0.100.
 dotnet restore OfficeAgent.NET.sln
 dotnet build OfficeAgent.NET.sln --no-restore
 dotnet test OfficeAgent.NET.sln --no-build
 ```
 
-The library multi-targets `netstandard2.0;net8.0`. Tests run on `net8.0`; build all TFM legs locally before opening a PR. CI also runs the tests on the .NET 10 runtime; to do the same locally, install the .NET 10 runtime and run `dotnet test` with `DOTNET_ROLL_FORWARD=LatestMajor`.
+The library multi-targets `netstandard2.0;net10.0`. Tests run on `net10.0`; build all TFM legs locally before opening a PR.
 
 The [maintenance guide](docs/maintenance.md) describes the checks, the release process and the systems a maintainer needs.
+
+The [fuzz target](tests/OfficeAgent.Fuzz/README.md) feeds arbitrary bytes to inspection and runs
+locally; its README has the steps. After editing a skill under `skills/`, run
+`python scripts/sync_claude_plugin.py` to refresh the plugin's copies in `plugins/officeagent`.
 
 ### Lock files
 
@@ -78,8 +82,10 @@ dotnet restore OfficeAgent.NET.sln --force-evaluate
   XML documentation for public members, and updates to the operation matrix and
   affected format guide.
 - New document providers (`IDocumentProvider`) in a focused assembly under
-  `src/`, with the filesystem and SharePoint providers as the security and
-  concurrency baseline.
+  `src/`, with the existing providers as the security and concurrency baseline.
+  Implement `IDocumentCreatingProvider`, `IDocumentListingProvider` and
+  `IConnectionTemplateSource` too where the store supports creation, listing and a
+  templates folder.
 - Documentation improvements, samples, and operational guidance.
 
 ## What we don't want without discussion

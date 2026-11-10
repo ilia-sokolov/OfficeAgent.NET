@@ -50,8 +50,16 @@ corresponding GitHub release.
   [list documents and templates](docs/document-providers.md#list-documents-and-templates).
 - **Templates folders and read-only connections.** Filesystem and SharePoint connections take a
   `TemplatesFolder` and a `TemplateLocation` (`Connection`, `Personal`, `Workgroup` or
-  `Organization`), and a filesystem connection can be `ReadOnly`: it refuses every write and
-  keeps its registrations in memory, so a shared templates folder is never written to.
+  `Organization`). Every connection except the session one can be `ReadOnly`: it refuses every
+  save and creation with `access-denied` before anything reaches the storage, whatever its
+  identity could write, so a shared templates library is never changed through it. Templates go
+  on a read-only connection beside a writable one, and `create_document` with
+  `templateConnectionId` reads from the first and files on the second. A read-only filesystem
+  connection also refuses removing a registration and keeps its registrations in memory; the
+  SharePoint, iManage, Google Drive, Box, Azure Blob and Amazon S3 connections keep theirs in the
+  host's store as usual. A read-only connection that also names a creation folder is refused at
+  construction, and stops the MCP server at startup. See
+  [read-only connections](docs/document-providers.md#read-only-connections).
 - **Office's own template folders.** With `OfficeTemplates:Enabled`, the MCP server adds the
   personal and workgroup template folders Word, PowerPoint and Excel use, read from the Office
   registry values on Windows or the Office group container on macOS, as read-only connections.
@@ -66,7 +74,8 @@ corresponding GitHub release.
   translation puts it, and untagged text takes the paragraph's usual formatting. `expect` must
   be the whole paragraph. Under `Tracked` the rewrite is one deletion and one insertion. A Word
   paragraph whose text crosses a hyperlink, content control or pending revision is refused, as
-  `changeText` already refused spans that cross one. See
+  `changeText` already refused spans that cross one, and so is a paragraph holding a tab, line
+  break, field, note reference or picture, which a rewrite would drop or move. See
   [translation and bulk edits](docs/translation-and-bulk-edits.md#translate-a-document).
 - **One plan across many documents.** `edit_documents` applies a plan to up to 100 documents
   named by source. Each is edited and saved on its own, so one failure leaves the others saved,
@@ -106,28 +115,30 @@ corresponding GitHub release.
 - **Every MCP tool says what it does to your files.** Each tool now carries MCP annotations: a
   title clients display, and explicit read-only, destructive, idempotent and open-world hints.
   Clients use them to tell tools that only read from tools that write, and some approve
-  read-only tools without asking. `apply_plan` and `edit_document` are the only destructive
-  tools, because they save over a document in place; the tools that create documents refuse to
-  overwrite one, and `remove_document` never deletes a file. No tool is open-world. The
-  annotations are recorded in the [wire contract](docs/wire-contract.md#tools).
+  read-only tools without asking. `apply_plan`, `edit_document`, `edit_documents` and
+  `refresh_document` are the only destructive tools, because they save over a document in place;
+  the tools that create documents refuse to overwrite one, and `remove_document` never deletes a
+  file. No tool is open-world. The annotations are recorded in the
+  [wire contract](docs/wire-contract.md#tools).
 - **A privacy policy.** [PRIVACY.md](PRIVACY.md) states what OfficeAgent does with documents
-  and data: it collects nothing, contacts no third party except Microsoft Graph for a
-  SharePoint connection a host configures, and stores only the id index in a connection's
-  folder. The README has a summary, and the Claude Desktop bundles link the policy from their
-  manifests.
+  and data: it collects nothing, contacts no third party except the storage service of a
+  connection a host configures (Microsoft Graph for SharePoint, iManage Work, Google Drive, Box,
+  Azure Blob Storage or Amazon S3), and stores only the id index in a connection's folder. The
+  README has a summary, and the Claude Desktop bundles link the policy from their manifests.
 - **Install from PyPI with no .NET.** `uvx officeagent-mcp --stdio` runs the MCP server, and
   `pip install officeagent-mcp` installs it as a command. Each platform wheel carries the
   release's self-contained executable, taken from the attested release archive rather than
   rebuilt, for Windows, macOS 15 or later and glibc Linux on x64 and Arm64. On Windows the
   launcher ends the server when it ends, even if a client kills it without closing the
-  connection. Installed this way, the executable carries no download mark, so SmartScreen and Gatekeeper
-  do not prompt; Windows 11's Smart App Control can still block it where it is turned on.
-  See [the MCP server guide](docs/mcp-server.md#install-and-run).
-- **A Claude plugin.** `plugins/officeagent` packages the MCP server, started with
-  `uvx officeagent-mcp`, together with the `word-document-review` and `officeagent-integration`
-  skills. The server reaches only the project folder; creating documents and calculating
-  formulas stay off until the user turns them on. It passes `claude plugin validate`, and a test
-  holds it to the directory's published submission rules. See
+  connection. Installed this way, the executable carries no download mark, so SmartScreen and
+  Gatekeeper do not prompt; Windows 11's Smart App Control can still block it where it is turned
+  on. See [the MCP server guide](docs/mcp-server.md#install-and-run).
+- **A Claude plugin.** `plugins/officeagent` packages the MCP server together with the
+  `word-document-review` and `officeagent-integration` skills. The server starts with
+  `uv run --locked` from a lock file that takes the release's `officeagent-mcp` wheels from PyPI
+  by hash. It reaches only the project folder; creating documents and calculating formulas stay
+  off until the user turns them on. It passes `claude plugin validate` and is installed from
+  this repository; it is not listed in Claude's plugin directory. See
   [the MCP server guide](docs/mcp-server.md#claude-code-plugin).
 - **Slides on a template's own layouts.** `insertSlide` now takes the name of any layout the deck
   defines, as PowerPoint shows it, such as `"layout": "Two Column With Logo"`, besides the five
@@ -187,8 +198,9 @@ corresponding GitHub release.
 - **Large files save to SharePoint.** A save of 4 MiB or more now goes through a Graph upload
   session in chunks, so SharePoint no longer stops at the 250 MB limit of a single request;
   `MaximumBytes` is the limit. A failed chunk is retried from where Graph says to resume. A save
-  that fails before its last chunk stored nothing and is `write-rejected`; a failure on the last
-  chunk is `outcome-unknown`. `Replace` still sends `If-Match`, and new names still use
+  that fails before its last chunk stored nothing and is `write-rejected`; a lost reply or server
+  error on the last chunk is `outcome-unknown`, and a conflict Graph states there is reported as
+  that conflict. `Replace` still sends `If-Match`, and new names still use
   `conflictBehavior=fail`. `UploadSessionThresholdBytes` and `UploadSessionChunkBytes` set the
   threshold and the chunk size. See [document providers](docs/document-providers.md#the-sharepoint-provider).
 - **An iManage Work provider.** The new `OfficeAgent.IManage` package reads and saves Word,
@@ -257,6 +269,16 @@ corresponding GitHub release.
 
 ### Changed
 
+- **.NET 10 replaces .NET 8.** Microsoft support for .NET 8 ended on 2026-11-10, so every package
+  that targeted `net8.0` now targets `net10.0`, and the libraries keep `netstandard2.0`. A .NET 10
+  application sees no difference, and both library targets expose the same public API. A .NET 8
+  application still builds against the `netstandard2.0` assets, untested, but
+  `OfficeAgent.Rendering` and the `OfficeAgent.Mcp` tool now need .NET 10. The SharePoint, iManage,
+  Google Drive and Box packages no longer reference `System.Net.Http` 4.3.4, because
+  `netstandard2.0` provides `HttpClient`. Contributors need only the .NET 10 SDK. The container
+  image, the standalone downloads and the PyPI wheels ship .NET 10.0.15, the November 2026
+  security release. See
+  [platforms](docs/compatibility.md#platforms).
 - **Agents start from the organization's template.** The creation guidance tells an agent to call
   `find_templates` before creating a document and to create from the best match, preferring
   organization, then workgroup, then personal templates. For a deck it reuses the template's own

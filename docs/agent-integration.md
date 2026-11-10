@@ -9,8 +9,9 @@ and a complete direct .NET edit before adding an agent adapter.
 Microsoft.Extensions.AI `AIFunction` tools through `OfficeAgentTools`. The tools
 address documents by `(connectionId, documentId)` and route every call through
 `OfficeAgentClient`, so the default tool surface gives the model opaque ids and
-never credentials. Opt-in registration and composite tools also accept a path
-or SharePoint source from the model. In either case, the provider enforces the
+never credentials. Opt-in registration and composite tools also accept a source
+from the model: a path, a SharePoint URL, an iManage, Google Drive or Box id or
+link, or a blob name or object key. In either case, the provider enforces the
 configured connection boundary. By default the host
 pre-registers documents (`OfficeAgentClient.RegisterAsync`) and threads the
 resulting opaque id into the agent's system prompt; hosts that want the agent to
@@ -160,7 +161,7 @@ offers separate least-privilege switches for existing documents and new ones:
 
 | Tool | Opt-in | Purpose |
 | --- | --- | --- |
-| `register_document(connectionId, source)` | `AllowRegistration` | Registers an existing document with a configured connection and returns its opaque `documentId`. `source` is connection-specific: a path under the filesystem connection's root, or - for a SharePoint connection - the document's SharePoint/OneDrive URL or a `driveId/itemId` pair. Filesystem traversal, disallowed extensions, and oversized files are rejected by the provider. |
+| `register_document(connectionId, source)` | `AllowRegistration` | Registers an existing document with a configured connection and returns its opaque `documentId`. `source` is connection-specific: a path under the filesystem connection's root; for SharePoint, the document's SharePoint/OneDrive URL or a `driveId/itemId` pair; for iManage, a document id such as `ACTIVE!12345.1` or an iManage Work link; for Google Drive and Box, a file id or URL; for Azure Blob and Amazon S3, a blob name or key relative to the connection's prefix. Filesystem traversal, disallowed extensions, and oversized files are rejected by the provider. |
 | `remove_document(connectionId, documentId)` | `AllowRegistration` | Removes the registration only - the underlying file is never deleted. |
 | `list_documents(connectionId, folder, nameContains, extensions, recursive, templates, maximumResults, continuation)` | `AllowRegistration` | Lists a connection's documents without registering them; each item's `source` is what `register_document` and `open_document` accept. `extensions` is a comma list; `templates: true` lists the templates folder. See [list documents and templates](document-providers.md#list-documents-and-templates). |
 | `find_templates(format, nameContains, maximumResults)` | `AllowRegistration` | Searches every connection with a template location and ranks the templates found; a connection that fails is reported in `connectionsFailed`. |
@@ -240,8 +241,16 @@ var prompt = OfficeAgentTools.SystemPromptGuidance
            + OfficeAgentTools.CreationPromptGuidance;   // only when AllowCreation = true
 ```
 
-Creation writes under a filesystem connection's root or, for SharePoint, into
-the connection's explicitly configured drive and folder. Initial-plan errors
+`CreationPromptGuidance` tells the agent to call `find_templates` before it
+creates a document and to start from the best match. `find_templates` arrives
+with `AllowRegistration`, so a host that enables creation alone gets blank
+documents only; enable both for templates-first creation.
+
+Creation writes under a filesystem connection's root; for SharePoint, into the
+connection's configured drive and folder; for iManage, Google Drive and Box,
+into the configured `CreationFolderId`; and for Azure Blob and Amazon S3, under
+the connection's prefix. A connection without a creation target, or a read-only
+filesystem connection, cannot create documents. Initial-plan errors
 happen before storage is touched. A later provider error can mean storage accepted
 the file but registration did not finish, so the agent should not blindly retry
 the same name.
@@ -320,6 +329,15 @@ work is two calls or one:
   preview before writing, a regex search, or an id you already hold.
 - `edit_documents` → the same for a list of documents, when one change belongs
   in many files.
+- `list_documents` → when the user describes a document instead of naming its
+  file ("last quarter's board deck"); pass the `source` it returns to
+  `open_document` or `edit_document`.
+- `refresh_document` → updates a report or deck from a workbook through the
+  `xl:` bindings it carries; preview first, then run it again without preview.
+
+When creation is enabled, call `find_templates` before `create_document` and pass
+the best match as `templateConnectionId` and `templateSource`, preferring
+organization, then workgroup, then personal templates.
 
 ## Errors the LLM can act on
 
@@ -334,6 +352,11 @@ work is two calls or one:
 | `already-exists` | A `create_document` name is taken. Nothing was overwritten; retry with a different name. |
 | `ambiguous-anchor` | An `edit_document` `find` target matched several times. The message lists each candidate; re-issue with `"match": <index>` or more surrounding text. Nothing was written. |
 | `anchor-not-found` | A `find` target matched nothing, its `match` index was out of range, or every `"match": "all"` target in the plan matched nothing. Check the wording with `inspect_document` rather than retrying the same text. |
+| `encrypted-document` | The file is protected by a sensitivity label or a password. OfficeAgent does not decrypt; ask the user for an unprotected copy. |
+| `macro-enabled-document` | The document or template is macro-enabled. Ask for a macro-free `.dotx`, `.potx`, `.xltx` or document instead. |
+| `output-format-mismatch` | A template batch named an output in another format than the template's documents. Use the template format's document extension, such as `.docx` for a `.dotx`. |
+| `malformed-package` | The file is not a readable Office package. Retrying the same file fails the same way. |
+| `no-bindings`, `range-not-found`, `not-chart-data`, … | A `refresh_document` binding could not be read, and nothing was written. See [report refresh](report-refresh.md#limits). |
 | `contract-mismatch` | The edit plan must omit `contractVersion` for legacy `0.2` behavior or set it to `"0.2"`. Null, empty, malformed, and unknown versions are refused before saving. |
 | `invalid-argument`, `invalid-json` | The plan or arguments were malformed. Unknown properties, operations, enum names, integer enum values, and non-string versions are refused. The error message says what to fix; when storage refused an argument, it names the call's arguments that reached storage, and a `newName` sent with `Replace` is refused by name. |
 | `configuration-error` | The `connectionId` is not registered on this host, or - for `create_document` - that connection cannot create documents. Try another connection rather than retrying. |
@@ -347,16 +370,17 @@ Every error also carries `connectionId` and `itemId` (when known) so the agent c
 
 ## Prompt guidance
 
-`OfficeAgentTools.SystemPromptGuidance` is a `const string` you concatenate into your agent's instructions. It teaches the model the host-registered `(connectionId, documentId)` contract, the safety loop (re-inspect on stale snapshot, re-find on expect mismatch), uncertain-write recovery, the `Tracked` default for Word and why a deck refuses it, how a deck is addressed, that saving replaces the document in place, and the rule that anchors and node paths come from the engine - never invented. Append `OfficeAgentTools.RegistrationPromptGuidance` when the registration tools are enabled, and `OfficeAgentTools.CreationPromptGuidance` when `create_document` is among them - each block should be present only when its tools are.
+`OfficeAgentTools.SystemPromptGuidance` is a `const string` you concatenate into your agent's instructions. It teaches the model the host-registered `(connectionId, documentId)` contract, the safety loop (re-inspect on stale snapshot, re-find on expect mismatch), uncertain-write recovery, the `Tracked` default for Word and why a deck refuses it, translating a paragraph with `withMarked`, marking only the changed words with `"granularity": "Minimal"`, how a deck is addressed, that saving replaces the document in place, and the rule that anchors and node paths come from the engine - never invented. Append `OfficeAgentTools.RegistrationPromptGuidance` when the registration tools are enabled, and `OfficeAgentTools.CreationPromptGuidance` when `create_document` is among them - each block should be present only when its tools are.
 
 ## Use OfficeAgent over MCP
 
-The same core tool surface is available to any MCP-capable agent (Claude code, Codex Copilot Studio agents etc.) through the
+The same core tool surface is available to any MCP-capable agent (Claude Code, Codex, Copilot Studio agents and others) through the
 [`OfficeAgent.Mcp` server](mcp-server.md) - stdio for local hosting, streamable
 HTTP for the cloud. When registration or creation is enabled, the MCP server also
 adds `list_connections`, which returns
-`{connectionId, provider, canCreateDocuments}` entries. The boolean means that
-at least one creatable format is configured; it does not enumerate formats or
-prove that the provider is reachable and authorized. The MCP server advertises this
+`{connectionId, provider, canCreateDocuments, allowedExtensions, defaultChangeMode, defaultChangeGranularity, calculatesFormulas, listable, templatesFolder, templateLocation, readOnly}`
+entries. `canCreateDocuments` means that at least one creatable format is
+configured; it does not prove that the provider is reachable and authorized. See
+[the MCP server's tools](mcp-server.md#tools) for each field. The MCP server advertises this
 prompt guidance as its server instructions, so MCP clients pick up the contract
 automatically.

@@ -77,6 +77,9 @@ folder on a path without spaces, because libfuzzer-dotnet starts `dotnet <target
    ./tests/OfficeAgent.Fuzz/build-seeds.ps1
    ```
 
+   This step is optional: `fuzz.ps1` runs `build-seeds.ps1` itself when the seeds folder does not
+   exist. Run it again after the fixtures change, because `fuzz.ps1` reuses an existing folder.
+
 4. Publish, instrument and fuzz for an hour, continuing past findings:
 
    ```powershell
@@ -160,7 +163,9 @@ and nothing extra is committed. Each fixture is written as it is (`orig-`) and a
 ZIP entry stored uncompressed (`stored-`). A byte flip inside a deflated entry nearly always
 breaks the deflate stream, so mutations of the original files mostly exercise the archive reader;
 in a stored copy they land in the XML and reach the SDK and the format modules. Duplicates are
-dropped, and the encrypted fixtures, which are not archives, are kept only as they are.
+dropped, and the encrypted fixtures, which are not archives, are kept only as they are. A seed
+over 1 MiB is skipped, matching the `-max_len` that `fuzz.ps1` passes; the script reports how
+many it skipped.
 
 ## What is instrumented, and why
 

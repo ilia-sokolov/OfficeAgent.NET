@@ -49,6 +49,15 @@ names; see [upgrading to 1.0](upgrading-to-1.0.md).
 | `connections` | Only the connections the caller may use, each with only the capabilities they hold. `calculatesFormulas` says whether workbooks edited through it are calculated |
 | `requiresInspection` | What discovery deliberately cannot answer |
 
+### Per-connection settings
+
+`describe_capabilities` names each connection's provider and access, not its settings. On the
+MCP server, `list_connections` reports the rest for every connection the caller may use:
+`allowedExtensions`, `defaultChangeMode`, `defaultChangeGranularity`, `calculatesFormulas`,
+`canCreateDocuments`, `listable`, `templatesFolder`, `templateLocation` and `readOnly`. A
+`listable` connection answers `list_documents`, and one with a template location is searched by
+`find_templates`. See [list documents and templates](document-providers.md#list-documents-and-templates).
+
 ## Access is not bypassed
 
 Through the agent and MCP surface, the connection list is filtered by the host's
@@ -73,6 +82,9 @@ the layer that holds the policy.
   [spans a pending tracked revision](pending-revisions.md).
 - **Template bindings.** Which tags and repeating rows a template exposes is a property of
   that template.
+
+Which documents and templates a connection holds is not discovery either: `list_documents`
+and `find_templates` answer it on the MCP server, and `IDocumentListingProvider` in .NET.
 
 ## Extending it
 

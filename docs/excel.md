@@ -18,7 +18,8 @@ Set `InspectOptions.SheetId` and `Range` to inspect one rectangle. `MaximumCells
 defaults to 1,000 and is capped at 10,000. Inspection enumerates stored cell elements within
 the range; truly absent cells are omitted. `find` can search `Displayed`, `Raw`, or `Both`.
 Displayed text resolves inline and shared strings and uses a formula's stored cached result;
-it does not apply Excel number formats. Raw search uses the stored cell value, such as the
+it does not apply Excel number formats, so it finds `4200000` but not `$4,200,000`. Read a
+cell's `formattedValue`, below, for the text Excel shows. Raw search uses the stored cell value, such as the
 shared-string index rather than the resolved text. Unless [formula calculation](#formula-calculation)
 is turned on, OfficeAgent does not calculate a new result.
 
@@ -29,6 +30,17 @@ built-in date formats in their en-US form. A formula with no stored result has n
 Inspection also lists the workbook's `definedNames` that refer to one range, each with its
 sheet id and range; built-in, hidden and sheet-scoped names are left out. Both feed
 [report refresh](report-refresh.md).
+
+## Creating a workbook
+
+`create_document` with a `.xlsx` name creates a blank workbook. With `templateSource`, and
+`templateConnectionId` when the template is on another connection, it starts the workbook as
+a copy of a template instead, applies the plan to the copy, and only reads the template;
+`OfficeAgentClient.CreateFromTemplateAsync` does the same from C#. An `.xltx` becomes a normal
+`.xlsx` that Excel opens as a workbook, so the name must end in `.xlsx`. A macro-enabled
+template, `.xltm` or any workbook carrying a VBA project, is refused with
+`macro-enabled-document`. `find_templates` with `format` `excel` finds the organization's
+templates first.
 
 ## Operations
 

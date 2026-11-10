@@ -7,16 +7,20 @@ instead of editing package XML.
 
 ## Document providers
 
-Documents live behind `IDocumentProvider` connections. Filesystem and SharePoint
-providers ship with the project; another store can implement the same
-`RegisterAsync`, `OpenReadAsync`, `SaveAsync`, and `RemoveAsync` contract.
+Documents live behind `IDocumentProvider` connections. Filesystem, SharePoint, iManage Work,
+Google Drive, Box, Azure Blob Storage and Amazon S3 providers ship with the project; another
+store can implement the same `RegisterAsync`, `OpenReadAsync`, `SaveAsync`, and `RemoveAsync`
+contract. A provider that also implements `IDocumentListingProvider` can list what a connection
+holds, including its templates folder, without registering anything.
 
-A filesystem or SharePoint provider stores references rather than copying document bytes.
+A storage provider stores references rather than copying document bytes.
 The session provider is the deliberate exception: it holds imported or created documents in
 process memory until the server stops. Registering an existing persistent document mints an opaque `documentId`; later calls address it by
 `(connectionId, documentId)`. The default in-process tools expose only those ids
 and never credentials. Opt-in registration and composite tools also accept a
-path, SharePoint URL, or `driveId/itemId` from the model. The MCP server enables
+source from the model: a path, a SharePoint URL or `driveId/itemId`, an iManage Work id or link,
+a Google Drive or Box file id or URL, a blob name or S3 key under the connection's prefix, or
+an entry that `list_documents` returned. The MCP server enables
 registration by default because an MCP client has no other staging channel.
 Those source values can enter model context, but the provider still enforces its
 configured root or identity boundary.
@@ -31,7 +35,13 @@ addressable nodes.
   tables, images, document properties, comments, footnotes and endnotes, and
   revisions.
 - PowerPoint inspection uses slide/shape-scoped paragraph ids and nodes for
-  slides, shapes, tables, images, comments, media, and sections.
+  slides, shapes, tables, images, comments, media, and sections, and lists the
+  deck's `layouts` with their placeholders.
+- Excel inspection includes worksheets, tables, bounded ranges, each cell's
+  `formattedValue` as Excel displays it, and the workbook's `definedNames`.
+- A Word or PowerPoint paragraph whose words differ in formatting carries a
+  `markedText` for translation, and a document's sensitivity label is listed as a
+  `sensitivityLabel` node.
 
 See [Document plans](document-plans.md) and
 [PowerPoint support](powerpoint.md) for exact target paths.
@@ -92,8 +102,10 @@ on verb counts.
 
 `DocumentPlan.Format` defaults to `Unspecified`. Set it only to assert a format;
 a mismatch produces `contract-mismatch`. An operation without `mode` uses the
-connection's default change mode—`Tracked` unless configured otherwise. A deck
-rejects tracked changes because PresentationML has no redline model.
+connection's default change mode—`Tracked` unless configured otherwise. A tracked
+`changeText` without `granularity` uses the connection's default granularity: `Span`, which
+marks the whole matched text, unless configured to `Minimal`, which marks only the words that
+change. A deck rejects tracked changes because PresentationML has no redline model.
 
 ## Preview and commit
 

@@ -44,6 +44,8 @@ first records a paragraph boundary appearing or disappearing, the second records
 | Edit spanning two different revision containers | **Refused** with `revision-overlap` |
 | Formatting change over text with a pending `w:rPrChange` | Allowed, but see the formatting-history limit below |
 | Structural verbs (rows, columns, tables) over pending row revisions | Allowed. Marked with their own `rowIns`/`rowDel`/`cellIns`/`cellDel` markers |
+| `changeText` with `withMarked` on a paragraph whose text crosses a pending tracked change | **Refused** with `invalid-operation`. The paragraph has no `markedText`; rewrite each part with `with`, or resolve the pending revisions first |
+| Tracked `replaceImage` | Allowed. The old picture is recorded as deleted and the new one as inserted beside it, so accepting keeps the new image and rejecting restores the old one |
 | Accept or reject addressed by id, `author:<name>`, or `all` | Allowed. Resolves exactly what is addressed and nothing else |
 
 The refusal is mode-independent. A `direct` edit across a pending deletion is refused
@@ -125,5 +127,7 @@ operation.
 - No automatic cleanup or rewriting of earlier review history.
 - Document comparison still refuses a document that already carries revisions; that
   restriction is unchanged here.
-- The displayed revision author is document metadata, not an authenticated actor. See
-  [concepts](concepts.md) for the audit identity that is.
+- The displayed revision author is document metadata, not an authenticated actor, unless
+  the host turns on `RevisionAuthorFromActor`, which writes the authenticated user's name
+  instead. See [concepts](concepts.md) for the audit identity and
+  [revision identity](document-plans.md#revision-identity) for the option.

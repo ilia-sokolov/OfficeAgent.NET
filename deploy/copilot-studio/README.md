@@ -39,7 +39,14 @@ For the API-key file, change `X-Api-Key` if your gateway reads another header.
    registration, and allow it to request the `access_as_user` scope.
 5. Back on **Add a tool**, select the connector and create a connection.
 6. Select **Add to agent**, then turn off any tools the agent should not have. Agents need
-   **generative orchestration**.
+   **generative orchestration**. `apply_plan`, `edit_document`, `edit_documents` and
+   `refresh_document` save over a document in place, and their MCP annotations mark them
+   destructive.
+
+Both files define one MCP endpoint rather than one operation per tool. Copilot Studio reads the
+tool list from the server, so tools a newer server adds, such as `list_documents`,
+`find_templates`, `refresh_document` and `edit_documents`, appear without changing the
+connector.
 
 Access to the server goes through a Power Platform connector, so your data policies apply to it.
 

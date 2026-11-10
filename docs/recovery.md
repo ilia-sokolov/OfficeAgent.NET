@@ -32,6 +32,9 @@ should say so with `WriteRejected`.
 | Boundary | Reported as | Safe next action |
 | --- | --- | --- |
 | Validation fails | `notWritten`, plan `errors` | Fix the plan, or re-inspect and rebuild it |
+| The document or template cannot be opened | `notWritten`, `encrypted-document`, `malformed-package` or `input-too-large` | Do not resend the same file: remove the protection in Office, repair or re-save the file, or raise the host limit |
+| A new document would start from a macro-enabled template | `notWritten`, `macro-enabled-document` | Save the template in Office as a macro-free `.dotx`, `.potx` or `.xltx`, or as a document, and use that |
+| A template batch names an output in another format | `notWritten`, `output-format-mismatch` | Give every `outputName` the document extension of the template's format |
 | Access revoked before commit | `notWritten`, `connection-forbidden` | Stop; the caller no longer holds the capability |
 | Source changed since preview | `notWritten`, `version-conflict`, `stale-snapshot`, `expect-mismatch`, `stale-batch-preview` or `stale-merge-source` | Re-inspect and re-preview; never replay the old plan |
 | Storage refused the write | `notWritten`, `write-rejected`, `already-exists` or another pre-write code | Fix the cause (a lock, a taken name, a size) and retry |
@@ -40,6 +43,12 @@ should say so with `WriteRejected`.
 | Receipt persistence failed after storage | `committed` (the engine returned the receipt; persisting it is the host's) | Keep the write; retry persisting the receipt from the result |
 | Cancellation after the write began | `unknown`, `outcome-unknown` | Reconcile before retrying |
 | Unknown remote outcome (timeout, lost response, server error) | `unknown`, `outcome-unknown` | Reconcile before retrying |
+
+A SharePoint save of `UploadSessionThresholdBytes` (4 MiB by default) or more goes up in
+chunks through a Graph upload session. A failure before the last chunk stored nothing and is
+`notWritten`, `write-rejected`. A refusal Graph states on the last chunk, such as a changed
+item (`version-conflict`) or a taken name (`already-exists`), is `notWritten` too. A lost response or a
+server error on the last chunk is `unknown`, `outcome-unknown`, and is reconciled as below.
 
 A cancellation that arrives before any write begins is plain cancellation, reported as
 `cancelled` by the tools, and nothing was written. A template batch cancelled after its first
@@ -83,8 +92,9 @@ none is retried automatically. What the providers do enforce makes a careful ret
 
 ## What each workflow protects
 
-"Version" is the provider's version token: the content SHA-256 for filesystem and memory, and
-the eTag for SharePoint.
+"Version" is the provider's version token: the content SHA-256 for filesystem and memory, the
+eTag for SharePoint, and each service's own token for the other providers, as
+[document providers](document-providers.md) describes.
 
 The other storage providers report the same error codes and write outcomes, through the MCP
 server as well as in code. Their `Replace` is conditional in its own way: Box, Azure Blob and
@@ -96,7 +106,9 @@ not enforce. See [document providers](document-providers.md) for each one.
 | --- | --- | --- | --- | --- | --- |
 | Edit, `Replace` | receipt `inputSha256` and `outputSha256` | plan `snapshot`, refused as `stale-snapshot` | checked at save; defaults to the version read | receipt `planSha256` (recorded, not a preview token) | filesystem: check and replace under a per-item in-process gate; memory: atomic under a lock; SharePoint, Box, Azure Blob and S3: `If-Match`, enforced by the service; iManage: version compared, then the document locked while a new version uploads; Google Drive: head revision re-read just before upload, no server-side check |
 | Edit, `NewVersion` or `NewDocument` | as above | as above | source version checked at save | as above | new name: filesystem no-overwrite rename; memory name check under its lock; SharePoint `conflictBehavior=fail`; Box 409 on a taken name; Azure Blob and S3 `If-None-Match: *`; iManage: `NewVersion` adds a version, `NewDocument` checks the name in the folder; Google Drive name check in the folder before upload |
-| Document creation | receipt hashes over the blank package and its output | none (a new document) | none | receipt `planSha256` | as for a new name |
+| Edit many documents (`edit_documents`) | per document, as for an edit | none: the plan cannot carry a snapshot, and each operation is verified against each document's live content | per document, as for an edit | receipt `planSha256` per document | per document, as for its save mode; one failure leaves the others saved |
+| Report refresh (`refresh_document`) | as for an edit | the refresh plan is bound to the document's snapshot, refused as `stale-snapshot` | as for an edit | receipt `planSha256` | as for its save mode |
+| Document creation | receipt hashes over the starting package (blank, or the converted template copy) and its output | none (a new document) | none | receipt `planSha256` | as for a new name |
 | Template batch | receipt per item | none | none | batch token (template and batch SHA-256), refused as `stale-batch-preview` | as for a new name, per item |
 | Document assembly | SHA-256 of every source, rechecked at commit | none | none | merge `planSha256`, refused if changed | create with `conflictBehavior=fail` or no-overwrite rename |
 
@@ -122,17 +134,19 @@ a receipt, and a receipt with an `outputDocument` means storage confirmed.
 
 ## The fault matrix
 
-Filesystem and memory are tested directly. SharePoint is tested by controlled simulation of the
-Graph API, not against a live tenant. A fault-injecting provider covers boundaries a real
-provider cannot be made to fail at on demand.
+Filesystem and memory are tested directly, and the other providers at their HTTP or SDK
+boundary, where each failure can be produced on demand. A fault-injecting provider covers
+boundaries a real provider cannot be made to fail at on demand.
 
 | Boundary | Tests |
 | --- | --- |
 | Before validation | `StorageOutcomeTests.An_invalid_plan_writes_nothing_and_says_so` |
 | Before provider open | `An_unknown_document_is_refused_before_any_write` |
+| On open | `ProtectedContentTests.An_encrypted_document_is_refused_whichever_format_its_name_claims`, `Merging_an_encrypted_document_names_the_protection`, `BoundedIngestionTests` |
+| Before a document is created from a template | `CreateFromTemplateTests.A_macro_enabled_template_is_refused`, `The_tool_reports_a_mismatched_name_and_a_macro_template_by_code`, `A_batch_output_named_in_another_format_is_refused_in_preflight` |
 | Between preview and commit | `A_source_changed_after_preview_is_refused_before_the_write`, `Access_revoked_after_preview_is_refused_before_the_write` |
 | Before the write | `A_taken_output_name_is_refused_as_already_exists`, `A_memory_version_conflict_is_refused_before_the_write`, `TakenNameTests`, SharePoint `A_taken_name_on_a_new_version_is_refused_before_upload`, `A_refused_upload_is_certain_and_leaves_nothing_behind` |
-| During the write | `A_filesystem_publish_that_fails_is_certain_and_changes_nothing`, `A_failure_mid_write_that_the_provider_does_not_classify_is_unknown`, SharePoint `A_server_error_on_upload_is_an_unknown_outcome` |
+| During the write | `A_filesystem_publish_that_fails_is_certain_and_changes_nothing`, `A_failure_mid_write_that_the_provider_does_not_classify_is_unknown`, SharePoint `A_server_error_on_upload_is_an_unknown_outcome`, `A_chunk_that_keeps_failing_is_rejected_and_its_session_cancelled`, `A_taken_name_reported_on_the_last_chunk_is_refused_and_its_session_cancelled`, `A_lost_response_to_the_last_chunk_is_unknown` |
 | Immediately after the write is accepted | `A_failure_after_an_accepted_write_is_unknown_with_a_reconcilable_locator`, SharePoint `A_lost_response_after_a_stored_upload_is_unknown_and_reconcilable` |
 | During registration | `StorageOutcomeTests.A_new_version_whose_registration_fails_is_written_not_registered`, the SharePoint test of the same name, `CreateDocumentTests.Registration_failure_leaves_the_created_file_intact` |
 | During receipt creation | `A_failure_resolving_the_audit_actor_happens_before_any_write` |

@@ -106,8 +106,9 @@ and ask you to confirm. After you confirm, it applies the plan and saves the con
 
 Open the contract in Word and open **Review > Reviewing Pane**. You should see:
 
-- in clause 5, `twelve months` struck through and `twenty-four months` inserted, as a
-  revision you can accept or reject;
+- in clause 5, `twelve` struck through and `twenty-four` inserted before `months`, as a
+  revision you can accept or reject. The instructions ask for `"granularity": "Minimal"`, so
+  only the changed word is marked;
 - a new comment on clause 4;
 - Priya's comment and the clause 3 revision unchanged, and clause 4's own text, which also says
   twelve months, unchanged.
@@ -121,7 +122,9 @@ SharePoint's version history keeps the version from before the edit.
 | Provisioning stops at `oauth/register` | `OFFICEAGENT_MCP_URL` or `OFFICEAGENT_API_CLIENT_ID` is empty in `env/.env.dev`. |
 | The agent cannot sign in, or every call returns `401` | Step 4 or 5 was skipped: the new Application ID URI is not on the app registration or not an allowed audience. |
 | Sign-in works, but the server reports `access-denied` | The user cannot open that file, or the Graph permissions are not consented. |
-| `version-conflict` or `io-error` | The file is checked out or open for exclusive editing. Close it and try again. |
+| `write-rejected`, with a message that the document is locked | The file is checked out or open for exclusive editing. Check it in or close it and try again, or save as a new version. |
+| `version-conflict` | Someone saved the file after the agent opened it. Ask the agent to open it again and rebuild its proposal. |
+| `encrypted-document` | The file is protected by a sensitivity label or a password. OfficeAgent does not decrypt; use an unprotected copy. |
 | The agent edits without `Tracked` | It should not; the instructions require it. Report the prompt and the reply, and reject the change in Word. |
 
 ## Not in this sample
