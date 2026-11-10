@@ -140,6 +140,12 @@ public static class OfficeAgentMcpServer
             ParseChangeGranularity(connection.DefaultChangeGranularity, connection.ConnectionId);
             ParseTemplateLocation(connection.TemplateLocation, connection.ConnectionId);
             ValidateSharePointTemplatesFolder(connection, index);
+            if (connection.ReadOnly &&
+                (!string.IsNullOrWhiteSpace(connection.CreationDriveId) || !string.IsNullOrWhiteSpace(connection.CreationFolderItemId)))
+                throw new InvalidOperationException(
+                    $"SharePoint connection '{connection.ConnectionId}' is ReadOnly but names a creation folder. A read-only " +
+                    $"connection creates nothing: remove OfficeAgent__SharePointConnections__{index}__CreationDriveId and " +
+                    "CreationFolderItemId, or turn ReadOnly off.");
         }
         StorageConnections.Validate(options);
 
@@ -567,7 +573,8 @@ public static class OfficeAgentMcpServer
             CalculateFormulas = connection.CalculateFormulas,
             RejectFormulaErrors = connection.RejectFormulaErrors,
             TemplatesFolder = string.IsNullOrWhiteSpace(connection.TemplatesFolder) ? null : connection.TemplatesFolder.Trim(),
-            TemplateLocation = ParseTemplateLocation(connection.TemplateLocation, connection.ConnectionId)
+            TemplateLocation = ParseTemplateLocation(connection.TemplateLocation, connection.ConnectionId),
+            ReadOnly = connection.ReadOnly
         }, http, tokens, store);
     }
 

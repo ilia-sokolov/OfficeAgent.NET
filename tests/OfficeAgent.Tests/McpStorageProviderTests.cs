@@ -610,6 +610,22 @@ public class McpStorageProviderTests
                     IManageConnections = { new IManageConnectionOptions { ConnectionId = "matters" } }
                 }));
 
+        // A read-only connection is never offered as somewhere to create a document, and says so.
+        var readOnly = new OfficeAgentMcpOptions { AllowCreation = true, AllowRegistration = false };
+        rig.Configure(readOnly, creation: false, minimal: false);
+        SetReadOnly(readOnly);
+        Assert.False(CanCreate(readOnly));
+        using (var payload = JsonDocument.Parse(OfficeAgentMcpServer.ConnectionsPayload(readOnly)))
+            Assert.True(Assert.Single(payload.RootElement.EnumerateArray()).GetProperty("readOnly").GetBoolean());
+
+        static void SetReadOnly(OfficeAgentMcpOptions options)
+        {
+            foreach (var c in options.IManageConnections.Cast<StorageConnectionOptions>()
+                         .Concat(options.GoogleDriveConnections).Concat(options.BoxConnections)
+                         .Concat(options.AzureBlobConnections).Concat(options.AmazonS3Connections))
+                c.ReadOnly = true;
+        }
+
         static bool CanCreate(OfficeAgentMcpOptions options)
         {
             using var payload = JsonDocument.Parse(OfficeAgentMcpServer.ConnectionsPayload(options));
@@ -705,6 +721,10 @@ public class McpStorageProviderTests
         { "s3-bad-template-location", new[] { "TemplateLocation 'Global'", "Expected Connection, Personal, Workgroup, Organization or None" } },
         { "s3-template-location-without-folder", new[] { "TemplateLocation Workgroup but no TemplatesFolder", "OfficeAgent__AmazonS3Connections__0__TemplatesFolder" } },
         { "s3-templates-folder-with-location-none", new[] { "TemplatesFolder and TemplateLocation None" } },
+        { "imanage-read-only-with-folder", new[] { "iManage connection 'matters' is ReadOnly", "OfficeAgent__IManageConnections__0__CreationFolderId" } },
+        { "drive-read-only-with-folder", new[] { "Google Drive connection 'drive' is ReadOnly", "OfficeAgent__GoogleDriveConnections__0__CreationFolderId" } },
+        { "box-read-only-with-folder", new[] { "Box connection 'box' is ReadOnly", "OfficeAgent__BoxConnections__0__CreationFolderId" } },
+        { "sharepoint-read-only-with-folder", new[] { "SharePoint connection 'library' is ReadOnly", "OfficeAgent__SharePointConnections__0__CreationDriveId" } },
     };
 
     [Theory]
@@ -852,6 +872,22 @@ public class McpStorageProviderTests
             case "s3-template-location-without-folder": options.AmazonS3Connections.Add(With(S3(), c => c.TemplateLocation = "workgroup")); break;
             case "s3-templates-folder-with-location-none":
                 options.AmazonS3Connections.Add(With(S3(), c => { c.TemplatesFolder = "templates"; c.TemplateLocation = "None"; }));
+                break;
+            case "imanage-read-only-with-folder":
+                options.IManageConnections.Add(With(IManage(), c => { c.ReadOnly = true; c.CreationFolderId = "ACTIVE!773"; }));
+                break;
+            case "drive-read-only-with-folder":
+                options.GoogleDriveConnections.Add(With(Drive(), c => { c.ReadOnly = true; c.CreationFolderId = "1AbCdEf"; }));
+                break;
+            case "box-read-only-with-folder":
+                options.BoxConnections.Add(With(Box(), c => { c.ReadOnly = true; c.CreationFolderId = "12345"; }));
+                break;
+            case "sharepoint-read-only-with-folder":
+                options.SharePointConnections.Add(new SharePointConnectionOptions
+                {
+                    ConnectionId = "library", TenantId = "t", ClientId = "c", ClientSecret = "s",
+                    ReadOnly = true, CreationDriveId = "b!drive", CreationFolderItemId = "01FOLDER"
+                });
                 break;
             default: throw new ArgumentOutOfRangeException(nameof(configuration));
         }

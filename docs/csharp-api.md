@@ -2495,6 +2495,7 @@ public string ConnectionId { get; }
 public ChangeGranularity DefaultChangeGranularity { get; }
 public ChangeMode DefaultChangeMode { get; }
 public string Provider { get; }
+public bool ReadOnly { get; }
 public bool RejectFormulaErrors { get; }
 public TemplateLocationKind TemplateLocation { get; }
 public string? TemplatesFolder { get; }
@@ -2520,6 +2521,7 @@ public ChangeMode DefaultChangeMode { get; set; }
 public bool ForcePathStyle { get; set; }
 public string KeyPrefix { get; set; }
 public long MaximumBytes { get; set; }
+public bool ReadOnly { get; set; }
 public string Region { get; set; }
 public string RegistrationIndexPath { get; set; }
 public bool RejectFormulaErrors { get; set; }
@@ -2559,6 +2561,7 @@ public string ConnectionId { get; }
 public ChangeGranularity DefaultChangeGranularity { get; }
 public ChangeMode DefaultChangeMode { get; }
 public string Provider { get; }
+public bool ReadOnly { get; }
 public bool RejectFormulaErrors { get; }
 public TemplateLocationKind TemplateLocation { get; }
 public string? TemplatesFolder { get; }
@@ -2585,6 +2588,7 @@ public ChangeMode DefaultChangeMode { get; set; }
 public string ManagedIdentityClientId { get; set; }
 public long MaximumBytes { get; set; }
 public string Prefix { get; set; }
+public bool ReadOnly { get; set; }
 public string RegistrationIndexPath { get; set; }
 public bool RejectFormulaErrors { get; set; }
 public string ServiceUri { get; set; }
@@ -2642,6 +2646,7 @@ public string ConnectionId { get; }
 public ChangeGranularity DefaultChangeGranularity { get; }
 public ChangeMode DefaultChangeMode { get; }
 public string Provider { get; }
+public bool ReadOnly { get; }
 public bool RejectFormulaErrors { get; }
 public TemplateLocationKind TemplateLocation { get; }
 public string? TemplatesFolder { get; }
@@ -2666,6 +2671,7 @@ public string CreationFolderId { get; set; }
 public ChangeGranularity DefaultChangeGranularity { get; set; }
 public ChangeMode DefaultChangeMode { get; set; }
 public long MaximumBytes { get; set; }
+public bool ReadOnly { get; set; }
 public bool RejectFormulaErrors { get; set; }
 public TemplateLocationKind? TemplateLocation { get; set; }
 public string TemplatesFolder { get; set; }
@@ -3387,6 +3393,7 @@ public string ConnectionId { get; }
 public ChangeGranularity DefaultChangeGranularity { get; }
 public ChangeMode DefaultChangeMode { get; }
 public string Provider { get; }
+public bool ReadOnly { get; }
 public bool RejectFormulaErrors { get; }
 public TemplateLocationKind TemplateLocation { get; }
 public string? TemplatesFolder { get; }
@@ -3411,6 +3418,7 @@ public string CreationFolderId { get; set; }
 public ChangeGranularity DefaultChangeGranularity { get; set; }
 public ChangeMode DefaultChangeMode { get; set; }
 public long MaximumBytes { get; set; }
+public bool ReadOnly { get; set; }
 public bool RejectFormulaErrors { get; set; }
 public TemplateLocationKind? TemplateLocation { get; set; }
 public string TemplatesFolder { get; set; }
@@ -3533,6 +3541,7 @@ public string ConnectionId { get; }
 public ChangeGranularity DefaultChangeGranularity { get; }
 public ChangeMode DefaultChangeMode { get; }
 public string Provider { get; }
+public bool ReadOnly { get; }
 public bool RejectFormulaErrors { get; }
 public TemplateLocationKind TemplateLocation { get; }
 public string? TemplatesFolder { get; }
@@ -3561,6 +3570,7 @@ public ChangeGranularity DefaultChangeGranularity { get; set; }
 public ChangeMode DefaultChangeMode { get; set; }
 public bool LockDuringSave { get; set; }
 public long MaximumBytes { get; set; }
+public bool ReadOnly { get; set; }
 public bool RejectFormulaErrors { get; set; }
 public string SaveComment { get; set; }
 public string ServerUrl { get; set; }
@@ -3866,6 +3876,7 @@ public string ConnectionId { get; }
 public ChangeGranularity DefaultChangeGranularity { get; }
 public ChangeMode DefaultChangeMode { get; }
 public string Provider { get; }
+public bool ReadOnly { get; }
 public bool RejectFormulaErrors { get; }
 public TemplateLocationKind TemplateLocation { get; }
 public string? TemplatesFolder { get; }
@@ -3891,6 +3902,7 @@ public ChangeGranularity DefaultChangeGranularity { get; set; }
 public ChangeMode DefaultChangeMode { get; set; }
 public string GraphBaseUrl { get; set; }
 public long MaximumBytes { get; set; }
+public bool ReadOnly { get; set; }
 public bool RejectFormulaErrors { get; set; }
 public TemplateLocationKind TemplateLocation { get; set; }
 public string? TemplatesFolder { get; set; }

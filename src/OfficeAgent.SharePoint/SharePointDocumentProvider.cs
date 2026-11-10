@@ -92,6 +92,18 @@ public sealed class SharePointDocumentProviderOptions
     /// organization template library.
     /// </summary>
     public TemplateLocationKind TemplateLocation { get; set; }
+
+    /// <summary>
+    /// Gets or sets whether the connection refuses every save and creation with
+    /// <see cref="ProviderErrorCode.AccessDenied"/> before any request reaches Graph, whatever
+    /// the configured identity may write. Registering, opening, listing and using a document as
+    /// a template still work, and registrations are kept as usual, because they live in the
+    /// host's <see cref="ISharePointRegistrationStore"/> rather than in SharePoint. Use it for a
+    /// templates library people share, beside a writable connection for the documents made from
+    /// it. A read-only connection cannot name <see cref="CreationDriveId"/> or
+    /// <see cref="CreationFolderItemId"/>. Defaults to <see langword="false"/>.
+    /// </summary>
+    public bool ReadOnly { get; set; }
 }
 
 /// <summary>
@@ -188,6 +200,10 @@ public sealed class SharePointDocumentProvider : IDocumentProvider, IDocumentCre
             throw new ArgumentException(
                 "SharePoint creation requires both CreationDriveId and CreationFolderItemId.",
                 nameof(options));
+        if (options.ReadOnly && !string.IsNullOrWhiteSpace(options.CreationDriveId))
+            throw new ArgumentException(
+                ReadOnlyConnections.CreationDestinationNamed("CreationDriveId and CreationFolderItemId"),
+                nameof(options));
 
         _allowedExtensions = new HashSet<string>(
             options.AllowedExtensions.Select(NormalizeExtension),
@@ -235,6 +251,12 @@ public sealed class SharePointDocumentProvider : IDocumentProvider, IDocumentCre
     /// <inheritdoc />
     public TemplateLocationKind TemplateLocation { get; }
 
+    /// <summary>
+    /// Gets whether the connection refuses every save and creation; see
+    /// <see cref="SharePointDocumentProviderOptions.ReadOnly"/>.
+    /// </summary>
+    public bool ReadOnly => _options.ReadOnly;
+
     /// <inheritdoc />
     public async Task<DocumentReference> RegisterAsync(
         string source,
@@ -261,6 +283,7 @@ public sealed class SharePointDocumentProvider : IDocumentProvider, IDocumentCre
         CancellationToken cancellationToken = default)
     {
         if (content is null) throw new ArgumentNullException(nameof(content));
+        RefuseWhenReadOnly(itemId: null);
         if (_creationDriveId is null || _creationFolderItemId is null)
             throw Error(
                 ProviderErrorCode.ConfigurationError,
@@ -427,6 +450,7 @@ public sealed class SharePointDocumentProvider : IDocumentProvider, IDocumentCre
         ValidateReference(source);
         if (content is null) throw new ArgumentNullException(nameof(content));
         if (options is null) throw new ArgumentNullException(nameof(options));
+        RefuseWhenReadOnly(source.ItemId);
         if (!string.IsNullOrEmpty(options.DestinationItemId))
             throw Error(ProviderErrorCode.InvalidArgument,
                 "SharePoint item ids are opaque and provider-assigned; a destination id cannot be chosen by the caller. Use Mode=NewVersion/NewDocument (optionally with NewName) to mint a new document, or Mode=Replace to overwrite the source.",
@@ -1672,6 +1696,13 @@ public sealed class SharePointDocumentProvider : IDocumentProvider, IDocumentCre
         string? itemId = null,
         Exception? innerException = null) =>
         new(code, message, ProviderName, ConnectionId, itemId, innerException);
+
+    /// <summary>The refusal every save and creation on a read-only connection meets before Graph is called.</summary>
+    private void RefuseWhenReadOnly(string? itemId)
+    {
+        if (_options.ReadOnly)
+            throw Error(ProviderErrorCode.AccessDenied, ReadOnlyConnections.WriteRefused, itemId);
+    }
 
     private sealed class GraphItem
     {

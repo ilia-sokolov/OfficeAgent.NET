@@ -61,6 +61,16 @@ public sealed class IManageDocumentProviderOptions
     /// </summary>
     public TemplateLocationKind? TemplateLocation { get; set; }
 
+    /// <summary>
+    /// Gets or sets whether the connection refuses every save and creation with
+    /// <see cref="ProviderErrorCode.AccessDenied"/> before any request reaches iManage, whatever
+    /// the configured credentials may write. Registering, opening, listing and using a document as
+    /// a template still work, and registrations are kept as usual, because they live in
+    /// the host's registration store rather than in iManage. Use it for a templates folder people share, beside a writable
+    /// connection for the documents made from it. A read-only connection cannot name <see cref="CreationFolderId"/>. Defaults to <see langword="false"/>.
+    /// </summary>
+    public bool ReadOnly { get; set; }
+
     /// <summary>Gets or sets the comment recorded on each version and document OfficeAgent saves.</summary>
     public string SaveComment { get; set; } = "Saved by OfficeAgent.";
 
@@ -145,6 +155,8 @@ public sealed class IManageDocumentProvider : IDocumentProvider, IDocumentCreati
         IIManageRegistrationStore? registrationStore = null)
     {
         _options = options ?? throw new ArgumentNullException(nameof(options));
+        if (options.ReadOnly && !string.IsNullOrWhiteSpace(options.CreationFolderId))
+            throw new ArgumentException(ReadOnlyConnections.CreationDestinationNamed("CreationFolderId"), nameof(options));
         _http = httpClient ?? throw new ArgumentNullException(nameof(httpClient));
         _tokens = tokenProvider ?? throw new ArgumentNullException(nameof(tokenProvider));
         _store = registrationStore ?? new InMemoryIManageRegistrationStore();
@@ -219,6 +231,12 @@ public sealed class IManageDocumentProvider : IDocumentProvider, IDocumentCreati
     /// <inheritdoc />
     public TemplateLocationKind TemplateLocation => _templateLocation;
 
+    /// <summary>
+    /// Gets whether the connection refuses every save and creation; see
+    /// <see cref="IManageDocumentProviderOptions.ReadOnly"/>.
+    /// </summary>
+    public bool ReadOnly => _options.ReadOnly;
+
     /// <inheritdoc />
     public async Task<DocumentReference> RegisterAsync(
         string source,
@@ -253,6 +271,7 @@ public sealed class IManageDocumentProvider : IDocumentProvider, IDocumentCreati
         CancellationToken cancellationToken = default)
     {
         if (content is null) throw new ArgumentNullException(nameof(content));
+        RefuseWhenReadOnly(itemId: null);
         RequireCreationFolder();
 
         var fileName = ValidateCreateName(name);
@@ -313,6 +332,7 @@ public sealed class IManageDocumentProvider : IDocumentProvider, IDocumentCreati
         ValidateReference(source);
         if (content is null) throw new ArgumentNullException(nameof(content));
         if (options is null) throw new ArgumentNullException(nameof(options));
+        RefuseWhenReadOnly(source.ItemId);
         if (!string.IsNullOrEmpty(options.DestinationItemId))
             throw Error(ProviderErrorCode.InvalidArgument,
                 "iManage document ids are opaque and provider-assigned; a destination id cannot be chosen by the caller. Use Mode=NewVersion to add an iManage version, Mode=NewDocument (optionally with NewName) to file a new document, or Mode=Replace to save a new version under the same id.",
@@ -1179,6 +1199,13 @@ public sealed class IManageDocumentProvider : IDocumentProvider, IDocumentCreati
         string? itemId = null,
         Exception? innerException = null) =>
         new(code, message, ProviderName, ConnectionId, itemId, innerException);
+
+    /// <summary>The refusal every save and creation on a read-only connection meets before the service is called.</summary>
+    private void RefuseWhenReadOnly(string? itemId)
+    {
+        if (_options.ReadOnly)
+            throw Error(ProviderErrorCode.AccessDenied, ReadOnlyConnections.WriteRefused, itemId);
+    }
 
     private sealed class Profile
     {

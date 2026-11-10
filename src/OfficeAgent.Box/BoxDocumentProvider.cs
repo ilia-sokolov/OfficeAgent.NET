@@ -50,6 +50,16 @@ public sealed class BoxDocumentProviderOptions
     public TemplateLocationKind? TemplateLocation { get; set; }
 
     /// <summary>
+    /// Gets or sets whether the connection refuses every save and creation with
+    /// <see cref="ProviderErrorCode.AccessDenied"/> before any request reaches Box, whatever
+    /// the configured credentials may write. Registering, opening, listing and using a document as
+    /// a template still work, and registrations are kept as usual, because they live in
+    /// the host's registration store rather than in Box. Use it for a templates folder people share, beside a writable
+    /// connection for the documents made from it. A read-only connection cannot name <see cref="CreationFolderId"/>. Defaults to <see langword="false"/>.
+    /// </summary>
+    public bool ReadOnly { get; set; }
+
+    /// <summary>
     /// Gets or sets the change mode used when an operation does not state one. The
     /// default is <see cref="ChangeMode.Tracked"/>, which suits documents a person
     /// reviews. Set <see cref="ChangeMode.Direct"/> for generated or machine-owned files,
@@ -120,6 +130,8 @@ public sealed class BoxDocumentProvider : IDocumentProvider, IDocumentCreatingPr
         IBoxRegistrationStore? registrationStore = null)
     {
         _options = options ?? throw new ArgumentNullException(nameof(options));
+        if (options.ReadOnly && !string.IsNullOrWhiteSpace(options.CreationFolderId))
+            throw new ArgumentException(ReadOnlyConnections.CreationDestinationNamed("CreationFolderId"), nameof(options));
         _http = httpClient ?? throw new ArgumentNullException(nameof(httpClient));
         _tokens = tokenProvider ?? throw new ArgumentNullException(nameof(tokenProvider));
         _store = registrationStore ?? new InMemoryBoxRegistrationStore();
@@ -176,6 +188,12 @@ public sealed class BoxDocumentProvider : IDocumentProvider, IDocumentCreatingPr
     /// <inheritdoc />
     public TemplateLocationKind TemplateLocation => _templateLocation;
 
+    /// <summary>
+    /// Gets whether the connection refuses every save and creation; see
+    /// <see cref="BoxDocumentProviderOptions.ReadOnly"/>.
+    /// </summary>
+    public bool ReadOnly => _options.ReadOnly;
+
     /// <inheritdoc />
     public async Task<DocumentReference> RegisterAsync(
         string source,
@@ -196,6 +214,7 @@ public sealed class BoxDocumentProvider : IDocumentProvider, IDocumentCreatingPr
         CancellationToken cancellationToken = default)
     {
         if (content is null) throw new ArgumentNullException(nameof(content));
+        RefuseWhenReadOnly(itemId: null);
         if (_creationFolderId is null)
             throw Error(
                 ProviderErrorCode.ConfigurationError,
@@ -269,6 +288,7 @@ public sealed class BoxDocumentProvider : IDocumentProvider, IDocumentCreatingPr
         ValidateReference(source);
         if (content is null) throw new ArgumentNullException(nameof(content));
         if (options is null) throw new ArgumentNullException(nameof(options));
+        RefuseWhenReadOnly(source.ItemId);
         if (!string.IsNullOrEmpty(options.DestinationItemId))
             throw Error(ProviderErrorCode.InvalidArgument,
                 "Box document ids are opaque and provider-assigned; a destination id cannot be chosen by the caller. Use Mode=NewVersion/NewDocument (optionally with NewName) to mint a new document, or Mode=Replace to overwrite the source.",
@@ -959,6 +979,13 @@ public sealed class BoxDocumentProvider : IDocumentProvider, IDocumentCreatingPr
         string? itemId = null,
         Exception? innerException = null) =>
         new(code, message, ProviderName, ConnectionId, itemId, innerException);
+
+    /// <summary>The refusal every save and creation on a read-only connection meets before the service is called.</summary>
+    private void RefuseWhenReadOnly(string? itemId)
+    {
+        if (_options.ReadOnly)
+            throw Error(ProviderErrorCode.AccessDenied, ReadOnlyConnections.WriteRefused, itemId);
+    }
 
     private sealed class BoxFile
     {

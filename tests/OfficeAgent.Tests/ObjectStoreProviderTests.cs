@@ -28,7 +28,8 @@ public abstract class ObjectStoreProviderTests
         string? registrationIndexPath = null,
         bool registerOnce = false,
         string? templatesFolder = null,
-        IReadOnlyCollection<string>? allowedExtensions = null);
+        IReadOnlyCollection<string>? allowedExtensions = null,
+        bool readOnly = false);
 
     protected abstract string ProviderName { get; }
 
@@ -40,6 +41,37 @@ public abstract class ObjectStoreProviderTests
 
     /// <summary>Text that would reveal the account, endpoint or bucket if it appeared in a message.</summary>
     protected abstract string StorageIdentity { get; }
+
+    [Fact]
+    public async Task A_read_only_connection_registers_and_opens_but_writes_nothing()
+    {
+        var store = NewStore();
+        store.Seed("contracts/Invoice.docx", Contract);
+        var provider = Provider(store, readOnly: true);
+
+        var reference = await provider.RegisterAsync("Invoice.docx");
+        using (var content = await provider.OpenReadAsync(reference))
+            Assert.Equal(Contract, ReadAll(content.Stream));
+        var before = store.Requests.Count;
+
+        var errors = new List<DocumentProviderException>();
+        foreach (var mode in new[] { SaveMode.Replace, SaveMode.NewVersion, SaveMode.NewDocument })
+        {
+            using var bytes = Docx();
+            errors.Add(await Assert.ThrowsAsync<DocumentProviderException>(() =>
+                provider.SaveAsync(reference, bytes, new SaveDocumentOptions { Mode = mode })));
+        }
+        using (var bytes = Docx())
+            errors.Add(await Assert.ThrowsAsync<DocumentProviderException>(() => provider.CreateAsync("new.docx", bytes)));
+
+        Assert.All(errors, error =>
+        {
+            Assert.Equal(ProviderErrorCode.AccessDenied, error.Code);
+            Assert.Contains("read-only", error.Message, StringComparison.Ordinal);
+        });
+        Assert.Equal(before, store.Requests.Count);
+        await provider.RemoveAsync(reference);
+    }
 
     private static OfficeAgentClient EngineOver(IDocumentProvider provider) =>
         new(new DocumentProviderRegistry(new[] { provider }), new WordModule());

@@ -17,6 +17,50 @@ namespace OfficeAgent.Tests;
 /// </summary>
 public class IManageProviderTests
 {
+    [Fact]
+    public async Task A_read_only_connection_registers_and_opens_but_sends_no_write()
+    {
+        using var server = new FakeIManage();
+        var original = DocxFactory.Contract();
+        var number = server.Seed("Invoice.docx", original);
+        var provider = server.Provider(configureCreation: false, readOnly: true);
+
+        Assert.True(provider.ReadOnly);
+        var reference = await provider.RegisterAsync(server.IdOf(number));
+        using (var content = await provider.OpenReadAsync(reference))
+            Assert.True(content.Stream.Length > 0);
+        var before = server.Requests.Count;
+
+        var errors = new List<DocumentProviderException>();
+        foreach (var mode in new[] { SaveMode.Replace, SaveMode.NewVersion, SaveMode.NewDocument })
+        {
+            using var bytes = new MemoryStream(DocxFactory.Contract());
+            errors.Add(await Assert.ThrowsAsync<DocumentProviderException>(() =>
+                provider.SaveAsync(reference, bytes, new SaveDocumentOptions { Mode = mode })));
+        }
+        using (var bytes = new MemoryStream(DocxFactory.Contract()))
+            errors.Add(await Assert.ThrowsAsync<DocumentProviderException>(() => provider.CreateAsync("new.docx", bytes)));
+
+        Assert.All(errors, error =>
+        {
+            Assert.Equal(ProviderErrorCode.AccessDenied, error.Code);
+            Assert.Contains("read-only", error.Message, StringComparison.Ordinal);
+        });
+        // Nothing reached iManage: not even a lookup, let alone an upload.
+        Assert.Equal(before, server.Requests.Count);
+        await provider.RemoveAsync(reference);
+    }
+
+    [Fact]
+    public void A_read_only_connection_cannot_also_name_a_creation_folder()
+    {
+        using var server = new FakeIManage();
+
+        var error = Assert.Throws<ArgumentException>(() => server.Provider(configureCreation: true, readOnly: true));
+
+        Assert.Contains("CreationFolderId", error.Message, StringComparison.Ordinal);
+    }
+
     private static OfficeAgentClient EngineOver(IManageDocumentProvider provider) =>
         new(new DocumentProviderRegistry(new IDocumentProvider[] { provider }), new WordModule());
 
@@ -917,10 +961,12 @@ public class IManageProviderTests
             IIManageRegistrationStore? registrationStore = null,
             bool lockDuringSave = true,
             string? templatesFolder = null,
-            IReadOnlyCollection<string>? allowedExtensions = null) => new(
+            IReadOnlyCollection<string>? allowedExtensions = null,
+            bool readOnly = false) => new(
             new IManageDocumentProviderOptions
             {
                 ConnectionId = "legal",
+                ReadOnly = readOnly,
                 ServerUrl = Server,
                 CustomerId = "42",
                 MaximumBytes = maximumBytes,

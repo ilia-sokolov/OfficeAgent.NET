@@ -418,6 +418,87 @@ public class SharePointProviderTests
     // Controlled simulations against the fake Graph drive, not live SharePoint. Each drives a
     // create through the engine, so the outcome asserted is the one a caller receives.
 
+    [Fact]
+    public async Task A_read_only_connection_registers_and_opens_but_sends_no_write()
+    {
+        using var drive = new FakeGraphDrive();
+        var original = DocxFactory.Contract();
+        var itemId = drive.Seed("Invoice.docx", original);
+        var provider = drive.Provider(configureCreation: false, readOnly: true);
+
+        Assert.True(provider.ReadOnly);
+        var reference = await provider.RegisterAsync(drive.SourceById(itemId));
+        using (var content = await provider.OpenReadAsync(reference))
+            Assert.True(content.Stream.Length > 0);
+
+        var errors = new List<DocumentProviderException>();
+        foreach (var mode in new[] { SaveMode.Replace, SaveMode.NewVersion, SaveMode.NewDocument })
+        {
+            using var bytes = new MemoryStream(DocxFactory.Contract());
+            errors.Add(await Assert.ThrowsAsync<DocumentProviderException>(() =>
+                provider.SaveAsync(reference, bytes, new SaveDocumentOptions { Mode = mode })));
+        }
+        using (var bytes = new MemoryStream(DocxFactory.Contract()))
+            errors.Add(await Assert.ThrowsAsync<DocumentProviderException>(() => provider.CreateAsync("new.docx", bytes)));
+
+        Assert.All(errors, error =>
+        {
+            Assert.Equal(ProviderErrorCode.AccessDenied, error.Code);
+            Assert.Contains("read-only", error.Message, StringComparison.Ordinal);
+        });
+        Assert.Equal(0, drive.WriteRequests);
+        Assert.Equal(original, drive.BytesNamed("Invoice.docx"));
+
+        // Registrations live in the host's store, not in SharePoint, so removing one still works.
+        await provider.RemoveAsync(reference);
+    }
+
+    [Fact]
+    public void A_read_only_connection_cannot_also_name_a_creation_folder()
+    {
+        using var drive = new FakeGraphDrive();
+
+        var error = Assert.Throws<ArgumentException>(() => drive.Provider(configureCreation: true, readOnly: true));
+
+        Assert.Contains("CreationDriveId", error.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task A_template_on_a_read_only_connection_seeds_a_document_on_a_writable_one()
+    {
+        using var drive = new FakeGraphDrive();
+        var original = DocxFactory.Contract();
+        var templateId = drive.Seed("Invoice.docx", original);
+        var templates = drive.Provider(configureCreation: false, readOnly: true, connectionId: "templates");
+        var documents = drive.Provider(connectionId: "legal");
+        var client = new OfficeAgentClient(
+            new DocumentProviderRegistry(new IDocumentProvider[] { templates, documents }), new WordModule());
+        var template = await templates.RegisterAsync(drive.SourceById(templateId));
+
+        var created = await client.CreateFromTemplateAsync("legal", "Invoice 2026-11.docx", template, plan: null);
+
+        Assert.True(created.Committed);
+        Assert.True(drive.HasName("Invoice 2026-11.docx"));
+        Assert.Equal(original, drive.BytesNamed("Invoice.docx"));
+    }
+
+    [Fact]
+    public async Task Editing_a_template_on_a_read_only_connection_writes_nothing()
+    {
+        using var drive = new FakeGraphDrive();
+        var itemId = drive.Seed("Invoice.docx", DocxFactory.Contract());
+        var provider = drive.Provider(configureCreation: false, readOnly: true);
+        var tools = new OfficeAgentTools(EngineOver(provider));
+
+        using var json = JsonDocument.Parse(await tools.EditDocument("legal", drive.SourceById(itemId),
+            "[{\"op\":\"changeText\",\"target\":{\"find\":\"Client:\"},\"with\":\"Fabrikam\",\"mode\":\"Direct\"}]"));
+
+        Assert.False(json.RootElement.GetProperty("committed").GetBoolean());
+        Assert.Equal("notWritten", json.RootElement.GetProperty("writeOutcome").GetString());
+        Assert.Equal("access-denied", json.RootElement.GetProperty("errors")[0].GetProperty("code").GetString());
+        Assert.Equal(0, drive.WriteRequests);
+    }
+
     private static OfficeAgentClient EngineOver(SharePointDocumentProvider provider) =>
         new(new DocumentProviderRegistry(new IDocumentProvider[] { provider }), new WordModule());
 
@@ -916,15 +997,21 @@ public class SharePointProviderTests
 
         public bool HasName(string name) => _byName.ContainsKey(name);
 
+        /// <summary>Every request that is not a GET, to Graph or to an upload session.</summary>
+        public int WriteRequests { get; private set; }
+
         public SharePointDocumentProvider Provider(
             long maximumBytes = 100 * 1024 * 1024,
             bool configureCreation = true,
             ISharePointRegistrationStore? registrationStore = null,
             long uploadSessionThresholdBytes = 4 * 1024 * 1024,
-            int uploadSessionChunkBytes = 10 * 1024 * 1024) => new(
+            int uploadSessionChunkBytes = 10 * 1024 * 1024,
+            bool readOnly = false,
+            string connectionId = "legal") => new(
             new SharePointDocumentProviderOptions
             {
-                ConnectionId = "legal",
+                ConnectionId = connectionId,
+                ReadOnly = readOnly,
                 GraphBaseUrl = GraphBase,
                 MaximumBytes = maximumBytes,
                 UploadSessionThresholdBytes = uploadSessionThresholdBytes,
@@ -1106,6 +1193,7 @@ public class SharePointProviderTests
             {
                 var url = request.RequestUri!.ToString();
                 var authorized = request.Headers.Authorization is { Scheme: "Bearer", Parameter: "fake-token" };
+                if (request.Method != HttpMethod.Get) _drive.WriteRequests++;
 
                 if (url.StartsWith(DownloadHost, StringComparison.Ordinal))
                 {

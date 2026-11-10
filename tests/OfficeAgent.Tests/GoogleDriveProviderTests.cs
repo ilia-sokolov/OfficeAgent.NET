@@ -438,6 +438,50 @@ public class GoogleDriveProviderTests
 
     // ── Storage outcomes ──────────────────────────────────────────────────────
 
+    [Fact]
+    public async Task A_read_only_connection_registers_and_opens_but_sends_no_write()
+    {
+        using var drive = new FakeDrive();
+        var original = DocxFactory.Contract();
+        var fileId = drive.Seed("Invoice.docx", original);
+        var provider = drive.Provider(configureCreation: false, readOnly: true);
+
+        Assert.True(provider.ReadOnly);
+        var reference = await provider.RegisterAsync($"https://drive.google.com/file/d/{fileId}/view");
+        using (var content = await provider.OpenReadAsync(reference))
+            Assert.True(content.Stream.Length > 0);
+        var before = drive.Requests.Count;
+
+        var errors = new List<DocumentProviderException>();
+        foreach (var mode in new[] { SaveMode.Replace, SaveMode.NewVersion, SaveMode.NewDocument })
+        {
+            using var bytes = new MemoryStream(DocxFactory.Contract());
+            errors.Add(await Assert.ThrowsAsync<DocumentProviderException>(() =>
+                provider.SaveAsync(reference, bytes, new SaveDocumentOptions { Mode = mode })));
+        }
+        using (var bytes = new MemoryStream(DocxFactory.Contract()))
+            errors.Add(await Assert.ThrowsAsync<DocumentProviderException>(() => provider.CreateAsync("new.docx", bytes)));
+
+        Assert.All(errors, error =>
+        {
+            Assert.Equal(ProviderErrorCode.AccessDenied, error.Code);
+            Assert.Contains("read-only", error.Message, StringComparison.Ordinal);
+        });
+        // Nothing reached Google Drive: not even a lookup, let alone an upload.
+        Assert.Equal(before, drive.Requests.Count);
+        await provider.RemoveAsync(reference);
+    }
+
+    [Fact]
+    public void A_read_only_connection_cannot_also_name_a_creation_folder()
+    {
+        using var drive = new FakeDrive();
+
+        var error = Assert.Throws<ArgumentException>(() => drive.Provider(configureCreation: true, readOnly: true));
+
+        Assert.Contains("CreationFolderId", error.Message, StringComparison.Ordinal);
+    }
+
     private static OfficeAgentClient EngineOver(GoogleDriveDocumentProvider provider) =>
         new(new DocumentProviderRegistry(new IDocumentProvider[] { provider }), new WordModule());
 
@@ -837,10 +881,12 @@ public class GoogleDriveProviderTests
             bool configureCreation = true,
             IGoogleDriveRegistrationStore? registrationStore = null,
             string? templatesFolder = null,
-            IReadOnlyCollection<string>? allowedExtensions = null) => new(
+            IReadOnlyCollection<string>? allowedExtensions = null,
+            bool readOnly = false) => new(
             new GoogleDriveDocumentProviderOptions
             {
                 ConnectionId = "drive",
+                ReadOnly = readOnly,
                 ApiBaseUrl = Api,
                 UploadBaseUrl = Upload,
                 MaximumBytes = maximumBytes,

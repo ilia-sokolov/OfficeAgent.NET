@@ -131,9 +131,10 @@ internal static class StorageConnections
         }));
         connections.AddRange(options.SharePointConnections.Select(c => new StorageConnection(
             StorageKind.SharePoint, c.ConnectionId, c.AllowedExtensions.ToArray(),
-            !string.IsNullOrWhiteSpace(c.CreationDriveId) && !string.IsNullOrWhiteSpace(c.CreationFolderItemId),
+            !c.ReadOnly && !string.IsNullOrWhiteSpace(c.CreationDriveId) && !string.IsNullOrWhiteSpace(c.CreationFolderItemId),
             c.DefaultChangeMode, c.DefaultChangeGranularity, c.CalculateFormulas)
         {
+            ReadOnly = c.ReadOnly,
             TemplatesFolder = Blank(c.TemplatesFolder),
             TemplateLocation = Blank(c.TemplateLocation)
         }));
@@ -141,7 +142,7 @@ internal static class StorageConnections
         connections.AddRange(options.GoogleDriveConnections.Select(c => Of(StorageKind.GoogleDrive, c, HasFolder(c.CreationFolderId))));
         connections.AddRange(options.BoxConnections.Select(c => Of(StorageKind.Box, c, HasFolder(c.CreationFolderId))));
         // Object stores create under the connection's own container and prefix, so they always
-        // have a destination.
+        // have a destination unless the connection is read-only.
         connections.AddRange(options.AzureBlobConnections.Select(c => Of(StorageKind.AzureBlob, c, true)));
         connections.AddRange(options.AmazonS3Connections.Select(c => Of(StorageKind.AmazonS3, c, true)));
         return connections;
@@ -162,10 +163,22 @@ internal static class StorageConnections
         "aeiouAEIOU".IndexOf(label[0]) >= 0 ? "an" : "a";
 
     private static StorageConnection Of(StorageKind kind, StorageConnectionOptions c, bool hasCreationTarget) =>
-        new(kind, c.ConnectionId, c.AllowedExtensions.ToArray(), hasCreationTarget,
-            c.DefaultChangeMode, c.DefaultChangeGranularity, c.CalculateFormulas);
+        new(kind, c.ConnectionId, c.AllowedExtensions.ToArray(), hasCreationTarget && !c.ReadOnly,
+            c.DefaultChangeMode, c.DefaultChangeGranularity, c.CalculateFormulas)
+        {
+            ReadOnly = c.ReadOnly
+        };
 
     private static bool HasFolder(string? folder) => !string.IsNullOrWhiteSpace(folder);
+
+    /// <summary>The name of the setting that gives a connection a creation folder, when it has one.</summary>
+    private static string? CreationFolderOf(StorageConnectionOptions c) => c switch
+    {
+        IManageConnectionOptions m when HasFolder(m.CreationFolderId) => nameof(IManageConnectionOptions.CreationFolderId),
+        GoogleDriveConnectionOptions g when HasFolder(g.CreationFolderId) => nameof(GoogleDriveConnectionOptions.CreationFolderId),
+        BoxConnectionOptions b when HasFolder(b.CreationFolderId) => nameof(BoxConnectionOptions.CreationFolderId),
+        _ => null
+    };
 
     private static string? Blank(string? value) => string.IsNullOrWhiteSpace(value) ? null : value!.Trim();
 
@@ -225,6 +238,10 @@ internal static class StorageConnections
             OfficeAgentMcpServer.ParseChangeGranularity(connection.DefaultChangeGranularity, connection.ConnectionId);
             ParseTemplateLocation(connection, setting);
             validate(connection, setting);
+            if (connection.ReadOnly && CreationFolderOf(connection) is { } creation)
+                throw setting.Error(
+                    "is ReadOnly but names a creation folder. A read-only connection creates nothing: remove " +
+                    $"{setting.Variable(creation)}, or turn ReadOnly off.");
         }
     }
 
@@ -472,7 +489,8 @@ internal static class StorageConnections
             CalculateFormulas = c.CalculateFormulas,
             RejectFormulaErrors = c.RejectFormulaErrors,
             TemplatesFolder = c.TemplatesFolder,
-            TemplateLocation = TemplateLocationOf(StorageKind.IManage, c)
+            TemplateLocation = TemplateLocationOf(StorageKind.IManage, c),
+            ReadOnly = c.ReadOnly
         }, http, tokens, store);
     }
 
@@ -503,7 +521,8 @@ internal static class StorageConnections
             CalculateFormulas = c.CalculateFormulas,
             RejectFormulaErrors = c.RejectFormulaErrors,
             TemplatesFolder = c.TemplatesFolder,
-            TemplateLocation = TemplateLocationOf(StorageKind.GoogleDrive, c)
+            TemplateLocation = TemplateLocationOf(StorageKind.GoogleDrive, c),
+            ReadOnly = c.ReadOnly
         }, http, tokens, store);
     }
 
@@ -534,7 +553,8 @@ internal static class StorageConnections
             CalculateFormulas = c.CalculateFormulas,
             RejectFormulaErrors = c.RejectFormulaErrors,
             TemplatesFolder = c.TemplatesFolder,
-            TemplateLocation = TemplateLocationOf(StorageKind.Box, c)
+            TemplateLocation = TemplateLocationOf(StorageKind.Box, c),
+            ReadOnly = c.ReadOnly
         }, http, tokens, store);
     }
 
@@ -556,7 +576,8 @@ internal static class StorageConnections
             CalculateFormulas = c.CalculateFormulas,
             RejectFormulaErrors = c.RejectFormulaErrors,
             TemplatesFolder = c.TemplatesFolder,
-            TemplateLocation = TemplateLocationOf(StorageKind.AzureBlob, c)
+            TemplateLocation = TemplateLocationOf(StorageKind.AzureBlob, c),
+            ReadOnly = c.ReadOnly
         };
         return services.GetService<StorageTransports>()?.AzureBlob is { } container
             ? new AzureBlobDocumentProvider(options, container(c))
@@ -581,7 +602,8 @@ internal static class StorageConnections
             CalculateFormulas = c.CalculateFormulas,
             RejectFormulaErrors = c.RejectFormulaErrors,
             TemplatesFolder = c.TemplatesFolder,
-            TemplateLocation = TemplateLocationOf(StorageKind.AmazonS3, c)
+            TemplateLocation = TemplateLocationOf(StorageKind.AmazonS3, c),
+            ReadOnly = c.ReadOnly
         };
         return services.GetService<StorageTransports>()?.AmazonS3 is { } client
             ? new AmazonS3DocumentProvider(options, client(c))

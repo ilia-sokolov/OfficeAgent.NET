@@ -46,6 +46,16 @@ public sealed class AzureBlobDocumentProviderOptions
     public TemplateLocationKind? TemplateLocation { get; set; }
 
     /// <summary>
+    /// Gets or sets whether the connection refuses every save and creation with
+    /// <see cref="ProviderErrorCode.AccessDenied"/> before any request reaches Azure Blob Storage, whatever
+    /// the configured credentials may write. Registering, opening, listing and using a document as
+    /// a template still work, and registrations are kept as usual, because they live in
+    /// the host's registration store rather than in the container. Use it for a templates folder people share, beside a writable
+    /// connection for the documents made from it. Defaults to <see langword="false"/>.
+    /// </summary>
+    public bool ReadOnly { get; set; }
+
+    /// <summary>
     /// Gets or sets the client id of a user-assigned managed identity for
     /// <c>DefaultAzureCredential</c>. Leave empty for a system-assigned identity.
     /// </summary>

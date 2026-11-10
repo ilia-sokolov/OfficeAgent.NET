@@ -16,7 +16,7 @@ public sealed class AmazonS3ProviderTests : ObjectStoreProviderTests
     private protected override IDocumentCreatingProvider Provider(
         FakeObjectStore store, string prefix = Prefix, long maximumBytes = 100 * 1024 * 1024,
         string? registrationIndexPath = null, bool registerOnce = false, string? templatesFolder = null,
-        IReadOnlyCollection<string>? allowedExtensions = null) =>
+        IReadOnlyCollection<string>? allowedExtensions = null, bool readOnly = false) =>
         new AmazonS3DocumentProvider(
             new AmazonS3DocumentProviderOptions
             {
@@ -26,7 +26,8 @@ public sealed class AmazonS3ProviderTests : ObjectStoreProviderTests
                 MaximumBytes = maximumBytes,
                 RegistrationIndexPath = registrationIndexPath ?? string.Empty,
                 AllowedExtensions = allowedExtensions ?? new[] { ".docx" },
-                TemplatesFolder = templatesFolder ?? string.Empty
+                TemplatesFolder = templatesFolder ?? string.Empty,
+                ReadOnly = readOnly
             },
             ((FakeS3Service)store).Client(),
             registerOnce ? new RegisterOnceStore() : null);

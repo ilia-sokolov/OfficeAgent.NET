@@ -33,6 +33,16 @@ public sealed class AmazonS3DocumentProviderOptions
     public TemplateLocationKind? TemplateLocation { get; set; }
 
     /// <summary>
+    /// Gets or sets whether the connection refuses every save and creation with
+    /// <see cref="ProviderErrorCode.AccessDenied"/> before any request reaches Amazon S3, whatever
+    /// the configured credentials may write. Registering, opening, listing and using a document as
+    /// a template still work, and registrations are kept as usual, because they live in
+    /// the host's registration store rather than in the bucket. Use it for a templates folder people share, beside a writable
+    /// connection for the documents made from it. Defaults to <see langword="false"/>.
+    /// </summary>
+    public bool ReadOnly { get; set; }
+
+    /// <summary>
     /// Gets or sets the AWS region, such as <c>eu-west-1</c>. Empty takes the region from the AWS
     /// SDK's default chain (<c>AWS_REGION</c>, the shared config file, or instance metadata).
     /// </summary>

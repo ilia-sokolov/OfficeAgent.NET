@@ -114,6 +114,12 @@ public sealed class AzureBlobDocumentProvider : IDocumentProvider, IDocumentCrea
     /// <inheritdoc />
     public TemplateLocationKind TemplateLocation => _templateLocation;
 
+    /// <summary>
+    /// Gets whether the connection refuses every save and creation; see
+    /// <see cref="AzureBlobDocumentProviderOptions.ReadOnly"/>.
+    /// </summary>
+    public bool ReadOnly => _options.ReadOnly;
+
     /// <inheritdoc />
     public async Task<DocumentReference> RegisterAsync(
         string source,
@@ -139,6 +145,7 @@ public sealed class AzureBlobDocumentProvider : IDocumentProvider, IDocumentCrea
         CancellationToken cancellationToken = default)
     {
         if (content is null) throw new ArgumentNullException(nameof(content));
+        RefuseWhenReadOnly(itemId: null);
 
         var fileName = ValidateCreateName(name);
         var blobName = _prefix + fileName;
@@ -206,6 +213,7 @@ public sealed class AzureBlobDocumentProvider : IDocumentProvider, IDocumentCrea
         ValidateReference(source);
         if (content is null) throw new ArgumentNullException(nameof(content));
         if (options is null) throw new ArgumentNullException(nameof(options));
+        RefuseWhenReadOnly(source.ItemId);
         if (!string.IsNullOrEmpty(options.DestinationItemId))
             throw Error(ProviderErrorCode.InvalidArgument,
                 "Azure Blob item ids are opaque and provider-assigned; a destination id cannot be chosen by the caller. Use Mode=NewVersion/NewDocument (optionally with NewName) to mint a new document, or Mode=Replace to overwrite the source.",
@@ -723,6 +731,13 @@ public sealed class AzureBlobDocumentProvider : IDocumentProvider, IDocumentCrea
     private DocumentProviderException Error(
         ProviderErrorCode code, string message, string? itemId = null, Exception? innerException = null) =>
         new(code, message, ProviderName, ConnectionId, itemId, innerException);
+
+    /// <summary>The refusal every save and creation on a read-only connection meets before the service is called.</summary>
+    private void RefuseWhenReadOnly(string? itemId)
+    {
+        if (_options.ReadOnly)
+            throw Error(ProviderErrorCode.AccessDenied, ReadOnlyConnections.WriteRefused, itemId);
+    }
 
     private static BlobContainerClient CreateContainerClient(AzureBlobDocumentProviderOptions options)
     {

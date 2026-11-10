@@ -283,7 +283,7 @@ public class TemplateListingToolsTests
                 new SharePointConnectionOptions
                 {
                     ConnectionId = "library", TenantId = "t", ClientId = "c", ClientSecret = "s",
-                    TemplatesFolder = "b!drive/01FOLDER", TemplateLocation = "Organization"
+                    TemplatesFolder = "b!drive/01FOLDER", TemplateLocation = "Organization", ReadOnly = true
                 }
             }
         };
@@ -317,7 +317,8 @@ public class TemplateListingToolsTests
             Assert.True(entries["library"].GetProperty("listable").GetBoolean());
             Assert.Equal("organization", entries["library"].GetProperty("templateLocation").GetString());
             Assert.Equal("b!drive/01FOLDER", entries["library"].GetProperty("templatesFolder").GetString());
-            Assert.Equal(JsonValueKind.Null, entries["library"].GetProperty("readOnly").ValueKind);
+            Assert.True(entries["library"].GetProperty("readOnly").GetBoolean());
+            Assert.False(entries["library"].GetProperty("canCreateDocuments").GetBoolean());
         }
     }
 

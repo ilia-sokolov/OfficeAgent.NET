@@ -335,6 +335,14 @@ public abstract class StorageConnectionOptions
     /// folder is set. Bound as a string for the reason the change mode is.
     /// </summary>
     public string TemplateLocation { get; set; } = string.Empty;
+
+    /// <summary>
+    /// Gets or sets whether the connection refuses every save and creation before the service
+    /// is called. Registrations still work and persist as usual. Use it for a templates folder
+    /// people share, beside a writable connection for the documents made from it; it cannot
+    /// also name a creation folder. Defaults to <see langword="false"/>.
+    /// </summary>
+    public bool ReadOnly { get; set; }
 }
 
 /// <summary>
@@ -682,4 +690,13 @@ public sealed class SharePointConnectionOptions
     /// <c>Organization</c>.
     /// </summary>
     public string TemplateLocation { get; set; } = string.Empty;
+
+    /// <summary>
+    /// Gets or sets whether the connection refuses every save and creation before Graph is
+    /// called, whatever the configured identity may write. Registrations still work and persist
+    /// as usual. Use it for a templates library people share, beside a writable connection for
+    /// the documents made from it; it cannot also name <see cref="CreationDriveId"/> or
+    /// <see cref="CreationFolderItemId"/>. Defaults to <see langword="false"/>.
+    /// </summary>
+    public bool ReadOnly { get; set; }
 }

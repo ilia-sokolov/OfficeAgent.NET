@@ -386,6 +386,50 @@ public class BoxProviderTests
 
     // ── Storage outcomes ──────────────────────────────────────────────────────
 
+    [Fact]
+    public async Task A_read_only_connection_registers_and_opens_but_sends_no_write()
+    {
+        using var box = new FakeBox();
+        var original = DocxFactory.Contract();
+        var fileId = box.Seed("Invoice.docx", original);
+        var provider = box.Provider(configureCreation: false, readOnly: true);
+
+        Assert.True(provider.ReadOnly);
+        var reference = await provider.RegisterAsync(fileId);
+        using (var content = await provider.OpenReadAsync(reference))
+            Assert.True(content.Stream.Length > 0);
+        var before = box.Requests.Count;
+
+        var errors = new List<DocumentProviderException>();
+        foreach (var mode in new[] { SaveMode.Replace, SaveMode.NewVersion, SaveMode.NewDocument })
+        {
+            using var bytes = new MemoryStream(DocxFactory.Contract());
+            errors.Add(await Assert.ThrowsAsync<DocumentProviderException>(() =>
+                provider.SaveAsync(reference, bytes, new SaveDocumentOptions { Mode = mode })));
+        }
+        using (var bytes = new MemoryStream(DocxFactory.Contract()))
+            errors.Add(await Assert.ThrowsAsync<DocumentProviderException>(() => provider.CreateAsync("new.docx", bytes)));
+
+        Assert.All(errors, error =>
+        {
+            Assert.Equal(ProviderErrorCode.AccessDenied, error.Code);
+            Assert.Contains("read-only", error.Message, StringComparison.Ordinal);
+        });
+        // Nothing reached Box: not even a lookup, let alone an upload.
+        Assert.Equal(before, box.Requests.Count);
+        await provider.RemoveAsync(reference);
+    }
+
+    [Fact]
+    public void A_read_only_connection_cannot_also_name_a_creation_folder()
+    {
+        using var box = new FakeBox();
+
+        var error = Assert.Throws<ArgumentException>(() => box.Provider(configureCreation: true, readOnly: true));
+
+        Assert.Contains("CreationFolderId", error.Message, StringComparison.Ordinal);
+    }
+
     private static OfficeAgentClient EngineOver(BoxDocumentProvider provider) =>
         new(new DocumentProviderRegistry(new IDocumentProvider[] { provider }), new WordModule());
 
@@ -625,10 +669,12 @@ public class BoxProviderTests
             bool configureCreation = true,
             IBoxRegistrationStore? registrationStore = null,
             string? templatesFolder = null,
-            IReadOnlyCollection<string>? allowedExtensions = null) => new(
+            IReadOnlyCollection<string>? allowedExtensions = null,
+            bool readOnly = false) => new(
             new BoxDocumentProviderOptions
             {
                 ConnectionId = "box",
+                ReadOnly = readOnly,
                 ApiBaseUrl = Api,
                 UploadBaseUrl = Upload,
                 MaximumBytes = maximumBytes,
