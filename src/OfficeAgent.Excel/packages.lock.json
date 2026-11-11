@@ -13,9 +13,9 @@
       },
       "ExcelNumberFormat": {
         "type": "Direct",
-        "requested": "[1.1.0, )",
-        "resolved": "1.1.0",
-        "contentHash": "R3BVHPs9O+RkExbZYTGT0+9HLbi8ZrNij1Yziyw6znd3J7P3uoIR07uwTLGOogtz1p6+0sna66eBoXu7tBiVQA=="
+        "requested": "[1.2.0, )",
+        "resolved": "1.2.0",
+        "contentHash": "13HfFpG3NBUHevDM5Z8BiMvE6BXJPYE54r9wbKTwa4kBJggSVtDDB73Mz0bGLmID1HgM/3lA1mssMqphdG0+9g=="
       },
       "Microsoft.Bcl.TimeProvider": {
         "type": "Direct",
@@ -162,7 +162,7 @@
           "Microsoft.Bcl.TimeProvider": "[8.0.1, )",
           "Microsoft.Extensions.DependencyInjection.Abstractions": "[8.0.2, )",
           "Microsoft.Extensions.Logging.Abstractions": "[8.0.3, )",
-          "OfficeAgent.Abstractions": "[1.2.0, )",
+          "OfficeAgent.Abstractions": "[1.3.0, )",
           "System.Diagnostics.DiagnosticSource": "[8.0.1, )"
         }
       }
@@ -179,9 +179,9 @@
       },
       "ExcelNumberFormat": {
         "type": "Direct",
-        "requested": "[1.1.0, )",
-        "resolved": "1.1.0",
-        "contentHash": "R3BVHPs9O+RkExbZYTGT0+9HLbi8ZrNij1Yziyw6znd3J7P3uoIR07uwTLGOogtz1p6+0sna66eBoXu7tBiVQA=="
+        "requested": "[1.2.0, )",
+        "resolved": "1.2.0",
+        "contentHash": "13HfFpG3NBUHevDM5Z8BiMvE6BXJPYE54r9wbKTwa4kBJggSVtDDB73Mz0bGLmID1HgM/3lA1mssMqphdG0+9g=="
       },
       "Microsoft.Extensions.DependencyInjection.Abstractions": {
         "type": "Direct",
@@ -219,7 +219,7 @@
           "DocumentFormat.OpenXml": "[3.5.1, )",
           "Microsoft.Extensions.DependencyInjection.Abstractions": "[8.0.2, )",
           "Microsoft.Extensions.Logging.Abstractions": "[8.0.3, )",
-          "OfficeAgent.Abstractions": "[1.2.0, )"
+          "OfficeAgent.Abstractions": "[1.3.0, )"
         }
       }
     }

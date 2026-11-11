@@ -27,6 +27,12 @@
           "DocumentFormat.OpenXml.Framework": "3.5.1"
         }
       },
+      "ExcelNumberFormat": {
+        "type": "Direct",
+        "requested": "[1.2.0, )",
+        "resolved": "1.2.0",
+        "contentHash": "13HfFpG3NBUHevDM5Z8BiMvE6BXJPYE54r9wbKTwa4kBJggSVtDDB73Mz0bGLmID1HgM/3lA1mssMqphdG0+9g=="
+      },
       "Microsoft.Extensions.DependencyInjection.Abstractions": {
         "type": "Direct",
         "requested": "[8.0.2, )",
@@ -61,11 +67,6 @@
         "dependencies": {
           "System.IO.Packaging": "8.0.1"
         }
-      },
-      "ExcelNumberFormat": {
-        "type": "Transitive",
-        "resolved": "1.1.0",
-        "contentHash": "R3BVHPs9O+RkExbZYTGT0+9HLbi8ZrNij1Yziyw6znd3J7P3uoIR07uwTLGOogtz1p6+0sna66eBoXu7tBiVQA=="
       },
       "Microsoft.Bcl.AsyncInterfaces": {
         "type": "Transitive",
@@ -195,6 +196,12 @@
           "DocumentFormat.OpenXml.Framework": "3.5.1"
         }
       },
+      "ExcelNumberFormat": {
+        "type": "Direct",
+        "requested": "[1.2.0, )",
+        "resolved": "1.2.0",
+        "contentHash": "13HfFpG3NBUHevDM5Z8BiMvE6BXJPYE54r9wbKTwa4kBJggSVtDDB73Mz0bGLmID1HgM/3lA1mssMqphdG0+9g=="
+      },
       "Microsoft.Extensions.DependencyInjection.Abstractions": {
         "type": "Direct",
         "requested": "[8.0.2, )",
@@ -213,11 +220,6 @@
         "dependencies": {
           "System.IO.Packaging": "10.0.2"
         }
-      },
-      "ExcelNumberFormat": {
-        "type": "Transitive",
-        "resolved": "1.1.0",
-        "contentHash": "R3BVHPs9O+RkExbZYTGT0+9HLbi8ZrNij1Yziyw6znd3J7P3uoIR07uwTLGOogtz1p6+0sna66eBoXu7tBiVQA=="
       },
       "RBush.Signed": {
         "type": "Transitive",
