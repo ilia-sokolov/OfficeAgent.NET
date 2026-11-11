@@ -9,7 +9,7 @@
     <PackAsTool>true</PackAsTool>
     <PackageType>McpServer</PackageType>
     <ToolCommandName>officeagent-mcp</ToolCommandName>
-    <Description>Model Context Protocol (MCP) server for OfficeAgent.NET: inspect and edit Word documents, PowerPoint decks, and Excel workbooks through structured plans over stdio or HTTP, with filesystem, SharePoint, iManage Work, Google Drive, Box, Azure Blob Storage, Amazon S3, session, and inline-content workflows.</Description>
+    <Description>MCP server that lets Claude, Codex, Cursor, Copilot Studio and other AI agents edit existing Word, PowerPoint and Excel files and fill company templates without breaking their formatting. The agent previews a typed plan, nothing is written when a check fails, and Word edits can be saved as real tracked changes. Works over stdio or HTTP with local folders, SharePoint, iManage Work, Google Drive, Box, Azure Blob Storage and Amazon S3.</Description>
   </PropertyGroup>
 
   <ItemGroup>

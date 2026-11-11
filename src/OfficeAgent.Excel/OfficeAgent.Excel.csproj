@@ -1,7 +1,7 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
     <TargetFrameworks>netstandard2.0;net10.0</TargetFrameworks>
-    <Description>Excel .xlsx inspection and deterministic editing for OfficeAgent.NET: bounded ranges, cells, formulas, tables, and comments while preserving unrelated workbook parts.</Description>
+    <Description>Excel .xlsx module for OfficeAgent.NET, built on the Open XML SDK: inspect worksheets, tables and ranges, read cells as Excel displays them, set cells and formulas, append table rows and manage notes, leaving the rest of the workbook untouched. Formulas are calculated by Excel when the file is next opened, or by the optional OfficeAgent.Excel.Calculation package.</Description>
   </PropertyGroup>
   <ItemGroup>
     <ProjectReference Include="..\OfficeAgent.Abstractions\OfficeAgent.Abstractions.csproj" />

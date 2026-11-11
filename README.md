@@ -11,19 +11,28 @@
 [![good first issues](https://img.shields.io/github/issues/ilia-sokolov/OfficeAgent.NET/good%20first%20issue?label=good%20first%20issues)](https://github.com/ilia-sokolov/OfficeAgent.NET/labels/good%20first%20issue)
 [![license](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
-OfficeAgent.NET is a .NET document-automation library built on the
-[Open XML SDK](https://learn.microsoft.com/office/open-xml/open-xml-sdk). Its direct
-.NET API turns document intent into typed, validated operations for Word `.docx`,
-PowerPoint `.pptx`, and Excel `.xlsx` packages.
+OfficeAgent.NET lets an AI agent or a .NET application edit your own Word, PowerPoint
+and Excel files without breaking them:
 
-Use it to generate documents and presentations, make targeted edits, update tables,
-styles, and images, or manage comments and review state. An MCP server and adapters
-for Microsoft Agent Framework and `Microsoft.Extensions.AI` are optional interfaces
-to the same engine. Applications can use the engine directly without MCP.
+- **Fill your company's Word template:** content controls, bookmarks and repeating table
+  rows, returned as the same file with its styles, numbering, headers and comments intact.
+- **Build slides on your own PowerPoint template:** new slides on the template's own
+  layouts, with named shapes, tables, charts and pictures filled and the logo and fonts
+  left alone.
+- **Change clauses, prices or dates as real tracked changes** that Word can accept or reject.
 
-One example is a targeted Word edit whose result remains reviewable:
+Every change is a typed plan that is previewed first, and if any check fails nothing is
+written. It is built on Microsoft's
+[Open XML SDK](https://learn.microsoft.com/office/open-xml/open-xml-sdk) and runs without
+Office installed.
 
 ![OfficeAgent.NET finds, previews, and applies a contract edit as a tracked change in Word.](https://raw.githubusercontent.com/ilia-sokolov/OfficeAgent.NET/main/media/demo.gif)
+
+| Use it from | Start with |
+| --- | --- |
+| Claude Code, Codex, Cursor or any MCP client, with no .NET installed | `uvx officeagent-mcp --stdio`, pointed at a folder as in [Try a Word edit](#try-a-word-edit) |
+| Claude Desktop | the one-click bundle in [Standalone downloads](docs/mcp-server.md#standalone-downloads) |
+| A .NET application, with or without an agent | `dotnet add package OfficeAgent.Word`, then [Getting started](docs/getting-started.md) |
 
 ## What this project does
 

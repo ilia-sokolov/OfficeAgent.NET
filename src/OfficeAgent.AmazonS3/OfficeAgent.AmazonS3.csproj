@@ -2,7 +2,7 @@
 
   <PropertyGroup>
     <TargetFrameworks>netstandard2.0;net10.0</TargetFrameworks>
-    <Description>Amazon S3 document provider for OfficeAgent.NET, a translation layer between AI agents and OOXML: creates, registers, opens, and saves documents in one S3 bucket through the AWS SDK, with conditional writes (If-Match and If-None-Match) so no save overwrites newer content. Works with S3-compatible stores that support conditional writes. Agents address documents by an opaque (connectionId, documentId); the provider never exposes bucket names or credentials to the model.</Description>
+    <Description>Amazon S3 document provider for OfficeAgent.NET, which lets AI agents edit existing Word, PowerPoint and Excel files and fill templates: creates, registers, opens, and saves documents in one S3 bucket through the AWS SDK, with conditional writes (If-Match and If-None-Match) so no save overwrites newer content. Works with S3-compatible stores that support conditional writes. Agents address documents by an opaque (connectionId, documentId); the provider never exposes bucket names or credentials to the model.</Description>
   </PropertyGroup>
 
   <ItemGroup>

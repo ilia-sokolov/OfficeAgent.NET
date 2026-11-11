@@ -42,7 +42,7 @@
     <RepositoryType>git</RepositoryType>
     <PackageReadmeFile>README.md</PackageReadmeFile>
     <PackageIcon>icon.png</PackageIcon>
-    <PackageTags>openxml;docx;pptx;xlsx;word;powerpoint;excel;office;mcp;model-context-protocol;ai;agents;llm;tracked-changes;document-automation</PackageTags>
+    <PackageTags>openxml;openxml-sdk;docx;pptx;xlsx;word;powerpoint;excel;office;templates;content-controls;tracked-changes;redline;comments;mcp;model-context-protocol;ai;agents;ai-agents;llm;document-automation</PackageTags>
     <PackageRequireLicenseAcceptance>false</PackageRequireLicenseAcceptance>
 
     <Deterministic>true</Deterministic>

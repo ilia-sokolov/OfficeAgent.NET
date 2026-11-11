@@ -2,7 +2,7 @@
 
   <PropertyGroup>
     <TargetFrameworks>netstandard2.0;net10.0</TargetFrameworks>
-    <Description>Word (.docx) format module for OfficeAgent.NET, a translation layer between AI agents and OOXML: WordprocessingML inspection, search, and operation handlers across body, headers, footers, footnotes, and endnotes.</Description>
+    <Description>Word .docx module for OfficeAgent.NET, built on the Open XML SDK: edit an existing document or fill a company template without breaking it. Replace text even when Word has split it across runs, fill content controls, bookmarks and repeating table rows, add or resolve comments, and save edits as real tracked changes (redlines) that Word can accept or reject. Covers the body, headers, footers, footnotes and endnotes.</Description>
   </PropertyGroup>
 
   <ItemGroup>

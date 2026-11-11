@@ -2,7 +2,7 @@
 
   <PropertyGroup>
     <TargetFrameworks>netstandard2.0;net10.0</TargetFrameworks>
-    <Description>SharePoint document provider for OfficeAgent.NET, a translation layer between AI agents and OOXML: creates, registers, opens, and saves documents in SharePoint document libraries through the Microsoft Graph REST endpoints. Agents address documents by an opaque (connectionId, documentId); the provider never exposes site URLs, drive ids, or credentials to the model.</Description>
+    <Description>SharePoint document provider for OfficeAgent.NET, which lets AI agents edit existing Word, PowerPoint and Excel files and fill templates: creates, registers, opens, and saves documents in SharePoint document libraries through the Microsoft Graph REST endpoints. Agents address documents by an opaque (connectionId, documentId); the provider never exposes site URLs, drive ids, or credentials to the model.</Description>
   </PropertyGroup>
 
   <ItemGroup>

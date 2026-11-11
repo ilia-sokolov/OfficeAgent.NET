@@ -2,7 +2,7 @@
 
   <PropertyGroup>
     <TargetFrameworks>netstandard2.0;net10.0</TargetFrameworks>
-    <Description>The engine of OfficeAgent.NET, a translation layer between AI agents and OOXML: agents express intent as typed change plans, and the library turns them into valid Open XML manipulations. Provides the inspect → find → preview → commit flow, plan validation, atomic apply with anchor stabilization, document providers, and Open XML package services. Compose with a format module such as OfficeAgent.Word.</Description>
+    <Description>The engine of OfficeAgent.NET, built on the Open XML SDK: lets an AI agent or a .NET application edit existing Word, PowerPoint and Excel files and fill company templates while keeping their formatting, numbering and comments. Find text against live content, preview a typed edit plan, and commit it atomically; a change that fails validation writes nothing. Includes folder and in-memory storage. Add a format module such as OfficeAgent.Word.</Description>
   </PropertyGroup>
 
   <ItemGroup>

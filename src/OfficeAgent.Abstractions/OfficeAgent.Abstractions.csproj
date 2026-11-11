@@ -2,7 +2,7 @@
 
   <PropertyGroup>
     <TargetFrameworks>netstandard2.0;net10.0</TargetFrameworks>
-    <Description>Contracts for OfficeAgent.NET, a translation layer between AI agents and OOXML: document handles, anchors, typed edit plans (the agent's intent), change reports, and capability labels for agent-driven Office document editing.</Description>
+    <Description>Contracts for OfficeAgent.NET, which lets AI agents and .NET applications edit existing Word, PowerPoint and Excel files and fill templates, built on the Open XML SDK: document handles, anchors, typed edit plans, change reports and capability labels. Most applications install OfficeAgent.Core and a format module rather than this package directly.</Description>
   </PropertyGroup>
 
   <ItemGroup Condition="'$(TargetFramework)' == 'netstandard2.0'">
