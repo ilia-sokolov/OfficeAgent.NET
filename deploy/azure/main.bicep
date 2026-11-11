@@ -12,7 +12,7 @@ param location string = resourceGroup().location
 param name string = 'officeagent'
 
 @description('Server image. Pin an exact version; review release notes before moving it.')
-param image string = 'ghcr.io/ilia-sokolov/officeagent-mcp:1.2.0'
+param image string = 'ghcr.io/ilia-sokolov/officeagent-mcp:1.3.0'
 
 @description('Entra tenant of the signed-in users.')
 param tenantId string = subscription().tenantId

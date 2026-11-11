@@ -3,7 +3,7 @@
 Notable changes per release. The body of each version section is also the text used for the
 corresponding GitHub release.
 
-## 1.3.0 — Unreleased
+## 1.3.0 — 2026-11-11
 
 ### Added
 

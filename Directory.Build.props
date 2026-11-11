@@ -31,7 +31,7 @@
   </PropertyGroup>
 
   <PropertyGroup>
-    <Version>1.2.0</Version>
+    <Version>1.3.0</Version>
     <Authors>Ilia Sokolov</Authors>
     <Company>Ilia Sokolov</Company>
     <Product>OfficeAgent.NET</Product>

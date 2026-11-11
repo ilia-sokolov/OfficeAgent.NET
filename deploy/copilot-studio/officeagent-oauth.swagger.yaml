@@ -2,7 +2,7 @@ swagger: '2.0'
 info:
   title: OfficeAgent
   description: Fill and edit your own Word, PowerPoint and Excel files in SharePoint with previewed plans and real tracked changes.
-  version: 1.2.0
+  version: 1.3.0
 host: YOUR_SERVER_HOST
 basePath: /
 schemes:

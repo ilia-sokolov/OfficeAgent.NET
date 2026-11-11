@@ -7,12 +7,12 @@
     "url": "https://github.com/ilia-sokolov/OfficeAgent.NET",
     "source": "github"
   },
-  "version": "1.2.0",
+  "version": "1.3.0",
   "packages": [
     {
       "registryType": "nuget",
       "identifier": "OfficeAgent.Mcp",
-      "version": "1.2.0",
+      "version": "1.3.0",
       "transport": {
         "type": "stdio"
       },
@@ -45,7 +45,7 @@
     },
     {
       "registryType": "mcpb",
-      "identifier": "https://github.com/ilia-sokolov/OfficeAgent.NET/releases/download/v1.2.0/officeagent-mcp-win-x64.mcpb",
+      "identifier": "https://github.com/ilia-sokolov/OfficeAgent.NET/releases/download/v1.3.0/officeagent-mcp-win-x64.mcpb",
       "fileSha256": "d52db58ee8a09919ca71be09b12d72745f468f82ef71893256e8afc7ccda42c3",
       "transport": {
         "type": "stdio"
@@ -53,7 +53,7 @@
     },
     {
       "registryType": "mcpb",
-      "identifier": "https://github.com/ilia-sokolov/OfficeAgent.NET/releases/download/v1.2.0/officeagent-mcp-win-arm64.mcpb",
+      "identifier": "https://github.com/ilia-sokolov/OfficeAgent.NET/releases/download/v1.3.0/officeagent-mcp-win-arm64.mcpb",
       "fileSha256": "597a297a36c576eb6db5a0eb21894a7eb0f0c04f0e810e11c11e6eaa5b68d26a",
       "transport": {
         "type": "stdio"
@@ -61,7 +61,7 @@
     },
     {
       "registryType": "mcpb",
-      "identifier": "https://github.com/ilia-sokolov/OfficeAgent.NET/releases/download/v1.2.0/officeagent-mcp-osx-x64.mcpb",
+      "identifier": "https://github.com/ilia-sokolov/OfficeAgent.NET/releases/download/v1.3.0/officeagent-mcp-osx-x64.mcpb",
       "fileSha256": "88acc3b9a9926f1ebd10f20883b5625645c700f710b78494ed1119d0ce5ca0fb",
       "transport": {
         "type": "stdio"
@@ -69,7 +69,7 @@
     },
     {
       "registryType": "mcpb",
-      "identifier": "https://github.com/ilia-sokolov/OfficeAgent.NET/releases/download/v1.2.0/officeagent-mcp-osx-arm64.mcpb",
+      "identifier": "https://github.com/ilia-sokolov/OfficeAgent.NET/releases/download/v1.3.0/officeagent-mcp-osx-arm64.mcpb",
       "fileSha256": "a9f2d50e6cad303d04eecdf7d98670fd9827aa23dc4990f02f704d4a59b37379",
       "transport": {
         "type": "stdio"
@@ -77,7 +77,7 @@
     },
     {
       "registryType": "oci",
-      "identifier": "ghcr.io/ilia-sokolov/officeagent-mcp:1.2.0",
+      "identifier": "ghcr.io/ilia-sokolov/officeagent-mcp:1.3.0",
       "transport": {
         "type": "stdio"
       },

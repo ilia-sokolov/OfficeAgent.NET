@@ -111,7 +111,7 @@ verify in Word; review is one part of the broader document operation set.
 Install the exact server version documented by this release:
 
 ```bash
-dotnet tool install --global OfficeAgent.Mcp --version 1.2.0
+dotnet tool install --global OfficeAgent.Mcp --version 1.3.0
 ```
 
 Make a folder for the agent to work in and download the
@@ -121,7 +121,7 @@ agreement with a clause to change, a table, an open comment, and a pending redli
 ```bash
 mkdir -p ~/officeagent-documents
 curl -Lo ~/officeagent-documents/services-agreement.docx \
-  https://raw.githubusercontent.com/ilia-sokolov/OfficeAgent.NET/v1.2.0/samples/documents/services-agreement.docx
+  https://raw.githubusercontent.com/ilia-sokolov/OfficeAgent.NET/v1.3.0/samples/documents/services-agreement.docx
 ```
 
 PowerShell:
@@ -130,7 +130,7 @@ PowerShell:
 $officeAgentDocuments = Join-Path $env:USERPROFILE "officeagent-documents"
 New-Item -ItemType Directory -Force $officeAgentDocuments | Out-Null
 Invoke-WebRequest `
-  https://raw.githubusercontent.com/ilia-sokolov/OfficeAgent.NET/v1.2.0/samples/documents/services-agreement.docx `
+  https://raw.githubusercontent.com/ilia-sokolov/OfficeAgent.NET/v1.3.0/samples/documents/services-agreement.docx `
   -OutFile (Join-Path $officeAgentDocuments "services-agreement.docx")
 ```
 
