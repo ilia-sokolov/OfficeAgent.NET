@@ -46,7 +46,7 @@
     {
       "registryType": "mcpb",
       "identifier": "https://github.com/ilia-sokolov/OfficeAgent.NET/releases/download/v1.3.0/officeagent-mcp-win-x64.mcpb",
-      "fileSha256": "d52db58ee8a09919ca71be09b12d72745f468f82ef71893256e8afc7ccda42c3",
+      "fileSha256": "85c1c4743087ddd50aed54cde70fff3fffd3689df9e2f43bfd9853df2364df71",
       "transport": {
         "type": "stdio"
       }
@@ -54,7 +54,7 @@
     {
       "registryType": "mcpb",
       "identifier": "https://github.com/ilia-sokolov/OfficeAgent.NET/releases/download/v1.3.0/officeagent-mcp-win-arm64.mcpb",
-      "fileSha256": "597a297a36c576eb6db5a0eb21894a7eb0f0c04f0e810e11c11e6eaa5b68d26a",
+      "fileSha256": "16909e8930297c7799784dd69a87cfc4b39e2fca8238ac69c98631072a424f25",
       "transport": {
         "type": "stdio"
       }
@@ -62,7 +62,7 @@
     {
       "registryType": "mcpb",
       "identifier": "https://github.com/ilia-sokolov/OfficeAgent.NET/releases/download/v1.3.0/officeagent-mcp-osx-x64.mcpb",
-      "fileSha256": "88acc3b9a9926f1ebd10f20883b5625645c700f710b78494ed1119d0ce5ca0fb",
+      "fileSha256": "cfff79db38f5bc0ec216ca66f696d260db459d83ddde7e3771dbcbdb1b450905",
       "transport": {
         "type": "stdio"
       }
@@ -70,7 +70,7 @@
     {
       "registryType": "mcpb",
       "identifier": "https://github.com/ilia-sokolov/OfficeAgent.NET/releases/download/v1.3.0/officeagent-mcp-osx-arm64.mcpb",
-      "fileSha256": "a9f2d50e6cad303d04eecdf7d98670fd9827aa23dc4990f02f704d4a59b37379",
+      "fileSha256": "07eda22678ebafabd2c53036a0c4de57e3815da475466bfca62443b665ad45dd",
       "transport": {
         "type": "stdio"
       }
