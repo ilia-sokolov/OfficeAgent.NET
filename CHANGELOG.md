@@ -23,6 +23,12 @@ corresponding GitHub release.
   that embeds the toolset in its own ASP.NET application registers `AddHttpContextAccessor()`
   ([#85](https://github.com/ilia-sokolov/OfficeAgent.NET/issues/85)).
 
+### Fixed
+
+- **Copilot Studio keeps users signed in.** The OAuth connector definition now requests
+  `offline_access`, so Copilot Studio gets a refresh token instead of asking users to sign in
+  again every hour ([#86](https://github.com/ilia-sokolov/OfficeAgent.NET/issues/86)).
+
 ## 1.3.0 — 2026-11-11
 
 ### Added

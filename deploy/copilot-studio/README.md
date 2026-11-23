@@ -36,7 +36,9 @@ For the API-key file, change `X-Api-Key` if your gateway reads another header.
 3. Select **New custom connector**, then **Import OpenAPI file**, and choose your edited file.
 4. Select **Continue** and finish the connector. For OAuth, enter a client id and secret for
    Copilot Studio to sign in with, then copy the **Redirect URL** Power Apps shows into that app
-   registration, and allow it to request the `access_as_user` scope.
+   registration, and allow it to request the `access_as_user` and `offline_access` scopes.
+   `offline_access` gives Copilot Studio a refresh token, so users are not asked to sign in
+   again every hour.
 5. Back on **Add a tool**, select the connector and create a connection.
 6. Select **Add to agent**, then turn off any tools the agent should not have. Agents need
    **generative orchestration**. `apply_plan`, `edit_document`, `edit_documents` and

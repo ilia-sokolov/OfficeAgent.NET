@@ -25,6 +25,8 @@ securityDefinitions:
     tokenUrl: https://login.microsoftonline.com/YOUR_TENANT_ID/oauth2/v2.0/token
     scopes:
       api://YOUR_API_CLIENT_ID/access_as_user: Work with documents as the signed-in user
+      offline_access: Stay signed in without asking again every hour
 security:
   - entra:
       - api://YOUR_API_CLIENT_ID/access_as_user
+      - offline_access
