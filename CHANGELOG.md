@@ -28,6 +28,10 @@ corresponding GitHub release.
 - **Copilot Studio keeps users signed in.** The OAuth connector definition now requests
   `offline_access`, so Copilot Studio gets a refresh token instead of asking users to sign in
   again every hour ([#86](https://github.com/ilia-sokolov/OfficeAgent.NET/issues/86)).
+- **The Copilot Studio wizard guidance names Manual OAuth.** The deployment guide said the
+  wizard's dynamic client registration works with an Entra-protected server. Entra has no
+  registration endpoint, so the guide now gives the Manual OAuth values
+  ([#87](https://github.com/ilia-sokolov/OfficeAgent.NET/issues/87)).
 
 ## 1.3.0 — 2026-11-11
 

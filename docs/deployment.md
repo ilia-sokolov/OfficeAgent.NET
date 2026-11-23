@@ -260,7 +260,7 @@ review, import the [connector](../deploy/copilot-studio/README.md) instead.
 2. Make sure the agent uses **generative orchestration** (Settings) - MCP tools require it.
 3. **Tools → Add a tool → New tool → Model Context Protocol.**
 4. Enter a name, description, and the **server URL** (your gateway endpoint).
-5. Pick the auth type matching your gateway: API key for `appOnly`, or OAuth 2.0 for `onBehalfOf` (dynamic client registration is supported).
+5. Pick the auth type matching your gateway: API key for `appOnly`, or OAuth 2.0 **Manual** for `onBehalfOf`. Microsoft Entra ID has no dynamic client registration endpoint and the server publishes no protected-resource metadata, so the Dynamic options do not work with an Entra-protected server. Enter the client id and secret of an app registration Copilot Studio signs in with, the authorization URL `https://login.microsoftonline.com/<tenant-id>/oauth2/v2.0/authorize`, the token URL `https://login.microsoftonline.com/<tenant-id>/oauth2/v2.0/token` (also the refresh URL), and the scopes `api://<api-client-id>/access_as_user offline_access`. Add the redirect URL the wizard shows to that app registration.
 6. Add it - the wizard lists the advertised tools; toggle off any you don't want (for example `register_document`).
 
 **Microsoft 365 Copilot** (declarative agent - MCP support is GA via the
