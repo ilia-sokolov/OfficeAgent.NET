@@ -29,6 +29,12 @@ namespace OfficeAgent.Core.DocumentProviders;
 /// bounds everything the connection holds at once, so a long session cannot grow until the
 /// host runs out of memory.
 /// </para>
+/// <para>
+/// One process can serve many callers, as an HTTP MCP server does. With
+/// <see cref="MemoryDocumentProviderOptions.Partition"/> set, each document belongs to the
+/// partition that added it, and a caller in another partition cannot list, open, save, remove
+/// or even detect it by name.
+/// </para>
 /// </remarks>
 public sealed class MemoryDocumentProvider : IDocumentProvider, IDocumentCreatingProvider, IDocumentListingProvider, IConnectionEditingDefaults, IConnectionGranularityDefaults, IConnectionCalculationDefaults
 {
@@ -104,9 +110,9 @@ public sealed class MemoryDocumentProvider : IDocumentProvider, IDocumentCreatin
     /// <summary>Returns the current reference for an item id, without reading its bytes.</summary>
     public DocumentReference Describe(string itemId) => Reference(itemId, Locate(itemId));
 
-    /// <summary>Lists what the connection currently holds, newest first is not implied.</summary>
+    /// <summary>Lists what the connection currently holds for the caller's partition, newest first is not implied.</summary>
     public IReadOnlyList<DocumentReference> List() =>
-        _documents.Select(pair => Reference(pair.Key, pair.Value)).ToList();
+        Visible().Select(pair => Reference(pair.Key, pair.Value)).ToList();
 
     /// <inheritdoc />
     /// <remarks>
@@ -122,7 +128,7 @@ public sealed class MemoryDocumentProvider : IDocumentProvider, IDocumentCreatin
     {
         cancellationToken.ThrowIfCancellationRequested();
         var id = source?.Trim();
-        if (!string.IsNullOrEmpty(id) && _documents.TryGetValue(id!, out var held))
+        if (!string.IsNullOrEmpty(id) && _documents.TryGetValue(id!, out var held) && IsVisible(held))
             return Task.FromResult(Reference(id!, held));
 
         throw Error(ProviderErrorCode.InvalidArgument,
@@ -162,7 +168,7 @@ public sealed class MemoryDocumentProvider : IDocumentProvider, IDocumentCreatin
         var pageSize = DocumentListingRules.PageSize(query);
         // Ordered by name, then id, so the key a token carries is a total position: a document
         // added or removed between pages moves nothing it has not reached.
-        var matches = _documents
+        var matches = Visible()
             .Where(pair => DocumentListingRules.Matches(pair.Value.Name, extensions, query))
             .Select(pair => (Key: pair.Value.Name.ToLowerInvariant() + "\n" + pair.Key, Id: pair.Key, Entry: pair.Value))
             .Where(item => after is null || string.CompareOrdinal(item.Key, after) > 0)
@@ -250,7 +256,7 @@ public sealed class MemoryDocumentProvider : IDocumentProvider, IDocumentCreatin
             if (options.Mode == SaveMode.Replace)
             {
                 RequireRoomUnsafe(bytes.LongLength, replacing: current.Bytes.LongLength);
-                var replaced = new Entry(current.Name, bytes, Version(bytes), DateTimeOffset.UtcNow);
+                var replaced = current with { Bytes = bytes, Version = Version(bytes), Modified = DateTimeOffset.UtcNow };
                 _documents[source.ItemId] = replaced;
                 return Reference(source.ItemId, replaced);
             }
@@ -261,7 +267,7 @@ public sealed class MemoryDocumentProvider : IDocumentProvider, IDocumentCreatin
                 : ValidateName(options.NewName!);
             // A taken name is refused, as CreateAsync and every other provider refuse it, rather
             // than leaving two documents that share a name.
-            Require(!_documents.Values.Any(entry => string.Equals(entry.Name, name, StringComparison.OrdinalIgnoreCase)),
+            Require(!NameTakenUnsafe(name),
                 ProviderErrorCode.AlreadyExists,
                 $"A document named '{name}' is already open in this connection.", itemId: source.ItemId);
 
@@ -282,7 +288,8 @@ public sealed class MemoryDocumentProvider : IDocumentProvider, IDocumentCreatin
         if (reference is null) throw new ArgumentNullException(nameof(reference));
         lock (_mutationGate)
         {
-            if (!_documents.TryRemove(reference.ItemId, out _))
+            if (!_documents.TryGetValue(reference.ItemId, out var held) || !IsVisible(held) ||
+                !_documents.TryRemove(reference.ItemId, out _))
                 throw Error(ProviderErrorCode.NotFound,
                     $"No document with id '{reference.ItemId}' is open in this connection.",
                     reference.ItemId);
@@ -301,7 +308,7 @@ public sealed class MemoryDocumentProvider : IDocumentProvider, IDocumentCreatin
 
         lock (_mutationGate)
         {
-            Require(!_documents.Values.Any(entry => string.Equals(entry.Name, safeName, StringComparison.OrdinalIgnoreCase)),
+            Require(!NameTakenUnsafe(safeName),
                 ProviderErrorCode.AlreadyExists,
                 $"A document named '{safeName}' is already open in this connection.", itemId: null);
             return AddUnsafe(safeName, bytes);
@@ -310,10 +317,25 @@ public sealed class MemoryDocumentProvider : IDocumentProvider, IDocumentCreatin
 
     // ── Internals ────────────────────────────────────────────────────────
 
-    private sealed record Entry(string Name, byte[] Bytes, string Version, DateTimeOffset Modified);
+    private sealed record Entry(string Name, byte[] Bytes, string Version, DateTimeOffset Modified, string Partition);
+
+    /// <summary>The caller's partition, or the shared one when the host sets none.</summary>
+    private string CurrentPartition => _options.Partition?.Invoke() ?? string.Empty;
+
+    private bool IsVisible(Entry entry) => string.Equals(entry.Partition, CurrentPartition, StringComparison.Ordinal);
+
+    private IEnumerable<KeyValuePair<string, Entry>> Visible()
+    {
+        var partition = CurrentPartition;
+        return _documents.Where(pair => string.Equals(pair.Value.Partition, partition, StringComparison.Ordinal));
+    }
+
+    /// <summary>Whether the caller's partition already holds a document by this name.</summary>
+    private bool NameTakenUnsafe(string name) =>
+        Visible().Any(pair => string.Equals(pair.Value.Name, name, StringComparison.OrdinalIgnoreCase));
 
     private Entry Locate(string itemId) =>
-        _documents.TryGetValue(itemId, out var entry)
+        _documents.TryGetValue(itemId, out var entry) && IsVisible(entry)
             ? entry
             : throw Error(ProviderErrorCode.NotFound,
                 $"No document with id '{itemId}' is open in this connection. " +
@@ -376,7 +398,7 @@ public sealed class MemoryDocumentProvider : IDocumentProvider, IDocumentCreatin
         for (var version = 2; ; version++)
         {
             var candidate = $"{stem}.v{version}{extension}";
-            if (!_documents.Values.Any(entry => string.Equals(entry.Name, candidate, StringComparison.OrdinalIgnoreCase)))
+            if (!NameTakenUnsafe(candidate))
                 return candidate;
         }
     }
@@ -413,7 +435,7 @@ public sealed class MemoryDocumentProvider : IDocumentProvider, IDocumentCreatin
         if (!roomAlreadyChecked) RequireRoomUnsafe(ownedContent.LongLength, replacing: 0);
 
         var itemId = Guid.NewGuid().ToString("N");
-        var entry = new Entry(name, ownedContent, Version(ownedContent), DateTimeOffset.UtcNow);
+        var entry = new Entry(name, ownedContent, Version(ownedContent), DateTimeOffset.UtcNow, CurrentPartition);
         _documents[itemId] = entry;
         return Reference(itemId, entry);
     }
@@ -490,4 +512,14 @@ public sealed class MemoryDocumentProviderOptions
     /// <see cref="CalculateFormulas"/>. Defaults to <see langword="false"/>.
     /// </summary>
     public bool RejectFormulaErrors { get; set; }
+
+    /// <summary>
+    /// Gets or sets a function that names the current caller's partition. Each document belongs
+    /// to the partition that added it and is invisible to every other one, so callers sharing one
+    /// process cannot see each other's documents. <see langword="null"/>, the default, or a
+    /// function returning <see langword="null"/>, puts every document in one shared partition,
+    /// which suits a single-user host such as a stdio server. The total size cap applies to all
+    /// partitions together.
+    /// </summary>
+    public Func<string?>? Partition { get; set; }
 }

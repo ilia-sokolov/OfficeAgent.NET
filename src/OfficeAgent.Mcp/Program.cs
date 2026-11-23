@@ -62,6 +62,9 @@ else
     if (OfficeAgentMcpServer.StartupNotice(options) is { } notice)
         Console.Error.WriteLine(notice);
 
+    // The session connection keeps each MCP session's documents apart, keyed by the session id
+    // on the request, so the tools need the current request.
+    builder.Services.AddHttpContextAccessor();
     builder.Services
         .AddMcpServer(o =>
         {

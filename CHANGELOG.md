@@ -15,6 +15,13 @@ corresponding GitHub release.
   `docker run` that wants a folder sets `OfficeAgent__FileSystemConnections__0__*`, as the
   documentation always showed. To check a running 1.3.0 deployment, call `list_connections`
   ([#84](https://github.com/ilia-sokolov/OfficeAgent.NET/issues/84)).
+- **The session connection keeps each MCP session's documents apart over HTTP.** One server
+  process serves every caller, and a session connection was one store any caller could reach by
+  id. Each document now belongs to the MCP session that imported or created it; another session
+  cannot open, export, list or remove it, or tell that its name is taken. Over stdio nothing
+  changes. `MemoryDocumentProviderOptions.Partition` is the direct API equivalent, and a host
+  that embeds the toolset in its own ASP.NET application registers `AddHttpContextAccessor()`
+  ([#85](https://github.com/ilia-sokolov/OfficeAgent.NET/issues/85)).
 
 ## 1.3.0 — 2026-11-11
 

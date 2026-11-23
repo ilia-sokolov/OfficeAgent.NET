@@ -1,4 +1,5 @@
 using System.Text.Json;
+using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
@@ -151,8 +152,14 @@ public static class OfficeAgentMcpServer
 
         if (HasEphemeral(options))
         {
+            // Over HTTP one process serves every caller, so each MCP session gets its own
+            // partition, keyed by the session id the transport assigned. A stdio host has no
+            // HTTP context and keeps the one shared partition its single user owns.
+            services.AddHttpContextAccessor();
+            var http = new HttpContextAccessor();
             services.AddMemoryDocumentProvider(EphemeralId(options), o =>
             {
+                o.Partition = () => SessionPartition(http.HttpContext);
                 o.MaximumTotalBytes = options.EphemeralMaximumTotalBytes;
                 o.AllowedExtensions = CreatableExtensions.Value.ToList();
                 o.CalculateFormulas = options.EphemeralCalculateFormulas;
@@ -283,6 +290,19 @@ public static class OfficeAgentMcpServer
     /// </remarks>
     private static bool RegistrationEnabled(OfficeAgentMcpOptions options) =>
         options.AllowRegistration && HasStorage(options);
+
+    /// <summary>
+    /// The session connection's partition for the current call: the MCP session id over HTTP,
+    /// or <see langword="null"/> (one shared partition) on a host with no HTTP request, such as
+    /// stdio. An HTTP request without a session id gets a partition of its own, so it can never
+    /// reach another caller's documents.
+    /// </summary>
+    internal static string? SessionPartition(HttpContext? context)
+    {
+        if (context is null) return null;
+        var session = context.Request.Headers["Mcp-Session-Id"].ToString();
+        return string.IsNullOrWhiteSpace(session) ? "request:" + context.TraceIdentifier : "session:" + session;
+    }
 
     private static bool HasEphemeral(OfficeAgentMcpOptions options) =>
         !string.IsNullOrWhiteSpace(EphemeralId(options));

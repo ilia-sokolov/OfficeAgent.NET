@@ -3036,6 +3036,7 @@ public ChangeGranularity DefaultChangeGranularity { get; set; }
 public ChangeMode DefaultChangeMode { get; set; }
 public long MaximumBytes { get; set; }
 public long MaximumTotalBytes { get; set; }
+public Func<string?>? Partition { get; set; }
 public bool RejectFormulaErrors { get; set; }
 ```
 

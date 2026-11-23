@@ -578,6 +578,13 @@ id exactly as it would documents in storage — `inspect_document`, `find_in_doc
 move bytes across the boundary: `import_document_content` puts a document in,
 `export_document_content` takes the result out.
 
+Over HTTP one server process serves every caller, so the session connection keeps each MCP
+session's documents apart: a document belongs to the session that imported or created it, and
+another session can neither open, export, list nor remove it, nor tell that its name is taken.
+A host that embeds the toolset in its own ASP.NET application must register
+`AddHttpContextAccessor()` for this; without it, every caller shares one store. Over stdio the
+server has one user and one store.
+
 ```json
 {
   "OfficeAgent": {
