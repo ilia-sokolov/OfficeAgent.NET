@@ -375,6 +375,7 @@ public sealed class OfficeAgentTools
         Required snapshot
         - This host refuses a plan without its snapshot. Call inspect_document first and copy its snapshot into snapshot.eTag in every plan you preview or apply, including a plan you rebuild after stale-snapshot or version-conflict.
         - A plan refused with snapshot-required changed nothing: inspect the document, copy the snapshot into the plan, and send it again.
+        - edit_documents is not offered here, because one plan cannot carry each document's snapshot. Edit each document with edit_document instead.
         """;
 
     /// <summary>
@@ -532,16 +533,19 @@ public sealed class OfficeAgentTools
                 "Run with preview=true first: it lists every binding and what it will write, and saves nothing. A refresh is all or nothing - if any binding cannot be read, nothing is written and each problem is listed. " +
                 "saveMode and newName behave as in apply_plan; NewVersion keeps last month's document beside the new one. " +
                 "Returns the edit_document shape plus bindings: [{kind, marker, reference, range, target, summary, errorCode, message}].")));
-            functions.Add(AIFunctionFactory.Create(EditDocuments, Opts(schema,
-                "edit_documents",
-                "Apply one plan to several documents in one call - rename a company, update a disclaimer, or change a term across a folder. " +
-                $"sources lists up to {MaximumBatchDocuments} documents, each exactly as edit_document takes source; list the folder yourself first. " +
-                "Name text with \"match\": \"all\" so each document changes wherever the text appears: { \"op\": \"changeText\", \"target\": { \"find\": \"Acme Corp\", \"match\": \"all\", \"caseSensitive\": true }, \"with\": \"Globex Inc.\" }. " +
-                "find ignores case and matches inside words unless the target adds \"caseSensitive\": true or \"wholeWord\": true; a rename usually wants both. " +
-                "Each document is edited on its own and atomically: one that fails is left untouched and the others still save. A document in which no \"match\": \"all\" target matched is reported as unchanged and not saved. " +
-                "Run with preview=true first to see every document's changes without writing anything, then again without it. The plan cannot carry a snapshot. " +
-                "saveMode behaves as in apply_plan; NewDocument keeps each source and saves a new copy beside it. " +
-                "Returns {isValid, preview, summary: {total, committed, previewed, unchanged, failed, notAttempted}, items}; each item is {source, status} followed by exactly what edit_document returns for that document, receipt included.")));
+            // A batch plan cannot carry each document's snapshot, so a host that requires one would
+            // refuse every call; offering the tool would only cost the agent a turn to find out.
+            if (!RequirePlanSnapshot)
+                functions.Add(AIFunctionFactory.Create(EditDocuments, Opts(schema,
+                    "edit_documents",
+                    "Apply one plan to several documents in one call - rename a company, update a disclaimer, or change a term across a folder. " +
+                    $"sources lists up to {MaximumBatchDocuments} documents, each exactly as edit_document takes source; list the folder yourself first. " +
+                    "Name text with \"match\": \"all\" so each document changes wherever the text appears: { \"op\": \"changeText\", \"target\": { \"find\": \"Acme Corp\", \"match\": \"all\", \"caseSensitive\": true }, \"with\": \"Globex Inc.\" }. " +
+                    "find ignores case and matches inside words unless the target adds \"caseSensitive\": true or \"wholeWord\": true; a rename usually wants both. " +
+                    "Each document is edited on its own and atomically: one that fails is left untouched and the others still save. A document in which no \"match\": \"all\" target matched is reported as unchanged and not saved. " +
+                    "Run with preview=true first to see every document's changes without writing anything, then again without it. The plan cannot carry a snapshot. " +
+                    "saveMode behaves as in apply_plan; NewDocument keeps each source and saves a new copy beside it. " +
+                    "Returns {isValid, preview, summary: {total, committed, previewed, unchanged, failed, notAttempted}, items}; each item is {source, status} followed by exactly what edit_document returns for that document, receipt included.")));
         }
         if (options.AllowCreation && options.AllowConnectionAddressing)
         {

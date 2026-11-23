@@ -89,6 +89,19 @@ public class PlanSnapshotRequirementTests
         Assert.Equal(1, await workspace.RowsWith(documentId, "APAC"));
     }
 
+    [Theory]
+    [InlineData(false, true)]
+    [InlineData(true, false)]
+    public void Edit_documents_is_offered_only_where_a_plan_may_omit_its_snapshot(bool requireSnapshot, bool offered)
+    {
+        using var workspace = new Workspace(requireSnapshot);
+
+        var names = workspace.Tools.AsAIFunctions(new OfficeAgentToolsOptions { AllowRegistration = true }).Select(f => f.Name);
+
+        Assert.Equal(offered, names.Contains("edit_documents"));
+        Assert.Contains("edit_document", names);
+    }
+
     [Fact]
     public async Task Edit_document_refuses_before_registering_anything()
     {
@@ -130,10 +143,15 @@ public class PlanSnapshotRequirementTests
         using var services = new ServiceCollection().AddOfficeAgentMcp(options).BuildServiceProvider();
 
         Assert.True(services.GetRequiredService<OfficeAgentTools>().RequirePlanSnapshot);
-        Assert.Contains(OfficeAgentTools.SnapshotRequiredPromptGuidance, OfficeAgentMcpServer.InstructionsFor(options));
-        Assert.DoesNotContain(
-            OfficeAgentTools.SnapshotRequiredPromptGuidance,
-            OfficeAgentMcpServer.InstructionsFor(new OfficeAgentMcpOptions { FileSystemConnections = options.FileSystemConnections }));
+        var required = OfficeAgentMcpServer.InstructionsFor(options);
+        var optional = OfficeAgentMcpServer.InstructionsFor(new OfficeAgentMcpOptions { FileSystemConnections = options.FileSystemConnections });
+        Assert.Contains(OfficeAgentTools.SnapshotRequiredPromptGuidance, required);
+        Assert.DoesNotContain(OfficeAgentTools.SnapshotRequiredPromptGuidance, optional);
+
+        // The tool is not offered there, so the instructions do not explain how to use it.
+        Assert.DoesNotContain("- edit_documents(", required);
+        Assert.Contains("- edit_documents(", optional);
+        Assert.Contains("- edit_document(", required);
     }
 
     private static void AssertSnapshotRequired(JsonElement response)

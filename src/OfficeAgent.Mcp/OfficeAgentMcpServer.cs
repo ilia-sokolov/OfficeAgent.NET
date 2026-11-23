@@ -56,13 +56,25 @@ public static class OfficeAgentMcpServer
 
         return OfficeAgentTools.SystemPromptGuidance
             + (options.RequirePlanSnapshot ? OfficeAgentTools.SnapshotRequiredPromptGuidance : string.Empty)
-            + (registrationEnabled ? OfficeAgentTools.RegistrationPromptGuidance : string.Empty)
+            + (registrationEnabled ? RegistrationGuidance(options) : string.Empty)
             + (creationEnabled ? OfficeAgentTools.CreationPromptGuidance : string.Empty)
             + (HasEphemeral(options) ? OfficeAgentTools.EphemeralPromptGuidance : string.Empty)
             + (options.AllowInlineContent ? OfficeAgentTools.InlineContentPromptGuidance : string.Empty)
             + (includeConnectionInventory
                 ? ConnectionInventory(options, registrationEnabled, creationEnabled)
                 : string.Empty);
+    }
+
+    /// <summary>
+    /// The registration guidance, without its edit_documents line where a plan must carry its
+    /// snapshot: that tool is not offered there.
+    /// </summary>
+    private static string RegistrationGuidance(OfficeAgentMcpOptions options)
+    {
+        if (!options.RequirePlanSnapshot) return OfficeAgentTools.RegistrationPromptGuidance;
+        var lines = OfficeAgentTools.RegistrationPromptGuidance.Split('\n')
+            .Where(line => !line.TrimStart().StartsWith("- edit_documents(", StringComparison.Ordinal));
+        return string.Join("\n", lines);
     }
 
     /// <summary>

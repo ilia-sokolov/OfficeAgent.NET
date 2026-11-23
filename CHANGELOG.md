@@ -32,6 +32,10 @@ corresponding GitHub release.
   wizard's dynamic client registration works with an Entra-protected server. Entra has no
   registration endpoint, so the guide now gives the Manual OAuth values
   ([#87](https://github.com/ilia-sokolov/OfficeAgent.NET/issues/87)).
+- **`edit_documents` is not offered where it would always be refused.** A server with
+  `RequirePlanSnapshot`, as the Azure template sets, refused every `edit_documents` call yet
+  still listed the tool. It is now left out there, the server's instructions no longer describe
+  it, and the guidance says to edit each document with `edit_document` ([#88](https://github.com/ilia-sokolov/OfficeAgent.NET/issues/88)).
 
 ## 1.3.0 — 2026-11-11
 

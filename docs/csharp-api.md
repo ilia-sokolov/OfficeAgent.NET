@@ -2373,7 +2373,8 @@ Working from a source in one call
 public const string SnapshotRequiredPromptGuidance = "
 Required snapshot
 - This host refuses a plan without its snapshot. Call inspect_document first and copy its snapshot into snapshot.eTag in every plan you preview or apply, including a plan you rebuild after stale-snapshot or version-conflict.
-- A plan refused with snapshot-required changed nothing: inspect the document, copy the snapshot into the plan, and send it again.";
+- A plan refused with snapshot-required changed nothing: inspect the document, copy the snapshot into the plan, and send it again.
+- edit_documents is not offered here, because one plan cannot carry each document's snapshot. Edit each document with edit_document instead.";
 public const string SystemPromptGuidance = "You are editing Microsoft Office documents through the OfficeAgent tools - a Word document (.docx), PowerPoint deck (.pptx), or Excel workbook (.xlsx). inspect_document reports which format it found.
 
 Document addressing
