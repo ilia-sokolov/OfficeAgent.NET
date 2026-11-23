@@ -1,5 +1,7 @@
 # officeagent-mcp
 
+<!-- mcp-name: io.github.ilia-sokolov/officeagent -->
+
 The [OfficeAgent.NET](https://github.com/ilia-sokolov/OfficeAgent.NET) MCP server, installable
 with pip or uv. It lets an AI assistant inspect and edit existing Word, PowerPoint and Excel
 files: the assistant previews a typed edit plan, and the server applies it all or nothing, with

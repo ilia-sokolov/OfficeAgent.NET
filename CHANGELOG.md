@@ -36,6 +36,9 @@ corresponding GitHub release.
   `RequirePlanSnapshot`, as the Azure template sets, refused every `edit_documents` call yet
   still listed the tool. It is now left out there, the server's instructions no longer describe
   it, and the guidance says to edit each document with `edit_document` ([#88](https://github.com/ilia-sokolov/OfficeAgent.NET/issues/88)).
+- **The PyPI package names its MCP Registry server,** so the registry can list it beside the
+  NuGet tool, the bundles and the image
+  ([#89](https://github.com/ilia-sokolov/OfficeAgent.NET/issues/89)).
 
 ## 1.3.0 — 2026-11-11
 

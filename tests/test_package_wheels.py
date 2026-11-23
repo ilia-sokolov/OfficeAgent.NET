@@ -63,6 +63,15 @@ class WheelBuildTests(unittest.TestCase):
         self.assertEqual(expected, built)
         self.assertEqual(set(STANDALONE["runtimes"]), set(wheels.PLATFORM_TAGS))
 
+    def test_the_description_names_the_mcp_registry_server(self) -> None:
+        # The MCP Registry lists a PyPI package only when its description carries this line.
+        import json
+        name = json.loads((ROOT / "server.json").read_text(encoding="utf-8"))["name"]
+        wheel = self.build()[0]
+        with zipfile.ZipFile(wheel) as archive:
+            metadata = next(n for n in archive.namelist() if n.endswith(".dist-info/METADATA"))
+            self.assertIn(f"mcp-name: {name}", archive.read(metadata).decode("utf-8"))
+
     def test_a_wheel_carries_the_release_executable_byte_for_byte_and_executable(self) -> None:
         wheel = next(path for path in self.build() if "manylinux_2_27_x86_64" in path.name)
         with zipfile.ZipFile(wheel) as archive:
