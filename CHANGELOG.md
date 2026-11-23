@@ -3,6 +3,19 @@
 Notable changes per release. The body of each version section is also the text used for the
 corresponding GitHub release.
 
+## 1.3.1 — Unreleased
+
+### Security
+
+- **The container image no longer adds a folder connection of its own.** The image's
+  `appsettings.json` defined a writable filesystem connection, `documents`, at `./documents`.
+  .NET merges configuration lists by position, so a deployment that added only a SharePoint
+  connection through the environment, as the Azure template does, also offered that
+  container-local folder to every signed-in user. The image now defines no connection; a
+  `docker run` that wants a folder sets `OfficeAgent__FileSystemConnections__0__*`, as the
+  documentation always showed. To check a running 1.3.0 deployment, call `list_connections`
+  ([#84](https://github.com/ilia-sokolov/OfficeAgent.NET/issues/84)).
+
 ## 1.3.0 — 2026-11-11
 
 ### Added
