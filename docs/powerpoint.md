@@ -91,7 +91,7 @@ guessing which line was meant; see [Anchor stability](#anchor-stability).
 | `insertSlide` | none, or slide node | Adds a slide from one of the deck's layouts. `position` defaults to `End`; `Before`/`After` take a slide target |
 | `removeSlide` | slide node | Takes the slide's notes with it. Refused when it would empty the deck |
 | `moveSlide` | slide node | `position` + `relativeTo` |
-| `duplicateSlide` | slide node | Copy gets its own slide id, shape ids, and notes; lands after the original by default |
+| `duplicateSlide` | slide node | Copy gets its own slide id, shape ids, notes, charts (with their workbooks), SmartArt and comments, and shares the layout and pictures; lands after the original by default |
 | `setProperty` | `docProperty` node | The deck's core properties: `core/title`, `core/creator`, `core/subject`, `core/keywords`, `core/category` and the rest, as for a Word document. `field` and `settings/*` targets are Word only |
 
 Verbs the module does not implement — `defineStyle`, `revision`, `pageSetup`, `insertBreak` and `note` — are reported per-operation as

@@ -387,30 +387,21 @@ internal sealed class SlideDuplicateHandler : IOperationHandler
             ?? throw new InvalidOperationException($"Slide '{anchor.Path}' vanished before apply.");
 
         var main = PowerPointModel.Main(context.Package);
+        var list = SlideList.Require(context.Package);
+        var copySlideId = SlideList.NextSlideId(list);
+
         var copyPart = main.AddNewPart<SlidePart>();
         copyPart.Slide = (Slide)slide.Part.SlideRoot().CloneNode(deep: true);
 
-        // Share the layout and any images: parts are immutable content addressed by
-        // relationship id, so two slides pointing at one image is what PowerPoint itself
-        // produces. Notes are the exception - they are per-slide content the user edits,
-        // so the copy gets its own, and sharing the source's part would both alias the
-        // text and fail outright, a slide being allowed only one notes part.
-        foreach (var pair in slide.Part.Parts)
-        {
-            if (pair.OpenXmlPart is NotesSlidePart) continue;
-            copyPart.AddPart(pair.OpenXmlPart, pair.RelationshipId);
-        }
+        // Layouts and images are shared, as PowerPoint shares them. Charts, SmartArt,
+        // embedded objects, comments and notes are per-slide content edited in place, so
+        // the copy gets its own: a shared chart part makes PowerPoint refuse the deck, and
+        // a chart write on either slide would land on both.
+        SlidePartCopy.Relate(slide.Part, copyPart, copySlideId);
 
-        if (slide.Part.NotesSlidePart?.NotesSlide is { } notes)
-        {
-            var notesPart = copyPart.AddNewPart<NotesSlidePart>();
-            notesPart.NotesSlide = (NotesSlide)notes.CloneNode(deep: true);
-        }
-
-        var list = SlideList.Require(context.Package);
         var entry = new SlideId
         {
-            Id = SlideList.NextSlideId(list),
+            Id = copySlideId,
             RelationshipId = main.GetIdOfPart(copyPart)
         };
 

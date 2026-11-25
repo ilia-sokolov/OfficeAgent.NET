@@ -3,6 +3,21 @@
 Notable changes per release. The body of each version section is also the text used for the
 corresponding GitHub release.
 
+## 1.3.2 — Unreleased
+
+### Fixed
+
+- **A duplicated slide gets its own chart.** `duplicateSlide` related the copy to every part of
+  the source slide except its notes, so a copy of a chart slide pointed at the same
+  `ppt/charts/chartN.xml`. Desktop PowerPoint refused the deck ("PowerPoint could not open the
+  file"), and `setChartData` on one copy changed every slide that shared the chart. The copy now
+  gets its own chart part with its own embedded workbook and style and colour parts, under the
+  same relationship ids. SmartArt, embedded objects, ActiveX controls, tags and comments are
+  copied the same way. Layouts, images and media stay shared, as PowerPoint shares them.
+  Comments on the copy name the copy and its new creation id. Video, audio and hyperlink
+  relationships, which the copy used to drop, are kept. A template whose chart slide is
+  duplicated twice now opens in PowerPoint with three independent charts.
+
 ## 1.3.1 — 2026-11-23
 
 ### Security

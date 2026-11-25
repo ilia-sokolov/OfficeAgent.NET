@@ -112,6 +112,9 @@ public sealed class NativeCorpusTests
                 case "charts":
                     Assert.Equal((int)value, Count(c.Format, c.Output, "chart"));
                     break;
+                case "chartValuesEach" when c.Format == "powerpoint":
+                    Assert.Equal((double[][])value, ChartValuesEach(c.Output));
+                    break;
             }
         }
     }
@@ -542,6 +545,22 @@ public sealed class NativeCorpusTests
     // formatting revisions. A paragraph-mark w:ins inside rPr counts once, with its run.
     private const string WordNamespace = "http://schemas.openxmlformats.org/wordprocessingml/2006/main";
     private static readonly HashSet<string> RevisionMarks = new(StringComparer.Ordinal) { "ins", "del", "moveFrom", "moveTo" };
+
+    /// <summary>The first series' values of every chart, slide by slide in deck order.</summary>
+    private static double[][] ChartValuesEach(byte[] bytes)
+    {
+        using var stream = new MemoryStream(bytes, writable: false);
+        using var deck = PresentationDocument.Open(stream, false);
+        var main = deck.PresentationPart!;
+        return main.Presentation!.SlideIdList!.Elements<P.SlideId>()
+            .Select(entry => (SlidePart)main.GetPartById(entry.RelationshipId!))
+            .SelectMany(slide => slide.Slide!.Descendants<DocumentFormat.OpenXml.Drawing.Charts.ChartReference>()
+                .Select(reference => (ChartPart)slide.GetPartById(reference.Id!)))
+            .Select(chart => chart.ChartSpace!.Descendants<DocumentFormat.OpenXml.Drawing.Charts.Values>().First()
+                .Descendants<DocumentFormat.OpenXml.Drawing.Charts.NumericValue>()
+                .Select(v => double.Parse(v.Text, System.Globalization.CultureInfo.InvariantCulture)).ToArray())
+            .ToArray();
+    }
 
     private static int Count(string format, byte[] bytes, string localName)
     {

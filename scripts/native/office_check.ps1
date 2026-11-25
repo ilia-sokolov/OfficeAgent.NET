@@ -296,6 +296,26 @@ function Check-Deck($app, $case, [string]$path) {
             $values = @($chart.SeriesCollection(1).Values | ForEach-Object { [double]$_ })
             Check 'chart series values' ($e.chartSeriesValues -join ', ') ($values -join ', ') ((@($e.chartSeriesValues) -join '|') -eq ($values -join '|'))
         }
+        if (Has $e 'chartValuesEach') {
+            # Every chart's first series, in deck order: charts that share a part read alike.
+            $charts = @($shapes | Where-Object { $_.HasChart } | ForEach-Object { $_.Chart })
+            $want = @($e.chartValuesEach | ForEach-Object { (@($_) -join ', ') })
+            $got = @($charts | ForEach-Object { (@($_.SeriesCollection(1).Values | ForEach-Object { [double]$_ }) -join ', ') })
+            Check 'each chart''s series values' ($want -join ' | ') ($got -join ' | ') (($want -join '|') -eq ($got -join '|'))
+        }
+        if (Has $e 'chartsEditable') {
+            $opened = 0
+            $charts = @($shapes | Where-Object { $_.HasChart } | ForEach-Object { $_.Chart })
+            foreach ($chart in $charts) {
+                try {
+                    $chart.ChartData.Activate()
+                    $book = $chart.ChartData.Workbook
+                    if ($null -ne $book.Worksheets.Item(1).UsedRange) { $opened++ }
+                    $book.Application.Quit()
+                } catch { }
+            }
+            Check 'every chart''s data opens for editing' $charts.Count $opened ($opened -eq $charts.Count -and $opened -gt 0)
+        }
         if (Has $e 'chartSeriesCount') {
             $chart = @($shapes | Where-Object { $_.HasChart })[0].Chart
             $n = $chart.SeriesCollection().Count

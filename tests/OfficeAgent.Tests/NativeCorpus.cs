@@ -474,6 +474,28 @@ internal static class NativeCorpus
             }),
             new Dictionary<string, object> { ["charts"] = 1, ["chartEditable"] = true, ["chartSeriesValues"] = new[] { 41.0, 58.0 } }, AnyPart, true);
 
+        // A chart slide duplicated twice, in two plans as an agent sends them, then new data in
+        // each copy. PowerPoint refuses a deck whose slides share one chart part, and a write to
+        // one copy must leave the original and the other copy as they were.
+        var chartSlide = new NodeAnchor { Kind = "slide", Path = "slide#256" };
+        var chartCopies = Commit(client,
+            Commit(client, charted, "input.pptx", new PlanOperation[] { new DuplicateSlideOp { Target = chartSlide } }),
+            "input.pptx", new PlanOperation[] { new DuplicateSlideOp { Target = chartSlide, Position = SlidePosition.End } });
+        var copiedCharts = Paths(client, chartCopies, "chart", ".pptx");
+        SetChartDataOp Data(string path, params double?[] values) => new()
+        {
+            Target = new NodeAnchor { Kind = "chart", Path = path },
+            Categories = new[] { "Q1", "Q2", "Q3" },
+            Series = new[] { new ChartSeries { Name = "Revenue", Values = values } }
+        };
+        yield return new Case("p-duplicateslide-chart", "powerpoint", "duplicateSlide", "A chart slide duplicated twice, new data in each copy",
+            charted, Commit(client, chartCopies, "input.pptx", new PlanOperation[] { Data(copiedCharts[1], 1, 2, 3), Data(copiedCharts[2], 4, 5, 6) }),
+            new Dictionary<string, object>
+            {
+                ["slides"] = 3, ["charts"] = 3, ["chartsEditable"] = true,
+                ["chartValuesEach"] = new[] { new[] { 10.0, 12.0, 15.0 }, new[] { 1.0, 2.0, 3.0 }, new[] { 4.0, 5.0, 6.0 } }
+            }, AnyPart, true);
+
         var pictured = Commit(client, deck, "input.pptx", new PlanOperation[]
         {
             new InsertImageOp { Target = new NodeAnchor { Kind = "slide", Path = "slide#256" }, Base64Bytes = Png(200, 100, 0x2E, 0x75, 0xB6), WidthPx = 200, HeightPx = 100 }
