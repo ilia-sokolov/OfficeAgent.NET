@@ -27,7 +27,7 @@
     },
     "image": {
       "type": "string",
-      "defaultValue": "ghcr.io/ilia-sokolov/officeagent-mcp:1.3.1",
+      "defaultValue": "ghcr.io/ilia-sokolov/officeagent-mcp:1.3.2",
       "metadata": {
         "description": "Server image. Pin an exact version; review release notes before moving it."
       }
