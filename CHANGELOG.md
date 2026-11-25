@@ -17,6 +17,12 @@ corresponding GitHub release.
   Comments on the copy name the copy and its new creation id. Video, audio and hyperlink
   relationships, which the copy used to drop, are kept. A template whose chart slide is
   duplicated twice now opens in PowerPoint with three independent charts.
+- **A plan sent as an object is read, not refused with an unexplained error.** Agents sometimes
+  send `planJson` as the plan object or operations array itself rather than as a string. The
+  argument binder threw before the tool ran, and an MCP client saw only "An error occurred
+  invoking 'create_document'." Every tool's string parameters now take an object or array as its
+  JSON text, so the plan is parsed and validated as usual. A value of the wrong shape gets the
+  tool's own diagnostic. The schemas still declare a string.
 
 ## 1.3.1 — 2026-11-23
 

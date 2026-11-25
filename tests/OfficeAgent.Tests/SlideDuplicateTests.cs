@@ -77,6 +77,34 @@ public class SlideDuplicateTests
     }
 
     [Fact]
+    public void A_copy_of_a_copy_moved_in_a_later_plan_has_its_own_chart()
+    {
+        // The second blind run's shape: duplicate when creating, then duplicate the copy and
+        // move slides in a later plan, then set data on every chart.
+        var client = Client();
+        var copied = Apply(client, ChartDeck(client), new DuplicateSlideOp { Target = SlideAnchor(256) });
+        var firstCopy = SlideIdAt(copied, 1);
+        var copyOfCopy = Apply(client, copied,
+            new DuplicateSlideOp { Target = SlideAnchor(firstCopy) },
+            new MoveSlideOp { Target = SlideAnchor(256), Position = SlidePosition.End });
+        var ids = Enumerable.Range(0, 3).Select(i => SlideIdAt(copyOfCopy, i)).ToArray();
+        var shapeId = ChartShapeId(client, copyOfCopy, 256);
+
+        var edited = Apply(client, copyOfCopy,
+            SetData(ids[0], shapeId, 1, 2, 3),
+            SetData(ids[1], shapeId, 4, 5, 6),
+            SetData(ids[2], shapeId, 7, 8, 9));
+
+        Assert.Equal(new[] { 1.0, 2.0, 3.0 }, ValuesAt(edited, 0));
+        Assert.Equal(new[] { 4.0, 5.0, 6.0 }, ValuesAt(edited, 1));
+        Assert.Equal(new[] { 7.0, 8.0, 9.0 }, ValuesAt(edited, 2));
+        using (var stream = new MemoryStream(edited))
+        using (var document = PresentationDocument.Open(stream, isEditable: false))
+            Assert.Equal(3, OrderedParts(document).Select(ChartOf).Select(c => c.Uri).Distinct().Count());
+        AssertValid(edited);
+    }
+
+    [Fact]
     public void A_chart_written_earlier_in_the_same_plan_is_copied_as_written()
     {
         var client = Client();

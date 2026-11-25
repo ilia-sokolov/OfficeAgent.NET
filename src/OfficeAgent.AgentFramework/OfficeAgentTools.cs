@@ -2098,8 +2098,40 @@ public sealed class OfficeAgentTools
     {
         Name = name,
         Description = description,
-        JsonSchemaCreateOptions = schema
+        JsonSchemaCreateOptions = schema,
+        ConfigureParameterBinding = parameter => parameter.ParameterType == typeof(string)
+            ? new AIFunctionFactoryOptions.ParameterBindingOptions { BindParameter = BindString }
+            : default
     };
+
+    /// <summary>
+    /// Binds a string parameter from whatever JSON the caller sent. Agents often send planJson
+    /// as the plan object itself rather than as a string holding it, and the default binder
+    /// throws on that before the tool runs, which an MCP client sees only as "An error occurred
+    /// invoking" the tool. An object or array is taken as its JSON text, so a plan sent either way
+    /// is parsed and validated as usual. A number or boolean is taken as its text, and any value
+    /// that is still wrong is then refused by the tool with a diagnostic of its own.
+    /// </summary>
+    private static object? BindString(System.Reflection.ParameterInfo parameter, AIFunctionArguments arguments)
+    {
+        if (!arguments.TryGetValue(parameter.Name!, out var value))
+        {
+            if (parameter.HasDefaultValue) return parameter.DefaultValue;
+            throw new ArgumentException($"The arguments dictionary is missing a value for the required parameter '{parameter.Name}'.", parameter.Name);
+        }
+
+        return value switch
+        {
+            null => parameter.HasDefaultValue ? parameter.DefaultValue : null,
+            string text => text,
+            JsonElement { ValueKind: JsonValueKind.String } element => element.GetString(),
+            JsonElement { ValueKind: JsonValueKind.Null or JsonValueKind.Undefined } => parameter.HasDefaultValue ? parameter.DefaultValue : null,
+            JsonElement element => element.GetRawText(),
+            JsonNode node when node.GetValueKind() == JsonValueKind.String => node.GetValue<string>(),
+            JsonNode node => node.ToJsonString(),
+            _ => JsonSerializer.Serialize(value, value.GetType())
+        };
+    }
 
     private static Fidelity ParseFidelity(string fidelity) => fidelity?.ToLowerInvariant() switch
     {
