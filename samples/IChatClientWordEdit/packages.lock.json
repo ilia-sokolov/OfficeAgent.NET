@@ -32,21 +32,21 @@
       },
       "Microsoft.Extensions.AI.OpenAI": {
         "type": "Direct",
-        "requested": "[10.11.0, )",
-        "resolved": "10.11.0",
-        "contentHash": "p8fJdcPOrwaUPRrag5dY9SLohaouutY+bqg1Lw+8OOEFqMXvCHGNWQXv2GcUUNPBCkTR4mcBEHoP9LAV2RtxzA==",
+        "requested": "[10.11.1, )",
+        "resolved": "10.11.1",
+        "contentHash": "i7/NS7BfByBF5on8UP0GDjeqWYIjkGG0b6ikQa/KkxXnVvgi/2bq/Z589zZ8UqNNeHjHgHDMviOPu6UStisOpQ==",
         "dependencies": {
-          "Microsoft.Extensions.AI.Abstractions": "10.11.0",
+          "Microsoft.Extensions.AI.Abstractions": "10.11.1",
           "OpenAI": "2.14.0"
         }
       },
       "Microsoft.Extensions.DependencyInjection": {
         "type": "Direct",
-        "requested": "[10.0.13, )",
-        "resolved": "10.0.13",
-        "contentHash": "4tnWU9vrU/A8NwYe9Z6wvieZ0EBb/uM82LAT+edNhdepOBWREZ7M7mzb941EIDPJaeOFdbVrDd5+7s9e89U6bQ==",
+        "requested": "[10.0.15, )",
+        "resolved": "10.0.15",
+        "contentHash": "7DUIgHeJpBs1RG0hYwWDOImXP03+uPrV5KtyUPxrZsiWadlg95aYijNKCZ2j2UmufQAmN6XEQfx4B/J6TuE7lg==",
         "dependencies": {
-          "Microsoft.Extensions.DependencyInjection.Abstractions": "10.0.13"
+          "Microsoft.Extensions.DependencyInjection.Abstractions": "10.0.15"
         }
       },
       "Azure.Core": {
@@ -78,10 +78,10 @@
       },
       "Microsoft.Extensions.AI": {
         "type": "Transitive",
-        "resolved": "10.11.0",
-        "contentHash": "PtgeWqaC3gQ8/saMgkUiwKeqCBPfDOcjfqDLcXtwJI//pu79gYZqUMPOh7/bFdFWcJihP/rWq9sgQd2xQtEP0A==",
+        "resolved": "10.11.1",
+        "contentHash": "VaQmPXuKSnHcv1tVDAWUx/MDahzTK43ozkurbhGcKMR4BnEA41ktF+fSO+aZNQGcgQg2KYI7D5ca3dTzlrO9/A==",
         "dependencies": {
-          "Microsoft.Extensions.AI.Abstractions": "10.11.0",
+          "Microsoft.Extensions.AI.Abstractions": "10.11.1",
           "Microsoft.Extensions.Caching.Abstractions": "10.0.13",
           "Microsoft.Extensions.DependencyInjection.Abstractions": "10.0.13",
           "Microsoft.Extensions.Logging.Abstractions": "10.0.13",
@@ -90,8 +90,8 @@
       },
       "Microsoft.Extensions.AI.Abstractions": {
         "type": "Transitive",
-        "resolved": "10.11.0",
-        "contentHash": "h4DX/TdJU4fk1GGaf19n6Kujkj6VXbGeL4UEOsQ8+ZJC5fVApPauokCtvBP684BYbczUYZQNfo1mbmyHG4WVSg=="
+        "resolved": "10.11.1",
+        "contentHash": "LcfA+SF7/GYZcI/XIC6WW17g7xytFvMQOzlBvbK5rvcltQKYXqnX47WaE/tvFqNm2GQtqhWnG/EkJC+T5PBKMw=="
       },
       "Microsoft.Extensions.Caching.Abstractions": {
         "type": "Transitive",
@@ -111,8 +111,8 @@
       },
       "Microsoft.Extensions.DependencyInjection.Abstractions": {
         "type": "Transitive",
-        "resolved": "10.0.13",
-        "contentHash": "G2GrGWNAPZBsii2F6AU8n+JT2tC1/I0Ml/e9ZyNCgPjf3hZqronP7o0X91aAynCmVeae8KkSIUNXXeXCNRmdVQ=="
+        "resolved": "10.0.15",
+        "contentHash": "KczR2nV7ooeimtZxAawPht/FJUHnX+uoWy7y4pba+iaRQBwUM2NwtiqZg+/FpZDHUf2RkkzveGkhMTWDNzmDUA=="
       },
       "Microsoft.Extensions.Diagnostics.Abstractions": {
         "type": "Transitive",
@@ -232,12 +232,12 @@
       "officeagent.agentframework": {
         "type": "Project",
         "dependencies": {
-          "Microsoft.Extensions.AI": "[10.11.0, )",
-          "Microsoft.Extensions.AI.Abstractions": "[10.11.0, )",
-          "OfficeAgent.Abstractions": "[1.2.0, )",
-          "OfficeAgent.Core": "[1.2.0, )",
-          "OfficeAgent.PowerPoint": "[1.2.0, )",
-          "OfficeAgent.Word": "[1.2.0, )"
+          "Microsoft.Extensions.AI": "[10.11.1, )",
+          "Microsoft.Extensions.AI.Abstractions": "[10.11.1, )",
+          "OfficeAgent.Abstractions": "[1.3.2, )",
+          "OfficeAgent.Core": "[1.3.2, )",
+          "OfficeAgent.PowerPoint": "[1.3.2, )",
+          "OfficeAgent.Word": "[1.3.2, )"
         }
       },
       "officeagent.core": {
@@ -246,7 +246,7 @@
           "DocumentFormat.OpenXml": "[3.5.1, )",
           "Microsoft.Extensions.DependencyInjection.Abstractions": "[8.0.2, )",
           "Microsoft.Extensions.Logging.Abstractions": "[8.0.3, )",
-          "OfficeAgent.Abstractions": "[1.2.0, )"
+          "OfficeAgent.Abstractions": "[1.3.2, )"
         }
       },
       "officeagent.powerpoint": {
@@ -254,8 +254,8 @@
         "dependencies": {
           "DocumentFormat.OpenXml": "[3.5.1, )",
           "Microsoft.Extensions.DependencyInjection.Abstractions": "[8.0.2, )",
-          "OfficeAgent.Abstractions": "[1.2.0, )",
-          "OfficeAgent.Core": "[1.2.0, )"
+          "OfficeAgent.Abstractions": "[1.3.2, )",
+          "OfficeAgent.Core": "[1.3.2, )"
         }
       },
       "officeagent.word": {
@@ -263,8 +263,8 @@
         "dependencies": {
           "DocumentFormat.OpenXml": "[3.5.1, )",
           "Microsoft.Extensions.DependencyInjection.Abstractions": "[8.0.2, )",
-          "OfficeAgent.Abstractions": "[1.2.0, )",
-          "OfficeAgent.Core": "[1.2.0, )"
+          "OfficeAgent.Abstractions": "[1.3.2, )",
+          "OfficeAgent.Core": "[1.3.2, )"
         }
       }
     }
