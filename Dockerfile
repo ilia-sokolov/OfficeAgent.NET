@@ -1,4 +1,4 @@
-FROM mcr.microsoft.com/dotnet/sdk:10.0@sha256:fe0fd4e93bd2fbb47c883b7a6369e5c8d3db8bf01cdc5981f6ee35fbdf3ff4fb AS build
+FROM mcr.microsoft.com/dotnet/sdk:10.0@sha256:8c6edfb26c85153f236d26efebd9ad349aec403583f343f201ee67838b23658d AS build
 WORKDIR /src
 
 COPY global.json Directory.Build.props OfficeAgent.NET.sln ./
@@ -10,7 +10,7 @@ RUN dotnet publish src/OfficeAgent.Mcp/OfficeAgent.Mcp.csproj \
 
 # The server targets net10.0 and runs on the .NET 10 LTS runtime, built with the SDK global.json
 # pins.
-FROM mcr.microsoft.com/dotnet/aspnet:10.0@sha256:bfd912c83295ce66d4b706ebb8541b9f14259b0e76fbb88b2751f58ce2399d2e AS runtime
+FROM mcr.microsoft.com/dotnet/aspnet:10.0@sha256:aac50ceef10391e78a899e3d2ccd00bbafa2dcb56ccf4586cbccf00edb84fc21 AS runtime
 WORKDIR /app
 COPY --from=build /app ./
 
