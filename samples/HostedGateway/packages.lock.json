@@ -9,15 +9,24 @@
       },
       "AWSSDK.Core": {
         "type": "Transitive",
-        "resolved": "4.0.102.11",
-        "contentHash": "K9PP9/qHQ7pqSB0lYwStJrpXQ8P1xc7Fbn3CyPg8EX78p4+yz8dhIiwiRc3aVbVrUZxmPAPRvmZm+ey1euIXGg=="
+        "resolved": "4.1.1.1",
+        "contentHash": "paZNy+g/hXMCsEpWvmOFr14x9gVzIY2JRSzSk+nXpKcnaASxEFBMWE4CNBuI/WwGN1ygTwojRTsPRn3yXuhSYQ==",
+        "dependencies": {
+          "AWSSDK.Extensions.Numerics": "[4.1.0, 5.0.0)",
+          "System.IO.Hashing": "11.0.0"
+        }
+      },
+      "AWSSDK.Extensions.Numerics": {
+        "type": "Transitive",
+        "resolved": "4.1.0",
+        "contentHash": "hhoiXT1aUyVgIiQbQoqG3L1EEneqXDh2GKyH5izUlO6Rzi9GAAi8S6mlLiVwow23+EGg77zHjdmUi+ia3RSUTg=="
       },
       "AWSSDK.S3": {
         "type": "Transitive",
-        "resolved": "4.0.104.4",
-        "contentHash": "Qi+NicEv1md8Vxm6c40zf5pRsQ9DzPm4UwewjxSk4zbHpdzAMZK8bDZJGdp4Za9/vHP8GTbSdnDuseZQ5h9tmw==",
+        "resolved": "4.1.2.1",
+        "contentHash": "5NYXkjBc8uQz5RFtpubw6NcjFahIiVTIq4rucZv6y8q9QSaO33PWsJHnkxrtmXRCXft0Fke1gnv6gvMP5wR1nw==",
         "dependencies": {
-          "AWSSDK.Core": "[4.0.102.11, 5.0.0)"
+          "AWSSDK.Core": "[4.1.1.1, 5.0.0)"
         }
       },
       "Azure.Core": {
@@ -42,18 +51,18 @@
       },
       "Azure.Storage.Blobs": {
         "type": "Transitive",
-        "resolved": "12.30.1",
-        "contentHash": "ywPqtDHLH5MY0Cp/wfLQgqhHOuJmD+bYVJawjXudtaQr9aJB+9orhk8oE6hHPy5s8H5bzq2q/mDkESf8w1rzBg==",
+        "resolved": "12.30.2",
+        "contentHash": "7c0H70SRY3Axty6YunsEFqw0k9KYzEgpmi4iRROAM325S2Ou5tyF1VvPw7imyjmopzhSqFx5LvwuE4/CLBDhng==",
         "dependencies": {
           "Apache.Arrow": "22.1.0",
           "Azure.Core": "1.60.0",
-          "Azure.Storage.Common": "12.29.0"
+          "Azure.Storage.Common": "12.29.1"
         }
       },
       "Azure.Storage.Common": {
         "type": "Transitive",
-        "resolved": "12.29.0",
-        "contentHash": "0VqPcAinzXFJDAELqC+VPFUL6AaU1mmIpDAHarr7DVw3zcJrlo4k3Xc3TCTVBkDgY6YUOjJ00Fd9ZB9En5H2Jg==",
+        "resolved": "12.29.1",
+        "contentHash": "T0CHonZVqUhIze/357Sbbg2ite4YM41rIvf+cEJMas/uRp5YiPGq3MV1E8/nvdWClJrzmmorXv4bg3qu1FuXIg==",
         "dependencies": {
           "Azure.Core": "1.60.0",
           "System.IO.Hashing": "10.0.9"
@@ -94,8 +103,8 @@
       },
       "ExcelNumberFormat": {
         "type": "Transitive",
-        "resolved": "1.1.0",
-        "contentHash": "R3BVHPs9O+RkExbZYTGT0+9HLbi8ZrNij1Yziyw6znd3J7P3uoIR07uwTLGOogtz1p6+0sna66eBoXu7tBiVQA=="
+        "resolved": "1.2.0",
+        "contentHash": "13HfFpG3NBUHevDM5Z8BiMvE6BXJPYE54r9wbKTwa4kBJggSVtDDB73Mz0bGLmID1HgM/3lA1mssMqphdG0+9g=="
       },
       "Microsoft.Bcl.AsyncInterfaces": {
         "type": "Transitive",
@@ -104,17 +113,17 @@
       },
       "Microsoft.Extensions.AI": {
         "type": "Transitive",
-        "resolved": "10.11.0",
-        "contentHash": "PtgeWqaC3gQ8/saMgkUiwKeqCBPfDOcjfqDLcXtwJI//pu79gYZqUMPOh7/bFdFWcJihP/rWq9sgQd2xQtEP0A==",
+        "resolved": "10.11.1",
+        "contentHash": "VaQmPXuKSnHcv1tVDAWUx/MDahzTK43ozkurbhGcKMR4BnEA41ktF+fSO+aZNQGcgQg2KYI7D5ca3dTzlrO9/A==",
         "dependencies": {
-          "Microsoft.Extensions.AI.Abstractions": "10.11.0",
+          "Microsoft.Extensions.AI.Abstractions": "10.11.1",
           "System.Numerics.Tensors": "10.0.13"
         }
       },
       "Microsoft.Extensions.AI.Abstractions": {
         "type": "Transitive",
-        "resolved": "10.11.0",
-        "contentHash": "h4DX/TdJU4fk1GGaf19n6Kujkj6VXbGeL4UEOsQ8+ZJC5fVApPauokCtvBP684BYbczUYZQNfo1mbmyHG4WVSg=="
+        "resolved": "10.11.1",
+        "contentHash": "LcfA+SF7/GYZcI/XIC6WW17g7xytFvMQOzlBvbK5rvcltQKYXqnX47WaE/tvFqNm2GQtqhWnG/EkJC+T5PBKMw=="
       },
       "Microsoft.Identity.Client": {
         "type": "Transitive",
@@ -182,8 +191,8 @@
       },
       "System.IO.Hashing": {
         "type": "Transitive",
-        "resolved": "10.0.9",
-        "contentHash": "vixglGnKEexAJDeIRhyayZYzxyrgK1K9GU3K/zRZVwDbaDcMkSqj4WDHoVmQMNfsdUtLALfNSJw6mBIpdxie4A=="
+        "resolved": "11.0.0",
+        "contentHash": "U+Bv2qCYt6eONi+arSP0QIp4uTO6os6uceBsqiAwruZ+Wo2HrRhO/0tj38M9URJtS+4DhAtT3ka2TGNFYsnhyQ=="
       },
       "System.IO.Packaging": {
         "type": "Transitive",
@@ -211,52 +220,52 @@
       "officeagent.agentframework": {
         "type": "Project",
         "dependencies": {
-          "Microsoft.Extensions.AI": "[10.11.0, )",
-          "Microsoft.Extensions.AI.Abstractions": "[10.11.0, )",
-          "OfficeAgent.Abstractions": "[1.2.0, )",
-          "OfficeAgent.Core": "[1.2.0, )",
-          "OfficeAgent.PowerPoint": "[1.2.0, )",
-          "OfficeAgent.Word": "[1.2.0, )"
+          "Microsoft.Extensions.AI": "[10.11.1, )",
+          "Microsoft.Extensions.AI.Abstractions": "[10.11.1, )",
+          "OfficeAgent.Abstractions": "[1.3.2, )",
+          "OfficeAgent.Core": "[1.3.2, )",
+          "OfficeAgent.PowerPoint": "[1.3.2, )",
+          "OfficeAgent.Word": "[1.3.2, )"
         }
       },
       "officeagent.amazons3": {
         "type": "Project",
         "dependencies": {
-          "AWSSDK.S3": "[4.0.104.4, )",
-          "OfficeAgent.Abstractions": "[1.2.0, )",
-          "OfficeAgent.Core": "[1.2.0, )"
+          "AWSSDK.S3": "[4.1.2.1, )",
+          "OfficeAgent.Abstractions": "[1.3.2, )",
+          "OfficeAgent.Core": "[1.3.2, )"
         }
       },
       "officeagent.azureblob": {
         "type": "Project",
         "dependencies": {
           "Azure.Identity": "[1.21.0, )",
-          "Azure.Storage.Blobs": "[12.30.1, )",
-          "OfficeAgent.Abstractions": "[1.2.0, )",
-          "OfficeAgent.Core": "[1.2.0, )"
+          "Azure.Storage.Blobs": "[12.30.2, )",
+          "OfficeAgent.Abstractions": "[1.3.2, )",
+          "OfficeAgent.Core": "[1.3.2, )"
         }
       },
       "officeagent.box": {
         "type": "Project",
         "dependencies": {
-          "OfficeAgent.Abstractions": "[1.2.0, )",
-          "OfficeAgent.Core": "[1.2.0, )"
+          "OfficeAgent.Abstractions": "[1.3.2, )",
+          "OfficeAgent.Core": "[1.3.2, )"
         }
       },
       "officeagent.core": {
         "type": "Project",
         "dependencies": {
           "DocumentFormat.OpenXml": "[3.5.1, )",
-          "OfficeAgent.Abstractions": "[1.2.0, )"
+          "OfficeAgent.Abstractions": "[1.3.2, )"
         }
       },
       "officeagent.excel": {
         "type": "Project",
         "dependencies": {
           "DocumentFormat.OpenXml": "[3.5.1, )",
-          "ExcelNumberFormat": "[1.1.0, )",
-          "OfficeAgent.Abstractions": "[1.2.0, )",
-          "OfficeAgent.Core": "[1.2.0, )"
+          "ExcelNumberFormat": "[1.2.0, )",
+          "OfficeAgent.Abstractions": "[1.3.2, )",
+          "OfficeAgent.Core": "[1.3.2, )"
         }
       },
       "officeagent.excel.calculation": {
@@ -264,64 +273,64 @@
         "dependencies": {
           "ClosedXML": "[0.105.1, 0.106.0)",
           "DocumentFormat.OpenXml": "[3.5.1, )",
-          "OfficeAgent.Abstractions": "[1.2.0, )"
+          "OfficeAgent.Abstractions": "[1.3.2, )"
         }
       },
       "officeagent.googledrive": {
         "type": "Project",
         "dependencies": {
-          "OfficeAgent.Abstractions": "[1.2.0, )",
-          "OfficeAgent.Core": "[1.2.0, )"
+          "OfficeAgent.Abstractions": "[1.3.2, )",
+          "OfficeAgent.Core": "[1.3.2, )"
         }
       },
       "officeagent.imanage": {
         "type": "Project",
         "dependencies": {
-          "OfficeAgent.Abstractions": "[1.2.0, )",
-          "OfficeAgent.Core": "[1.2.0, )"
+          "OfficeAgent.Abstractions": "[1.3.2, )",
+          "OfficeAgent.Core": "[1.3.2, )"
         }
       },
       "officeagent.mcp": {
         "type": "Project",
         "dependencies": {
-          "Microsoft.Extensions.AI": "[10.11.0, )",
+          "Microsoft.Extensions.AI": "[10.11.1, )",
           "ModelContextProtocol.AspNetCore": "[1.4.1, )",
-          "OfficeAgent.Abstractions": "[1.2.0, )",
-          "OfficeAgent.AgentFramework": "[1.2.0, )",
-          "OfficeAgent.AmazonS3": "[1.2.0, )",
-          "OfficeAgent.AzureBlob": "[1.2.0, )",
-          "OfficeAgent.Box": "[1.2.0, )",
-          "OfficeAgent.Core": "[1.2.0, )",
-          "OfficeAgent.Excel": "[1.2.0, )",
-          "OfficeAgent.Excel.Calculation": "[1.2.0, )",
-          "OfficeAgent.GoogleDrive": "[1.2.0, )",
-          "OfficeAgent.IManage": "[1.2.0, )",
-          "OfficeAgent.PowerPoint": "[1.2.0, )",
-          "OfficeAgent.SharePoint": "[1.2.0, )",
-          "OfficeAgent.Word": "[1.2.0, )"
+          "OfficeAgent.Abstractions": "[1.3.2, )",
+          "OfficeAgent.AgentFramework": "[1.3.2, )",
+          "OfficeAgent.AmazonS3": "[1.3.2, )",
+          "OfficeAgent.AzureBlob": "[1.3.2, )",
+          "OfficeAgent.Box": "[1.3.2, )",
+          "OfficeAgent.Core": "[1.3.2, )",
+          "OfficeAgent.Excel": "[1.3.2, )",
+          "OfficeAgent.Excel.Calculation": "[1.3.2, )",
+          "OfficeAgent.GoogleDrive": "[1.3.2, )",
+          "OfficeAgent.IManage": "[1.3.2, )",
+          "OfficeAgent.PowerPoint": "[1.3.2, )",
+          "OfficeAgent.SharePoint": "[1.3.2, )",
+          "OfficeAgent.Word": "[1.3.2, )"
         }
       },
       "officeagent.powerpoint": {
         "type": "Project",
         "dependencies": {
           "DocumentFormat.OpenXml": "[3.5.1, )",
-          "OfficeAgent.Abstractions": "[1.2.0, )",
-          "OfficeAgent.Core": "[1.2.0, )"
+          "OfficeAgent.Abstractions": "[1.3.2, )",
+          "OfficeAgent.Core": "[1.3.2, )"
         }
       },
       "officeagent.sharepoint": {
         "type": "Project",
         "dependencies": {
-          "OfficeAgent.Abstractions": "[1.2.0, )",
-          "OfficeAgent.Core": "[1.2.0, )"
+          "OfficeAgent.Abstractions": "[1.3.2, )",
+          "OfficeAgent.Core": "[1.3.2, )"
         }
       },
       "officeagent.word": {
         "type": "Project",
         "dependencies": {
           "DocumentFormat.OpenXml": "[3.5.1, )",
-          "OfficeAgent.Abstractions": "[1.2.0, )",
-          "OfficeAgent.Core": "[1.2.0, )"
+          "OfficeAgent.Abstractions": "[1.3.2, )",
+          "OfficeAgent.Core": "[1.3.2, )"
         }
       }
     }
