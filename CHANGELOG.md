@@ -3,7 +3,7 @@
 Notable changes per release. The body of each version section is also the text used for the
 corresponding GitHub release.
 
-## 1.3.2 — 2026-11-25
+## 1.3.2 — 2026-11-26
 
 ### Fixed
 
